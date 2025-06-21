@@ -5,11 +5,11 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { Heart, User, Users, Home, MessageCircle } from "lucide-react";
 import { Like, EventProfile, Event, Message } from "@/api/entities"; // Import Message entity
-import MatchNotificationToast from "../components/MatchNotificationToast";
-import MessageNotificationToast from "../components/MessageNotificationToast"; // Import MessageNotificationToast
-import FeedbackSurveyModal from "../components/FeedbackSurveyModal"; // Import FeedbackSurveyModal
+import MatchNotificationToast from "@components/MatchNotificationToast";
+import MessageNotificationToast from "@components/MessageNotificationToast"; // Import MessageNotificationToast
+import FeedbackSurveyModal from "@components/FeedbackSurveyModal"; // Import FeedbackSurveyModal
 import { AnimatePresence } from "framer-motion";
-import { Toaster } from "@/components/ui/sonner";
+import { Toaster } from "@components/ui/sonner";
 
 export default function Layout({ children, currentPageName }) {
   const location = useLocation();

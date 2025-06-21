@@ -4,9 +4,9 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+} from '@components/ui/dialog';
+import { Button } from '@components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@components/ui/card';
 import { EventProfile, Like, Message } from '@/api/entities';
 import { X, Users, Heart, MessageCircle, Calendar } from 'lucide-react';
 import { format } from 'date-fns';

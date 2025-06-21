@@ -5,14 +5,14 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
+} from '@components/ui/dialog';
+import { Button } from '@components/ui/button';
+import { Input } from '@components/ui/input';
+import { Textarea } from '@components/ui/textarea';
+import { Label } from '@components/ui/label';
 import { Event } from '@/api/entities';
 import { X, Save, Loader2 } from 'lucide-react';
-import { toast } from "@/components/ui/sonner";
+import { toast } from "@components/ui/sonner";
 import { format } from 'date-fns';
 
 export default function EventFormModal({ event, isOpen, onClose, onSuccess }) {

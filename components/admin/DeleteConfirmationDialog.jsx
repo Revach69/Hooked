@@ -8,8 +8,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { Button } from '@/components/ui/button';
+} from '@components/ui/alert-dialog';
+import { Button } from '@components/ui/button';
 
 export default function DeleteConfirmationDialog({ isOpen, onClose, onConfirm, eventName }) {
   return (
