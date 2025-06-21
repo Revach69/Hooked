@@ -215,7 +215,6 @@ function PlaceholderScreen({ route }: any) {
 
 export default HomeScreen;
 
-
 const Stack = createNativeStackNavigator();
 export default function Root() {
   return (
