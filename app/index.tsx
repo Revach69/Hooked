@@ -10,6 +10,7 @@ import { Event } from '../src/api/entities';
 import ConsentScreen from './Consent';
 import DiscoveryScreen from './Discovery';
 
+
 function HomeScreen() {
   const navigation = useNavigation();
   const [activeModal, setActiveModal] = useState<null | 'qrScanner' | 'manualCodeEntry'>(null);
