@@ -7,7 +7,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { BarCodeScanner } from 'expo-barcode-scanner';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Heart, QrCode, Hash, Shield, Clock, Users } from 'lucide-react-native';
-import { Event } from '../src/api/entities';
+import { Event } from '../lib/api/entities';
 import ConsentScreen from './Consent';
 import DiscoveryScreen from './Discovery';
 import MatchesScreen from './Matches';

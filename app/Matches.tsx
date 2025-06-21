@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
-import { EventProfile, Like, Message } from '../src/api/entities';
+import { EventProfile, Like, Message } from '../lib/api/entities';
 import { Heart, MessageCircle, Users, Sparkles } from 'lucide-react-native';
 import ChatModal from './ChatModal';
 

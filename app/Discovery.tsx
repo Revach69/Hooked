@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
-import { EventProfile, Like, Event } from '../src/api/entities';
+import { EventProfile, Like, Event } from '../lib/api/entities';
 import { Heart } from 'lucide-react-native';
 
 interface Filters {

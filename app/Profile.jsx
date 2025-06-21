@@ -13,8 +13,8 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
-import { User, EventProfile } from '../src/api/entities';
-import { UploadFile } from '../src/api/integrations';
+import { User, EventProfile } from '../lib/api/entities';
+import { UploadFile } from '../lib/api/integrations';
 
 const ALL_INTERESTS = [
   'music', 'tech', 'food', 'books', 'travel', 'art', 'fitness', 'nature',
