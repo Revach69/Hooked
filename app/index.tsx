@@ -7,10 +7,9 @@ import { BarCodeScanner } from 'expo-barcode-scanner';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Heart, QrCode, Hash, Shield, Clock, Users } from 'lucide-react-native';
 import { Event } from '../src/api/entities';
-#<<<<<<< codex/convert-index.jsx-to-mobile-native-expo-screen
 import ConsentScreen from './Consent';
-=======
-#>>>>>>> main
+import DiscoveryScreen from './Discovery';
+
 
 function HomeScreen() {
   const navigation = useNavigation();
@@ -219,12 +218,8 @@ export default function Root() {
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Home" component={HomeScreen} />
         <Stack.Screen name="Join" component={PlaceholderScreen} />
-#<<<<<<< codex/convert-index.jsx-to-mobile-native-expo-screen
         <Stack.Screen name="Consent" component={ConsentScreen} />
-=======
-        <Stack.Screen name="Consent" component={PlaceholderScreen} />
-#>>>>>>> main
-        <Stack.Screen name="Discovery" component={PlaceholderScreen} />
+        <Stack.Screen name="Discovery" component={DiscoveryScreen} />
         <Stack.Screen name="Matches" component={PlaceholderScreen} />
         <Stack.Screen name="Profile" component={PlaceholderScreen} />
       </Stack.Navigator>
