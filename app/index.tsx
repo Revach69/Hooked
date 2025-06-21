@@ -12,6 +12,7 @@ import DiscoveryScreen from './Discovery';
 import MatchesScreen from './Matches';
 import JoinScreen from './join';
 
+
 function HomeScreen() {
   const navigation = useNavigation();
   const [activeModal, setActiveModal] = useState<null | 'qrScanner' | 'manualCodeEntry'>(null);
