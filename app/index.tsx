@@ -2,10 +2,17 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Modal, TextInput, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
+import { NavigationContainer, useNavigation } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { BarCodeScanner } from 'expo-barcode-scanner';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Heart, QrCode, Hash, Shield, Clock, Users } from 'lucide-react-native';
 import { Event } from '../src/api/entities';
+import ConsentScreen from './Consent';
+import DiscoveryScreen from './Discovery';
+import MatchesScreen from './Matches';
+import ProfileScreen from './Profile';
+import JoinScreen from './join';
 
 function HomeScreen() {
   const navigation = useNavigation();
@@ -207,6 +214,23 @@ function PlaceholderScreen({ route }: any) {
 }
 
 export default HomeScreen;
+
+
+const Stack = createNativeStackNavigator();
+export default function Root() {
+  return (
+    <NavigationContainer>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="Home" component={HomeScreen} />
+        <Stack.Screen name="Join" component={JoinScreen} />
+        <Stack.Screen name="Consent" component={ConsentScreen} />
+        <Stack.Screen name="Discovery" component={DiscoveryScreen} />
+        <Stack.Screen name="Matches" component={MatchesScreen} />
+        <Stack.Screen name="Profile" component={ProfileScreen} />
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+}
 
 const styles = StyleSheet.create({
   container: {
