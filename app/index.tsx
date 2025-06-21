@@ -9,7 +9,7 @@ import { Heart, QrCode, Hash, Shield, Clock, Users } from 'lucide-react-native';
 import { Event } from '../src/api/entities';
 import ConsentScreen from './Consent';
 import DiscoveryScreen from './Discovery';
-
+import MatchesScreen from './Matches';
 
 function HomeScreen() {
   const navigation = useNavigation();
@@ -220,7 +220,7 @@ export default function Root() {
         <Stack.Screen name="Join" component={PlaceholderScreen} />
         <Stack.Screen name="Consent" component={ConsentScreen} />
         <Stack.Screen name="Discovery" component={DiscoveryScreen} />
-        <Stack.Screen name="Matches" component={PlaceholderScreen} />
+        <Stack.Screen name="Matches" component={MatchesScreen} />
         <Stack.Screen name="Profile" component={PlaceholderScreen} />
       </Stack.Navigator>
     </NavigationContainer>
