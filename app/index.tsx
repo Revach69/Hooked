@@ -10,8 +10,8 @@ import { Event } from '../src/api/entities';
 import ConsentScreen from './Consent';
 import DiscoveryScreen from './Discovery';
 import MatchesScreen from './Matches';
+import ProfileScreen from './Profile';
 import JoinScreen from './join';
-
 
 function HomeScreen() {
   const navigation = useNavigation();
@@ -223,7 +223,8 @@ export default function Root() {
         <Stack.Screen name="Consent" component={ConsentScreen} />
         <Stack.Screen name="Discovery" component={DiscoveryScreen} />
         <Stack.Screen name="Matches" component={MatchesScreen} />
-        <Stack.Screen name="Profile" component={PlaceholderScreen} />
+        <Stack.Screen name="Profile" component={ProfileScreen} />
+
       </Stack.Navigator>
     </NavigationContainer>
   );
