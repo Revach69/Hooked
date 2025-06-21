@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Modal, TextInput, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
-
 import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { BarCodeScanner } from 'expo-barcode-scanner';
@@ -216,6 +215,7 @@ function PlaceholderScreen({ route }: any) {
 
 export default HomeScreen;
 
+
 const Stack = createNativeStackNavigator();
 export default function Root() {
   return (
@@ -231,7 +231,6 @@ export default function Root() {
     </NavigationContainer>
   );
 }
-
 
 const styles = StyleSheet.create({
   container: {
