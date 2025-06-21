@@ -50,6 +50,7 @@
     "expo-barcode-scanner": "^13.0.1",
     "expo-linear-gradient": "^14.1.5",
     "expo-image-picker": "^14.2.1",
+    "@react-native-community/slider": "^5.0.0",
     "@react-native-picker/picker": "^2.4.8",
     "expo-router": "^5.1.0",
     "framer-motion": "^12.4.7",
