@@ -1,17 +1,17 @@
 
 import React, { useState, useEffect } from 'react';
 import { Event, EventProfile, Like, Message, EventFeedback } from '@/api/entities';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge'; // Added Badge import
+import { Button } from '@components/ui/button';
+import { Input } from '@components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@components/ui/card';
+import { Badge } from '@components/ui/badge'; // Added Badge import
 import { Copy, Download, Loader2, PlusCircle, BarChart2, Edit, Trash2, FileImage, MessageSquare, Hash, MapPin } from 'lucide-react'; // Added Hash, MapPin imports
-import { toast, Toaster } from "@/components/ui/sonner";
-import QRCodeGenerator from '../components/QRCodeGenerator';
-import EventFormModal from '../components/admin/EventFormModal';
-import EventAnalyticsModal from '../components/admin/EventAnalyticsModal';
-import DeleteConfirmationDialog from '../components/admin/DeleteConfirmationDialog';
-import FeedbackInsightsModal from '../components/admin/FeedbackInsightsModal';
+import { toast, Toaster } from "@components/ui/sonner";
+import QRCodeGenerator from '@components/QRCodeGenerator';
+import EventFormModal from '@components/admin/EventFormModal';
+import EventAnalyticsModal from '@components/admin/EventAnalyticsModal';
+import DeleteConfirmationDialog from '@components/admin/DeleteConfirmationDialog';
+import FeedbackInsightsModal from '@components/admin/FeedbackInsightsModal';
 
 // --- CSV Helper Functions ---
 const convertToCSV = (dataArray, headers) => {

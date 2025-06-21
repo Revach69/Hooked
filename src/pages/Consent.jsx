@@ -2,12 +2,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@components/ui/button";
+import { Input } from "@components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@components/ui/card";
+import { Checkbox } from "@components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@components/ui/select";
+import { Badge } from "@components/ui/badge";
 import { Heart, Shield, Users, ArrowRight, X, UserCircle, Mail, Instagram, Facebook } from "lucide-react";
 import { Event, EventProfile, User } from "@/api/entities"; // Import User
 import { UploadFile } from "@/api/integrations";

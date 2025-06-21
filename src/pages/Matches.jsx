@@ -2,12 +2,12 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@components/ui/card";
+import { Button } from "@components/ui/button";
+import { Badge } from "@components/ui/badge";
 import { Heart, MessageCircle, Users, Sparkles } from "lucide-react";
 import { EventProfile, Like, Message } from "@/api/entities";
-import ChatModal from "../components/ChatModal";
+import ChatModal from "@components/ChatModal";
 
 export default function Matches() {
   const navigate = useNavigate();

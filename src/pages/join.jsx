@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@components/ui/card";
+import { Button } from "@components/ui/button";
 import { AlertCircle, Calendar, MapPin, Clock } from "lucide-react";
 import { Event } from "@/api/entities";
 

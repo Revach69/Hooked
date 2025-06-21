@@ -4,8 +4,8 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+} from "@components/ui/dialog";
+import { Button } from "@components/ui/button";
 import { Camera, X, Smartphone, ScanLine, ExternalLink } from "lucide-react";
 
 export default function QRInstructionsModal({ onClose }) {
