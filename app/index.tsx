@@ -224,6 +224,7 @@ export default function Root() {
         <Stack.Screen name="Discovery" component={DiscoveryScreen} />
         <Stack.Screen name="Matches" component={MatchesScreen} />
         <Stack.Screen name="Profile" component={ProfileScreen} />
+
       </Stack.Navigator>
     </NavigationContainer>
   );
