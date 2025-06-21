@@ -11,7 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Message } from '../src/api/entities';
+import { Message } from '../lib/api/entities';
 import { X, Send } from 'lucide-react-native';
 
 interface ChatModalProps {

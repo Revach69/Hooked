@@ -3,8 +3,8 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ScrollView,
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
-import { Event, EventProfile, User } from '../src/api/entities';
-import { UploadFile } from '../src/api/integrations';
+import { Event, EventProfile, User } from '../lib/api/entities';
+import { UploadFile } from '../lib/api/integrations';
 import { Heart, Instagram, Facebook } from 'lucide-react-native';
 
 const COLORS = [

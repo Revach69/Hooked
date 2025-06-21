@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { Event, EventProfile } from '../src/api/entities';
+import { Event, EventProfile } from '../lib/api/entities';
 import { AlertCircle } from 'lucide-react-native';
 
 export default function JoinScreen() {
