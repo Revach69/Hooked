@@ -2,7 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Modal, TextInput, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NavigationContainer, useNavigation } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import {
+  createNativeStackNavigator,
+  NativeStackNavigationProp,
+} from '@react-navigation/native-stack';
 import { BarCodeScanner } from 'expo-barcode-scanner';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Heart, QrCode, Hash, Shield, Clock, Users } from 'lucide-react-native';
@@ -13,8 +16,17 @@ import MatchesScreen from './Matches';
 import ProfileScreen from './Profile';
 import JoinScreen from './join';
 
+export type RootStackParamList = {
+  Home: undefined;
+  Join: { code: string };
+  Consent: undefined;
+  Discovery: undefined;
+  Matches: undefined;
+  Profile: undefined;
+};
+
 function HomeScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList, 'Home'>>();
   const [activeModal, setActiveModal] = useState<null | 'qrScanner' | 'manualCodeEntry'>(null);
   const [manualCode, setManualCode] = useState('');
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
@@ -33,8 +45,13 @@ function HomeScreen() {
       if (events.length > 0) {
         const event = events[0];
         const nowISO = new Date().toISOString();
-        if (event.starts_at && event.expires_at && nowISO >= event.starts_at && nowISO <= event.expires_at) {
-          navigation.navigate('Discovery' as never);
+        if (
+          event.starts_at &&
+          event.expires_at &&
+          nowISO >= event.starts_at &&
+          nowISO <= event.expires_at
+        ) {
+          navigation.navigate('Discovery');
           return;
         }
       }
@@ -62,7 +79,7 @@ function HomeScreen() {
 
   const handleEventAccess = (code: string) => {
     closeModal();
-    navigation.navigate('Join' as never, { code: code.toUpperCase() } as never);
+    navigation.navigate('Join', { code: code.toUpperCase() });
   };
 
   const handleScanSuccess = ({ data }: { data: string }) => {
@@ -212,7 +229,7 @@ function PlaceholderScreen({ route }: any) {
   );
 }
 
-const Stack = createNativeStackNavigator();
+const Stack = createNativeStackNavigator<RootStackParamList>();
 export default function Root() {
   return (
     <NavigationContainer>
