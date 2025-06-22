@@ -4,30 +4,37 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-  "start": "expo start",
-  "android": "expo run:android",
-  "ios": "expo run:ios",
-  "lint": "eslint ."
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "lint": "eslint ."
+  },
+  "expo": {
+  "doctor": {
+    "reactNativeDirectoryCheck": {
+      "exclude": ["@base44/sdk", "tailwindcss-animate", "expo-barcode-scanner"]
+      }
+    }
   },
   "dependencies": {
     "@base44/sdk": "^0.1.2",
-    "@react-native-async-storage/async-storage": "^2.2.0",
-    "@react-native-community/slider": "^5.0.0",
-    "@react-native-picker/picker": "^2.4.8",
-    "@react-navigation/native": "^7.1.13",
+    "@react-native-async-storage/async-storage": "2.1.2",
+    "@react-native-community/slider": "4.5.6",
+    "@react-native-picker/picker": "2.11.0",
+    "@react-navigation/native": "^7.1.6",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
-    "expo": "^49.0.23",
+    "expo": "53.0.12",
     "expo-barcode-scanner": "^13.0.1",
-    "expo-image-picker": "^14.2.1",
+    "expo-image-picker": "~16.1.4",
     "expo-router": "^5.1.0",
     "lucide-react-native": "^0.522.0",
-    "react": "^18.2.0",
+    "react": "19.0.0",
     "react-hook-form": "^7.54.2",
-    "react-native": "^0.72.6",
-    "react-native-reanimated": "^3.18.0",
-    "react-native-safe-area-context": "^5.4.1",
+    "react-native": "0.79.4",
+    "react-native-reanimated": "~3.17.4",
+    "react-native-safe-area-context": "5.4.0",
     "react-native-screens": "^4.11.1",
     "react-native-toast-message": "^2.3.0",
     "tailwind-merge": "^3.0.2",
@@ -35,7 +42,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.19.0",
-    "@types/react": "^18.2.66",
+    "@types/react": "~19.0.10",
     "babel-plugin-module-resolver": "^5.0.2",
     "eslint": "^9.19.0",
     "eslint-plugin-react": "^7.37.4",
