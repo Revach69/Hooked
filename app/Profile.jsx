@@ -76,7 +76,7 @@ export default function ProfileScreen() {
 
   const handleSave = async field => {
     try {
-      await User.updateMyUserData({ [field]: formData[field] });
+      await User.updateMe({ [field]: formData[field] });
       handleEditToggle(field);
       await loadData();
     } catch (e) {
@@ -99,7 +99,7 @@ export default function ProfileScreen() {
         const { file_url } = await UploadFile({
           file: { uri: asset.uri, name: asset.fileName || 'photo.jpg', type: asset.mimeType || 'image/jpeg' }
         });
-        await User.updateMyUserData({ profile_photo_url: file_url });
+        await User.updateMe({ profile_photo_url: file_url });
         await loadData();
       } catch (e) {
         console.log('Error uploading photo', e);
