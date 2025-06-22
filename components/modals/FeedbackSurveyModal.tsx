@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { X, Heart, Star } from 'lucide-react-native';
-import { EventFeedback } from '../api/entities';
+import { EventFeedback } from '../../lib/api/entities';
 
 interface Props {
   event: any;
