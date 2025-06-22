@@ -11,7 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Message } from '../api/entities';
+import { Message } from '../../lib/api/entities';
 import ContactShareModal from './ContactShareModal';
 import { Send, X, Share } from 'lucide-react-native';
 
