@@ -116,7 +116,7 @@ export default function ConsentScreen() {
         uploadedPhotoUrl = file_url;
       }
       const profileColor = COLORS[Math.floor(Math.random() * COLORS.length)];
-      await User.updateMyUserData({
+      await User.updateMe({
         full_name: formData.first_name,
         email: formData.email,
         age: parseInt(formData.age, 10),
