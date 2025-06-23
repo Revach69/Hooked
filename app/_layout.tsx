@@ -3,7 +3,7 @@ import { SafeAreaView, View } from 'react-native';
 import { Stack } from 'expo-router';
 console.log('✅ Loaded _layout.tsx');
 
-export default function RootLayout() {
+export default function AppNavigator() {
   console.log('✅ Rendering _layout.tsx');
 
   return (
