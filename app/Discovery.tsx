@@ -23,6 +23,8 @@ interface Filters {
 }
 
 export default function DiscoveryScreen() {
+  console.log('Rendering DiscoveryScreen'); // Debugging line to check if the component is rendering
+
   const navigation = useNavigation();
   const [profiles, setProfiles] = useState<any[]>([]);
   const [currentUserProfile, setCurrentUserProfile] = useState<any | null>(null);

@@ -17,10 +17,15 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Heart, QrCode, Hash, Shield, Clock, Users } from 'lucide-react-native';
 import { Event } from '../lib/api/entities';
 import ConsentScreen from './Consent';
+console.log('ConsentScreen:', ConsentScreen);
 import DiscoveryScreen from './Discovery';
+console.log('DiscoveryScreen', DiscoveryScreen);
 import MatchesScreen from './Matches';
+console.log('MatchesScreen', MatchesScreen);
 import ProfileScreen from './Profile';
+console.log('ProfileScreen', ProfileScreen);
 import JoinScreen from './join';
+console.log('JoinScreen', JoinScreen);
 
 export type RootStackParamList = {
   Home: undefined;

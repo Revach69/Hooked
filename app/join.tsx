@@ -6,6 +6,8 @@ import { Event, EventProfile } from '../lib/api/entities';
 import { AlertCircle } from 'lucide-react-native';
 
 export default function JoinScreen() {
+  console.log('Rendering JoinScreen'); // Debugging line to check if the component is rendering
+
   const navigation = useNavigation();
   const route = useRoute() as any;
   const [isLoading, setIsLoading] = useState(true);
