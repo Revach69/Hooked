@@ -24,7 +24,10 @@ interface ButtonProps extends TouchableOpacityProps {
   children?: React.ReactNode;
 }
 
-export const Button = React.forwardRef<TouchableOpacity, ButtonProps>(
+export const Button = React.forwardRef<
+  React.ElementRef<typeof TouchableOpacity>,
+  ButtonProps
+>(
   (
     {
       variant = 'default',
@@ -38,6 +41,7 @@ export const Button = React.forwardRef<TouchableOpacity, ButtonProps>(
   ) => {
     const content =
       children ?? <Text style={[styles.text, variantText[variant]]}>{title}</Text>;
+
     return (
       <TouchableOpacity
         ref={ref}
@@ -49,6 +53,7 @@ export const Button = React.forwardRef<TouchableOpacity, ButtonProps>(
     );
   }
 );
+
 Button.displayName = 'Button';
 
 const styles = StyleSheet.create({

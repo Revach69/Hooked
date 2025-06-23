@@ -61,30 +61,33 @@ interface ButtonProps {
   style?: ViewStyle | TextStyle;
 }
 
-export const AlertDialogAction = React.forwardRef<TouchableOpacity, ButtonProps>(
-  ({ onPress, children, style }, ref) => (
-    <TouchableOpacity ref={ref} style={[styles.action, style as ViewStyle]} onPress={onPress}>
-      {typeof children === 'string' ? (
-        <Text style={styles.actionText}>{children}</Text>
-      ) : (
-        children
-      )}
-    </TouchableOpacity>
-  )
-);
-AlertDialogAction.displayName = 'AlertDialogAction';
+export const AlertDialogAction = React.forwardRef<
+React.ElementRef<typeof TouchableOpacity>,
+ButtonProps
+>(({ onPress, children, style }, ref) => (
+<TouchableOpacity ref={ref} style={[styles.action, style as ViewStyle]} onPress={onPress}>
+  {typeof children === 'string' ? (
+    <Text style={styles.actionText}>{children}</Text>
+  ) : (
+    children
+  )}
+</TouchableOpacity>
+));
 
-export const AlertDialogCancel = React.forwardRef<TouchableOpacity, ButtonProps>(
-  ({ onPress, children, style }, ref) => (
-    <TouchableOpacity ref={ref} style={[styles.cancel, style as ViewStyle]} onPress={onPress}>
-      {typeof children === 'string' ? (
-        <Text style={styles.cancelText}>{children}</Text>
-      ) : (
-        children
-      )}
-    </TouchableOpacity>
-  )
-);
+AlertDialogAction.displayName = 'AlertDialogAction';
+export const AlertDialogCancel = React.forwardRef<
+  React.ElementRef<typeof TouchableOpacity>,
+  ButtonProps
+>(({ onPress, children, style }, ref) => (
+  <TouchableOpacity ref={ref} style={[styles.cancel, style as ViewStyle]} onPress={onPress}>
+    {typeof children === 'string' ? (
+      <Text style={styles.cancelText}>{children}</Text>
+    ) : (
+      children
+    )}
+  </TouchableOpacity>
+));
+
 AlertDialogCancel.displayName = 'AlertDialogCancel';
 
 const styles = StyleSheet.create({

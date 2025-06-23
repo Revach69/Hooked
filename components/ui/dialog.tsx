@@ -55,13 +55,18 @@ export function DialogDescription({ children, style }: BasicProps) {
   return <Text style={[styles.description, style as TextStyle]}>{children}</Text>;
 }
 
-export const DialogClose = React.forwardRef<TouchableOpacity, { onPress?: () => void; style?: ViewStyle | TextStyle; children?: React.ReactNode }>(
-  ({ onPress, children, style }, ref) => (
-    <TouchableOpacity ref={ref} onPress={onPress} style={style as ViewStyle}>
-      {children}
-    </TouchableOpacity>
-  )
-);
+export const DialogClose = React.forwardRef<
+  React.ElementRef<typeof TouchableOpacity>,
+  {
+    onPress?: () => void;
+    style?: ViewStyle | TextStyle;
+    children?: React.ReactNode;
+  }
+>(({ onPress, children, style }, ref) => (
+  <TouchableOpacity ref={ref} onPress={onPress} style={style as ViewStyle}>
+    {children}
+  </TouchableOpacity>
+));
 DialogClose.displayName = 'DialogClose';
 
 const styles = StyleSheet.create({
