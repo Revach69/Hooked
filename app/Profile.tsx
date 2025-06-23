@@ -123,7 +123,7 @@ export default function ProfileScreen() {
     try {
       const newVisibility = !eventProfile.is_visible;
       await EventProfile.update(eventProfile.id, { is_visible: newVisibility });
-      setEventProfile(prev => ({ ...prev, is_visible: newVisibility }));
+      setEventProfile((prev: typeof formData) => ({ ...prev, is_visible: newVisibility }));
     } catch (e) {
       console.log('Error updating visibility', e);
       Alert.alert('Error', 'Failed to update visibility.');
@@ -221,7 +221,7 @@ export default function ProfileScreen() {
         ) : (
           <View style={styles.chips}> 
             {user?.interests?.length ? (
-              user.interests.map(i => (
+              user.interests.map((i: string) => (
                 <View key={i} style={[styles.chip, styles.chipSelected]}><Text style={[styles.chipText, { color: '#fff' }]}>{i}</Text></View>
               ))
             ) : (
