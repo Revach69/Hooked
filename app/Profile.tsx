@@ -8,7 +8,7 @@ import {
   StyleSheet,
   Image,
   ActivityIndicator,
-  Alert
+  Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
@@ -25,10 +25,16 @@ const ALL_INTERESTS = [
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
-  const [user, setUser] = useState(null);
-  const [eventProfile, setEventProfile] = useState(null);
-  const [isEditing, setIsEditing] = useState({ bio: false, interests: false, height: false });
-  const [formData, setFormData] = useState({ bio: '', interests: [], height: '' });
+  const [user, setUser] = useState<any>(null);
+  const [eventProfile, setEventProfile] = useState<any>(null);
+  const [isEditing, setIsEditing] = useState<{ bio: boolean; interests: boolean; height: boolean }>({
+    bio: false,
+    interests: false,
+    height: false,
+  });
+  const [formData, setFormData] = useState<{ bio: string; interests: string[]; height: string }>(
+    { bio: '', interests: [], height: '' },
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -37,7 +43,7 @@ export default function ProfileScreen() {
     try {
       const currentUser = await User.me();
       if (!currentUser) {
-        navigation.navigate('Home');
+        navigation.navigate('Home' as never);
         return;
       }
       setUser(currentUser);
@@ -58,11 +64,14 @@ export default function ProfileScreen() {
     setIsLoading(false);
   }, [navigation]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
-  const handleEditToggle = field => setIsEditing(prev => ({ ...prev, [field]: !prev[field] }));
+  const handleEditToggle = (field: 'bio' | 'interests' | 'height') =>
+    setIsEditing(prev => ({ ...prev, [field]: !prev[field] }));
 
-  const handleInterestToggle = interest => {
+  const handleInterestToggle = (interest: string) => {
     setFormData(prev => {
       const exists = prev.interests.includes(interest);
       let newInterests = exists ? prev.interests.filter(i => i !== interest) : [...prev.interests, interest];
@@ -74,7 +83,7 @@ export default function ProfileScreen() {
     });
   };
 
-  const handleSave = async field => {
+  const handleSave = async (field: 'bio' | 'interests' | 'height') => {
     try {
       await User.updateMe({ [field]: formData[field] });
       handleEditToggle(field);
@@ -135,7 +144,7 @@ export default function ProfileScreen() {
             'currentProfileColor',
             'currentProfilePhotoUrl'
           ]);
-          navigation.navigate('Home');
+          navigation.navigate('Home' as never);
         } catch (e) {
           console.log('Error leaving event', e);
           Alert.alert('Error', 'Failed to leave event.');
