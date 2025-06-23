@@ -13,6 +13,8 @@ import { useNavigation } from '@react-navigation/native';
 import { EventProfile, Like, Message } from '../lib/api/entities';
 import { Heart, MessageCircle, Users, Sparkles } from 'lucide-react-native';
 import ChatModal from '../components/modals/ChatModal';
+console.log('ChatModal', ChatModal); // should log a function
+
 
 export default function MatchesScreen() {
   const navigation = useNavigation();
