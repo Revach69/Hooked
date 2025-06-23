@@ -1,13 +1,12 @@
 {
-    "expo": {
-      "name": "Hooked",
-      "slug": "hooked",
-      "version": "1.0.0",
-      "sdkVersion": "53.0.0",
-      "platforms": ["ios", "android"],
-      "orientation": "portrait",
-      "jsEngine": "hermes",
-      "entryPoint": "./index.tsx"
-    }
+  "expo": {
+    "name": "Hooked",
+    "slug": "hooked",
+    "version": "1.0.0",
+    "sdkVersion": "53.0.0",
+    "platforms": ["ios", "android"],
+    "orientation": "portrait",
+    "jsEngine": "hermes",
+    "plugins": ["expo-barcode-scanner"]
   }
-  
+}
