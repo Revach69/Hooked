@@ -1,5 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Modal, TextInput, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  Modal,
+  TextInput,
+  Alert,
+} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator, NativeStackNavigationProp,} from '@react-navigation/native-stack';
@@ -217,17 +226,9 @@ function HomeScreen() {
   );
 }
 
-function PlaceholderScreen({ route }: any) {
-  const { name } = route;
-  return (
-    <View style={styles.placeholder}>
-      <Text style={styles.placeholderText}>{name} Screen</Text>
-    </View>
-  );
-}
-
 const Stack = createNativeStackNavigator<RootStackParamList>();
-export default function Root() {
+
+export default function AppNavigator() {
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
