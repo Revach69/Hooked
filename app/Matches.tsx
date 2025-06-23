@@ -18,7 +18,6 @@ console.log('ChatModal', ChatModal); // should log a function
 
 export default function MatchesScreen() {
   console.log('Rendering MatchesScreen'); // Debugging line to check if the component is rendering
-
   const navigation = useNavigation();
   const [matches, setMatches] = useState<any[]>([]);
   const [selectedMatch, setSelectedMatch] = useState<any | null>(null);

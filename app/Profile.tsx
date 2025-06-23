@@ -25,7 +25,6 @@ const ALL_INTERESTS = [
 
 export default function ProfileScreen() {
   console.log('Rendering ProfileScreen'); // Debugging line to check if the component is rendering
-
   const navigation = useNavigation();
   const [user, setUser] = useState<any>(null);
   const [eventProfile, setEventProfile] = useState<any>(null);
