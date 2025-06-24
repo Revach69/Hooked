@@ -43,16 +43,16 @@ function HomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList, 'Home'>>();
   const [activeModal, setActiveModal] = useState<null | 'qrScanner' | 'manualCodeEntry'>(null);
   const [manualCode, setManualCode] = useState('');
-
+ 
   useEffect(() => {
-    console.log('Initializing app…');
     const client = getClient();
-    if (client?.auth?.useSession) {
+    if (client && client.auth && typeof client.auth.useSession === 'function') {
       client.auth.useSession();
     } else {
-      console.warn('Base44 auth is not available');
+      console.warn('⚠️ Base44 client or auth module not available');
     }
   }, []);
+  
   
 
   useEffect(() => {
