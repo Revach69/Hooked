@@ -1,0 +1,8 @@
+** BUILD FAILED **
+
+
+The following build commands failed:
+	SwiftCompile normal x86_64 Compiling\ BarCodeScannerExceptions.swift,\ BarCodeScannerModule.swift /Users/roirevach/Desktop/Hooked/node_modules/expo-barcode-scanner/ios/EXBarCodeScanner/BarCodeScannerExceptions.swift /Users/roirevach/Desktop/Hooked/node_modules/expo-barcode-scanner/ios/EXBarCodeScanner/BarCodeScannerModule.swift (in target 'EXBarCodeScanner' from project 'Pods')
+	CompileSwift normal x86_64 (in target 'EXBarCodeScanner' from project 'Pods')
+	Building workspace Hooked with scheme Hooked and configuration Debug
+(3 failures)
