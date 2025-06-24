@@ -12,7 +12,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator, NativeStackNavigationProp,} from '@react-navigation/native-stack';
-import { CameraKitCameraScreen } from 'react-native-camera-kit';
+import  CameraKitCameraScreen from 'react-native-camera-kit';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Heart, QrCode, Hash, Shield, Clock, Users } from 'lucide-react-native';
 import { Event } from '../lib/api/entities';
@@ -26,6 +26,9 @@ import ProfileScreen from './Profile';
 console.log('ProfileScreen', ProfileScreen);
 import JoinScreen from './join';
 console.log('JoinScreen', JoinScreen);
+import { getClient } from '../lib/api/base44Client';
+
+const base44 = getClient();
 
 export type RootStackParamList = {
   Home: undefined;
@@ -36,10 +39,16 @@ export type RootStackParamList = {
   Profile: undefined;
 };
 
+
+
 function HomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList, 'Home'>>();
   const [activeModal, setActiveModal] = useState<null | 'qrScanner' | 'manualCodeEntry'>(null);
   const [manualCode, setManualCode] = useState('');
+
+  useEffect(() => {
+    base44.auth.useSession();
+  }, []);
 
   useEffect(() => {
     checkActiveEventSession();
@@ -183,9 +192,9 @@ function HomeScreen() {
         <View style={styles.modalContainer}>
           <CameraKitCameraScreen
             style={StyleSheet.absoluteFillObject}
-            onReadCode={({ nativeEvent }) =>
-              handleScanSuccess({ data: nativeEvent.codeStringValue })
-            }
+            onReadCode={(event: { nativeEvent: { codeStringValue: string } }) =>
+              handleScanSuccess({ data: event.nativeEvent.codeStringValue })
+            }            
           />
           <TouchableOpacity style={styles.modalClose} onPress={closeModal}>
             <Text style={styles.modalCloseText}>Close</Text>
