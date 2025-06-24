@@ -45,16 +45,9 @@ function HomeScreen() {
   const [manualCode, setManualCode] = useState('');
  
   useEffect(() => {
-    const client = getClient();
-    if (!client) {
-      console.warn('⚠️ Base44 client failed to initialize');
-      return;
-    }
-    if (client.auth && typeof client.auth.useSession === 'function') {
-      client.auth.useSession();
-    } else {
-      console.warn('⚠️ Base44 client or auth module not available');
-    }
+    // During local development we bypass Base44 auth entirely.
+    // Re-enable this when integrating with the real backend.
+    getClient().auth.useSession();
   }, []);
   
   
