@@ -12,7 +12,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator, NativeStackNavigationProp,} from '@react-navigation/native-stack';
-import { BarCodeScanner } from 'expo-barcode-scanner';
+import { CameraKitCameraScreen } from 'react-native-camera-kit';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Heart, QrCode, Hash, Shield, Clock, Users } from 'lucide-react-native';
 import { Event } from '../lib/api/entities';
@@ -40,7 +40,6 @@ function HomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList, 'Home'>>();
   const [activeModal, setActiveModal] = useState<null | 'qrScanner' | 'manualCodeEntry'>(null);
   const [manualCode, setManualCode] = useState('');
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
 
   useEffect(() => {
     checkActiveEventSession();
@@ -111,13 +110,6 @@ function HomeScreen() {
     }
   };
 
-  useEffect(() => {
-    if (activeModal === 'qrScanner') {
-      BarCodeScanner.requestPermissionsAsync().then(({ status }) => {
-        setHasPermission(status === 'granted');
-      });
-    }
-  }, [activeModal]);
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -187,13 +179,14 @@ function HomeScreen() {
         </View>
       </View>
 
-      <Modal visible={activeModal === 'qrScanner'} animationType="slide" onRequestClose={closeModal}>
+        <Modal visible={activeModal === 'qrScanner'} animationType="slide" onRequestClose={closeModal}>
         <View style={styles.modalContainer}>
-          {hasPermission === false ? (
-            <Text style={styles.modalText}>Camera access denied</Text>
-          ) : (
-            <BarCodeScanner style={StyleSheet.absoluteFillObject} onBarCodeScanned={handleScanSuccess} />
-          )}
+          <CameraKitCameraScreen
+            style={StyleSheet.absoluteFillObject}
+            onReadCode={({ nativeEvent }) =>
+              handleScanSuccess({ data: nativeEvent.codeStringValue })
+            }
+          />
           <TouchableOpacity style={styles.modalClose} onPress={closeModal}>
             <Text style={styles.modalCloseText}>Close</Text>
           </TouchableOpacity>
