@@ -14,6 +14,7 @@
         "exclude": [
           "@base44/sdk",
           "tailwindcss-animate"
+
         ]
       }
     }
@@ -29,6 +30,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
     "expo": "53.0.12",
+    "expo-barcode-scanner-interface": "^3.0.0",
     "expo-image-picker": "~16.1.4",
     "expo-linear-gradient": "~14.1.5",
     "lucide-react-native": "^0.522.0",
