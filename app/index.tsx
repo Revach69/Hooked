@@ -28,8 +28,6 @@ import JoinScreen from './join';
 console.log('JoinScreen', JoinScreen);
 import { getClient } from '../lib/api/base44Client';
 
-const base44 = getClient();
-
 export type RootStackParamList = {
   Home: undefined;
   Join: { code: string };
@@ -47,8 +45,15 @@ function HomeScreen() {
   const [manualCode, setManualCode] = useState('');
 
   useEffect(() => {
-    base44.auth.useSession();
+    console.log('Initializing app…');
+    const client = getClient();
+    if (client?.auth?.useSession) {
+      client.auth.useSession();
+    } else {
+      console.warn('Base44 auth is not available');
+    }
   }, []);
+  
 
   useEffect(() => {
     checkActiveEventSession();
