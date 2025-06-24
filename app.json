@@ -4,9 +4,23 @@
     "slug": "hooked",
     "version": "1.0.0",
     "sdkVersion": "53.0.0",
-    "platforms": ["ios", "android"],
+    "platforms": [
+      "ios",
+      "android"
+    ],
     "orientation": "portrait",
     "jsEngine": "hermes",
-    "plugins": ["expo-barcode-scanner"]
+    "plugins": [
+      "expo-barcode-scanner"
+    ],
+    "ios": {
+      "bundleIdentifier": "com.anonymous.hooked" 
+    },
+      "android": {
+        "permissions": [
+          "android.permission.CAMERA"
+        ],
+        "package": "com.anonymous.hooked"
   }
+}
 }
