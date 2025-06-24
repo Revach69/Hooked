@@ -46,7 +46,11 @@ function HomeScreen() {
  
   useEffect(() => {
     const client = getClient();
-    if (client && client.auth && typeof client.auth.useSession === 'function') {
+    if (!client) {
+      console.warn('⚠️ Base44 client failed to initialize');
+      return;
+    }
+    if (client.auth && typeof client.auth.useSession === 'function') {
       client.auth.useSession();
     } else {
       console.warn('⚠️ Base44 client or auth module not available');
