@@ -14,7 +14,6 @@
         "exclude": [
           "@base44/sdk",
           "tailwindcss-animate",
-          "expo-barcode-scanner"
         ]
       }
     }
@@ -30,7 +29,6 @@
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
     "expo": "53.0.12",
-    "expo-barcode-scanner": "^13.0.1",
     "expo-barcode-scanner-interface": "^3.0.0",
     "expo-image-picker": "~16.1.4",
     "expo-linear-gradient": "~14.1.5",
