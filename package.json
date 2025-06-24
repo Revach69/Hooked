@@ -14,7 +14,6 @@
         "exclude": [
           "@base44/sdk",
           "tailwindcss-animate"
-
         ]
       }
     }
