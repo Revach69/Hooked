@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Modal,
   View,
@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from 'react-native';
-import { BarCodeScanner, BarCodeScannerResult } from 'expo-barcode-scanner';
+import { CameraKitCameraScreen } from 'react-native-camera-kit';
 import { X } from 'lucide-react-native';
 
 interface Props {
@@ -16,40 +16,29 @@ interface Props {
 }
 
 export default function QRScanner({ onScan, onClose, onSwitchToManual }: Props) {
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanned, setScanned] = useState(false);
 
-  useEffect(() => {
-    BarCodeScanner.requestPermissionsAsync().then(({ status }) =>
-      setHasPermission(status === 'granted')
-    );
-  }, []);
-
-  const handleBarCodeScanned = ({ data }: BarCodeScannerResult) => {
+  const handleReadCode = ({ nativeEvent }: { nativeEvent: { codeStringValue: string } }) => {
     if (scanned) return;
     setScanned(true);
-    onScan(data);
+    onScan(nativeEvent.codeStringValue);
   };
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.overlay}>
         <View style={styles.container}>
-          {hasPermission === false ? (
-            <Text style={styles.permissionText}>Camera access denied</Text>
-          ) : (
-            <BarCodeScanner
-              style={StyleSheet.absoluteFillObject}
-              onBarCodeScanned={handleBarCodeScanned}
-            />
-          )}
+          <CameraKitCameraScreen
+            style={StyleSheet.absoluteFillObject}
+            onReadCode={handleReadCode}
+          />
           <View style={styles.topBar}>
             <Text style={styles.title}>Scan Event QR Code</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
               <X size={20} color="#fff" />
             </TouchableOpacity>
           </View>
-          {hasPermission !== false && <View style={styles.frame} />}
+          <View style={styles.frame} />
           {onSwitchToManual && (
             <TouchableOpacity style={styles.manualBtn} onPress={onSwitchToManual}>
               <Text style={styles.manualText}>Enter Code Manually</Text>
@@ -102,7 +91,6 @@ const styles = StyleSheet.create({
     borderColor: '#ec4899',
     borderRadius: 12,
   },
-  permissionText: { color: '#fff', textAlign: 'center', marginTop: 150 },
   manualBtn: {
     position: 'absolute',
     bottom: 16,

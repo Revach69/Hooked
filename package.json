@@ -13,7 +13,8 @@
       "reactNativeDirectoryCheck": {
         "exclude": [
           "@base44/sdk",
-          "tailwindcss-animate",
+          "tailwindcss-animate"
+
         ]
       }
     }
