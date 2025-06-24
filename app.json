@@ -10,9 +10,6 @@
     ],
     "orientation": "portrait",
     "jsEngine": "hermes",
-    "plugins": [
-      "expo-barcode-scanner"
-    ],
     "ios": {
       "bundleIdentifier": "com.anonymous.hooked" 
     },
