@@ -23,6 +23,15 @@ import { Heart, MessageCircle, Users, Sparkles } from 'lucide-react-native';
 import ChatModal from '../components/modals/ChatModal';
 console.log('ChatModal', ChatModal); // should log a function
 
+type Like = {
+  id: string;
+  liker_session_id: string;
+  liked_session_id: string;
+  is_mutual: boolean;
+  liker_notified_of_match?: boolean;
+  liked_notified_of_match?: boolean;
+};
+
 
 export default function MatchesScreen() {
   console.log('Rendering MatchesScreen'); // Debugging line to check if the component is rendering
@@ -38,17 +47,17 @@ export default function MatchesScreen() {
     const allSnap = await getDocs(
       query(collection(db, 'events', eventId, 'likes'), where('is_mutual', '==', true))
     );
-    const all = allSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    for (const p of profiles) {
-      const my = all.find((l: any) => l.liker_session_id === sessionId && l.liked_session_id === p.session_id);
-      if (my && !my.liker_notified_of_match) {
-        try { await updateDoc(doc(db, 'events', eventId, 'likes', my.id), { liker_notified_of_match: true }); } catch (e) { console.log(e); }
-      }
-      const their = all.find((l: any) => l.liker_session_id === p.session_id && l.liked_session_id === sessionId);
-      if (their && !their.liked_notified_of_match) {
-        try { await updateDoc(doc(db, 'events', eventId, 'likes', their.id), { liked_notified_of_match: true }); } catch (e) { console.log(e); }
-      }
-    }
+    const all: Like[] = allSnap.docs.map((docSnap) => {
+      const data = docSnap.data();
+      return {
+        id: docSnap.id,
+        liker_session_id: data.liker_session_id,
+        liked_session_id: data.liked_session_id,
+        is_mutual: data.is_mutual,
+        liker_notified_of_match: data.liker_notified_of_match,
+        liked_notified_of_match: data.liked_notified_of_match,
+      };
+    });
   }, []);
 
   const loadMatches = useCallback(async () => {

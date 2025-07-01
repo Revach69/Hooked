@@ -5,9 +5,6 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { db } from '../lib/firebaseConfig';
 import { getDoc, doc, collection, query, where, getDocs } from 'firebase/firestore';
 import { AlertCircle } from 'lucide-react-native';
-import { getDoc, doc } from 'firebase/firestore';
-import { db } from '../lib/firebaseConfig';
-
 
 export default function JoinScreen() {
 
@@ -28,7 +25,6 @@ export default function JoinScreen() {
         setIsLoading(false);
         return;
       }
-      const snapshot = await getDoc(doc(db, 'events', eventCode));
       const docRef = doc(db, 'events', eventCode);
       const snapshot = await getDoc(docRef);
       if (!snapshot.exists()) {
@@ -36,50 +32,33 @@ export default function JoinScreen() {
         setIsLoading(false);
       return;
       }
-      const foundEvent = snapshot.data() as any;
-      const startsAt: Date | undefined = foundEvent.starts_at?.toDate
-        ? foundEvent.starts_at.toDate()
-        : foundEvent.starts_at
-        ? new Date(foundEvent.starts_at)
-        : undefined;
-      const expiresAt: Date | undefined = foundEvent.expires_at?.toDate
-        ? foundEvent.expires_at.toDate()
-        : foundEvent.expires_at
-        ? new Date(foundEvent.expires_at)
-        : undefined;
-
-      if (!startsAt || !expiresAt) {
-        setError('This event is not configured correctly. Please contact the organizer.');
-        setIsLoading(false);
-        return;
-      }
-      const now = new Date();
-      if (now < startsAt) {
       const foundEvent = snapshot.data();
-        if (!foundEvent.starts_at || !foundEvent.expires_at) {
-          setError('This event is not configured correctly. Please contact the organizer.');
-          setIsLoading(false);
-        return;
-      }
-      const startsAt = foundEvent.starts_at.toDate ? foundEvent.starts_at.toDate() : new Date(foundEvent.starts_at);
-      const expiresAt = foundEvent.expires_at.toDate ? foundEvent.expires_at.toDate() : new Date(foundEvent.expires_at);
+const startsAt = foundEvent.starts_at?.toDate?.() ?? new Date(foundEvent.starts_at);
+const expiresAt = foundEvent.expires_at?.toDate?.() ?? new Date(foundEvent.expires_at);
 
-      const nowUTC = new Date().toISOString();
-      if (nowUTC < startsAt.toISOString()) {
-        setError("This event hasn't started yet. Try again soon!");
-        setIsLoading(false);
-        return;
-      }
-      if (now >= expiresAt) {
-      if (nowUTC >= expiresAt.toISOString()) {
-        setError('This event has ended.');
-        setIsLoading(false);
-        return;
-      }
-      await AsyncStorage.multiSet([
-        ['currentEventId', foundEvent.id],
-        ['currentEventCode', foundEvent.code],
-      ]);
+if (!startsAt || !expiresAt) {
+  setError('This event is not configured correctly. Please contact the organizer.');
+  setIsLoading(false);
+  return;
+}
+
+const now = new Date();
+
+if (now < startsAt) {
+  setError("This event hasn't started yet. Try again soon!");
+  setIsLoading(false);
+  return;
+}
+
+if (now >= expiresAt) {
+  setError('This event has ended.');
+  setIsLoading(false);
+  return;
+}
+    await AsyncStorage.multiSet([
+      ['currentEventId', snapshot.id],
+     ['currentEventCode', eventCode],
+    ]);
       const existingSessionId = await AsyncStorage.getItem('currentSessionId');
       if (existingSessionId) {
         try {
