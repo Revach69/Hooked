@@ -126,7 +126,7 @@ function HomeScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1 }}>
-      <ScrollView contentContainerStyle={[styles.container, { paddingTop: insets.top + 20 }]}>
+      <ScrollView contentContainerStyle={[styles.container, { paddingTop: insets.top + 1 }]}>
       <View style={styles.hero}>
         <LinearGradient colors={['#ec4899', '#8b5cf6']} style={styles.heroIcon}>
           <Heart size={40} color="#fff" />
