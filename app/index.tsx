@@ -9,6 +9,7 @@ import {
   TextInput,
   Alert,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator, NativeStackNavigationProp,} from '@react-navigation/native-stack';
@@ -41,6 +42,7 @@ export type RootStackParamList = {
 
 function HomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList, 'Home'>>();
+  const insets = useSafeAreaInsets();
   const [activeModal, setActiveModal] = useState<null | 'qrScanner' | 'manualCodeEntry'>(null);
   const [manualCode, setManualCode] = useState('');
  
@@ -123,7 +125,8 @@ function HomeScreen() {
 
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <SafeAreaView style={{ flex: 1 }}>
+      <ScrollView contentContainerStyle={[styles.container, { paddingTop: insets.top + 20 }]}>
       <View style={styles.hero}>
         <LinearGradient colors={['#ec4899', '#8b5cf6']} style={styles.heroIcon}>
           <Heart size={40} color="#fff" />
@@ -231,7 +234,8 @@ function HomeScreen() {
           </View>
         </View>
       </Modal>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
