@@ -17,6 +17,8 @@ import CameraKitCameraScreen from 'react-native-camera-kit';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Heart, QrCode, Hash, Shield, Clock, Users } from 'lucide-react-native';
 import { Event } from '../lib/api/entities';
+import { db } from '../lib/firebaseConfig';
+import { getDoc, doc } from 'firebase/firestore';
 import ConsentScreen from './Consent';
 console.log('ConsentScreen:', ConsentScreen);
 import DiscoveryScreen from './Discovery';
@@ -100,9 +102,20 @@ function HomeScreen() {
   const openModal = (name: 'qrScanner' | 'manualCodeEntry') => setActiveModal(name);
   const closeModal = () => { setActiveModal(null); setManualCode(''); };
 
-  const handleEventAccess = (code: string) => {
+  const handleEventAccess = async (code: string) => {
     closeModal();
-    navigation.navigate('Join', { code: code.toUpperCase() });
+    const eventCode = code.toUpperCase().trim();
+    try {
+      const snapshot = await getDoc(doc(db, 'events', eventCode));
+      if (snapshot.exists() && (snapshot.data() as any)?.active) {
+        navigation.navigate('Join', { code: eventCode });
+      } else {
+        Alert.alert('Invalid Event Code', 'No active event found for that code.');
+      }
+    } catch (err) {
+      console.error('Error fetching event from Firestore:', err);
+      Alert.alert('Error', 'Unable to verify event code. Please try again.');
+    }
   };
 
   const handleScanSuccess = ({ data }: { data: string }) => {
