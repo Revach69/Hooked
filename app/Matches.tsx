@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
-import { db } from '../lib/firebaseConfig';
+import { auth, db  } from '../lib/firebaseConfig';
 import {
   collection,
   query,

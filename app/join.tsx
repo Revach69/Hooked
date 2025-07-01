@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator, TouchableOpacity, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { db } from '../lib/firebaseConfig';
+import { auth, db } from '../lib/firebaseConfig';
 import { getDoc, doc, collection, query, where, getDocs } from 'firebase/firestore';
 import { AlertCircle } from 'lucide-react-native';
 

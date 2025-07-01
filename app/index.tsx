@@ -18,8 +18,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Heart, QrCode, Hash, Shield, Clock, Users } from 'lucide-react-native';
 import { Event } from '../lib/api/entities';
 import { db } from '../lib/firebaseConfig';
-import { getDoc, doc } from 'firebase/firestore';
-import ConsentScreen from './Consent';
+import {
+  getDoc,
+  getDocs,
+  doc,
+  collection,
+  query,
+  where,
+} from 'firebase/firestore';import ConsentScreen from './Consent';
 console.log('ConsentScreen:', ConsentScreen);
 import DiscoveryScreen from './Discovery';
 console.log('DiscoveryScreen', DiscoveryScreen);
@@ -60,6 +66,16 @@ function HomeScreen() {
     checkActiveEventSession();
   }, []);
 
+  const checkIfUserHasProfile = async (eventId: string, sessionId: string) => {
+    const q = query(
+      collection(db, 'events', eventId, 'profiles'),
+      where('session_id', '==', sessionId)
+    );
+    const snapshot = await getDocs(q);
+    return !snapshot.empty;
+  };
+  
+
   const checkActiveEventSession = async () => {
     const eventId = await AsyncStorage.getItem('currentEventId');
     const sessionId = await AsyncStorage.getItem('currentSessionId');
@@ -69,17 +85,16 @@ function HomeScreen() {
       const events = await Event.filter({ id: eventId });
       if (events.length > 0) {
         const event = events[0];
-        const nowISO = new Date().toISOString();
-        if (
-          event.starts_at &&
-          event.expires_at &&
-          nowISO >= event.starts_at &&
-          nowISO <= event.expires_at
-        ) {
-          navigation.navigate('Discovery');
+        const startsAt = new Date(event.starts_at);
+        const expiresAt = new Date(event.expires_at);
+        const now = new Date();
+          if (now >= startsAt && now <= expiresAt) {
+          const profileExists = await checkIfUserHasProfile(eventId, sessionId);
+          navigation.navigate(profileExists ? 'Discovery' : 'Consent');
           return;
-        }
+          }
       }
+      
       await AsyncStorage.multiRemove([
         'currentEventId',
         'currentSessionId',
