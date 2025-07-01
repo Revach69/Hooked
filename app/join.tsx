@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator, TouchableOpacity, StyleSheet, } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { Event, EventProfile } from '../lib/api/entities';
+import { db } from '../lib/firebaseConfig';
+import { getDoc, doc, collection, query, where, getDocs } from 'firebase/firestore';
 import { AlertCircle } from 'lucide-react-native';
 
 export default function JoinScreen() {
@@ -25,25 +26,37 @@ export default function JoinScreen() {
         setIsLoading(false);
         return;
       }
-      const events = await Event.filter({ code: eventCode });
-      if (events.length === 0) {
+      const snapshot = await getDoc(doc(db, 'events', eventCode));
+      if (!snapshot.exists()) {
         setError('Invalid event code.');
         setIsLoading(false);
         return;
       }
-      const foundEvent = events[0];
-      if (!foundEvent.starts_at || !foundEvent.expires_at) {
+
+      const foundEvent = snapshot.data() as any;
+      const startsAt: Date | undefined = foundEvent.starts_at?.toDate
+        ? foundEvent.starts_at.toDate()
+        : foundEvent.starts_at
+        ? new Date(foundEvent.starts_at)
+        : undefined;
+      const expiresAt: Date | undefined = foundEvent.expires_at?.toDate
+        ? foundEvent.expires_at.toDate()
+        : foundEvent.expires_at
+        ? new Date(foundEvent.expires_at)
+        : undefined;
+
+      if (!startsAt || !expiresAt) {
         setError('This event is not configured correctly. Please contact the organizer.');
         setIsLoading(false);
         return;
       }
-      const nowUTC = new Date().toISOString();
-      if (nowUTC < foundEvent.starts_at) {
+      const now = new Date();
+      if (now < startsAt) {
         setError("This event hasn't started yet. Try again soon!");
         setIsLoading(false);
         return;
       }
-      if (nowUTC >= foundEvent.expires_at) {
+      if (now >= expiresAt) {
         setError('This event has ended.');
         setIsLoading(false);
         return;
@@ -55,11 +68,12 @@ export default function JoinScreen() {
       const existingSessionId = await AsyncStorage.getItem('currentSessionId');
       if (existingSessionId) {
         try {
-          const profiles = await EventProfile.filter({
-            session_id: existingSessionId,
-            event_id: foundEvent.id,
-          });
-          if (profiles.length > 0) {
+          const q = query(
+            collection(db, 'events', foundEvent.id, 'profiles'),
+            where('session_id', '==', existingSessionId)
+          );
+          const profileSnap = await getDocs(q);
+          if (!profileSnap.empty) {
             navigation.navigate('Discovery' as never);
             return;
           }
