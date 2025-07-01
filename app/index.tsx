@@ -107,6 +107,33 @@ function HomeScreen() {
     const eventCode = code.toUpperCase().trim();
     try {
       const snapshot = await getDoc(doc(db, 'events', eventCode));
+      if (!snapshot.exists()) {
+        Alert.alert('Invalid Event Code', 'No event found for that code.');
+        return;
+      }
+
+      const data = snapshot.data() as any;
+      const startsAt: Date | undefined = data.starts_at?.toDate
+        ? data.starts_at.toDate()
+        : data.starts_at
+        ? new Date(data.starts_at)
+        : undefined;
+      const expiresAt: Date | undefined = data.expires_at?.toDate
+        ? data.expires_at.toDate()
+        : data.expires_at
+        ? new Date(data.expires_at)
+        : undefined;
+
+      if (
+        startsAt &&
+        expiresAt &&
+        new Date() >= startsAt &&
+        new Date() <= expiresAt
+      ) {
+        navigation.navigate('Join', { code: eventCode });
+      } else {
+        Alert.alert('Event Inactive');
+=======
       if (snapshot.exists()) {
         const data = snapshot.data();
         const now = new Date();
