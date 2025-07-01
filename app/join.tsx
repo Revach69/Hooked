@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ActivityIndicator, TouchableOpacity, StyleSheet, } from 'react-native';
+import { View, Text, ActivityIndicator, TouchableOpacity, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { db } from '../lib/firebaseConfig';
@@ -10,7 +10,6 @@ import { db } from '../lib/firebaseConfig';
 
 
 export default function JoinScreen() {
-  console.log('Rendering JoinScreen'); // Debugging line to check if the component is rendering
 
   const navigation = useNavigation();
   const route = useRoute() as any;
@@ -30,7 +29,6 @@ export default function JoinScreen() {
         return;
       }
       const snapshot = await getDoc(doc(db, 'events', eventCode));
-
       const docRef = doc(db, 'events', eventCode);
       const snapshot = await getDoc(docRef);
       if (!snapshot.exists()) {

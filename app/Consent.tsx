@@ -14,7 +14,6 @@ const COLORS = [
 ];
 
 export default function ConsentScreen() {
-  console.log('Rendering ConsentScreen');
   const navigation = useNavigation();
   const [currentEvent, setCurrentEvent] = useState<any>(null);
   const [profilePhoto, setProfilePhoto] = useState<any>(null);
