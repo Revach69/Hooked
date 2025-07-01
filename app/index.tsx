@@ -107,10 +107,19 @@ function HomeScreen() {
     const eventCode = code.toUpperCase().trim();
     try {
       const snapshot = await getDoc(doc(db, 'events', eventCode));
-      if (snapshot.exists() && (snapshot.data() as any)?.active) {
-        navigation.navigate('Join', { code: eventCode });
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        const now = new Date();
+        const startsAt = new Date(data.starts_at);
+        const expiresAt = new Date(data.expires_at);
+      
+        if (startsAt <= now && now <= expiresAt) {
+          navigation.navigate('Join', { code: eventCode });
+        } else {
+          Alert.alert('Event Inactive', 'This event is not currently active.');
+        }
       } else {
-        Alert.alert('Invalid Event Code', 'No active event found for that code.');
+        Alert.alert('Invalid Event Code', 'No event found for that code.');
       }
     } catch (err) {
       console.error('Error fetching event from Firestore:', err);
