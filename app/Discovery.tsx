@@ -12,7 +12,17 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
-import { EventProfile, Like, Event } from '../lib/api/entities';
+import { db } from '../lib/firebaseConfig';
+import {
+  getDoc,
+  doc,
+  collection,
+  query,
+  where,
+  getDocs,
+  addDoc,
+  updateDoc,
+} from 'firebase/firestore';
 import { Heart } from 'lucide-react-native';
 
 interface Filters {
@@ -74,9 +84,9 @@ export default function DiscoveryScreen() {
     setCurrentSessionId(sessionId);
 
     try {
-      const events = await Event.filter({ id: eventId });
-      if (events.length > 0) {
-        setCurrentEvent(events[0]);
+      const snapshot = await getDoc(doc(db, 'events', eventId));
+      if (snapshot.exists()) {
+        setCurrentEvent({ id: eventId, ...snapshot.data() });
       } else {
         navigation.navigate('Home' as never);
         return;
@@ -94,7 +104,12 @@ export default function DiscoveryScreen() {
 
   const loadProfiles = async (eventId: string, sessionId: string) => {
     try {
-      const visible = await EventProfile.filter({ event_id: eventId, is_visible: true });
+      const q = query(
+        collection(db, 'events', eventId, 'profiles'),
+        where('is_visible', '==', true)
+      );
+      const snap = await getDocs(q);
+      const visible = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       const me = visible.find((p: any) => p.session_id === sessionId);
       setCurrentUserProfile(me);
       setProfiles(visible.filter((p: any) => p.session_id !== sessionId));
@@ -108,7 +123,12 @@ export default function DiscoveryScreen() {
 
   const loadLikes = async (eventId: string, sessionId: string) => {
     try {
-      const likes = await Like.filter({ liker_session_id: sessionId, event_id: eventId });
+      const q = query(
+        collection(db, 'events', eventId, 'likes'),
+        where('liker_session_id', '==', sessionId)
+      );
+      const snap = await getDocs(q);
+      const likes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setLikedProfiles(new Set(likes.map((l: any) => l.liked_session_id)));
     } catch (e) {
       console.log('Error loading likes', e);
@@ -151,7 +171,7 @@ export default function DiscoveryScreen() {
 
     try {
       setLikedProfiles((prev) => new Set([...Array.from(prev), profile.session_id]));
-      const newLike = await Like.create({
+      const likeRef = await addDoc(collection(db, 'events', eventId!, 'likes'), {
         event_id: eventId,
         liker_session_id: likerSessionId,
         liked_session_id: profile.session_id,
@@ -160,19 +180,21 @@ export default function DiscoveryScreen() {
         liked_notified_of_match: false,
       });
 
-      const theirLikes = await Like.filter({
-        event_id: eventId,
-        liker_session_id: profile.session_id,
-        liked_session_id: likerSessionId,
-      });
+      const theirLikesSnap = await getDocs(
+        query(
+          collection(db, 'events', eventId!, 'likes'),
+          where('liker_session_id', '==', profile.session_id),
+          where('liked_session_id', '==', likerSessionId)
+        )
+      );
 
-      if (theirLikes.length > 0) {
-        const theirLike = theirLikes[0];
-        await Like.update(newLike.id, {
+      if (!theirLikesSnap.empty) {
+        const theirLike = theirLikesSnap.docs[0];
+        await updateDoc(doc(db, 'events', eventId!, 'likes', likeRef.id), {
           is_mutual: true,
           liker_notified_of_match: true,
         });
-        await Like.update(theirLike.id, {
+        await updateDoc(doc(db, 'events', eventId!, 'likes', theirLike.id), {
           is_mutual: true,
           liked_notified_of_match: true,
         });
