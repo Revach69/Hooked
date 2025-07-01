@@ -159,7 +159,6 @@ function HomeScreen() {
     }
   };
 
-
   return (
     <SafeAreaView style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={[styles.container, { paddingTop: insets.top + 1 }]}>

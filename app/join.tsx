@@ -4,6 +4,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Event, EventProfile } from '../lib/api/entities';
 import { AlertCircle } from 'lucide-react-native';
+import { getDoc, doc } from 'firebase/firestore';
+import { db } from '../lib/firebaseConfig';
+
 
 export default function JoinScreen() {
   console.log('Rendering JoinScreen'); // Debugging line to check if the component is rendering
@@ -25,25 +28,29 @@ export default function JoinScreen() {
         setIsLoading(false);
         return;
       }
-      const events = await Event.filter({ code: eventCode });
-      if (events.length === 0) {
+      const docRef = doc(db, 'events', eventCode);
+      const snapshot = await getDoc(docRef);
+      if (!snapshot.exists()) {
         setError('Invalid event code.');
         setIsLoading(false);
+      return;
+      }
+      const foundEvent = snapshot.data();
+        if (!foundEvent.starts_at || !foundEvent.expires_at) {
+          setError('This event is not configured correctly. Please contact the organizer.');
+          setIsLoading(false);
         return;
       }
-      const foundEvent = events[0];
-      if (!foundEvent.starts_at || !foundEvent.expires_at) {
-        setError('This event is not configured correctly. Please contact the organizer.');
-        setIsLoading(false);
-        return;
-      }
+      const startsAt = foundEvent.starts_at.toDate ? foundEvent.starts_at.toDate() : new Date(foundEvent.starts_at);
+      const expiresAt = foundEvent.expires_at.toDate ? foundEvent.expires_at.toDate() : new Date(foundEvent.expires_at);
+
       const nowUTC = new Date().toISOString();
-      if (nowUTC < foundEvent.starts_at) {
+      if (nowUTC < startsAt.toISOString()) {
         setError("This event hasn't started yet. Try again soon!");
         setIsLoading(false);
         return;
       }
-      if (nowUTC >= foundEvent.expires_at) {
+      if (nowUTC >= expiresAt.toISOString()) {
         setError('This event has ended.');
         setIsLoading(false);
         return;
