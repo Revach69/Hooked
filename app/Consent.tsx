@@ -3,7 +3,8 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ScrollView,
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
-import { Event, EventProfile, User } from '../lib/api/entities';
+import { db } from '../lib/firebaseConfig';
+import { getDoc, doc, collection, addDoc } from 'firebase/firestore';
 import { UploadFile } from '../lib/api/integrations';
 import { Heart, Instagram, Facebook } from 'lucide-react-native';
 
@@ -13,7 +14,6 @@ const COLORS = [
 ];
 
 export default function ConsentScreen() {
-  console.log('Rendering ConsentScreen');
   const navigation = useNavigation();
   const [currentEvent, setCurrentEvent] = useState<any>(null);
   const [profilePhoto, setProfilePhoto] = useState<any>(null);
@@ -41,30 +41,14 @@ export default function ConsentScreen() {
       return;
     }
     try {
-      const [events, currentUser] = await Promise.all([
-        Event.filter({ id: eventId }),
-        User.me().catch(() => null),
-      ]);
-      if (events.length > 0) {
-        setCurrentEvent(events[0]);
+      const snapshot = await getDoc(doc(db, 'events', eventId));
+      if (snapshot.exists()) {
+        setCurrentEvent({ id: eventId, ...snapshot.data() });
       } else {
         navigation.navigate('Home' as never);
         return;
       }
-      if (currentUser) {
-        setFormData(prev => ({
-          ...prev,
-          first_name: currentUser.full_name || '',
-          email: currentUser.email || '',
-          age: currentUser.age?.toString() || '',
-          gender_identity: currentUser.gender_identity || '',
-          interested_in: currentUser.interested_in || '',
-          interests: currentUser.interests || [],
-        }));
-        if (currentUser.profile_photo_url) {
-          setProfilePhotoPreview(currentUser.profile_photo_url);
-        }
-      }
+      // No user system implemented; form starts blank
     } catch (e) {
       console.log('Error loading data', e);
       navigation.navigate('Home' as never);
@@ -117,27 +101,17 @@ export default function ConsentScreen() {
         uploadedPhotoUrl = file_url;
       }
       const profileColor = COLORS[Math.floor(Math.random() * COLORS.length)];
-      await User.updateMe({
-        full_name: formData.first_name,
-        email: formData.email,
-        age: parseInt(formData.age, 10),
-        gender_identity: formData.gender_identity,
-        interested_in: formData.interested_in,
-        interests: formData.interests || [],
-        profile_photo_url: uploadedPhotoUrl,
-        profile_color: profileColor,
-      });
       const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      await EventProfile.create({
-        event_id: currentEvent.id,
+
+      await addDoc(collection(db, 'events', currentEvent.id, 'profiles'), {
         session_id: sessionId,
-        profile_photo_url: uploadedPhotoUrl,
         first_name: formData.first_name,
         email: formData.email,
         age: parseInt(formData.age, 10),
         gender_identity: formData.gender_identity,
         interested_in: formData.interested_in,
         interests: formData.interests || [],
+        profile_photo_url: uploadedPhotoUrl,
         profile_color: profileColor,
       });
       await AsyncStorage.multiSet([

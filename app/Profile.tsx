@@ -13,7 +13,16 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
-import { User, EventProfile } from '../lib/api/entities';
+import { db } from '../lib/firebaseConfig';
+import {
+  getDocs,
+  query,
+  where,
+  collection,
+  updateDoc,
+  doc,
+  deleteDoc,
+} from 'firebase/firestore';
 import { UploadFile } from '../lib/api/integrations';
 
 const ALL_INTERESTS = [
@@ -42,7 +51,8 @@ export default function ProfileScreen() {
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const currentUser = await User.me();
+      const stored = await AsyncStorage.getItem('currentUserData');
+      const currentUser = stored ? JSON.parse(stored) : null;
       if (!currentUser) {
         navigation.navigate('Home' as never);
         return;
@@ -56,8 +66,12 @@ export default function ProfileScreen() {
       const eventId = await AsyncStorage.getItem('currentEventId');
       const sessionId = await AsyncStorage.getItem('currentSessionId');
       if (eventId && sessionId) {
-        const profiles = await EventProfile.filter({ event_id: eventId, session_id: sessionId });
-        if (profiles.length > 0) setEventProfile(profiles[0]);
+        const q = query(
+          collection(db, 'events', eventId, 'profiles'),
+          where('session_id', '==', sessionId)
+        );
+        const snap = await getDocs(q);
+        if (!snap.empty) setEventProfile({ id: snap.docs[0].id, ...snap.docs[0].data() });
       }
     } catch (e) {
       console.log('Error loading profile data', e);
@@ -86,9 +100,10 @@ export default function ProfileScreen() {
 
   const handleSave = async (field: 'bio' | 'interests' | 'height') => {
     try {
-      await User.updateMe({ [field]: formData[field] });
+      const updated = { ...user, [field]: formData[field] };
+      await AsyncStorage.setItem('currentUserData', JSON.stringify(updated));
+      setUser(updated);
       handleEditToggle(field);
-      await loadData();
     } catch (e) {
       console.log('Error updating', field, e);
       Alert.alert('Error', 'Failed to update profile.');
@@ -109,8 +124,9 @@ export default function ProfileScreen() {
         const { file_url } = await UploadFile({
           file: { uri: asset.uri, name: asset.fileName || 'photo.jpg', type: asset.mimeType || 'image/jpeg' }
         });
-        await User.updateMe({ profile_photo_url: file_url });
-        await loadData();
+        const updated = { ...user, profile_photo_url: file_url };
+        await AsyncStorage.setItem('currentUserData', JSON.stringify(updated));
+        setUser(updated);
       } catch (e) {
         console.log('Error uploading photo', e);
         Alert.alert('Error', 'Failed to upload photo.');
@@ -123,7 +139,11 @@ export default function ProfileScreen() {
     if (!eventProfile) return;
     try {
       const newVisibility = !eventProfile.is_visible;
-      await EventProfile.update(eventProfile.id, { is_visible: newVisibility });
+      const eventId = await AsyncStorage.getItem('currentEventId');
+      if (!eventId) return;
+      await updateDoc(doc(db, 'events', eventId, 'profiles', eventProfile.id), {
+        is_visible: newVisibility,
+      });
       setEventProfile((prev: typeof formData) => ({ ...prev, is_visible: newVisibility }));
     } catch (e) {
       console.log('Error updating visibility', e);
@@ -137,7 +157,9 @@ export default function ProfileScreen() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Leave', style: 'destructive', onPress: async () => {
         try {
-          await EventProfile.delete(eventProfile.id);
+          const eventId = await AsyncStorage.getItem('currentEventId');
+          if (!eventId) return;
+          await deleteDoc(doc(db, 'events', eventId, 'profiles', eventProfile.id));
           await AsyncStorage.multiRemove([
             'currentEventId',
             'currentSessionId',
