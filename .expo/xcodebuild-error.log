@@ -1,0 +1,7 @@
+** BUILD FAILED **
+
+
+The following build commands failed:
+	ScanDependencies /Users/roirevach/Library/Developer/Xcode/DerivedData/Hooked-dxdrjmtyuuwueadiewiaptdsvnrh/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/React-RuntimeHermes.build/Objects-normal/x86_64/React-RuntimeHermes-dummy.o /Users/roirevach/Desktop/Hooked/ios/Pods/Target\ Support\ Files/React-RuntimeHermes/React-RuntimeHermes-dummy.m normal x86_64 objective-c com.apple.compilers.llvm.clang.1_0.compiler (in target 'React-RuntimeHermes' from project 'Pods')
+	Building workspace Hooked with scheme Hooked and configuration Debug
+(2 failures)
