@@ -11,7 +11,15 @@ import {
   Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Message } from '../../lib/api/entities';
+import { db } from '../../lib/firebaseConfig';
+import {
+  collection,
+  query,
+  where,
+  orderBy,
+  getDocs,
+  addDoc,
+} from 'firebase/firestore';
 import ContactShareModal from './ContactShareModal';
 import { Send, X, Share } from 'lucide-react-native';
 
@@ -38,7 +46,13 @@ export default function ChatModal({ match, onClose }: Props) {
     if (!sessionId || !eventId) return;
     const matchId = [sessionId, match.session_id].sort().join('_');
     try {
-      const all = await Message.filter({ event_id: eventId, match_id: matchId }, 'created_date');
+      const q = query(
+        collection(db, 'events', eventId, 'messages'),
+        where('match_id', '==', matchId),
+        orderBy('created_date')
+      );
+      const snap = await getDocs(q);
+      const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setMessages(all);
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 0);
     } catch (e) {
@@ -62,21 +76,22 @@ export default function ChatModal({ match, onClose }: Props) {
     };
     setMessages(prev => [...prev, temp]);
     try {
-      await Message.create({
+      await addDoc(collection(db, 'events', eventId, 'messages'), {
         event_id: eventId,
         sender_session_id: sessionId,
         receiver_session_id: match.session_id,
         content: text,
         match_id: matchId,
         is_read: false,
+        created_date: new Date(),
       });
     } catch (e) {
       console.log('Error sending message', e);
     }
   };
 
-  const formatTime = (iso: string) => {
-    const d = new Date(iso);
+  const formatTime = (value: any) => {
+    const d = value?.toDate ? value.toDate() : new Date(value);
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 

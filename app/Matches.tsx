@@ -10,7 +10,15 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
-import { EventProfile, Like, Message } from '../lib/api/entities';
+import { db } from '../lib/firebaseConfig';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  updateDoc,
+  doc,
+} from 'firebase/firestore';
 import { Heart, MessageCircle, Users, Sparkles } from 'lucide-react-native';
 import ChatModal from '../components/modals/ChatModal';
 console.log('ChatModal', ChatModal); // should log a function
@@ -27,15 +35,18 @@ export default function MatchesScreen() {
     const sessionId = await AsyncStorage.getItem('currentSessionId');
     const eventId = await AsyncStorage.getItem('currentEventId');
     if (!sessionId || !eventId || profiles.length === 0) return;
-    const all = await Like.filter({ event_id: eventId, is_mutual: true });
+    const allSnap = await getDocs(
+      query(collection(db, 'events', eventId, 'likes'), where('is_mutual', '==', true))
+    );
+    const all = allSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     for (const p of profiles) {
       const my = all.find((l: any) => l.liker_session_id === sessionId && l.liked_session_id === p.session_id);
       if (my && !my.liker_notified_of_match) {
-        try { await Like.update(my.id, { liker_notified_of_match: true }); } catch (e) { console.log(e); }
+        try { await updateDoc(doc(db, 'events', eventId, 'likes', my.id), { liker_notified_of_match: true }); } catch (e) { console.log(e); }
       }
       const their = all.find((l: any) => l.liker_session_id === p.session_id && l.liked_session_id === sessionId);
       if (their && !their.liked_notified_of_match) {
-        try { await Like.update(their.id, { liked_notified_of_match: true }); } catch (e) { console.log(e); }
+        try { await updateDoc(doc(db, 'events', eventId, 'likes', their.id), { liked_notified_of_match: true }); } catch (e) { console.log(e); }
       }
     }
   }, []);
@@ -45,19 +56,47 @@ export default function MatchesScreen() {
     const eventId = await AsyncStorage.getItem('currentEventId');
     if (!sessionId || !eventId) { setIsLoading(false); return; }
     try {
-      const myLikes = await Like.filter({ liker_session_id: sessionId, event_id: eventId, is_mutual: true });
-      const likesToMe = await Like.filter({ liked_session_id: sessionId, event_id: eventId, is_mutual: true });
+      const myLikesSnap = await getDocs(
+        query(
+          collection(db, 'events', eventId, 'likes'),
+          where('liker_session_id', '==', sessionId),
+          where('is_mutual', '==', true)
+        )
+      );
+      const myLikes = myLikesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      const likesToMeSnap = await getDocs(
+        query(
+          collection(db, 'events', eventId, 'likes'),
+          where('liked_session_id', '==', sessionId),
+          where('is_mutual', '==', true)
+        )
+      );
+      const likesToMe = likesToMeSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
       const ids = new Set([
         ...myLikes.map((l: any) => l.liked_session_id),
         ...likesToMe.map((l: any) => l.liker_session_id),
       ]);
       if (ids.size === 0) { setMatches([]); setIsLoading(false); return; }
-      const profiles = await EventProfile.filter({ session_id: Array.from(ids), event_id: eventId });
+
+      const profileSnap = await getDocs(collection(db, 'events', eventId, 'profiles'));
+      const profiles = profileSnap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter((p: any) => ids.has(p.session_id));
+
       const withCounts = await Promise.all(profiles.map(async (p: any) => {
         const participants = [sessionId, p.session_id].sort();
         const matchId = `${participants[0]}_${participants[1]}`;
-        const unread = await Message.filter({ match_id: matchId, receiver_session_id: sessionId, is_read: false, event_id: eventId });
-        return { ...p, unreadCount: unread.length };
+        const unreadSnap = await getDocs(
+          query(
+            collection(db, 'events', eventId, 'messages'),
+            where('match_id', '==', matchId),
+            where('receiver_session_id', '==', sessionId),
+            where('is_read', '==', false)
+          )
+        );
+        return { ...p, unreadCount: unreadSnap.size };
       }));
       setMatches(withCounts.filter(Boolean));
       if (profiles.length > 0) markMatchesAsNotified(profiles);

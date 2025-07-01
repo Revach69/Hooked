@@ -30,6 +30,7 @@ export default function JoinScreen() {
         return;
       }
       const snapshot = await getDoc(doc(db, 'events', eventCode));
+
       const docRef = doc(db, 'events', eventCode);
       const snapshot = await getDoc(docRef);
       if (!snapshot.exists()) {
@@ -37,7 +38,6 @@ export default function JoinScreen() {
         setIsLoading(false);
       return;
       }
-
       const foundEvent = snapshot.data() as any;
       const startsAt: Date | undefined = foundEvent.starts_at?.toDate
         ? foundEvent.starts_at.toDate()
