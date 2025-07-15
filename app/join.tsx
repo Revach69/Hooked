@@ -1,15 +1,19 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, ActivityIndicator, TouchableOpacity, StyleSheet } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import { auth, db } from '../lib/firebaseConfig';
-import { getDoc, doc, collection, query, where, getDocs } from 'firebase/firestore';
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  ActivityIndicator,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+} from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
 import { AlertCircle } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Event } from '../lib/firebaseApi';
 
-export default function JoinScreen() {
-
-  const navigation = useNavigation();
-  const route = useRoute() as any;
+export default function JoinPage() {
+  const { code } = useLocalSearchParams<{ code: string }>();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -19,80 +23,96 @@ export default function JoinScreen() {
 
   const handleEventJoin = async () => {
     try {
-      const eventCode = (route.params?.code || '').toUpperCase().trim();
-      if (!eventCode) {
-        setError('No event code provided.');
+      if (!code) {
+        setError("No event code provided.");
         setIsLoading(false);
         return;
       }
-      const docRef = doc(db, 'events', eventCode);
-      const snapshot = await getDoc(docRef);
-      if (!snapshot.exists()) {
-        setError('Invalid event code.');
+
+      // Validate the event code
+      const events = await Event.filter({ event_code: code.toUpperCase() });
+      
+      if (events.length === 0) {
+        setError("Invalid event code.");
         setIsLoading(false);
-      return;
+        return;
       }
-      const foundEvent = snapshot.data();
-const startsAt = foundEvent.starts_at?.toDate?.() ?? new Date(foundEvent.starts_at);
-const expiresAt = foundEvent.expires_at?.toDate?.() ?? new Date(foundEvent.expires_at);
 
-if (!startsAt || !expiresAt) {
-  setError('This event is not configured correctly. Please contact the organizer.');
-  setIsLoading(false);
-  return;
-}
+      const foundEvent = events[0];
+      const nowUTC = new Date().toISOString(); // Current UTC time as ISO string
 
-const now = new Date();
+      if (!foundEvent.starts_at || !foundEvent.expires_at) {
+        setError("This event is not configured correctly. Please contact the organizer.");
+        setIsLoading(false);
+        return;
+      }
+      
+      // Check if event is active using UTC time comparison
+      const isActive = foundEvent.starts_at <= nowUTC && nowUTC < foundEvent.expires_at;
+      
+      if (nowUTC < foundEvent.starts_at) {
+        setError("This event hasn't started yet. Try again soon!");
+        setIsLoading(false);
+        return;
+      }
+      
+      if (nowUTC >= foundEvent.expires_at) {
+        setError("This event has ended.");
+        setIsLoading(false);
+        return;
+      }
 
-if (now < startsAt) {
-  setError("This event hasn't started yet. Try again soon!");
-  setIsLoading(false);
-  return;
-}
+      // Store event data in AsyncStorage for the session
+      await AsyncStorage.setItem('currentEventId', foundEvent.id);
+      await AsyncStorage.setItem('currentEventCode', foundEvent.event_code);
 
-if (now >= expiresAt) {
-  setError('This event has ended.');
-  setIsLoading(false);
-  return;
-}
-    await AsyncStorage.multiSet([
-      ['currentEventId', snapshot.id],
-     ['currentEventCode', eventCode],
-    ]);
+      // Check if user already has a session for this event
       const existingSessionId = await AsyncStorage.getItem('currentSessionId');
+      
       if (existingSessionId) {
+        // User might be returning - verify their profile still exists
         try {
-          const q = query(
-            collection(db, 'events', foundEvent.id, 'profiles'),
-            where('session_id', '==', existingSessionId)
-          );
-          const profileSnap = await getDocs(q);
-          if (!profileSnap.empty) {
-            navigation.navigate('Discovery' as never);
+          const { EventProfile } = await import('../lib/firebaseApi');
+          const existingProfiles = await EventProfile.filter({
+            session_id: existingSessionId,
+            event_id: foundEvent.id
+          });
+          
+          if (existingProfiles.length > 0) {
+            // User has an existing profile, redirect to Discovery
+            router.replace('/discovery');
             return;
           }
-        } catch (e) {
-          console.log('Error checking existing profile', e);
+        } catch (profileError) {
+          console.warn("Error checking existing profile:", profileError);
+          // Continue to consent page if profile check fails
         }
       }
-      navigation.navigate('Consent' as never);
-    } catch (e) {
-      console.log('Error processing event join', e);
-      setError('Unable to process event access. Please try again.');
+
+      // New user or no existing profile - redirect to consent/profile creation
+      router.replace('/consent');
+
+    } catch (error) {
+      console.error("Error processing event join:", error);
+      setError("Unable to process event access. Please try again.");
       setIsLoading(false);
     }
   };
 
   const handleGoHome = () => {
-    navigation.navigate('Home' as never);
+    router.replace('/home');
   };
 
   if (isLoading) {
     return (
       <View style={styles.container}>
-        <ActivityIndicator size="large" color="#8b5cf6" />
-        <Text style={styles.title}>Joining Event...</Text>
-        <Text style={styles.text}>Please wait while we verify your event access.</Text>
+        <View style={styles.card}>
+          <ActivityIndicator size="large" color="#8b5cf6" style={styles.spinner} />
+          <Text style={styles.title}>Joining Event...</Text>
+          <Text style={styles.subtitle}>
+            Please wait while we verify your event access.
+          </Text>
+        </View>
       </View>
     );
   }
@@ -100,32 +120,97 @@ if (now >= expiresAt) {
   if (error) {
     return (
       <View style={styles.container}>
-        <View style={styles.errorIconContainer}>
-          <AlertCircle size={32} color="#dc2626" />
+        <View style={styles.card}>
+          <View style={styles.errorIconContainer}>
+            <AlertCircle size={32} color="#dc2626" />
+          </View>
+          <Text style={styles.title}>Unable to Join Event</Text>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity style={styles.button} onPress={handleGoHome}>
+            <Text style={styles.buttonText}>Return to Home</Text>
+          </TouchableOpacity>
         </View>
-        <Text style={styles.title}>Unable to Join Event</Text>
-        <Text style={styles.text}>{error}</Text>
-        <TouchableOpacity style={styles.button} onPress={handleGoHome}>
-          <Text style={styles.buttonText}>Return to Home</Text>
-        </TouchableOpacity>
       </View>
     );
   }
 
+  // This should not be reached due to redirects, but just in case
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Processing...</Text>
-      <Text style={styles.text}>Redirecting you to the event.</Text>
+      <View style={styles.card}>
+        <Text style={styles.title}>Processing...</Text>
+        <Text style={styles.subtitle}>
+          Redirecting you to the event.
+        </Text>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 16, backgroundColor: '#f5f8ff' },
-  title: { fontSize: 20, fontWeight: 'bold', color: '#111', marginTop: 12, marginBottom: 4, textAlign: 'center' },
-  text: { color: '#6b7280', textAlign: 'center', marginBottom: 12 },
-  errorIconContainer: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#fee2e2', alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  button: { marginTop: 8, paddingVertical: 12, paddingHorizontal: 24, backgroundColor: '#a855f7', borderRadius: 8 },
-  buttonText: { color: '#fff', fontWeight: '600' },
-});
-
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  card: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 32,
+    maxWidth: 400,
+    width: '100%',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  spinner: {
+    marginBottom: 24,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  errorIconContainer: {
+    width: 64,
+    height: 64,
+    backgroundColor: '#fef2f2',
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 24,
+  },
+  button: {
+    backgroundColor: '#8b5cf6',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    width: '100%',
+    alignItems: 'center',
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+}); 

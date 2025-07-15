@@ -1,327 +1,383 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
-  TextInput,
-  StyleSheet,
   Image,
   ActivityIndicator,
   Alert,
+  StyleSheet,
 } from 'react-native';
+import { router } from 'expo-router';
+import { User, Settings, LogOut, Edit, Camera } from 'lucide-react-native';
+import { EventProfile, Event, UploadFile } from '../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
-import { db } from '../lib/firebaseConfig';
-import {
-  getDocs,
-  query,
-  where,
-  collection,
-  updateDoc,
-  doc,
-  deleteDoc,
-} from 'firebase/firestore';
-import { UploadFile } from '../lib/api/integrations';
 
-const ALL_INTERESTS = [
-  'music', 'tech', 'food', 'books', 'travel', 'art', 'fitness', 'nature',
-  'movies', 'business', 'photography', 'dancing', 'yoga', 'gaming', 'comedy',
-  'startups', 'fashion', 'spirituality', 'volunteering', 'crypto', 'cocktails',
-  'politics', 'hiking', 'design', 'podcasts', 'pets', 'wellness'
-];
-
-export default function ProfileScreen() {
-  console.log('Rendering ProfileScreen'); // Debugging line to check if the component is rendering
-  const navigation = useNavigation();
-  const [user, setUser] = useState<any>(null);
-  const [eventProfile, setEventProfile] = useState<any>(null);
-  const [isEditing, setIsEditing] = useState<{ bio: boolean; interests: boolean; height: boolean }>({
-    bio: false,
-    interests: false,
-    height: false,
-  });
-  const [formData, setFormData] = useState<{ bio: string; interests: string[]; height: string }>(
-    { bio: '', interests: [], height: '' },
-  );
+export default function Profile() {
+  const [profile, setProfile] = useState<any>(null);
+  const [currentEvent, setCurrentEvent] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isUploading, setIsUploading] = useState(false);
-
-  const loadData = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const stored = await AsyncStorage.getItem('currentUserData');
-      const currentUser = stored ? JSON.parse(stored) : null;
-      if (!currentUser) {
-        navigation.navigate('Home' as never);
-        return;
-      }
-      setUser(currentUser);
-      setFormData({
-        bio: currentUser.bio || '',
-        interests: currentUser.interests || [],
-        height: currentUser.height || ''
-      });
-      const eventId = await AsyncStorage.getItem('currentEventId');
-      const sessionId = await AsyncStorage.getItem('currentSessionId');
-      if (eventId && sessionId) {
-        const q = query(
-          collection(db, 'events', eventId, 'profiles'),
-          where('session_id', '==', sessionId)
-        );
-        const snap = await getDocs(q);
-        if (!snap.empty) setEventProfile({ id: snap.docs[0].id, ...snap.docs[0].data() });
-      }
-    } catch (e) {
-      console.log('Error loading profile data', e);
-    }
-    setIsLoading(false);
-  }, [navigation]);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    initializeSession();
+  }, []);
 
-  const handleEditToggle = (field: 'bio' | 'interests' | 'height') =>
-    setIsEditing(prev => ({ ...prev, [field]: !prev[field] }));
-
-  const handleInterestToggle = (interest: string) => {
-    setFormData(prev => {
-      const exists = prev.interests.includes(interest);
-      let newInterests = exists ? prev.interests.filter(i => i !== interest) : [...prev.interests, interest];
-      if (newInterests.length > 3) {
-        Alert.alert('Limit reached', 'You can select up to 3 interests.');
-        return prev;
-      }
-      return { ...prev, interests: newInterests };
-    });
-  };
-
-  const handleSave = async (field: 'bio' | 'interests' | 'height') => {
-    try {
-      const updated = { ...user, [field]: formData[field] };
-      await AsyncStorage.setItem('currentUserData', JSON.stringify(updated));
-      setUser(updated);
-      handleEditToggle(field);
-    } catch (e) {
-      console.log('Error updating', field, e);
-      Alert.alert('Error', 'Failed to update profile.');
-    }
-  };
-
-  const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission required', 'Camera roll permissions are required.');
+  const initializeSession = async () => {
+    const eventId = await AsyncStorage.getItem('currentEventId');
+    const sessionId = await AsyncStorage.getItem('currentSessionId');
+    
+    if (!eventId || !sessionId) {
+      router.replace('/home');
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images });
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      const asset = result.assets[0];
-      setIsUploading(true);
-      try {
-        const { file_url } = await UploadFile({
-          file: { uri: asset.uri, name: asset.fileName || 'photo.jpg', type: asset.mimeType || 'image/jpeg' }
-        });
-        const updated = { ...user, profile_photo_url: file_url };
-        await AsyncStorage.setItem('currentUserData', JSON.stringify(updated));
-        setUser(updated);
-      } catch (e) {
-        console.log('Error uploading photo', e);
-        Alert.alert('Error', 'Failed to upload photo.');
-      }
-      setIsUploading(false);
-    }
-  };
-
-  const toggleVisibility = async () => {
-    if (!eventProfile) return;
+    
     try {
-      const newVisibility = !eventProfile.is_visible;
-      const eventId = await AsyncStorage.getItem('currentEventId');
-      if (!eventId) return;
-      await updateDoc(doc(db, 'events', eventId, 'profiles', eventProfile.id), {
-        is_visible: newVisibility,
+      const events = await Event.filter({ id: eventId });
+      if (events.length > 0) {
+        setCurrentEvent(events[0]);
+      } else {
+        router.replace('/home');
+        return;
+      }
+
+      const profiles = await EventProfile.filter({ 
+        session_id: sessionId,
+        event_id: eventId 
       });
-      setEventProfile((prev: typeof formData) => ({ ...prev, is_visible: newVisibility }));
-    } catch (e) {
-      console.log('Error updating visibility', e);
-      Alert.alert('Error', 'Failed to update visibility.');
+      
+      if (profiles.length > 0) {
+        setProfile(profiles[0]);
+      } else {
+        router.replace('/home');
+        return;
+      }
+    } catch (error) {
+      console.error("Error initializing session:", error);
+      router.replace('/home');
+    }
+    setIsLoading(false);
+  };
+
+  const handlePhotoUpload = async () => {
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (permissionResult.granted === false) {
+        Alert.alert("Permission Required", "Permission to access camera roll is required!");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        
+        if (asset.fileSize && asset.fileSize > 5 * 1024 * 1024) {
+          Alert.alert("File Too Large", "Image must be smaller than 5MB.");
+          return;
+        }
+
+        setIsUploadingPhoto(true);
+        try {
+          const response = await fetch(asset.uri);
+          const blob = await response.blob();
+          const file = new File([blob], 'profile-photo.jpg', { type: 'image/jpeg' });
+          
+          const { file_url } = await UploadFile(file);
+          
+          // Update profile with new photo
+          await EventProfile.update(profile.id, { profile_photo_url: file_url });
+          setProfile((prev: any) => ({ ...prev, profile_photo_url: file_url }));
+          await AsyncStorage.setItem('currentProfilePhotoUrl', file_url);
+          
+          Alert.alert("Success", "Profile photo updated successfully!");
+        } catch (err) {
+          console.error("Error uploading photo:", err);
+          Alert.alert("Upload Failed", "Failed to upload photo. Please try again.");
+        } finally {
+          setIsUploadingPhoto(false);
+        }
+      }
+    } catch (error) {
+      console.error("Error picking image:", error);
+      Alert.alert("Error", "Failed to pick image. Please try again.");
     }
   };
 
-  const leaveEvent = async () => {
-    if (!eventProfile) return;
-    Alert.alert('Leave Event', 'This will delete your profile for this event. Continue?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Leave', style: 'destructive', onPress: async () => {
-        try {
-          const eventId = await AsyncStorage.getItem('currentEventId');
-          if (!eventId) return;
-          await deleteDoc(doc(db, 'events', eventId, 'profiles', eventProfile.id));
-          await AsyncStorage.multiRemove([
-            'currentEventId',
-            'currentSessionId',
-            'currentEventCode',
-            'currentProfileColor',
-            'currentProfilePhotoUrl'
-          ]);
-          navigation.navigate('Home' as never);
-        } catch (e) {
-          console.log('Error leaving event', e);
-          Alert.alert('Error', 'Failed to leave event.');
+  const handleLogout = async () => {
+    Alert.alert(
+      "Logout",
+      "Are you sure you want to logout? You'll need to rejoin the event.",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Logout",
+          style: "destructive",
+          onPress: async () => {
+            await AsyncStorage.multiRemove([
+              'currentEventId',
+              'currentSessionId',
+              'currentEventCode',
+              'currentProfileColor',
+              'currentProfilePhotoUrl'
+            ]);
+            router.replace('/home');
+          }
         }
-      }}
-    ]);
+      ]
+    );
   };
 
   if (isLoading) {
     return (
-      <View style={styles.loader}> <ActivityIndicator size="large" color="#8b5cf6" /> </View>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#8b5cf6" />
+        <Text style={styles.loadingText}>Loading your profile...</Text>
+      </View>
     );
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <View style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={pickImage} style={styles.photoWrapper}>
-          {user?.profile_photo_url ? (
-            <Image source={{ uri: user.profile_photo_url }} style={styles.photo} />
-          ) : (
-            <View style={[styles.photoPlaceholder, { backgroundColor: user?.profile_color || '#ccc' }]}> 
-              <Text style={{ color: '#fff', fontSize: 32 }}>{user?.full_name ? user.full_name[0] : '?'}</Text>
-            </View>
-          )}
-          {isUploading && <View style={styles.uploadOverlay}><ActivityIndicator color="#fff" /></View>}
+        <Text style={styles.title}>Your Profile</Text>
+        <TouchableOpacity style={styles.settingsButton}>
+          <Settings size={20} color="#6b7280" />
         </TouchableOpacity>
-        <Text style={styles.name}>{user?.full_name}</Text>
-        {user?.age && <Text style={styles.age}>{user.age} years old</Text>}
       </View>
 
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>About Me</Text>
-          <TouchableOpacity onPress={() => handleEditToggle('bio')}><Text style={styles.edit}>{isEditing.bio ? 'Cancel' : 'Edit'}</Text></TouchableOpacity>
-        </View>
-        {isEditing.bio ? (
-          <View>
-            <TextInput
-              style={styles.input}
-              value={formData.bio}
-              onChangeText={t => setFormData(prev => ({ ...prev, bio: t }))}
-              placeholder="Tell us about yourself"
-              multiline
-            />
-            <TouchableOpacity style={styles.saveButton} onPress={() => handleSave('bio')}><Text style={styles.saveText}>Save Bio</Text></TouchableOpacity>
-          </View>
-        ) : (
-          <Text style={styles.text}>{user?.bio || 'No bio yet.'}</Text>
-        )}
-      </View>
-
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Interests</Text>
-          <TouchableOpacity onPress={() => handleEditToggle('interests')}><Text style={styles.edit}>{isEditing.interests ? 'Cancel' : 'Edit'}</Text></TouchableOpacity>
-        </View>
-        {isEditing.interests ? (
-          <View>
-            <View style={styles.chips}> 
-              {ALL_INTERESTS.map(i => (
-                <TouchableOpacity
-                  key={i}
-                  style={[styles.chip, formData.interests.includes(i) && styles.chipSelected]}
-                  onPress={() => handleInterestToggle(i)}
-                >
-                  <Text style={[styles.chipText, formData.interests.includes(i) && { color: '#fff' }]}>{i}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <Text style={styles.helper}>{formData.interests.length} / 3 selected</Text>
-            <TouchableOpacity style={styles.saveButton} onPress={() => handleSave('interests')}><Text style={styles.saveText}>Save Interests</Text></TouchableOpacity>
-          </View>
-        ) : (
-          <View style={styles.chips}> 
-            {user?.interests?.length ? (
-              user.interests.map((i: string) => (
-                <View key={i} style={[styles.chip, styles.chipSelected]}><Text style={[styles.chipText, { color: '#fff' }]}>{i}</Text></View>
-              ))
+      <ScrollView style={styles.content}>
+        {/* Profile Photo Section */}
+        <View style={styles.photoSection}>
+          <View style={styles.photoContainer}>
+            {profile.profile_photo_url ? (
+              <Image
+                source={{ uri: profile.profile_photo_url }}
+                style={styles.profilePhoto}
+                resizeMode="cover"
+              />
             ) : (
-              <Text style={styles.text}>No interests added.</Text>
+              <View style={[styles.fallbackAvatar, { backgroundColor: profile.profile_color || '#cccccc' }]}>
+                <Text style={styles.fallbackText}>{profile.first_name[0]}</Text>
+              </View>
             )}
+            
+            <TouchableOpacity
+              style={styles.photoEditButton}
+              onPress={handlePhotoUpload}
+              disabled={isUploadingPhoto}
+            >
+              <Camera size={16} color="white" />
+            </TouchableOpacity>
           </View>
-        )}
-      </View>
-
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Height</Text>
-          <TouchableOpacity onPress={() => handleEditToggle('height')}><Text style={styles.edit}>{isEditing.height ? 'Cancel' : 'Edit'}</Text></TouchableOpacity>
+          
+          <Text style={styles.name}>{profile.first_name}</Text>
+          <Text style={styles.age}>{profile.age} years old</Text>
         </View>
-        {isEditing.height ? (
-          <View>
-            <TextInput
-              style={styles.input}
-              value={formData.height}
-              onChangeText={t => setFormData(prev => ({ ...prev, height: t }))}
-              placeholder="Height in cm"
-              keyboardType="numeric"
-            />
-            <TouchableOpacity style={styles.saveButton} onPress={() => handleSave('height')}><Text style={styles.saveText}>Save Height</Text></TouchableOpacity>
-          </View>
-        ) : (
-          <Text style={styles.text}>{user?.height ? `${user.height} cm` : 'Not specified'}</Text>
-        )}
-      </View>
 
-      {eventProfile && (
-        <View>
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Event Visibility</Text>
-              <TouchableOpacity onPress={toggleVisibility} style={[styles.visibilityToggle, eventProfile.is_visible && styles.visibilityOn]}>
-                <Text style={{ color: '#fff' }}>{eventProfile.is_visible ? 'Visible' : 'Hidden'}</Text>
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.text}>{eventProfile.is_visible ? 'Your profile is visible to others.' : 'You are hidden from other attendees.'}</Text>
+        {/* Profile Details */}
+        <View style={styles.detailsSection}>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Gender</Text>
+            <Text style={styles.detailValue}>
+              {profile.gender_identity === 'man' ? 'Man' : 'Woman'}
+            </Text>
           </View>
-
-          <View style={[styles.section, { borderColor: '#fca5a5' }]}> 
-            <Text style={[styles.sectionTitle, { color: '#dc2626', marginBottom: 8 }]}>Leave Event</Text>
-            <TouchableOpacity style={styles.leaveButton} onPress={leaveEvent}><Text style={styles.leaveText}>Leave Event & Delete Profile</Text></TouchableOpacity>
+          
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Interested in</Text>
+            <Text style={styles.detailValue}>
+              {profile.interested_in === 'men' ? 'Men' : 
+               profile.interested_in === 'women' ? 'Women' : 'Everyone'}
+            </Text>
+          </View>
+          
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Event</Text>
+            <Text style={styles.detailValue}>{currentEvent?.name}</Text>
           </View>
         </View>
-      )}
-    </ScrollView>
+
+        {/* Actions */}
+        <View style={styles.actionsSection}>
+          <TouchableOpacity style={styles.actionButton}>
+            <Edit size={16} color="#6b7280" />
+            <Text style={styles.actionText}>Edit Profile</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.logoutButton]}
+            onPress={handleLogout}
+          >
+            <LogOut size={16} color="#dc2626" />
+            <Text style={[styles.actionText, styles.logoutText]}>Logout</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 16, backgroundColor: '#f5f8ff' },
-  loader: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f8ff' },
-  header: { alignItems: 'center', marginBottom: 24 },
-  photoWrapper: { position: 'relative', marginBottom: 12 },
-  photo: { width: 96, height: 96, borderRadius: 48 },
-  uploadOverlay: { position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', borderRadius: 48 },
-  photoPlaceholder: { width: 96, height: 96, borderRadius: 48, justifyContent: 'center', alignItems: 'center' },
-  name: { fontSize: 20, fontWeight: 'bold', color: '#111' },
-  age: { color: '#6b7280' },
-  section: { backgroundColor: '#fff', padding: 16, borderRadius: 16, marginBottom: 16 },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  sectionTitle: { fontWeight: '600', color: '#111', fontSize: 16 },
-  edit: { color: '#8b5cf6' },
-  text: { color: '#111' },
-  input: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 8, backgroundColor: '#fff', color: '#111', marginBottom: 8 },
-  saveButton: { backgroundColor: '#8b5cf6', padding: 10, alignItems: 'center', borderRadius: 8 },
-  saveText: { color: '#fff', fontWeight: '600' },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 8 },
-  chip: { borderWidth: 1, borderColor: '#d1d5db', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 16, margin: 2 },
-  chipSelected: { backgroundColor: '#8b5cf6', borderColor: '#8b5cf6' },
-  chipText: { color: '#111', fontSize: 12 },
-  helper: { fontSize: 12, color: '#6b7280', marginBottom: 8 },
-  visibilityToggle: { padding: 8, borderRadius: 8, backgroundColor: '#6b7280' },
-  visibilityOn: { backgroundColor: '#10b981' },
-  leaveButton: { backgroundColor: '#dc2626', padding: 12, alignItems: 'center', borderRadius: 8 },
-  leaveText: { color: '#fff', fontWeight: '600' }
-});
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6b7280',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    paddingTop: 32,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  settingsButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'white',
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  photoSection: {
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  photoContainer: {
+    position: 'relative',
+    marginBottom: 16,
+  },
+  profilePhoto: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 4,
+    borderColor: '#e5e7eb',
+  },
+  fallbackAvatar: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 4,
+    borderColor: '#e5e7eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fallbackText: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  photoEditButton: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#8b5cf6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: 'white',
+  },
+  name: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginBottom: 4,
+  },
+  age: {
+    fontSize: 16,
+    color: '#6b7280',
+  },
+  detailsSection: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  detailLabel: {
+    fontSize: 16,
+    color: '#6b7280',
+  },
+  detailValue: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#1f2937',
+  },
+  actionsSection: {
+    gap: 12,
+    marginBottom: 32,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  actionText: {
+    fontSize: 16,
+    color: '#6b7280',
+  },
+  logoutButton: {
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    backgroundColor: '#fef2f2',
+  },
+  logoutText: {
+    color: '#dc2626',
+  },
+}); 

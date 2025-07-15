@@ -1,227 +1,329 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  ActivityIndicator,
+  Alert,
+  StyleSheet,
+  Image,
+} from 'react-native';
+import { router } from 'expo-router';
+import { User, EventProfile, Event, UploadFile } from '../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useNavigation } from '@react-navigation/native';
+import { User as UserIcon, Camera, Upload } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { db } from '../lib/firebaseConfig';
-import { getDoc, doc, collection, addDoc } from 'firebase/firestore';
-import { UploadFile } from '../lib/api/integrations';
-import { Heart, Instagram, Facebook } from 'lucide-react-native';
 
-const COLORS = [
-  '#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57',
-  '#ff9ff3', '#54a0ff', '#5f27cd', '#00d2d3', '#ff9f43'
-];
+// Simple UUID v4 generator function
+function generateUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
 
-export default function ConsentScreen() {
-  const navigation = useNavigation();
-  const [currentEvent, setCurrentEvent] = useState<any>(null);
-  const [profilePhoto, setProfilePhoto] = useState<any>(null);
-  const [profilePhotoPreview, setProfilePhotoPreview] = useState<string | null>(null);
+export default function Consent() {
+  const [event, setEvent] = useState<any>(null);
+  const [step, setStep] = useState('manual');
   const [formData, setFormData] = useState({
     first_name: '',
     email: '',
     age: '',
     gender_identity: '',
     interested_in: '',
-    interests: [],
-    consent: false,
+    profile_photo_url: ''
   });
-  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   useEffect(() => {
-    loadEventAndUser();
-  }, []);
-
-  const loadEventAndUser = async () => {
-    const eventId = await AsyncStorage.getItem('currentEventId');
-    if (!eventId) {
-      navigation.navigate('Home' as never);
-      return;
-    }
-    try {
-      const snapshot = await getDoc(doc(db, 'events', eventId));
-      if (snapshot.exists()) {
-        setCurrentEvent({ id: eventId, ...snapshot.data() });
-      } else {
-        navigation.navigate('Home' as never);
+    const fetchEvent = async () => {
+      const eventId = await AsyncStorage.getItem('currentEventId');
+      if (!eventId) {
+        router.replace('/home');
         return;
       }
-      // No user system implemented; form starts blank
-    } catch (e) {
-      console.log('Error loading data', e);
-      navigation.navigate('Home' as never);
-    }
-    setIsLoading(false);
-  };
+      try {
+        const events = await Event.filter({ id: eventId });
+        if (events.length > 0) {
+          setEvent(events[0]);
+        } else {
+          router.replace('/home');
+        }
+      } catch (err) {
+        console.error("Error fetching event details:", err);
+        router.replace('/home');
+      }
+    };
+    fetchEvent();
+  }, []);
 
-  const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission required', 'Camera roll permissions are required.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images });
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      const asset = result.assets[0];
-      setProfilePhoto(asset);
-      setProfilePhotoPreview(asset.uri);
+  // Handler for profile photo upload
+  const handlePhotoUpload = async () => {
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (permissionResult.granted === false) {
+        Alert.alert("Permission Required", "Permission to access camera roll is required!");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        
+        // Validate file size (5MB limit)
+        if (asset.fileSize && asset.fileSize > 5 * 1024 * 1024) {
+          Alert.alert("File Too Large", "Image must be smaller than 5MB.");
+          return;
+        }
+
+        setIsUploadingPhoto(true);
+        try {
+          // Convert asset to file-like object for upload
+          const response = await fetch(asset.uri);
+          const blob = await response.blob();
+          const file = new File([blob], 'profile-photo.jpg', { type: 'image/jpeg' });
+          
+          const { file_url } = await UploadFile(file);
+          setFormData(prev => ({ ...prev, profile_photo_url: file_url }));
+          Alert.alert("Success", "Photo uploaded successfully!");
+        } catch (err) {
+          console.error("Error uploading photo:", err);
+          Alert.alert("Upload Failed", "Failed to upload photo. Please try again.");
+        } finally {
+          setIsUploadingPhoto(false);
+        }
+      }
+    } catch (error) {
+      console.error("Error picking image:", error);
+      Alert.alert("Error", "Failed to pick image. Please try again.");
     }
   };
 
   const handleSubmit = async () => {
-    if (!formData.consent) {
-      Alert.alert('Consent required', 'You must consent to join.');
-      return;
-    }
-    const missing: string[] = [];
-    if (!profilePhotoPreview) missing.push('Profile Photo');
-    if (!formData.first_name) missing.push('First Name');
-    if (!formData.age) missing.push('Age');
-    if (!formData.gender_identity) missing.push('Gender Identity');
-    if (!formData.interested_in) missing.push('Interested In');
-
-    if (missing.length > 0) {
-      Alert.alert('Missing fields', `Please complete: ${missing.join(', ')}`);
+    // Validate all required fields including photo
+    if (!formData.first_name || !formData.email || !formData.age || !formData.gender_identity || !formData.interested_in) {
+      Alert.alert("Missing Information", "Please fill in all fields.");
       return;
     }
 
+    if (!formData.profile_photo_url) {
+      Alert.alert("Missing Photo", "Please upload a profile photo.");
+      return;
+    }
+    
     setIsSubmitting(true);
-    let uploadedPhotoUrl = profilePhotoPreview;
+    setStep('processing');
+    
     try {
-      if (profilePhoto && profilePhoto.uri) {
-        const { file_url } = await UploadFile({
-          file: {
-            uri: profilePhoto.uri,
-            name: profilePhoto.fileName || 'photo.jpg',
-            type: profilePhoto.mimeType || 'image/jpeg',
-          },
-        });
-        uploadedPhotoUrl = file_url;
-      }
-      const profileColor = COLORS[Math.floor(Math.random() * COLORS.length)];
-      const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const sessionId = generateUUID();
+      const profileColor = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
 
-      await addDoc(collection(db, 'events', currentEvent.id, 'profiles'), {
+      // Update user profile with photo URL
+      await User.updateProfile({
+        photoURL: formData.profile_photo_url
+      });
+
+      // Create event profile with photo
+      await EventProfile.create({
+        event_id: event.id,
         session_id: sessionId,
         first_name: formData.first_name,
         email: formData.email,
-        age: parseInt(formData.age, 10),
+        age: parseInt(formData.age),
         gender_identity: formData.gender_identity,
         interested_in: formData.interested_in,
-        interests: formData.interests || [],
-        profile_photo_url: uploadedPhotoUrl,
         profile_color: profileColor,
+        profile_photo_url: formData.profile_photo_url,
+        is_visible: true,
       });
-      await AsyncStorage.multiSet([
-        ['currentSessionId', sessionId],
-        ['currentProfileColor', profileColor],
-        ['currentProfilePhotoUrl', uploadedPhotoUrl || ''],
-      ]);
-      Alert.alert('Profile saved', 'Taking you to the event...');
-      navigation.navigate('Discovery' as never);
-    } catch (e) {
-      console.log('Error creating profile', e);
-      Alert.alert('Error', 'Error creating profile. Please try again.');
+
+      await AsyncStorage.setItem('currentSessionId', sessionId);
+      await AsyncStorage.setItem('currentProfileColor', profileColor);
+      await AsyncStorage.setItem('currentProfilePhotoUrl', formData.profile_photo_url);
+      
+      Alert.alert("Success", "Profile created! Welcome to the event.");
+      router.replace('/discovery');
+    } catch (err) {
+      console.error("Error creating profile:", err);
+      setError("Failed to create profile. Please try again.");
+      setStep('error');
+      setIsSubmitting(false);
     }
-    setIsSubmitting(false);
   };
 
-  if (isLoading) {
+  if (step === 'processing') {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#8b5cf6" />
+      <View style={styles.container}>
+        <View style={styles.card}>
+          <ActivityIndicator size="large" color="#8b5cf6" style={styles.spinner} />
+          <Text style={styles.title}>Creating Your Profile...</Text>
+          <Text style={styles.subtitle}>
+            Just a moment while we get you into the event.
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (step === 'error') {
+    return (
+      <View style={styles.container}>
+        <View style={styles.card}>
+          <Text style={styles.errorTitle}>Something went wrong</Text>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity style={styles.button} onPress={() => setStep('manual')}>
+            <Text style={styles.buttonText}>Try Again</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <View style={styles.headerCard}>
-        <View style={styles.headerIcon}>
-          <Heart size={32} color="#fff" />
-        </View>
-        <Text style={styles.headerTitle}>{currentEvent?.name}</Text>
-        <Text style={styles.headerSubtitle}>{currentEvent?.location}</Text>
-      </View>
-
+    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Create Your Event Profile</Text>
-        <Text style={styles.cardSubtitle}>This information will only be visible to other singles at this event</Text>
-
-        <TouchableOpacity style={styles.socialButton} onPress={() => Alert.alert('Coming soon')}> 
-          <Instagram size={20} color="#fff" style={{ marginRight: 8 }} />
-          <Text style={styles.socialButtonText}>Continue with Instagram</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.socialButton, { backgroundColor: '#1877F2', marginTop: 8 }]} onPress={() => Alert.alert('Coming soon')}> 
-          <Facebook size={20} color="#fff" style={{ marginRight: 8 }} />
-          <Text style={styles.socialButtonText}>Continue with Facebook</Text>
-        </TouchableOpacity>
-
-        <View style={styles.dividerContainer}>
-          <View style={styles.divider} />
-          <Text style={styles.dividerText}>Or</Text>
-          <View style={styles.divider} />
+        <View style={styles.header}>
+          <View style={styles.logoContainer}>
+            <UserIcon size={32} color="white" />
+          </View>
+          <Text style={styles.title}>
+            Create Your Event Profile For:
+          </Text>
+          <Text style={styles.title}>
+            {event?.name || 'This Event'}
+          </Text>
         </View>
 
-        <TouchableOpacity onPress={pickImage} style={styles.photoPicker}>
-          {profilePhotoPreview ? (
-            <Image source={{ uri: profilePhotoPreview }} style={styles.photo} />
-          ) : (
-            <View style={styles.photoPlaceholder}>
-              <Text style={{ color: '#6b7280' }}>Add Photo*</Text>
+        <View style={styles.form}>
+          {/* Profile Photo Upload */}
+          <View style={styles.photoSection}>
+            <Text style={styles.label}>Profile Photo *</Text>
+            <View style={styles.photoContainer}>
+              {formData.profile_photo_url ? (
+                <View style={styles.photoPreviewContainer}>
+                  <Image
+                    source={{ uri: formData.profile_photo_url }}
+                    style={styles.photoPreview}
+                  />
+                  <TouchableOpacity
+                    style={styles.photoOverlay}
+                    onPress={handlePhotoUpload}
+                  >
+                    <Camera size={24} color="white" />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.uploadArea}
+                  onPress={handlePhotoUpload}
+                  disabled={isUploadingPhoto}
+                >
+                  <Upload size={24} color="#9ca3af" />
+                  <Text style={styles.uploadText}>Upload Photo</Text>
+                </TouchableOpacity>
+              )}
             </View>
-          )}
-        </TouchableOpacity>
-        {!profilePhotoPreview && <Text style={styles.errorText}>Profile photo is required.</Text>}
+            <Text style={styles.photoHint}>
+              Required • Max 5MB • JPG, PNG, or GIF
+            </Text>
+          </View>
 
-        <TextInput
-          style={styles.input}
-          placeholder="First Name*"
-          value={formData.first_name}
-          onChangeText={(t) => setFormData(prev => ({ ...prev, first_name: t }))}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Age*"
-          value={formData.age}
-          keyboardType="numeric"
-          onChangeText={(t) => setFormData(prev => ({ ...prev, age: t }))}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Gender Identity*"
-          value={formData.gender_identity}
-          onChangeText={(t) => setFormData(prev => ({ ...prev, gender_identity: t }))}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Interested In*"
-          value={formData.interested_in}
-          onChangeText={(t) => setFormData(prev => ({ ...prev, interested_in: t }))}
-        />
+          <TextInput
+            style={styles.input}
+            placeholder="First Name *"
+            value={formData.first_name}
+            onChangeText={(text) => setFormData({...formData, first_name: text})}
+          />
 
-        <TouchableOpacity
-          style={styles.checkboxContainer}
-          onPress={() => setFormData(prev => ({ ...prev, consent: !prev.consent }))}
-        >
-          <View style={[styles.checkbox, formData.consent && styles.checkboxChecked]} />
-          <Text style={styles.checkboxLabel}>I agree to appear to other singles who opted in at this event*</Text>
-        </TouchableOpacity>
-        <Text style={styles.checkboxDesc}>Your profile will automatically be deleted when this event ends. Your email will only be used for feedback requests after the event and will not be visible to other users.</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Email (private, for feedback only) *"
+            value={formData.email}
+            onChangeText={(text) => setFormData({...formData, email: text})}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
 
-        <TouchableOpacity
-          style={[styles.submitButton, (isSubmitting) && { opacity: 0.6 }]}
-          disabled={isSubmitting}
-          onPress={handleSubmit}
-        >
-          {isSubmitting ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.submitButtonText}>Join the Singles List</Text>
-          )}
-        </TouchableOpacity>
+          <TextInput
+            style={styles.input}
+            placeholder="Age *"
+            value={formData.age}
+            onChangeText={(text) => setFormData({...formData, age: text})}
+            keyboardType="numeric"
+          />
+
+          <View style={styles.selectContainer}>
+            <Text style={styles.selectLabel}>I am a... *</Text>
+            <View style={styles.selectButtons}>
+              {['man', 'woman'].map((option) => (
+                <TouchableOpacity
+                  key={option}
+                  style={[
+                    styles.selectButton,
+                    formData.gender_identity === option && styles.selectButtonActive
+                  ]}
+                  onPress={() => setFormData({...formData, gender_identity: option})}
+                >
+                  <Text style={[
+                    styles.selectButtonText,
+                    formData.gender_identity === option && styles.selectButtonTextActive
+                  ]}>
+                    {option.charAt(0).toUpperCase() + option.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.selectContainer}>
+            <Text style={styles.selectLabel}>I'm interested in... *</Text>
+            <View style={styles.selectButtons}>
+              {['men', 'women', 'everyone'].map((option) => (
+                <TouchableOpacity
+                  key={option}
+                  style={[
+                    styles.selectButton,
+                    formData.interested_in === option && styles.selectButtonActive
+                  ]}
+                  onPress={() => setFormData({...formData, interested_in: option})}
+                >
+                  <Text style={[
+                    styles.selectButtonText,
+                    formData.interested_in === option && styles.selectButtonTextActive
+                  ]}>
+                    {option.charAt(0).toUpperCase() + option.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.submitButton, (isSubmitting || isUploadingPhoto) && styles.submitButtonDisabled]}
+            onPress={handleSubmit}
+            disabled={isSubmitting || isUploadingPhoto}
+          >
+            {isSubmitting ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color="white" />
+                <Text style={styles.submitButtonText}>Creating Profile...</Text>
+              </View>
+            ) : (
+              <Text style={styles.submitButtonText}>Join Event</Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
     </ScrollView>
   );
@@ -229,145 +331,196 @@ export default function ConsentScreen() {
 
 const styles = StyleSheet.create({
   container: {
-    padding: 16,
-    backgroundColor: '#f5f8ff',
-  },
-  loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f5f8ff',
+    backgroundColor: '#f8fafc',
   },
-  headerCard: {
+  contentContainer: {
+    padding: 16,
+    alignItems: 'center',
+  },
+  card: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 24,
+    maxWidth: 400,
+    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  header: {
     alignItems: 'center',
     marginBottom: 24,
   },
-  headerIcon: {
+  logoContainer: {
     width: 64,
     height: 64,
+    backgroundColor: '#8b5cf6',
     borderRadius: 16,
-    backgroundColor: '#ec4899',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
-  headerTitle: {
-    fontSize: 20,
+  title: {
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#111',
+    color: '#1f2937',
+    textAlign: 'center',
+    marginBottom: 4,
   },
-  headerSubtitle: {
+  subtitle: {
+    fontSize: 16,
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  form: {
+    gap: 16,
+  },
+  photoSection: {
+    alignItems: 'center',
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  photoContainer: {
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  photoPreviewContainer: {
+    position: 'relative',
+  },
+  photoPreview: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    borderWidth: 4,
+    borderColor: '#e5e7eb',
+  },
+  photoOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  uploadArea: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    borderWidth: 2,
+    borderColor: '#d1d5db',
+    borderStyle: 'dashed',
+    backgroundColor: '#f9fafb',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  uploadText: {
+    fontSize: 12,
     color: '#6b7280',
     marginTop: 4,
   },
-  card: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 16,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#111',
-    marginBottom: 4,
-  },
-  cardSubtitle: {
-    color: '#6b7280',
-    marginBottom: 12,
-  },
-  socialButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#E1306C',
-    padding: 12,
-    borderRadius: 8,
-  },
-  socialButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 16,
-  },
-  divider: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#d1d5db',
-  },
-  dividerText: {
-    marginHorizontal: 8,
-    color: '#6b7280',
+  photoHint: {
     fontSize: 12,
-    fontWeight: '600',
-  },
-  photoPicker: {
-    alignSelf: 'center',
-    marginBottom: 12,
-  },
-  photo: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-  },
-  photoPlaceholder: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: '#e5e7eb',
-    justifyContent: 'center',
-    alignItems: 'center',
+    color: '#6b7280',
+    textAlign: 'center',
   },
   input: {
     borderWidth: 1,
     borderColor: '#d1d5db',
     borderRadius: 8,
     padding: 12,
-    marginBottom: 12,
-    backgroundColor: '#fff',
-    color: '#111',
+    fontSize: 16,
+    backgroundColor: 'white',
   },
-  checkboxContainer: {
+  selectContainer: {
+    gap: 8,
+  },
+  selectLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+  },
+  selectButtons: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
+    gap: 8,
   },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderWidth: 1,
-    borderColor: '#000',
-    marginRight: 8,
-  },
-  checkboxChecked: {
-    backgroundColor: '#000',
-  },
-  checkboxLabel: {
+  selectButton: {
     flex: 1,
-    color: '#111',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+    backgroundColor: 'white',
   },
-  checkboxDesc: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginBottom: 12,
+  selectButtonActive: {
+    borderColor: '#8b5cf6',
+    backgroundColor: '#8b5cf6',
   },
-  errorText: {
-    color: '#dc2626',
-    fontSize: 12,
-    marginBottom: 8,
-    textAlign: 'center',
+  selectButtonText: {
+    fontSize: 14,
+    color: '#374151',
+  },
+  selectButtonTextActive: {
+    color: 'white',
   },
   submitButton: {
-    backgroundColor: '#a855f7',
+    backgroundColor: '#8b5cf6',
+    borderRadius: 12,
     padding: 16,
-    borderRadius: 8,
     alignItems: 'center',
     marginTop: 8,
   },
-  submitButtonText: {
-    color: '#fff',
-    fontWeight: '600',
+  submitButtonDisabled: {
+    backgroundColor: '#9ca3af',
   },
-});
+  submitButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  spinner: {
+    marginBottom: 24,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#dc2626',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 24,
+  },
+  button: {
+    backgroundColor: '#8b5cf6',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+}); 
