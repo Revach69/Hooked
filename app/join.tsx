@@ -39,9 +39,11 @@ export default function JoinPage() {
       }
 
       const foundEvent = events[0];
+      console.log('Found event:', foundEvent); // Add this debug line
       const nowUTC = new Date().toISOString(); // Current UTC time as ISO string
 
       if (!foundEvent.starts_at || !foundEvent.expires_at) {
+        console.log('Missing dates:', { starts_at: foundEvent.starts_at, expires_at: foundEvent.expires_at }); // Add this debug line
         setError("This event is not configured correctly. Please contact the organizer.");
         setIsLoading(false);
         return;

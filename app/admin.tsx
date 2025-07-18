@@ -124,7 +124,7 @@ export default function Admin() {
           <Text style={styles.sectionTitle}>Event Information</Text>
           <View style={styles.eventCard}>
             <Text style={styles.eventName}>{currentEvent?.name}</Text>
-            <Text style={styles.eventCode}>Code: {currentEvent?.code}</Text>
+            <Text style={styles.eventCode}>Code: {currentEvent?.event_code}</Text>
             <Text style={styles.eventStatus}>
               Status: {currentEvent?.is_active ? 'Active' : 'Inactive'}
             </Text>

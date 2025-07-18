@@ -7,16 +7,23 @@ import {
   Alert,
   StyleSheet,
   Dimensions,
+  Modal,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
-import { Heart, QrCode, Hash, Shield, Clock, Users } from 'lucide-react-native';
+import { Heart, QrCode, Hash, Shield, Clock, Users, X, Camera } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Event } from '../lib/firebaseApi';
+import * as ImagePicker from 'expo-image-picker';
 
 const { width } = Dimensions.get('window');
 
 export default function Home() {
   const [activeModal, setActiveModal] = useState<string | null>(null);
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [manualCode, setManualCode] = useState('');
 
   useEffect(() => {
     checkActiveEventSession();
@@ -84,6 +91,46 @@ export default function Home() {
     }
   };
 
+  const handleCameraAccess = async () => {
+    try {
+      setIsProcessing(true);
+      
+      // Request camera permissions
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Camera permission is required to scan QR codes.');
+        setIsProcessing(false);
+        return;
+      }
+
+      // Launch camera
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        // For now, we'll show a message that QR scanning is not fully implemented
+        // In a real app, you would process the image to extract QR code data
+        Alert.alert(
+          'QR Code Detected',
+          'Camera functionality is working! For now, please use the manual code entry option.',
+          [
+            { text: 'OK', onPress: () => closeModal() },
+            { text: 'Enter Code Manually', onPress: () => openModal('manualCodeEntry') }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Camera error:', error);
+      Alert.alert('Error', 'Failed to access camera. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleEventAccess = (eventCode: string) => {
     // The join page will handle all validation logic.
     closeModal();
@@ -92,14 +139,20 @@ export default function Home() {
 
   const openModal = (modalName: string) => {
     setActiveModal(modalName);
+    setManualCode('');
   };
 
   const closeModal = () => {
     setActiveModal(null);
+    setManualCode('');
   };
-  
-  const switchToManualEntry = () => {
-    setActiveModal('manualCodeEntry');
+
+  const handleManualSubmit = () => {
+    if (manualCode.trim().length > 0) {
+      handleEventAccess(manualCode.trim());
+    } else {
+      Alert.alert("Invalid Code", "Please enter a valid event code.");
+    }
   };
 
   return (
@@ -133,9 +186,14 @@ export default function Home() {
           </View>
           <TouchableOpacity
             style={styles.primaryButton}
-            onPress={() => openModal('qrScanner')}
+            onPress={handleCameraAccess}
+            disabled={isProcessing}
           >
-            <Text style={styles.primaryButtonText}>Scan QR Code</Text>
+            {isProcessing ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <Text style={styles.primaryButtonText}>Scan QR Code</Text>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -180,7 +238,7 @@ export default function Home() {
           <View style={styles.infoTextContainer}>
             <Text style={styles.infoTitle}>How it works</Text>
             <Text style={styles.infoText}>• Scan the event's unique QR code{'\n'}
-              • Create a temporary profile (first name only){'\n'}
+              • Create a temporary profile {'\n'}
               • Discover other singles at this event{'\n'}
               • Match and chat privately{'\n'}
               • Everything expires when the event ends</Text>
@@ -188,7 +246,41 @@ export default function Home() {
         </View>
       </View>
 
-      {/* TODO: Add QR Scanner and Event Code Entry modals */}
+      {/* Manual Code Entry Modal */}
+      <Modal
+        visible={activeModal === 'manualCodeEntry'}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={closeModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Enter Event Code</Text>
+              <TouchableOpacity onPress={closeModal} style={styles.modalCloseButton}>
+                <X size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              style={styles.manualCodeInput}
+              placeholder="Enter event code"
+              placeholderTextColor="#9ca3af"
+              value={manualCode}
+              onChangeText={setManualCode}
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoFocus={true}
+              keyboardType="default"
+            />
+            <TouchableOpacity
+              style={styles.manualSubmitButton}
+              onPress={handleManualSubmit}
+            >
+              <Text style={styles.manualSubmitButtonText}>Submit</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -368,5 +460,79 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6b7280',
     lineHeight: 20,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 24,
+    width: '80%',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  modalCloseButton: {
+    padding: 5,
+  },
+  permissionText: {
+    fontSize: 16,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  scanAgainButton: {
+    backgroundColor: '#3b82f6',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+  },
+  scanAgainButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  manualCodeInput: {
+    width: '100%',
+    height: 50,
+    borderColor: '#e5e7eb',
+    borderWidth: 2,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: '#1f2937',
+    marginBottom: 20,
+  },
+  manualSubmitButton: {
+    backgroundColor: '#ec4899',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+  },
+  manualSubmitButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '500',
   },
 }); 

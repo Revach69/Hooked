@@ -96,7 +96,7 @@ export default function Consent() {
           
           const { file_url } = await UploadFile(file);
           setFormData(prev => ({ ...prev, profile_photo_url: file_url }));
-          Alert.alert("Success", "Photo uploaded successfully!");
+          // Removed the success alert - photo upload is now silent
         } catch (err) {
           console.error("Error uploading photo:", err);
           Alert.alert("Upload Failed", "Failed to upload photo. Please try again.");
@@ -129,10 +129,8 @@ export default function Consent() {
       const sessionId = generateUUID();
       const profileColor = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
 
-      // Update user profile with photo URL
-      await User.updateProfile({
-        photoURL: formData.profile_photo_url
-      });
+      // Removed User.updateProfile() call since we're not using Firebase Auth
+      // This was causing the "No user logged in" error
 
       // Create event profile with photo
       await EventProfile.create({

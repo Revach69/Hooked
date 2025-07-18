@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 
 // Your Firebase configuration
 const firebaseConfig = {
@@ -17,18 +18,12 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 
 // Initialize Firebase services
-// For Firebase 11, we'll use getAuth which should work fine for React Native
-// The persistence warning is just a recommendation, not a requirement
 export const auth = getAuth(app);
+
+// Configure Firestore
 export const db = getFirestore(app);
 
-// Configure Firestore to use me-west1 region
-// Note: You'll need to set up your Firestore database in the me-west1 region
-// and update the projectId above to match your Firebase project
-
-// For development, you can connect to emulator
-// if (__DEV__) {
-//   connectFirestoreEmulator(db, 'localhost', 8080);
-// }
+// Configure Storage
+export const storage = getStorage(app);
 
 export default app;

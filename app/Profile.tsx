@@ -98,7 +98,7 @@ export default function Profile() {
           setProfile((prev: any) => ({ ...prev, profile_photo_url: file_url }));
           await AsyncStorage.setItem('currentProfilePhotoUrl', file_url);
           
-          Alert.alert("Success", "Profile photo updated successfully!");
+          // Removed the success alert - photo upload is now silent
         } catch (err) {
           console.error("Error uploading photo:", err);
           Alert.alert("Upload Failed", "Failed to upload photo. Please try again.");

@@ -1,4 +1,4 @@
-import { db, auth } from './firebaseConfig';
+import { db, auth, storage } from './firebaseConfig';
 import {
   collection,
   doc,
@@ -24,6 +24,11 @@ import {
   updateProfile,
   User as FirebaseUser
 } from 'firebase/auth';
+import {
+  ref,
+  uploadBytes,
+  getDownloadURL
+} from 'firebase/storage';
 
 // Types
 export interface Event {
@@ -32,8 +37,9 @@ export interface Event {
   description?: string;
   starts_at: string;
   expires_at: string;
-  event_code: string;
-  code: string; // Alias for event_code for backward compatibility
+  event_code: string; // Single field for event code
+  location?: string; // Added for your event
+  organizer_email?: string; // Added for your event
   created_at: string;
   updated_at: string;
 }
@@ -96,6 +102,26 @@ export interface EventFeedback {
 
 // Event API
 export const EventAPI = {
+  async create(data: Omit<Event, 'id' | 'created_at' | 'updated_at'>): Promise<Event> {
+    try {
+      const docRef = await addDoc(collection(db, 'events'), {
+        ...data,
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp()
+      });
+      
+      return {
+        id: docRef.id,
+        ...data,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+    } catch (error) {
+      console.error('Error creating event:', error);
+      throw error;
+    }
+  },
+
   async filter(filters: Partial<Event> = {}): Promise<Event[]> {
     try {
       let q: any = collection(db, 'events');
@@ -392,12 +418,28 @@ export const AuthAPI = {
   }
 };
 
-// File Upload API (placeholder - you'll need to implement with Firebase Storage)
+// File Upload API (implemented with Firebase Storage)
 export const FileUploadAPI = {
   async uploadFile(file: File): Promise<{ file_url: string }> {
-    // TODO: Implement Firebase Storage upload
-    // For now, return a placeholder
-    throw new Error('File upload not implemented yet');
+    try {
+      // Create a unique filename
+      const timestamp = Date.now();
+      const filename = `profile-photos/${timestamp}-${file.name}`;
+      
+      // Create a reference to the file location in Firebase Storage
+      const storageRef = ref(storage, filename);
+      
+      // Upload the file
+      const snapshot = await uploadBytes(storageRef, file);
+      
+      // Get the download URL
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      
+      return { file_url: downloadURL };
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      throw error;
+    }
   }
 };
 
