@@ -10,16 +10,29 @@ import {
   StyleSheet,
   Dimensions,
   AppState,
+  Modal,
+  FlatList,
 } from 'react-native';
 import { router } from 'expo-router';
-import { Heart, Filter, Users, User, MessageCircle } from 'lucide-react-native';
+import { Heart, Filter, Users, User, MessageCircle, X } from 'lucide-react-native';
 import { EventProfile, Like, Event } from '../lib/firebaseApi';
 import { sendMatchNotification } from '../lib/notificationService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Slider from '@react-native-community/slider';
 
 const { width } = Dimensions.get('window');
 const cardSize = (width - 48) / 3; // 3 columns with padding
+
+const BASIC_INTERESTS = [
+  'music', 'tech', 'food', 'books', 'travel', 'art', 'fitness', 'nature', 'movies', 'business', 'photography', 'dancing'
+];
+
+const EXTENDED_INTERESTS = [
+  'yoga', 'gaming', 'comedy', 'startups', 'fashion', 'spirituality', 'volunteering', 'crypto', 'cocktails', 'politics', 'hiking', 'design', 'podcasts', 'pets', 'wellness'
+];
+
+const ALL_INTERESTS = [...BASIC_INTERESTS, ...EXTENDED_INTERESTS];
 
 export default function Discovery() {
   const [profiles, setProfiles] = useState<any[]>([]);
@@ -30,10 +43,10 @@ export default function Discovery() {
   const [filters, setFilters] = useState({
     age_min: 18,
     age_max: 99,
-    gender: "all",
     interests: [] as string[]
   });
   const [showFilters, setShowFilters] = useState(false);
+  const [showExtendedInterests, setShowExtendedInterests] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [likedProfiles, setLikedProfiles] = useState(new Set<string>());
   const [selectedProfileForDetail, setSelectedProfileForDetail] = useState<any>(null);
@@ -168,18 +181,16 @@ export default function Discovery() {
     }
 
     let tempFiltered = profiles.filter(otherUser => {
-      // Mutual Gender Interest Check
+      // Mutual Gender Interest Check - based on user's profile preferences
       const iAmInterestedInOther =
-        (currentUserProfile.interested_in === 'everyone') ||
+        (currentUserProfile.interested_in === 'everybody') ||
         (currentUserProfile.interested_in === 'men' && otherUser.gender_identity === 'man') ||
-        (currentUserProfile.interested_in === 'women' && otherUser.gender_identity === 'woman') ||
-        (currentUserProfile.interested_in === 'non-binary' && otherUser.gender_identity === 'non-binary');
+        (currentUserProfile.interested_in === 'women' && otherUser.gender_identity === 'woman');
 
       const otherIsInterestedInMe =
-        (otherUser.interested_in === 'everyone') ||
+        (otherUser.interested_in === 'everybody') ||
         (otherUser.interested_in === 'men' && currentUserProfile.gender_identity === 'man') ||
-        (otherUser.interested_in === 'women' && currentUserProfile.gender_identity === 'woman') ||
-        (otherUser.interested_in === 'non-binary' && currentUserProfile.gender_identity === 'non-binary');
+        (otherUser.interested_in === 'women' && currentUserProfile.gender_identity === 'woman');
       
       if (!iAmInterestedInOther || !otherIsInterestedInMe) {
         return false;
@@ -187,11 +198,6 @@ export default function Discovery() {
 
       // Age Range Filter
       if (!(otherUser.age >= filters.age_min && otherUser.age <= filters.age_max)) {
-        return false;
-      }
-      
-      // Direct Gender Filter
-      if (filters.gender !== "all" && otherUser.gender_identity !== filters.gender) {
         return false;
       }
 
@@ -298,6 +304,30 @@ export default function Discovery() {
       await AsyncStorage.setItem(`hasSeenGuide_${eventId}`, 'true');
     }
     setShowGuide(false);
+  };
+
+  const handleToggleInterest = (interest: string) => {
+    let newInterests = [...filters.interests];
+    if (newInterests.includes(interest)) {
+      newInterests = newInterests.filter(i => i !== interest);
+    } else if (newInterests.length < 3) {
+      newInterests.push(interest);
+    }
+    setFilters(prev => ({ ...prev, interests: newInterests }));
+  };
+
+  const handleApplyFilters = () => {
+    setShowFilters(false);
+    setShowExtendedInterests(false);
+  };
+
+  const handleResetFilters = () => {
+    setFilters({
+      age_min: 18,
+      age_max: 99,
+      interests: []
+    });
+    setShowExtendedInterests(false);
   };
 
   if (isLoading) {
@@ -421,7 +451,132 @@ export default function Discovery() {
         </TouchableOpacity>
       </View>
 
-      {/* TODO: Add Filter Modal */}
+      {/* Filter Modal */}
+      <Modal visible={showFilters} transparent animationType="slide" onRequestClose={() => setShowFilters(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Filters</Text>
+              <TouchableOpacity onPress={() => setShowFilters(false)}>
+                <X size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Age Range */}
+            <View style={styles.filterSection}>
+              <Text style={styles.filterSectionTitle}>Age Range</Text>
+              <View style={styles.ageRangeContainer}>
+                <Text style={styles.ageRangeText}>
+                  {filters.age_min} - {filters.age_max} years
+                </Text>
+                <View style={styles.sliderContainer}>
+                  <Slider
+                    style={styles.slider}
+                    minimumValue={18}
+                    maximumValue={99}
+                    value={filters.age_min}
+                    onValueChange={(value) => setFilters(prev => ({ ...prev, age_min: Math.round(value) }))}
+                    minimumTrackTintColor="#8b5cf6"
+                    maximumTrackTintColor="#d1d5db"
+                    thumbTintColor="#8b5cf6"
+                  />
+                  <Slider
+                    style={styles.slider}
+                    minimumValue={18}
+                    maximumValue={99}
+                    value={filters.age_max}
+                    onValueChange={(value) => setFilters(prev => ({ ...prev, age_max: Math.round(value) }))}
+                    minimumTrackTintColor="#8b5cf6"
+                    maximumTrackTintColor="#d1d5db"
+                    thumbTintColor="#8b5cf6"
+                  />
+                </View>
+              </View>
+            </View>
+
+
+
+            {/* Interests Filter */}
+            <View style={styles.filterSection}>
+              <Text style={styles.filterSectionTitle}>Interests (up to 3)</Text>
+              <ScrollView 
+                style={styles.interestsContainer} 
+                showsVerticalScrollIndicator={false}
+                horizontal={false}
+                showsHorizontalScrollIndicator={false}
+              >
+                {/* Basic Interests - Always Visible */}
+                <View style={styles.interestsSection}>
+                  <View style={styles.interestsGrid}>
+                    {BASIC_INTERESTS.map((interest) => (
+                      <TouchableOpacity
+                        key={interest}
+                        style={[
+                          styles.interestOption,
+                          filters.interests.includes(interest) && styles.interestOptionSelected
+                        ]}
+                        onPress={() => handleToggleInterest(interest)}
+                        disabled={!filters.interests.includes(interest) && filters.interests.length >= 3}
+                      >
+                        <Text style={[
+                          styles.interestOptionText,
+                          filters.interests.includes(interest) && styles.interestOptionTextSelected
+                        ]}>
+                          {interest.charAt(0).toUpperCase() + interest.slice(1)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                {/* Extended Interests - Collapsible */}
+                <View style={styles.interestsSection}>
+                  <TouchableOpacity 
+                    style={styles.interestsSectionHeader}
+                    onPress={() => setShowExtendedInterests(!showExtendedInterests)}
+                  >
+                    <Text style={styles.toggleIcon}>{showExtendedInterests ? '↑' : '↓'}</Text>
+                  </TouchableOpacity>
+                  
+                  {showExtendedInterests && (
+                    <View style={styles.interestsGrid}>
+                      {EXTENDED_INTERESTS.map((interest) => (
+                        <TouchableOpacity
+                          key={interest}
+                          style={[
+                            styles.interestOption,
+                            filters.interests.includes(interest) && styles.interestOptionSelected
+                          ]}
+                          onPress={() => handleToggleInterest(interest)}
+                          disabled={!filters.interests.includes(interest) && filters.interests.length >= 3}
+                        >
+                          <Text style={[
+                            styles.interestOptionText,
+                            filters.interests.includes(interest) && styles.interestOptionTextSelected
+                          ]}>
+                            {interest.charAt(0).toUpperCase() + interest.slice(1)}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              </ScrollView>
+            </View>
+
+            {/* Action Buttons */}
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.resetButton} onPress={handleResetFilters}>
+                <Text style={styles.resetButtonText}>Reset</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.applyButton} onPress={handleApplyFilters}>
+                <Text style={styles.applyButtonText}>Apply Filters</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* TODO: Add Profile Detail Modal */}
       {/* TODO: Add First Time Guide Modal */}
     </SafeAreaView>
@@ -606,5 +761,137 @@ const styles = StyleSheet.create({
   },
   navButtonTextActive: {
     fontWeight: '600',
+  },
+  // Filter Modal Styles
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalCard: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 24,
+    width: '90%',
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  filterSection: {
+    marginBottom: 24,
+  },
+  filterSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 12,
+  },
+  ageRangeContainer: {
+    marginBottom: 16,
+  },
+  ageRangeText: {
+    fontSize: 14,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  sliderContainer: {
+    gap: 16,
+  },
+  slider: {
+    width: '100%',
+    height: 40,
+  },
+
+  interestsContainer: {
+    maxHeight: 200,
+  },
+  interestsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
+    gap: 8,
+  },
+  interestOption: {
+    backgroundColor: '#f3f4f6',
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: '30%',
+  },
+  interestOptionSelected: {
+    backgroundColor: '#8b5cf6',
+  },
+  interestOptionText: {
+    fontSize: 14,
+    color: '#374151',
+    textAlign: 'center',
+  },
+  interestOptionTextSelected: {
+    color: 'white',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 16,
+  },
+  resetButton: {
+    flex: 1,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  resetButtonText: {
+    fontSize: 16,
+    color: '#6b7280',
+    fontWeight: '600',
+  },
+  applyButton: {
+    flex: 1,
+    backgroundColor: '#8b5cf6',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  applyButtonText: {
+    fontSize: 16,
+    color: 'white',
+    fontWeight: '600',
+  },
+  interestsSection: {
+    marginBottom: 16,
+  },
+  interestsSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  interestsSectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  toggleIcon: {
+    fontSize: 16,
+    color: '#6b7280',
   },
 }); 

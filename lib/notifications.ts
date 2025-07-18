@@ -54,9 +54,9 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
  */
 export async function getPushToken(): Promise<string | null> {
   try {
-    // Try without projectId first (for development)
+    // Specify the project ID explicitly
     const token = await Notifications.getExpoPushTokenAsync({
-      projectId: '5034a8e3', // Let Expo auto-detect for development
+      projectId: '5034a8e3' // Your expo project ID
     });
     return token.data;
   } catch (error) {
@@ -84,7 +84,6 @@ export async function savePushTokenToFirestore(token: string): Promise<boolean> 
     };
 
     await setDoc(doc(db, 'users', user.uid, 'pushTokens', token), tokenData);
-    console.log('Push token saved to Firestore');
     return true;
   } catch (error) {
     console.error('Error saving push token to Firestore:', error);
@@ -105,7 +104,6 @@ export async function removePushTokenFromFirestore(token: string): Promise<boole
 
     const tokenRef = doc(db, 'users', user.uid, 'pushTokens', token);
     await setDoc(tokenRef, { deleted: true, deletedAt: new Date() });
-    console.log('Push token removed from Firestore');
     return true;
   } catch (error) {
     console.error('Error removing push token from Firestore:', error);
@@ -143,7 +141,6 @@ export async function initializeNotifications(): Promise<{
     if (user) {
       tokenSaved = await savePushTokenToFirestore(token);
     } else {
-      console.log('User not authenticated, skipping token save to Firestore');
       tokenSaved = false;
     }
     

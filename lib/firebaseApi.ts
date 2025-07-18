@@ -31,6 +31,34 @@ import {
 } from 'firebase/storage';
 import { notifyNewMessage } from './messageNotificationHelper';
 
+// Helper function to retry Firebase operations
+async function retryOperation<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 3,
+  delay: number = 1000
+): Promise<T> {
+  let lastError: any;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error: any) {
+      lastError = error;
+      
+      // Don't retry on certain errors
+      if (error.code === 'permission-denied' || error.code === 'not-found') {
+        throw error;
+      }
+      
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, delay * attempt));
+      }
+    }
+  }
+  
+  throw lastError;
+}
+
 // Types
 export interface Event {
   id: string;
@@ -107,7 +135,7 @@ export interface EventFeedback {
 // Event API
 export const EventAPI = {
   async create(data: Omit<Event, 'id' | 'created_at' | 'updated_at'>): Promise<Event> {
-    try {
+    return retryOperation(async () => {
       const docRef = await addDoc(collection(db, 'events'), {
         ...data,
         created_at: serverTimestamp(),
@@ -120,14 +148,11 @@ export const EventAPI = {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
-    } catch (error) {
-      console.error('Error creating event:', error);
-      throw error;
-    }
+    });
   },
 
   async filter(filters: Partial<Event> = {}): Promise<Event[]> {
-    try {
+    return retryOperation(async () => {
       let q: any = collection(db, 'events');
       
       if (filters.event_code) {
@@ -142,14 +167,11 @@ export const EventAPI = {
         id: doc.id,
         ...(doc.data() as any)
       })) as Event[];
-    } catch (error) {
-      console.error('Error filtering events:', error);
-      throw error;
-    }
+    });
   },
 
   async get(id: string): Promise<Event | null> {
-    try {
+    return retryOperation(async () => {
       const docRef = doc(db, 'events', id);
       const docSnap = await getDoc(docRef);
       
@@ -157,17 +179,14 @@ export const EventAPI = {
         return { id: docSnap.id, ...docSnap.data() } as Event;
       }
       return null;
-    } catch (error) {
-      console.error('Error getting event:', error);
-      throw error;
-    }
+    });
   }
 };
 
 // EventProfile API
 export const EventProfileAPI = {
   async create(data: Omit<EventProfile, 'id' | 'created_at' | 'updated_at'>): Promise<EventProfile> {
-    try {
+    return retryOperation(async () => {
       const docRef = await addDoc(collection(db, 'event_profiles'), {
         ...data,
         created_at: serverTimestamp(),
@@ -180,14 +199,11 @@ export const EventProfileAPI = {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
-    } catch (error) {
-      console.error('Error creating event profile:', error);
-      throw error;
-    }
+    });
   },
 
   async filter(filters: Partial<EventProfile> = {}): Promise<EventProfile[]> {
-    try {
+    return retryOperation(async () => {
       let q: any = collection(db, 'event_profiles');
       
       if (filters.event_id) {
@@ -205,10 +221,7 @@ export const EventProfileAPI = {
         id: doc.id,
         ...(doc.data() as any)
       })) as EventProfile[];
-    } catch (error) {
-      console.error('Error filtering event profiles:', error);
-      throw error;
-    }
+    });
   },
 
   async update(id: string, data: Partial<EventProfile>): Promise<void> {
@@ -268,13 +281,24 @@ export const LikeAPI = {
       if (filters.to_profile_id) {
         q = query(q, where('to_profile_id', '==', filters.to_profile_id));
       }
+      if (filters.liker_session_id) {
+        q = query(q, where('liker_session_id', '==', filters.liker_session_id));
+      }
+      if (filters.liked_session_id) {
+        q = query(q, where('liked_session_id', '==', filters.liked_session_id));
+      }
       
       const querySnapshot = await getDocs(q);
       return querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...(doc.data() as any)
       })) as Like[];
-    } catch (error) {
+    } catch (error: any) {
+      // Suppress Firestore internal assertion errors
+      if (error.message?.includes('INTERNAL ASSERTION FAILED') || error.message?.includes('Target ID already exists')) {
+        console.warn('Firestore internal error suppressed:', error.message);
+        return []; // Return empty array instead of throwing
+      }
       console.error('Error filtering likes:', error);
       throw error;
     }
@@ -311,11 +335,20 @@ export const MessageAPI = {
       
       // 🎉 SEND MESSAGE NOTIFICATION
       try {
+        // Get sender's profile to get their name
+        const senderProfiles = await EventProfileAPI.filter({
+          event_id: data.event_id,
+          session_id: data.from_profile_id
+        });
+        
+        const senderName = senderProfiles.length > 0 ? senderProfiles[0].first_name : undefined;
+        
         await notifyNewMessage(
           data.event_id,
           data.from_profile_id,
           data.to_profile_id,
-          data.content
+          data.content,
+          senderName
         );
       } catch (notificationError) {
         console.error('Error sending message notification:', notificationError);

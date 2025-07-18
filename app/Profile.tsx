@@ -14,7 +14,7 @@ import {
   FlatList,
 } from 'react-native';
 import { router } from 'expo-router';
-import { User, Settings, LogOut, Edit, Camera, Users, MessageCircle, Flag, AlertTriangle, Shield, Clock, Mail } from 'lucide-react-native';
+import { User, LogOut, Edit, Camera, Users, MessageCircle, Flag, AlertTriangle, Shield, Clock, Mail } from 'lucide-react-native';
 import { EventProfile, Event, UploadFile } from '../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
@@ -31,11 +31,19 @@ export default function Profile() {
   const [editingHeight, setEditingHeight] = useState(false);
   const [interests, setInterests] = useState(profile?.interests || []);
   const [showInterests, setShowInterests] = useState(false);
+  const [showExtendedInterests, setShowExtendedInterests] = useState(false);
   const [eventVisible, setEventVisible] = useState(profile?.is_visible ?? true);
   const [saving, setSaving] = useState(false);
-  const INTEREST_OPTIONS = [
-    'Music', 'Sports', 'Travel', 'Food', 'Art', 'Tech', 'Outdoors', 'Fitness', 'Movies', 'Books', 'Dancing', 'Games', 'Fashion', 'Volunteering', 'Other'
+  const [editingBasicProfile, setEditingBasicProfile] = useState(false);
+  const BASIC_INTERESTS = [
+    'music', 'tech', 'food', 'books', 'travel', 'art', 'fitness', 'nature', 'movies', 'business', 'photography', 'dancing'
   ];
+  
+  const EXTENDED_INTERESTS = [
+    'yoga', 'gaming', 'comedy', 'startups', 'fashion', 'spirituality', 'volunteering', 'crypto', 'cocktails', 'politics', 'hiking', 'design', 'podcasts', 'pets', 'wellness'
+  ];
+  
+  const ALL_INTERESTS = [...BASIC_INTERESTS, ...EXTENDED_INTERESTS];
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportStep, setReportStep] = useState<'select' | 'form'>('select');
   const [selectedUserToReport, setSelectedUserToReport] = useState<any>(null);
@@ -274,6 +282,20 @@ export default function Profile() {
     setProfile((prev: any) => ({ ...prev, is_visible: value }));
   };
 
+  const handleUpdateGender = async (gender: string) => {
+    setSaving(true);
+    await EventProfile.update(profile.id, { gender_identity: gender });
+    setProfile((prev: any) => ({ ...prev, gender_identity: gender }));
+    setSaving(false);
+  };
+
+  const handleUpdateInterestedIn = async (interestedIn: string) => {
+    setSaving(true);
+    await EventProfile.update(profile.id, { interested_in: interestedIn });
+    setProfile((prev: any) => ({ ...prev, interested_in: interestedIn }));
+    setSaving(false);
+  };
+
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -288,9 +310,6 @@ export default function Profile() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Your Profile</Text>
-        <TouchableOpacity style={styles.settingsButton}>
-          <Settings size={20} color="#6b7280" />
-        </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content}>
@@ -323,21 +342,106 @@ export default function Profile() {
         </View>
 
         {/* Profile Details */}
-        <View style={styles.detailsSection}>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Gender</Text>
-            <Text style={styles.detailValue}>
-              {profile.gender_identity === 'man' ? 'Man' : 'Woman'}
-            </Text>
+        <View style={styles.card}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <Text style={{ fontWeight: 'bold', fontSize: 16 }}>Basic Profile</Text>
+            <TouchableOpacity onPress={() => setEditingBasicProfile(!editingBasicProfile)}>
+              <Edit size={18} color="#6b7280" />
+            </TouchableOpacity>
           </View>
           
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Interested in</Text>
-            <Text style={styles.detailValue}>
-              {profile.interested_in === 'men' ? 'Men' : 
-               profile.interested_in === 'women' ? 'Women' : 'Everyone'}
-            </Text>
-          </View>
+          {editingBasicProfile ? (
+            <View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Gender</Text>
+                <View style={styles.detailValueContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.genderOption,
+                      profile.gender_identity === 'man' && styles.genderOptionSelected
+                    ]}
+                    onPress={() => handleUpdateGender('man')}
+                  >
+                    <Text style={[
+                      styles.genderOptionText,
+                      profile.gender_identity === 'man' && styles.genderOptionTextSelected
+                    ]}>Man</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.genderOption,
+                      profile.gender_identity === 'woman' && styles.genderOptionSelected
+                    ]}
+                    onPress={() => handleUpdateGender('woman')}
+                  >
+                    <Text style={[
+                      styles.genderOptionText,
+                      profile.gender_identity === 'woman' && styles.genderOptionTextSelected
+                    ]}>Woman</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Interested in</Text>
+                <View style={styles.detailValueContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.genderOption,
+                      profile.interested_in === 'men' && styles.genderOptionSelected
+                    ]}
+                    onPress={() => handleUpdateInterestedIn('men')}
+                  >
+                    <Text style={[
+                      styles.genderOptionText,
+                      profile.interested_in === 'men' && styles.genderOptionTextSelected
+                    ]}>Men</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.genderOption,
+                      profile.interested_in === 'women' && styles.genderOptionSelected
+                    ]}
+                    onPress={() => handleUpdateInterestedIn('women')}
+                  >
+                    <Text style={[
+                      styles.genderOptionText,
+                      profile.interested_in === 'women' && styles.genderOptionTextSelected
+                    ]}>Women</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.genderOption,
+                      profile.interested_in === 'everybody' && styles.genderOptionSelected
+                    ]}
+                    onPress={() => handleUpdateInterestedIn('everybody')}
+                  >
+                    <Text style={[
+                      styles.genderOptionText,
+                      profile.interested_in === 'everybody' && styles.genderOptionTextSelected
+                    ]}>Everybody</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          ) : (
+            <View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Gender</Text>
+                <Text style={styles.detailValue}>
+                  {profile.gender_identity === 'man' ? 'Man' : 'Woman'}
+                </Text>
+              </View>
+              
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Interested in</Text>
+                <Text style={styles.detailValue}>
+                  {profile.interested_in === 'men' ? 'Men' : 
+                   profile.interested_in === 'women' ? 'Women' : 'Everybody'}
+                </Text>
+              </View>
+            </View>
+          )}
           
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Event</Text>
@@ -400,24 +504,63 @@ export default function Profile() {
         <Modal visible={showInterests} transparent animationType="slide" onRequestClose={() => setShowInterests(false)}>
           <View style={styles.modalOverlay}>
             <View style={styles.modalCard}>
-              <Text style={{ fontWeight: 'bold', fontSize: 18, marginBottom: 12 }}>Select up to 3 interests</Text>
-              <FlatList
-                data={INTEREST_OPTIONS}
-                numColumns={3}
-                keyExtractor={item => item}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={[styles.interestOption, interests.includes(item) && styles.interestOptionSelected]}
-                    onPress={() => handleToggleInterest(item)}
-                    disabled={!interests.includes(item) && interests.length >= 3}
+              <Text style={{ fontWeight: 'bold', fontSize: 18, marginBottom: 16 }}>Select up to 3 interests</Text>
+              
+              <ScrollView 
+                style={styles.interestsModalContainer} 
+                showsVerticalScrollIndicator={false}
+                horizontal={false}
+                showsHorizontalScrollIndicator={false}
+              >
+                {/* Basic Interests - Always Visible */}
+                <View style={styles.interestsSection}>
+                  <View style={styles.interestsModalGrid}>
+                    {BASIC_INTERESTS.map((interest) => (
+                      <TouchableOpacity
+                        key={interest}
+                        style={[styles.interestOption, interests.includes(interest) && styles.interestOptionSelected]}
+                        onPress={() => handleToggleInterest(interest)}
+                        disabled={!interests.includes(interest) && interests.length >= 3}
+                      >
+                        <Text style={[styles.interestOptionText, interests.includes(interest) && styles.interestOptionTextSelected]}>
+                          {interest.charAt(0).toUpperCase() + interest.slice(1)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                {/* Extended Interests - Collapsible */}
+                <View style={styles.interestsSection}>
+                  <TouchableOpacity 
+                    style={styles.interestsSectionHeader}
+                    onPress={() => setShowExtendedInterests(!showExtendedInterests)}
                   >
-                    <Text style={{ color: interests.includes(item) ? 'white' : '#374151' }}>{item}</Text>
+                    <Text style={styles.toggleIcon}>{showExtendedInterests ? '↑' : '↓'}</Text>
                   </TouchableOpacity>
-                )}
-              />
-              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12 }}>
+                  
+                  {showExtendedInterests && (
+                    <View style={styles.interestsModalGrid}>
+                      {EXTENDED_INTERESTS.map((interest) => (
+                        <TouchableOpacity
+                          key={interest}
+                          style={[styles.interestOption, interests.includes(interest) && styles.interestOptionSelected]}
+                          onPress={() => handleToggleInterest(interest)}
+                          disabled={!interests.includes(interest) && interests.length >= 3}
+                        >
+                          <Text style={[styles.interestOptionText, interests.includes(interest) && styles.interestOptionTextSelected]}>
+                            {interest.charAt(0).toUpperCase() + interest.slice(1)}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              </ScrollView>
+              
+              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 16 }}>
                 <TouchableOpacity onPress={handleSaveInterests} disabled={saving} style={styles.saveButton}><Text style={styles.saveButtonText}>Save</Text></TouchableOpacity>
-                <TouchableOpacity onPress={() => { setShowInterests(false); setInterests(profile.interests || []); }} style={styles.cancelButton}><Text style={styles.cancelButtonText}>Cancel</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => { setShowInterests(false); setInterests(profile.interests || []); setShowExtendedInterests(false); }} style={styles.cancelButton}><Text style={styles.cancelButtonText}>Cancel</Text></TouchableOpacity>
               </View>
             </View>
           </View>
@@ -507,11 +650,6 @@ export default function Profile() {
         </View>
         {/* Actions */}
         <View style={styles.actionsSection}>
-          <TouchableOpacity style={styles.actionButton}>
-            <Edit size={20} color="#6b7280" />
-            <Text style={styles.actionText}>Edit Profile</Text>
-          </TouchableOpacity>
-          
           <TouchableOpacity 
             style={[styles.actionButton, styles.logoutButton]}
             onPress={handleLogout}
@@ -668,16 +806,6 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#1f2937',
-  },
-  settingsButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'white',
   },
   content: {
     flex: 1,
@@ -880,9 +1008,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingVertical: 10,
     paddingHorizontal: 16,
-    margin: 8,
     alignItems: 'center',
     justifyContent: 'center',
+    minWidth: '30%',
   },
   interestOptionSelected: {
     backgroundColor: '#8b5cf6',
@@ -1024,5 +1152,66 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  // Gender and Interest Selection Styles
+  detailValueContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  genderOption: {
+    backgroundColor: '#f3f4f6',
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+  },
+  genderOptionSelected: {
+    backgroundColor: '#8b5cf6',
+    borderColor: '#8b5cf6',
+  },
+  genderOptionText: {
+    fontSize: 14,
+    color: '#374151',
+  },
+  genderOptionTextSelected: {
+    color: 'white',
+  },
+  interestsModalContainer: {
+    maxHeight: 300,
+  },
+  interestsModalGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
+    gap: 8,
+  },
+  interestsSection: {
+    marginBottom: 20,
+  },
+  interestsSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  interestsSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  toggleIcon: {
+    fontSize: 18,
+    color: '#6b7280',
+    fontWeight: 'bold',
+  },
+  interestOptionText: {
+    fontSize: 14,
+    color: '#374151',
+    textAlign: 'center',
+  },
+  interestOptionTextSelected: {
+    color: 'white',
   },
 }); 

@@ -1,7 +1,9 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, enableNetwork, disableNetwork, connectFirestoreEmulator } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
+import NetInfo from '@react-native-community/netinfo';
+import { Platform } from 'react-native';
 
 // Your Firebase configuration
 const firebaseConfig = {
@@ -20,10 +22,44 @@ const app = initializeApp(firebaseConfig);
 // Initialize Firebase services
 export const auth = getAuth(app);
 
-// Configure Firestore
+// Configure Firestore with iOS simulator specific settings
 export const db = getFirestore(app);
 
 // Configure Storage
 export const storage = getStorage(app);
+
+// iOS Simulator specific connection handling
+if (Platform.OS === 'ios' && __DEV__) {
+  // Add a small delay before enabling network
+  setTimeout(() => {
+    enableNetwork(db).catch(error => {
+      console.error('❌ Error enabling Firestore network:', error);
+    });
+  }, 1000);
+}
+
+// Monitor network connectivity and manage Firestore connection
+NetInfo.addEventListener(state => {
+  if (state.isConnected) {
+    // Add delay for iOS simulator
+    const delay = Platform.OS === 'ios' && __DEV__ ? 500 : 0;
+    
+    setTimeout(() => {
+      enableNetwork(db).catch(error => {
+        console.error('Error enabling Firestore network:', error);
+      });
+    }, delay);
+  } else {
+    // Disable Firestore network when connection is lost
+    disableNetwork(db).catch(error => {
+      console.error('Error disabling Firestore network:', error);
+    });
+  }
+});
+
+// Initialize network status (silently)
+NetInfo.fetch().then(state => {
+  // Network status fetched silently
+});
 
 export default app;
