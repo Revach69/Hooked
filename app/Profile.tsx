@@ -12,15 +12,18 @@ import {
   Modal,
   TextInput,
   FlatList,
+  useColorScheme,
 } from 'react-native';
 import { router } from 'expo-router';
-import { User, LogOut, Edit, Camera, Users, MessageCircle, Flag, AlertTriangle, Shield, Clock, Mail } from 'lucide-react-native';
+import { User, LogOut, Edit, Camera, Users, MessageCircle, Flag, AlertTriangle, Shield, Clock, Mail, AlertCircle } from 'lucide-react-native';
 import { EventProfile, Event, UploadFile } from '../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function Profile() {
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
   const [profile, setProfile] = useState<any>(null);
   const [currentEvent, setCurrentEvent] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -296,6 +299,433 @@ export default function Profile() {
     setSaving(false);
   };
 
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: isDark ? '#1a1a1a' : '#f8fafc',
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: 16,
+      paddingTop: 32,
+    },
+    headerText: {
+      flex: 1,
+    },
+    title: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: isDark ? '#ffffff' : '#1f2937',
+      marginBottom: 4,
+    },
+    content: {
+      flex: 1,
+      paddingHorizontal: 16,
+    },
+    photoSection: {
+      alignItems: 'center',
+      marginBottom: 20,
+    },
+    photoContainer: {
+      position: 'relative',
+      width: 100,
+      height: 100,
+      borderRadius: 50,
+      overflow: 'hidden',
+      marginBottom: 10,
+    },
+    profilePhoto: {
+      width: '100%',
+      height: '100%',
+    },
+    fallbackAvatar: {
+      width: '100%',
+      height: '100%',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    fallbackText: {
+      fontSize: 40,
+      color: 'white',
+    },
+    photoEditButton: {
+      position: 'absolute',
+      bottom: 0,
+      right: 0,
+      backgroundColor: '#8b5cf6',
+      borderRadius: 15,
+      width: 30,
+      height: 30,
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderWidth: 2,
+      borderColor: 'white',
+    },
+    name: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: isDark ? '#f9fafb' : '#1f2937',
+      marginBottom: 4,
+    },
+    age: {
+      fontSize: 16,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      marginBottom: 20,
+    },
+    card: {
+      backgroundColor: isDark ? '#2d2d2d' : 'white',
+      borderRadius: 16,
+      padding: 20,
+      marginBottom: 20,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: isDark ? 0.3 : 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    detailRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 12,
+    },
+    detailLabel: {
+      fontSize: 16,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      fontWeight: 'bold',
+    },
+    detailValueContainer: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+    },
+    detailValue: {
+      fontSize: 16,
+      color: isDark ? '#e5e7eb' : '#374151',
+    },
+    genderOption: {
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: isDark ? '#374151' : '#e5e7eb',
+      marginRight: 10,
+      marginBottom: 8,
+    },
+    genderOptionSelected: {
+      backgroundColor: '#8b5cf6',
+      borderColor: '#8b5cf6',
+    },
+    genderOptionText: {
+      fontSize: 14,
+      color: isDark ? '#e5e7eb' : '#374151',
+    },
+    genderOptionTextSelected: {
+      color: 'white',
+    },
+    input: {
+      backgroundColor: isDark ? '#374151' : '#f9fafb',
+      borderRadius: 10,
+      padding: 15,
+      fontSize: 16,
+      color: isDark ? '#e5e7eb' : '#1f2937',
+      borderWidth: 1,
+      borderColor: isDark ? '#374151' : '#e5e7eb',
+      minHeight: 100,
+    },
+    heightInput: {
+      backgroundColor: isDark ? '#374151' : '#f9fafb',
+      borderRadius: 10,
+      padding: 15,
+      fontSize: 18,
+      color: isDark ? '#e5e7eb' : '#1f2937',
+      borderWidth: 1,
+      borderColor: isDark ? '#374151' : '#e5e7eb',
+      height: 50,
+      marginTop: 8,
+    },
+    saveButton: {
+      backgroundColor: '#8b5cf6',
+      paddingVertical: 12,
+      paddingHorizontal: 25,
+      borderRadius: 10,
+      marginLeft: 10,
+    },
+    saveButtonText: {
+      color: 'white',
+      fontSize: 16,
+      fontWeight: 'bold',
+    },
+    cancelButton: {
+      backgroundColor: '#6b7280',
+      paddingVertical: 12,
+      paddingHorizontal: 25,
+      borderRadius: 10,
+      marginLeft: 10,
+    },
+    cancelButtonText: {
+      color: 'white',
+      fontSize: 16,
+      fontWeight: 'bold',
+    },
+    interestsModalContainer: {
+      maxHeight: 250,
+      paddingBottom: 10,
+    },
+    interestsSection: {
+      marginBottom: 15,
+    },
+    interestsSectionHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingBottom: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? '#374151' : '#e5e7eb',
+    },
+    toggleIcon: {
+      fontSize: 18,
+      color: isDark ? '#9ca3af' : '#6b7280',
+    },
+    interestOption: {
+      paddingVertical: 10,
+      paddingHorizontal: 15,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: isDark ? '#374151' : '#e5e7eb',
+      marginRight: 10,
+      marginBottom: 8,
+    },
+    interestOptionSelected: {
+      backgroundColor: '#8b5cf6',
+      borderColor: '#8b5cf6',
+    },
+    interestOptionText: {
+      fontSize: 14,
+      color: isDark ? '#e5e7eb' : '#374151',
+    },
+    interestOptionTextSelected: {
+      color: 'white',
+    },
+    interestChip: {
+      backgroundColor: '#e0e7ff',
+      borderRadius: 15,
+      paddingVertical: 5,
+      paddingHorizontal: 10,
+      marginRight: 8,
+      marginBottom: 8,
+      borderWidth: 1,
+      borderColor: '#8b5cf6',
+    },
+    interestChipText: {
+      fontSize: 12,
+      color: '#4f46e5',
+      fontWeight: 'bold',
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: isDark ? '#1f2937' : '#f9fafb',
+    },
+    loadingText: {
+      fontSize: 18,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      marginTop: 10,
+    },
+    reportButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: '#f59e0b',
+      paddingVertical: 12,
+      paddingHorizontal: 20,
+      borderRadius: 10,
+      marginTop: 10,
+    },
+    reportButtonText: {
+      color: 'white',
+      fontSize: 16,
+      fontWeight: 'bold',
+      marginLeft: 8,
+    },
+    infoCardHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    infoCardTitle: {
+      fontSize: 16,
+      fontWeight: 'bold',
+      color: isDark ? '#f9fafb' : '#1f2937',
+      marginLeft: 8,
+    },
+    infoCardText: {
+      fontSize: 14,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      marginTop: 8,
+      marginBottom: 10,
+    },
+    infoCardBullets: {
+      marginLeft: 15,
+    },
+    bulletPoint: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      marginBottom: 4,
+    },
+    bullet: {
+      fontSize: 10,
+      color: '#8b5cf6',
+      marginRight: 4,
+    },
+    bulletText: {
+      fontSize: 14,
+      color: isDark ? '#e5e7eb' : '#374151',
+    },
+    actionsSection: {
+      marginTop: 20,
+    },
+    actionButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 15,
+      paddingHorizontal: 20,
+      borderRadius: 12,
+      marginBottom: 10,
+    },
+    actionText: {
+      fontSize: 16,
+      fontWeight: 'bold',
+      marginLeft: 10,
+    },
+    logoutButton: {
+      backgroundColor: '#ef4444',
+    },
+    logoutText: {
+      color: 'white',
+    },
+    navButton: {
+      alignItems: 'center',
+    },
+    navButtonActive: {},
+    navButtonText: {
+      fontSize: 12,
+      color: isDark ? '#9ca3af' : '#9ca3af',
+      marginTop: 4,
+    },
+    navButtonTextActive: {
+      fontWeight: '600',
+      color: '#8b5cf6',
+    },
+    userListItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? '#374151' : '#e5e7eb',
+    },
+    userListPhoto: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      overflow: 'hidden',
+      marginRight: 10,
+    },
+    userListPhotoImage: {
+      width: '100%',
+      height: '100%',
+    },
+    userListPhotoFallback: {
+      width: '100%',
+      height: '100%',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    userListPhotoFallbackText: {
+      fontSize: 20,
+      color: 'white',
+    },
+    userListInfo: {
+      flex: 1,
+    },
+    userListName: {
+      fontSize: 16,
+      fontWeight: 'bold',
+      color: isDark ? '#f9fafb' : '#1f2937',
+    },
+    userListAge: {
+      fontSize: 14,
+      color: isDark ? '#9ca3af' : '#6b7280',
+    },
+    modalOverlay: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: 'rgba(0,0,0,0.5)',
+    },
+    modalCard: {
+      backgroundColor: isDark ? '#263238' : '#ffffff',
+      borderRadius: 15,
+      padding: 25,
+      width: '90%',
+      maxWidth: 400,
+      borderWidth: 1,
+      borderColor: isDark ? '#374151' : '#e5e7eb',
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      color: isDark ? '#f9fafb' : '#1f2937',
+      textAlign: 'center',
+      marginBottom: 15,
+    },
+    reportUserInfo: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 15,
+    },
+    modalButtons: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginTop: 20,
+    },
+    submitButton: {
+      backgroundColor: '#8b5cf6',
+      paddingVertical: 12,
+      paddingHorizontal: 25,
+      borderRadius: 10,
+    },
+    submitButtonText: {
+      color: 'white',
+      fontSize: 16,
+      fontWeight: 'bold',
+    },
+    interestsModalGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'flex-start',
+      gap: 8,
+    },
+    bottomNavigation: {
+      flexDirection: 'row',
+      justifyContent: 'space-around',
+      alignItems: 'center',
+      paddingVertical: 10,
+      paddingHorizontal: 20,
+      backgroundColor: isDark ? '#2d2d2d' : 'white',
+      borderTopWidth: 1,
+      borderTopColor: isDark ? '#404040' : '#e5e7eb',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: -2 },
+      shadowOpacity: isDark ? 0.1 : 0.05,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+
+  });
+
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -309,7 +739,9 @@ export default function Profile() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Your Profile</Text>
+        <View style={styles.headerText}>
+          <Text style={styles.title}>Your Profile</Text>
+        </View>
       </View>
 
       <ScrollView style={styles.content}>
@@ -344,9 +776,9 @@ export default function Profile() {
         {/* Profile Details */}
         <View style={styles.card}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <Text style={{ fontWeight: 'bold', fontSize: 16 }}>Basic Profile</Text>
+            <Text style={{ fontWeight: 'bold', fontSize: 16, color: isDark ? '#ffffff' : '#1f2937' }}>Basic Profile</Text>
             <TouchableOpacity onPress={() => setEditingBasicProfile(!editingBasicProfile)}>
-              <Edit size={18} color="#6b7280" />
+              <Edit size={18} color={isDark ? '#9ca3af' : '#6b7280'} />
             </TouchableOpacity>
           </View>
           
@@ -453,26 +885,26 @@ export default function Profile() {
         <View style={styles.card}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
             <User size={20} color={eventVisible ? '#22c55e' : '#9ca3af'} />
-            <Text style={{ fontWeight: 'bold', fontSize: 16, marginLeft: 8 }}>Event Visibility</Text>
+            <Text style={{ fontWeight: 'bold', fontSize: 16, marginLeft: 8, color: isDark ? '#ffffff' : '#1f2937' }}>Event Visibility</Text>
             <View style={{ flex: 1 }} />
             <Switch value={eventVisible} onValueChange={handleToggleVisibility} />
           </View>
-          <Text style={{ color: '#6b7280' }}>
+          <Text style={{ color: isDark ? '#9ca3af' : '#6b7280' }}>
             {eventVisible ? 'Your profile is visible to others at the current event.' : 'Your profile is hidden from others at the current event.'}
           </Text>
         </View>
         {/* About Me */}
         <View style={styles.card}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={{ fontWeight: 'bold', fontSize: 16 }}>About Me</Text>
+            <Text style={{ fontWeight: 'bold', fontSize: 16, color: isDark ? '#ffffff' : '#1f2937' }}>About Me</Text>
             <TouchableOpacity onPress={() => setEditingAboutMe(true)}>
-              <Edit size={18} color="#6b7280" />
+              <Edit size={18} color={isDark ? '#9ca3af' : '#6b7280'} />
             </TouchableOpacity>
           </View>
           {editingAboutMe ? (
             <View>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { marginTop: 8 }]}
                 value={aboutMe}
                 onChangeText={setAboutMe}
                 placeholder="No bio yet. Add one!"
@@ -484,21 +916,21 @@ export default function Profile() {
               </View>
             </View>
           ) : (
-            <Text style={{ color: '#6b7280', marginTop: 4 }}>{profile.about_me || 'No bio yet. Add one!'}</Text>
+            <Text style={{ color: isDark ? '#9ca3af' : '#6b7280', marginTop: 4 }}>{profile.about_me || 'No bio yet. Add one!'}</Text>
           )}
         </View>
         {/* Interests */}
         <View style={styles.card}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={{ fontWeight: 'bold', fontSize: 16 }}>Interests</Text>
+            <Text style={{ fontWeight: 'bold', fontSize: 16, color: isDark ? '#ffffff' : '#1f2937' }}>Interests</Text>
             <TouchableOpacity onPress={() => setShowInterests(true)}>
-              <Edit size={18} color="#6b7280" />
+              <Edit size={18} color={isDark ? '#9ca3af' : '#6b7280'} />
             </TouchableOpacity>
           </View>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 4 }}>
             {(profile.interests && profile.interests.length > 0) ? profile.interests.map((i: string) => (
               <View key={i} style={styles.interestChip}><Text style={styles.interestChipText}>{i}</Text></View>
-            )) : <Text style={{ color: '#6b7280' }}>No interests added yet.</Text>}
+            )) : <Text style={{ color: isDark ? '#9ca3af' : '#6b7280' }}>No interests added yet.</Text>}
           </View>
         </View>
         <Modal visible={showInterests} transparent animationType="slide" onRequestClose={() => setShowInterests(false)}>
@@ -568,20 +1000,21 @@ export default function Profile() {
         {/* Height */}
         <View style={styles.card}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={{ fontWeight: 'bold', fontSize: 16 }}>Height</Text>
+            <Text style={{ fontWeight: 'bold', fontSize: 16, color: isDark ? '#ffffff' : '#1f2937' }}>Height</Text>
             <TouchableOpacity onPress={() => setEditingHeight(true)}>
-              <Edit size={18} color="#6b7280" />
+              <Edit size={18} color={isDark ? '#9ca3af' : '#6b7280'} />
             </TouchableOpacity>
           </View>
           {editingHeight ? (
             <View>
               <TextInput
-                style={styles.input}
+                style={styles.heightInput}
                 value={height}
                 onChangeText={setHeight}
-                placeholder="Not specified"
+                placeholder="180"
                 keyboardType="numeric"
                 maxLength={3}
+                textAlign="center"
               />
               <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8 }}>
                 <TouchableOpacity onPress={handleSaveHeight} disabled={saving} style={styles.saveButton}><Text style={styles.saveButtonText}>Save</Text></TouchableOpacity>
@@ -589,13 +1022,13 @@ export default function Profile() {
               </View>
             </View>
           ) : (
-            <Text style={{ color: '#6b7280', marginTop: 4 }}>{profile.height_cm ? `${profile.height_cm} cm` : 'Not specified'}</Text>
+            <Text style={{ color: isDark ? '#9ca3af' : '#6b7280', marginTop: 8 }}>{profile.height_cm ? `${profile.height_cm} cm` : 'Height not defined yet'}</Text>
           )}
         </View>
         {/* Report User Button */}
         <View style={styles.card}>
           <TouchableOpacity style={styles.reportButton} onPress={handleReportUser}>
-            <Flag size={20} color="#ef4444" />
+            <AlertCircle size={20} color="white" />
             <Text style={styles.reportButtonText}>Report a User</Text>
           </TouchableOpacity>
         </View>
@@ -778,440 +1211,4 @@ export default function Profile() {
       </View>
     </SafeAreaView>
   );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#6b7280',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    paddingTop: 32,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1f2937',
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-  photoSection: {
-    alignItems: 'center',
-    marginBottom: 32,
-  },
-  photoContainer: {
-    position: 'relative',
-    marginBottom: 16,
-  },
-  profilePhoto: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 4,
-    borderColor: '#e5e7eb',
-  },
-  fallbackAvatar: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 4,
-    borderColor: '#e5e7eb',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fallbackText: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: 'white',
-  },
-  photoEditButton: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#8b5cf6',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: 'white',
-  },
-  name: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginBottom: 4,
-  },
-  age: {
-    fontSize: 16,
-    color: '#6b7280',
-  },
-  detailsSection: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-  },
-  detailLabel: {
-    fontSize: 16,
-    color: '#6b7280',
-  },
-  detailValue: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#1f2937',
-  },
-  actionsSection: {
-    gap: 12,
-    marginBottom: 32,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  actionText: {
-    fontSize: 16,
-    color: '#6b7280',
-  },
-  logoutButton: {
-    borderWidth: 1,
-    borderColor: '#fecaca',
-    backgroundColor: '#fef2f2',
-  },
-  logoutText: {
-    color: '#dc2626',
-  },
-  bottomNavigation: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    paddingVertical: 10,
-    backgroundColor: 'white',
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-  },
-  navButton: {
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  navButtonText: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginTop: 4,
-  },
-  navButtonActive: {
-    borderBottomWidth: 2,
-    borderBottomColor: '#8b5cf6',
-  },
-  navButtonTextActive: {
-    color: '#8b5cf6',
-    fontWeight: 'bold',
-  },
-  card: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 12,
-    padding: 12,
-    fontSize: 16,
-    color: '#374151',
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  saveButton: {
-    backgroundColor: '#8b5cf6',
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    marginLeft: 10,
-  },
-  saveButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  cancelButton: {
-    backgroundColor: '#f3f4f6',
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-  },
-  cancelButtonText: {
-    color: '#6b7280',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  interestChip: {
-    backgroundColor: '#e0e7ff',
-    borderRadius: 20,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    marginRight: 8,
-    marginBottom: 8,
-  },
-  interestChipText: {
-    color: '#4f46e5',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  interestOption: {
-    backgroundColor: '#f3f4f6',
-    borderRadius: 20,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: '30%',
-  },
-  interestOptionSelected: {
-    backgroundColor: '#8b5cf6',
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  modalCard: {
-    backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 24,
-    width: '80%',
-    alignItems: 'center',
-  },
-  reportButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: '#fef2f2',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#fecaca',
-  },
-  reportButtonText: {
-    fontSize: 16,
-    color: '#dc2626',
-    fontWeight: '600',
-  },
-  infoCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  infoCardTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginLeft: 8,
-  },
-  infoCardText: {
-    fontSize: 14,
-    color: '#6b7280',
-    lineHeight: 20,
-    marginBottom: 12,
-  },
-  infoCardBullets: {
-    gap: 8,
-  },
-  bulletPoint: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  bullet: {
-    fontSize: 14,
-    color: '#8b5cf6',
-    marginRight: 8,
-    marginTop: 2,
-  },
-  bulletText: {
-    fontSize: 14,
-    color: '#6b7280',
-    flex: 1,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  userListItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-  },
-  userListPhoto: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    overflow: 'hidden',
-    marginRight: 12,
-  },
-  userListPhotoImage: {
-    width: '100%',
-    height: '100%',
-  },
-  userListPhotoFallback: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  userListPhotoFallbackText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: 'white',
-  },
-  userListInfo: {
-    flex: 1,
-  },
-  userListName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1f2937',
-  },
-  userListAge: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  reportUserInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#f9fafb',
-    borderRadius: 12,
-    marginBottom: 16,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 16,
-  },
-  submitButton: {
-    backgroundColor: '#ef4444',
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    flex: 1,
-    marginRight: 8,
-    alignItems: 'center',
-  },
-  submitButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  // Gender and Interest Selection Styles
-  detailValueContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  genderOption: {
-    backgroundColor: '#f3f4f6',
-    borderRadius: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-  },
-  genderOptionSelected: {
-    backgroundColor: '#8b5cf6',
-    borderColor: '#8b5cf6',
-  },
-  genderOptionText: {
-    fontSize: 14,
-    color: '#374151',
-  },
-  genderOptionTextSelected: {
-    color: 'white',
-  },
-  interestsModalContainer: {
-    maxHeight: 300,
-  },
-  interestsModalGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'flex-start',
-    gap: 8,
-  },
-  interestsSection: {
-    marginBottom: 20,
-  },
-  interestsSectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  interestsSectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1f2937',
-  },
-  toggleIcon: {
-    fontSize: 18,
-    color: '#6b7280',
-    fontWeight: 'bold',
-  },
-  interestOptionText: {
-    fontSize: 14,
-    color: '#374151',
-    textAlign: 'center',
-  },
-  interestOptionTextSelected: {
-    color: 'white',
-  },
-}); 
+} 

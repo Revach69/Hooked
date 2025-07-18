@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   StyleSheet,
+  useColorScheme,
 } from 'react-native';
 import { router } from 'expo-router';
 import { BarChart3, Users, Heart, MessageCircle, Settings, LogOut } from 'lucide-react-native';
@@ -14,6 +15,8 @@ import { Event, EventProfile, Like, Message } from '../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function Admin() {
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
   const [currentEvent, setCurrentEvent] = useState<any>(null);
   const [stats, setStats] = useState({
     totalProfiles: 0,
@@ -98,6 +101,154 @@ export default function Admin() {
       ]
     );
   };
+
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: isDark ? '#1a1a1a' : '#f8fafc',
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    loadingText: {
+      marginTop: 16,
+      fontSize: 16,
+      color: isDark ? '#9ca3af' : '#6b7280',
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: 16,
+      paddingTop: 32,
+    },
+    title: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: isDark ? '#ffffff' : '#1f2937',
+    },
+    settingsButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: isDark ? '#404040' : '#d1d5db',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: isDark ? '#2d2d2d' : 'white',
+    },
+    content: {
+      flex: 1,
+      paddingHorizontal: 16,
+    },
+    eventSection: {
+      marginBottom: 24,
+    },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: isDark ? '#ffffff' : '#1f2937',
+      marginBottom: 12,
+    },
+    eventCard: {
+      backgroundColor: isDark ? '#2d2d2d' : 'white',
+      borderRadius: 12,
+      padding: 16,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: isDark ? 0.3 : 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    eventName: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: isDark ? '#ffffff' : '#1f2937',
+      marginBottom: 4,
+    },
+    eventCode: {
+      fontSize: 14,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      marginBottom: 4,
+    },
+    eventStatus: {
+      fontSize: 14,
+      color: isDark ? '#9ca3af' : '#6b7280',
+    },
+    statsSection: {
+      marginBottom: 24,
+    },
+    statsGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 12,
+    },
+    statCard: {
+      flex: 1,
+      minWidth: '45%',
+      backgroundColor: isDark ? '#2d2d2d' : 'white',
+      borderRadius: 12,
+      padding: 16,
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: isDark ? 0.3 : 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    statIcon: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: isDark ? '#404040' : '#f3f4f6',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 8,
+    },
+    statNumber: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: isDark ? '#ffffff' : '#1f2937',
+      marginBottom: 4,
+    },
+    statLabel: {
+      fontSize: 14,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      textAlign: 'center',
+    },
+    actionsSection: {
+      marginBottom: 24,
+    },
+    actionButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: isDark ? '#2d2d2d' : 'white',
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 12,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: isDark ? 0.3 : 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+      gap: 12,
+    },
+    actionText: {
+      fontSize: 16,
+      color: isDark ? '#ffffff' : '#1f2937',
+      fontWeight: '500',
+    },
+    logoutButton: {
+      backgroundColor: isDark ? '#dc2626' : '#fef2f2',
+      borderColor: isDark ? '#dc2626' : '#fecaca',
+      borderWidth: 1,
+    },
+    logoutText: {
+      color: isDark ? '#ffffff' : '#dc2626',
+    },
+  });
 
   if (isLoading) {
     return (
@@ -199,151 +350,4 @@ export default function Admin() {
       </ScrollView>
     </View>
   );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#6b7280',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    paddingTop: 32,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1f2937',
-  },
-  settingsButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'white',
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-  eventSection: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1f2937',
-    marginBottom: 12,
-  },
-  eventCard: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  eventName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginBottom: 4,
-  },
-  eventCode: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginBottom: 4,
-  },
-  eventStatus: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  statsSection: {
-    marginBottom: 24,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  statCard: {
-    width: '48%',
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  statIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#f3f4f6',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#6b7280',
-    textAlign: 'center',
-  },
-  actionsSection: {
-    marginBottom: 32,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  actionText: {
-    fontSize: 16,
-    color: '#6b7280',
-  },
-  logoutButton: {
-    borderWidth: 1,
-    borderColor: '#fecaca',
-    backgroundColor: '#fef2f2',
-  },
-  logoutText: {
-    color: '#dc2626',
-  },
-}); 
+} 

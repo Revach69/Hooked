@@ -10,6 +10,7 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
+  useColorScheme,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Heart, QrCode, Hash, Shield, Clock, Users, X, Camera } from 'lucide-react-native';
@@ -21,6 +22,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 const { width } = Dimensions.get('window');
 
 export default function Home() {
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -156,6 +159,259 @@ export default function Home() {
     }
   };
 
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: isDark ? '#1a1a1a' : '#f8fafc',
+    },
+    contentContainer: {
+      paddingHorizontal: 16,
+      paddingVertical: 32,
+      maxWidth: 400,
+      alignSelf: 'center',
+      width: '100%',
+    },
+    heroSection: {
+      alignItems: 'center',
+      marginBottom: 48,
+    },
+    logoContainer: {
+      width: 80,
+      height: 80,
+      backgroundColor: '#ec4899',
+      borderRadius: 40,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 24,
+      shadowColor: '#ec4899',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.25,
+      shadowRadius: 16,
+      elevation: 8,
+    },
+    title: {
+      fontSize: 32,
+      fontWeight: 'bold',
+      color: isDark ? '#ffffff' : '#1f2937',
+      textAlign: 'center',
+      marginBottom: 16,
+      lineHeight: 40,
+    },
+    gradientText: {
+      color: '#ec4899',
+    },
+    subtitle: {
+      fontSize: 18,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      textAlign: 'center',
+      lineHeight: 26,
+    },
+    accessMethods: {
+      marginBottom: 32,
+    },
+    card: {
+      backgroundColor: isDark ? '#2d2d2d' : 'white',
+      borderRadius: 16,
+      padding: 20,
+      marginBottom: 16,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: isDark ? 0.3 : 0.1,
+      shadowRadius: 12,
+      elevation: 4,
+    },
+    cardHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    iconContainer: {
+      width: 48,
+      height: 48,
+      backgroundColor: '#3b82f6',
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 12,
+    },
+    purpleGradient: {
+      backgroundColor: '#8b5cf6',
+    },
+    cardTextContainer: {
+      flex: 1,
+    },
+    cardTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: isDark ? '#ffffff' : '#1f2937',
+      marginBottom: 4,
+    },
+    cardSubtitle: {
+      fontSize: 14,
+      color: isDark ? '#9ca3af' : '#6b7280',
+    },
+    primaryButton: {
+      backgroundColor: '#3b82f6',
+      borderRadius: 12,
+      paddingVertical: 16,
+      alignItems: 'center',
+    },
+    primaryButtonText: {
+      color: 'white',
+      fontSize: 16,
+      fontWeight: '500',
+    },
+    secondaryButton: {
+      borderWidth: 2,
+      borderColor: isDark ? '#404040' : '#e5e7eb',
+      borderRadius: 12,
+      paddingVertical: 16,
+      alignItems: 'center',
+    },
+    secondaryButtonText: {
+      color: '#8b5cf6',
+      fontSize: 16,
+      fontWeight: '500',
+    },
+    featuresContainer: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 32,
+    },
+    featureCard: {
+      flex: 1,
+      backgroundColor: isDark ? '#2d2d2d' : 'white',
+      borderRadius: 16,
+      padding: 24,
+      alignItems: 'center',
+      marginHorizontal: 4,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: isDark ? 0.3 : 0.05,
+      shadowRadius: 8,
+      elevation: 2,
+    },
+    featureTitle: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: isDark ? '#ffffff' : '#1f2937',
+      marginTop: 12,
+      marginBottom: 4,
+    },
+    featureSubtitle: {
+      fontSize: 12,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      textAlign: 'center',
+    },
+    infoCard: {
+      backgroundColor: isDark ? '#2d2d2d' : 'white',
+      borderRadius: 16,
+      padding: 24,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: isDark ? 0.3 : 0.1,
+      shadowRadius: 12,
+      elevation: 4,
+    },
+    infoContent: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+    },
+    infoIcon: {
+      marginTop: 2,
+      marginRight: 12,
+    },
+    infoTextContainer: {
+      flex: 1,
+    },
+    infoTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: isDark ? '#ffffff' : '#1f2937',
+      marginBottom: 8,
+    },
+    infoText: {
+      fontSize: 14,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      lineHeight: 20,
+    },
+    modalOverlay: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: 'rgba(0,0,0,0.7)',
+    },
+    modalContent: {
+      backgroundColor: isDark ? '#2d2d2d' : 'white',
+      borderRadius: 20,
+      padding: 24,
+      width: '80%',
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.25,
+      shadowRadius: 20,
+      elevation: 10,
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      width: '100%',
+      marginBottom: 20,
+    },
+    modalTitle: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: isDark ? '#ffffff' : '#1f2937',
+    },
+    modalCloseButton: {
+      padding: 5,
+    },
+    permissionText: {
+      fontSize: 16,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      textAlign: 'center',
+      marginBottom: 20,
+    },
+    scanAgainButton: {
+      backgroundColor: '#3b82f6',
+      borderRadius: 12,
+      paddingVertical: 12,
+      paddingHorizontal: 24,
+      alignItems: 'center',
+    },
+    scanAgainButtonText: {
+      color: 'white',
+      fontSize: 16,
+      fontWeight: '500',
+    },
+    manualCodeInput: {
+      width: '100%',
+      height: 50,
+      borderColor: isDark ? '#404040' : '#e5e7eb',
+      borderWidth: 2,
+      borderRadius: 12,
+      paddingHorizontal: 16,
+      fontSize: 16,
+      color: isDark ? '#ffffff' : '#1f2937',
+      marginBottom: 20,
+      backgroundColor: isDark ? '#1a1a1a' : 'white',
+    },
+    manualSubmitButton: {
+      backgroundColor: '#ec4899',
+      borderRadius: 12,
+      paddingVertical: 16,
+      paddingHorizontal: 24,
+      alignItems: 'center',
+    },
+    manualSubmitButtonText: {
+      color: 'white',
+      fontSize: 16,
+      fontWeight: '500',
+    },
+  });
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.contentContainer}>
@@ -286,256 +542,4 @@ export default function Home() {
       </ScrollView>
     </SafeAreaView>
   );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-  },
-  contentContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 32,
-    maxWidth: 400,
-    alignSelf: 'center',
-    width: '100%',
-  },
-  heroSection: {
-    alignItems: 'center',
-    marginBottom: 48,
-  },
-  logoContainer: {
-    width: 80,
-    height: 80,
-    backgroundColor: '#ec4899',
-    borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
-    shadowColor: '#ec4899',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    textAlign: 'center',
-    marginBottom: 16,
-    lineHeight: 40,
-  },
-  gradientText: {
-    color: '#ec4899',
-  },
-  subtitle: {
-    fontSize: 18,
-    color: '#6b7280',
-    textAlign: 'center',
-    lineHeight: 26,
-  },
-  accessMethods: {
-    marginBottom: 32,
-  },
-  card: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  iconContainer: {
-    width: 48,
-    height: 48,
-    backgroundColor: '#3b82f6',
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  purpleGradient: {
-    backgroundColor: '#8b5cf6',
-  },
-  cardTextContainer: {
-    flex: 1,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1f2937',
-    marginBottom: 4,
-  },
-  cardSubtitle: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  primaryButton: {
-    backgroundColor: '#3b82f6',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  primaryButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  secondaryButton: {
-    borderWidth: 2,
-    borderColor: '#e5e7eb',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  secondaryButtonText: {
-    color: '#8b5cf6',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  featuresContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 32,
-  },
-  featureCard: {
-    flex: 1,
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    marginHorizontal: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  featureTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1f2937',
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  featureSubtitle: {
-    fontSize: 12,
-    color: '#6b7280',
-    textAlign: 'center',
-  },
-  infoCard: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  infoContent: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  infoIcon: {
-    marginTop: 2,
-    marginRight: 12,
-  },
-  infoTextContainer: {
-    flex: 1,
-  },
-  infoTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1f2937',
-    marginBottom: 8,
-  },
-  infoText: {
-    fontSize: 14,
-    color: '#6b7280',
-    lineHeight: 20,
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.7)',
-  },
-  modalContent: {
-    backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 24,
-    width: '80%',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    width: '100%',
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1f2937',
-  },
-  modalCloseButton: {
-    padding: 5,
-  },
-  permissionText: {
-    fontSize: 16,
-    color: '#6b7280',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  scanAgainButton: {
-    backgroundColor: '#3b82f6',
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-  },
-  scanAgainButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  manualCodeInput: {
-    width: '100%',
-    height: 50,
-    borderColor: '#e5e7eb',
-    borderWidth: 2,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    fontSize: 16,
-    color: '#1f2937',
-    marginBottom: 20,
-  },
-  manualSubmitButton: {
-    backgroundColor: '#ec4899',
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-  },
-  manualSubmitButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-}); 
+} 

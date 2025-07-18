@@ -12,6 +12,7 @@ import {
   Keyboard,
   TouchableWithoutFeedback,
   Modal,
+  useColorScheme,
 } from 'react-native';
 import { router } from 'expo-router';
 import { User, EventProfile, Event, UploadFile } from '../lib/firebaseApi';
@@ -29,6 +30,8 @@ function generateUUID() {
 }
 
 export default function Consent() {
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
   const [event, setEvent] = useState<any>(null);
   const [step, setStep] = useState('manual');
   const [formData, setFormData] = useState({

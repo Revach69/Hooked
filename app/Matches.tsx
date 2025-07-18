@@ -7,6 +7,7 @@ import {
   Image,
   ActivityIndicator,
   StyleSheet,
+  useColorScheme,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Heart, MessageCircle, Users, User } from 'lucide-react-native';
@@ -15,6 +16,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function Matches() {
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
   const [matches, setMatches] = useState<any[]>([]);
   const [currentEvent, setCurrentEvent] = useState<any>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -92,6 +95,182 @@ export default function Matches() {
     console.log('Profile tapped:', profile.first_name);
   };
 
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: isDark ? '#1a1a1a' : '#f8fafc',
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    loadingText: {
+      marginTop: 16,
+      fontSize: 16,
+      color: isDark ? '#9ca3af' : '#6b7280',
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: 16,
+      paddingTop: 32,
+    },
+    headerText: {
+      flex: 1,
+    },
+    title: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: isDark ? '#ffffff' : '#1f2937',
+      marginBottom: 4,
+    },
+    subtitle: {
+      fontSize: 16,
+      color: isDark ? '#9ca3af' : '#6b7280',
+    },
+    headerIcon: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: isDark ? '#2d2d2d' : '#fef2f2',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    matchesContainer: {
+      flex: 1,
+      paddingHorizontal: 16,
+    },
+    matchesList: {
+      gap: 12,
+    },
+    matchCard: {
+      flexDirection: 'row',
+      backgroundColor: isDark ? '#2d2d2d' : 'white',
+      borderRadius: 16,
+      padding: 16,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: isDark ? 0.3 : 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    matchImageContainer: {
+      marginRight: 16,
+    },
+    matchImage: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+    },
+    fallbackAvatar: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: isDark ? '#404040' : '#cccccc',
+    },
+    fallbackText: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: 'white',
+    },
+    matchInfo: {
+      flex: 1,
+      justifyContent: 'center',
+    },
+    matchName: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: isDark ? '#ffffff' : '#1f2937',
+      marginBottom: 4,
+    },
+    matchAge: {
+      fontSize: 14,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      marginBottom: 12,
+    },
+    matchActions: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    actionButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: isDark ? '#404040' : '#f3f4f6',
+      borderRadius: 20,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      gap: 6,
+    },
+    actionText: {
+      fontSize: 14,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      fontWeight: '500',
+    },
+    emptyState: {
+      alignItems: 'center',
+      padding: 32,
+      marginTop: 32,
+    },
+    emptyTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: isDark ? '#ffffff' : '#1f2937',
+      marginTop: 16,
+      marginBottom: 8,
+    },
+    emptyText: {
+      fontSize: 14,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      textAlign: 'center',
+      marginBottom: 16,
+      lineHeight: 20,
+    },
+    browseButton: {
+      backgroundColor: '#8b5cf6',
+      borderRadius: 12,
+      paddingVertical: 12,
+      paddingHorizontal: 24,
+    },
+    browseButtonText: {
+      fontSize: 16,
+      color: 'white',
+      fontWeight: '600',
+      textAlign: 'center',
+    },
+    bottomNavigation: {
+      flexDirection: 'row',
+      justifyContent: 'space-around',
+      alignItems: 'center',
+      paddingVertical: 10,
+      paddingHorizontal: 20,
+      backgroundColor: isDark ? '#2d2d2d' : 'white',
+      borderTopWidth: 1,
+      borderTopColor: isDark ? '#404040' : '#e5e7eb',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: -2 },
+      shadowOpacity: isDark ? 0.1 : 0.05,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    navButton: {
+      alignItems: 'center',
+    },
+    navButtonText: {
+      fontSize: 12,
+      color: isDark ? '#9ca3af' : '#9ca3af',
+      marginTop: 4,
+    },
+    navButtonActive: {},
+    navButtonTextActive: {
+      fontWeight: '600',
+      color: '#8b5cf6',
+    },
+  });
+
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -136,7 +315,7 @@ export default function Matches() {
                       resizeMode="cover"
                     />
                   ) : (
-                    <View style={[styles.fallbackAvatar, { backgroundColor: match.profile_color || '#cccccc' }]}>
+                    <View style={styles.fallbackAvatar}>
                       <Text style={styles.fallbackText}>{match.first_name[0]}</Text>
                     </View>
                   )}
@@ -200,174 +379,4 @@ export default function Matches() {
       </View>
     </SafeAreaView>
   );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#6b7280',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    paddingTop: 32,
-  },
-  headerText: {
-    flex: 1,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#6b7280',
-  },
-  headerIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#fef2f2',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  matchesContainer: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-  matchesList: {
-    gap: 12,
-  },
-  matchCard: {
-    flexDirection: 'row',
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  matchImageContainer: {
-    marginRight: 16,
-  },
-  matchImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-  },
-  fallbackAvatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fallbackText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: 'white',
-  },
-  matchInfo: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  matchName: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1f2937',
-    marginBottom: 4,
-  },
-  matchAge: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginBottom: 12,
-  },
-  matchActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: '#f3f4f6',
-    borderRadius: 8,
-  },
-  actionText: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  emptyState: {
-    alignItems: 'center',
-    padding: 32,
-    marginTop: 32,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#1f2937',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#6b7280',
-    textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 24,
-  },
-  browseButton: {
-    backgroundColor: '#8b5cf6',
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-  },
-  browseButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  bottomNavigation: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    backgroundColor: '#f8fafc',
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-  },
-  navButton: {
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  navButtonText: {
-    fontSize: 12,
-    color: '#9ca3af',
-    marginTop: 4,
-  },
-  navButtonActive: {
-    // Active state styling handled in the component
-  },
-  navButtonTextActive: {
-    fontWeight: '600',
-  },
-}); 
+} 

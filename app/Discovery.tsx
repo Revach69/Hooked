@@ -12,6 +12,7 @@ import {
   AppState,
   Modal,
   FlatList,
+  useColorScheme,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Heart, Filter, Users, User, MessageCircle, X } from 'lucide-react-native';
@@ -35,6 +36,8 @@ const EXTENDED_INTERESTS = [
 const ALL_INTERESTS = [...BASIC_INTERESTS, ...EXTENDED_INTERESTS];
 
 export default function Discovery() {
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
   const [profiles, setProfiles] = useState<any[]>([]);
   const [currentUserProfile, setCurrentUserProfile] = useState<any>(null);
   const [filteredProfiles, setFilteredProfiles] = useState<any[]>([]);
@@ -330,6 +333,328 @@ export default function Discovery() {
     setShowExtendedInterests(false);
   };
 
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: isDark ? '#1a1a1a' : '#f8fafc',
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    loadingText: {
+      marginTop: 16,
+      fontSize: 16,
+      color: isDark ? '#9ca3af' : '#6b7280',
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: 16,
+      paddingTop: 32,
+    },
+    headerText: {
+      flex: 1,
+    },
+    title: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: isDark ? '#ffffff' : '#1f2937',
+      marginBottom: 4,
+    },
+    subtitle: {
+      fontSize: 16,
+      color: isDark ? '#9ca3af' : '#6b7280',
+    },
+    filterButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: isDark ? '#404040' : '#d1d5db',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: isDark ? '#2d2d2d' : 'white',
+    },
+    profilesContainer: {
+      flex: 1,
+      paddingHorizontal: 16,
+    },
+    profilesGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'flex-start',
+      gap: 12,
+    },
+    profileCard: {
+      width: cardSize,
+      backgroundColor: isDark ? '#2d2d2d' : 'white',
+      borderRadius: 16,
+      padding: 12,
+      margin: 4,
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: isDark ? 0.3 : 0.1,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    profileImageContainer: {
+      width: cardSize - 24,
+      height: cardSize - 24,
+      borderRadius: (cardSize - 24) / 2,
+      overflow: 'hidden',
+      marginBottom: 8,
+      backgroundColor: isDark ? '#404040' : '#e5e7eb',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    profileImage: {
+      width: '100%',
+      height: '100%',
+      borderRadius: (cardSize - 24) / 2,
+    },
+    fallbackAvatar: {
+      width: cardSize - 24,
+      height: cardSize - 24,
+      borderRadius: (cardSize - 24) / 2,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: isDark ? '#404040' : '#cccccc',
+    },
+    fallbackText: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: 'white',
+    },
+    likeButton: {
+      position: 'absolute',
+      top: 8,
+      right: 8,
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: 'rgba(255, 255, 255, 0.9)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    likeButtonActive: {
+      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    },
+    nameOverlay: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.7)',
+      padding: 8,
+    },
+    profileName: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: isDark ? '#ffffff' : '#1f2937',
+    },
+    emptyState: {
+      alignItems: 'center',
+      padding: 32,
+      marginTop: 32,
+    },
+    emptyTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: isDark ? '#ffffff' : '#1f2937',
+      marginTop: 16,
+      marginBottom: 8,
+    },
+    emptyText: {
+      fontSize: 14,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      textAlign: 'center',
+      marginBottom: 16,
+      lineHeight: 20,
+    },
+    adjustFiltersButton: {
+      borderWidth: 1,
+      borderColor: isDark ? '#404040' : '#d1d5db',
+      borderRadius: 12,
+      paddingVertical: 12,
+      paddingHorizontal: 24,
+      backgroundColor: isDark ? '#2d2d2d' : 'white',
+    },
+    adjustFiltersButtonText: {
+      fontSize: 14,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      fontWeight: '500',
+    },
+    bottomNavigation: {
+      flexDirection: 'row',
+      justifyContent: 'space-around',
+      alignItems: 'center',
+      paddingVertical: 10,
+      paddingHorizontal: 20,
+      backgroundColor: isDark ? '#2d2d2d' : 'white',
+      borderTopWidth: 1,
+      borderTopColor: isDark ? '#404040' : '#e5e7eb',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: -2 },
+      shadowOpacity: isDark ? 0.1 : 0.05,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    navButton: {
+      alignItems: 'center',
+    },
+    navButtonText: {
+      fontSize: 12,
+      color: isDark ? '#9ca3af' : '#9ca3af',
+      marginTop: 4,
+    },
+    navButtonActive: {},
+    navButtonTextActive: {
+      fontWeight: '600',
+      color: isDark ? '#ffffff' : '#1f2937',
+    },
+    // Filter Modal Styles
+    modalOverlay: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: 'rgba(0,0,0,0.5)',
+    },
+    modalCard: {
+      backgroundColor: isDark ? '#2d2d2d' : 'white',
+      borderRadius: 20,
+      padding: 24,
+      width: '90%',
+      maxHeight: '80%',
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 24,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      color: isDark ? '#ffffff' : '#1f2937',
+    },
+    filterSection: {
+      marginBottom: 24,
+    },
+    filterSectionTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: isDark ? '#ffffff' : '#1f2937',
+      marginBottom: 12,
+    },
+    ageRangeContainer: {
+      marginBottom: 16,
+    },
+    ageRangeText: {
+      fontSize: 14,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      textAlign: 'center',
+      marginBottom: 12,
+    },
+    sliderContainer: {
+      gap: 16,
+    },
+    slider: {
+      width: '100%',
+      height: 40,
+    },
+
+    interestsContainer: {
+      maxHeight: 200,
+    },
+    interestsGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'flex-start',
+      gap: 8,
+    },
+    interestOption: {
+      backgroundColor: isDark ? '#404040' : '#f3f4f6',
+      borderRadius: 20,
+      paddingVertical: 10,
+      paddingHorizontal: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      minWidth: '30%',
+    },
+    interestOptionSelected: {
+      backgroundColor: '#8b5cf6',
+    },
+    interestOptionText: {
+      fontSize: 14,
+      color: isDark ? '#ffffff' : '#374151',
+      textAlign: 'center',
+    },
+    interestOptionTextSelected: {
+      color: 'white',
+    },
+    modalActions: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      gap: 12,
+      marginTop: 16,
+    },
+    resetButton: {
+      flex: 1,
+      backgroundColor: isDark ? '#404040' : '#f3f4f6',
+      borderRadius: 12,
+      paddingVertical: 12,
+      alignItems: 'center',
+    },
+    resetButtonText: {
+      fontSize: 16,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      fontWeight: '600',
+    },
+    applyButton: {
+      flex: 1,
+      backgroundColor: '#8b5cf6',
+      borderRadius: 12,
+      paddingVertical: 12,
+      alignItems: 'center',
+    },
+    applyButtonText: {
+      fontSize: 16,
+      color: 'white',
+      fontWeight: '600',
+    },
+    interestsSection: {
+      marginBottom: 16,
+    },
+    interestsSectionHeader: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      backgroundColor: isDark ? '#404040' : '#f3f4f6',
+      borderRadius: 12,
+      marginBottom: 8,
+    },
+    interestsSectionTitle: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: isDark ? '#ffffff' : '#1f2937',
+    },
+    toggleIcon: {
+      fontSize: 16,
+      color: isDark ? '#9ca3af' : '#6b7280',
+    },
+  });
+
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -581,317 +906,4 @@ export default function Discovery() {
       {/* TODO: Add First Time Guide Modal */}
     </SafeAreaView>
   );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#6b7280',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    paddingTop: 32,
-  },
-  headerText: {
-    flex: 1,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#6b7280',
-  },
-  filterButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'white',
-  },
-  profilesContainer: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-  profilesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  profileCard: {
-    width: cardSize,
-    marginBottom: 12,
-  },
-  profileImageContainer: {
-    position: 'relative',
-    width: cardSize,
-    height: cardSize,
-    borderRadius: 12,
-    overflow: 'hidden',
-    backgroundColor: 'white',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  profileImage: {
-    width: '100%',
-    height: '100%',
-  },
-  fallbackAvatar: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fallbackText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: 'white',
-  },
-  likeButton: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  likeButtonActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-  },
-  nameOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    padding: 8,
-  },
-  profileName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: 'white',
-  },
-  emptyState: {
-    alignItems: 'center',
-    padding: 32,
-    marginTop: 32,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1f2937',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#6b7280',
-    textAlign: 'center',
-    marginBottom: 16,
-    lineHeight: 20,
-  },
-  adjustFiltersButton: {
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    backgroundColor: 'white',
-  },
-  adjustFiltersButtonText: {
-    fontSize: 14,
-    color: '#6b7280',
-    fontWeight: '500',
-  },
-  bottomNavigation: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    backgroundColor: 'white',
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  navButton: {
-    alignItems: 'center',
-  },
-  navButtonText: {
-    fontSize: 12,
-    color: '#9ca3af',
-    marginTop: 4,
-  },
-  navButtonActive: {
-    // Active state styling handled in the component
-  },
-  navButtonTextActive: {
-    fontWeight: '600',
-  },
-  // Filter Modal Styles
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  modalCard: {
-    backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 24,
-    width: '90%',
-    maxHeight: '80%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1f2937',
-  },
-  filterSection: {
-    marginBottom: 24,
-  },
-  filterSectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1f2937',
-    marginBottom: 12,
-  },
-  ageRangeContainer: {
-    marginBottom: 16,
-  },
-  ageRangeText: {
-    fontSize: 14,
-    color: '#6b7280',
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  sliderContainer: {
-    gap: 16,
-  },
-  slider: {
-    width: '100%',
-    height: 40,
-  },
-
-  interestsContainer: {
-    maxHeight: 200,
-  },
-  interestsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'flex-start',
-    gap: 8,
-  },
-  interestOption: {
-    backgroundColor: '#f3f4f6',
-    borderRadius: 20,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: '30%',
-  },
-  interestOptionSelected: {
-    backgroundColor: '#8b5cf6',
-  },
-  interestOptionText: {
-    fontSize: 14,
-    color: '#374151',
-    textAlign: 'center',
-  },
-  interestOptionTextSelected: {
-    color: 'white',
-  },
-  modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginTop: 16,
-  },
-  resetButton: {
-    flex: 1,
-    backgroundColor: '#f3f4f6',
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  resetButtonText: {
-    fontSize: 16,
-    color: '#6b7280',
-    fontWeight: '600',
-  },
-  applyButton: {
-    flex: 1,
-    backgroundColor: '#8b5cf6',
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  applyButtonText: {
-    fontSize: 16,
-    color: 'white',
-    fontWeight: '600',
-  },
-  interestsSection: {
-    marginBottom: 16,
-  },
-  interestsSectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    backgroundColor: '#f3f4f6',
-    borderRadius: 12,
-    marginBottom: 8,
-  },
-  interestsSectionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1f2937',
-  },
-  toggleIcon: {
-    fontSize: 16,
-    color: '#6b7280',
-  },
-}); 
+} 

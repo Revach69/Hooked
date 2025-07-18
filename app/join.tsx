@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  useColorScheme,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { AlertCircle } from 'lucide-react-native';
@@ -17,6 +18,8 @@ export default function JoinPage() {
   const { code } = useLocalSearchParams<{ code: string }>();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
 
   useEffect(() => {
     handleEventJoin();
@@ -106,6 +109,74 @@ export default function JoinPage() {
     router.replace('/home');
   };
 
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: isDark ? '#1a1a1a' : '#f8fafc',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 16,
+    },
+    card: {
+      backgroundColor: isDark ? '#2d2d2d' : 'white',
+      borderRadius: 16,
+      padding: 32,
+      maxWidth: 400,
+      width: '100%',
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: isDark ? 0.3 : 0.1,
+      shadowRadius: 12,
+      elevation: 4,
+    },
+    spinner: {
+      marginBottom: 24,
+    },
+    title: {
+      fontSize: 20,
+      fontWeight: '600',
+      color: isDark ? '#ffffff' : '#1f2937',
+      marginBottom: 8,
+      textAlign: 'center',
+    },
+    subtitle: {
+      fontSize: 16,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      textAlign: 'center',
+      lineHeight: 24,
+    },
+    errorIconContainer: {
+      width: 64,
+      height: 64,
+      backgroundColor: isDark ? '#dc2626' : '#fef2f2',
+      borderRadius: 32,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 24,
+    },
+    errorText: {
+      fontSize: 16,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      textAlign: 'center',
+      marginBottom: 24,
+      lineHeight: 24,
+    },
+    button: {
+      backgroundColor: '#8b5cf6',
+      borderRadius: 12,
+      paddingVertical: 16,
+      paddingHorizontal: 24,
+      width: '100%',
+      alignItems: 'center',
+    },
+    buttonText: {
+      color: 'white',
+      fontSize: 16,
+      fontWeight: '500',
+    },
+  });
+
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -148,72 +219,4 @@ export default function JoinPage() {
       </View>
     </SafeAreaView>
   );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
-  },
-  card: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 32,
-    maxWidth: 400,
-    width: '100%',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  spinner: {
-    marginBottom: 24,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#1f2937',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#6b7280',
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  errorIconContainer: {
-    width: 64,
-    height: 64,
-    backgroundColor: '#fef2f2',
-    borderRadius: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
-  },
-  errorText: {
-    fontSize: 16,
-    color: '#6b7280',
-    textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 24,
-  },
-  button: {
-    backgroundColor: '#8b5cf6',
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    width: '100%',
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-}); 
+} 
