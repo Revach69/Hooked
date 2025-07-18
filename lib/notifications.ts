@@ -54,8 +54,9 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
  */
 export async function getPushToken(): Promise<string | null> {
   try {
+    // Try without projectId first (for development)
     const token = await Notifications.getExpoPushTokenAsync({
-      projectId: 'hooked-69', // Your Expo project ID
+      projectId: '5034a8e3', // Let Expo auto-detect for development
     });
     return token.data;
   } catch (error) {
@@ -135,8 +136,16 @@ export async function initializeNotifications(): Promise<{
       return { permissionGranted: true, tokenSaved: false };
     }
 
-    // Save token to Firestore
-    const tokenSaved = await savePushTokenToFirestore(token);
+    // Only save to Firestore if user is authenticated
+    const user = auth.currentUser;
+    let tokenSaved = false;
+    
+    if (user) {
+      tokenSaved = await savePushTokenToFirestore(token);
+    } else {
+      console.log('User not authenticated, skipping token save to Firestore');
+      tokenSaved = false;
+    }
     
     return {
       permissionGranted: true,

@@ -32,7 +32,7 @@ export default function RootLayout() {
     };
 
     // Delay the permission check to avoid showing modal immediately on app launch
-    const timer = setTimeout(initNotifications, 2000);
+    const timer = setTimeout(initNotifications, 3000); // Increased delay
     
     return () => clearTimeout(timer);
   }, []);

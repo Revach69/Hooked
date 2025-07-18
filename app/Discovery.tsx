@@ -14,6 +14,7 @@ import {
 import { router } from 'expo-router';
 import { Heart, Filter, Users, User, MessageCircle } from 'lucide-react-native';
 import { EventProfile, Like, Event } from '../lib/firebaseApi';
+import { sendMatchNotification } from '../lib/notificationService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -249,6 +250,17 @@ export default function Discovery() {
           is_mutual: true,
           liked_notified_of_match: true 
         });
+        
+        // 🎉 SEND MATCH NOTIFICATIONS TO BOTH USERS
+        try {
+          await Promise.all([
+            sendMatchNotification(likerSessionId, likedProfile.first_name),
+            sendMatchNotification(likedProfile.session_id, currentUserProfile.first_name)
+          ]);
+          console.log('Match notifications sent successfully!');
+        } catch (notificationError) {
+          console.error('Error sending match notifications:', notificationError);
+        }
         
         Alert.alert(
           "🎉 It's a Match!", 

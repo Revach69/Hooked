@@ -29,6 +29,7 @@ import {
   uploadBytes,
   getDownloadURL
 } from 'firebase/storage';
+import { notifyNewMessage } from './messageNotificationHelper';
 
 // Types
 export interface Event {
@@ -302,11 +303,25 @@ export const MessageAPI = {
         created_at: serverTimestamp()
       });
       
-      return {
+      const message = {
         id: docRef.id,
         ...data,
         created_at: new Date().toISOString()
       };
+      
+      // 🎉 SEND MESSAGE NOTIFICATION
+      try {
+        await notifyNewMessage(
+          data.event_id,
+          data.from_profile_id,
+          data.to_profile_id,
+          data.content
+        );
+      } catch (notificationError) {
+        console.error('Error sending message notification:', notificationError);
+      }
+      
+      return message;
     } catch (error) {
       console.error('Error creating message:', error);
       throw error;
