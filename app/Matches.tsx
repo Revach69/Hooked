@@ -9,9 +9,10 @@ import {
   StyleSheet,
 } from 'react-native';
 import { router } from 'expo-router';
-import { Heart, MessageCircle, Users } from 'lucide-react-native';
+import { Heart, MessageCircle, Users, User } from 'lucide-react-native';
 import { EventProfile, Like, Event } from '../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function Matches() {
   const [matches, setMatches] = useState<any[]>([]);
@@ -101,7 +102,7 @@ export default function Matches() {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerText}>
@@ -170,7 +171,34 @@ export default function Matches() {
           </View>
         )}
       </ScrollView>
-    </View>
+
+      {/* Bottom Navigation */}
+      <View style={styles.bottomNavigation}>
+        <TouchableOpacity
+          style={styles.navButton}
+          onPress={() => router.push('/discovery')}
+        >
+          <Users size={24} color="#9ca3af" />
+          <Text style={styles.navButtonText}>Discover</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[styles.navButton, styles.navButtonActive]}
+          onPress={() => {}} // Already on matches page
+        >
+          <MessageCircle size={24} color="#8b5cf6" />
+          <Text style={[styles.navButtonText, styles.navButtonTextActive]}>Matches</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={styles.navButton}
+          onPress={() => router.push('/profile')}
+        >
+          <User size={24} color="#9ca3af" />
+          <Text style={styles.navButtonText}>Profile</Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
   );
 }
 
@@ -316,5 +344,30 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '500',
+  },
+  bottomNavigation: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    backgroundColor: '#f8fafc',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  navButton: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  navButtonText: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginTop: 4,
+  },
+  navButtonActive: {
+    // Active state styling handled in the component
+  },
+  navButtonTextActive: {
+    fontWeight: '600',
   },
 }); 

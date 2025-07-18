@@ -11,6 +11,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { AlertCircle } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Event } from '../lib/firebaseApi';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function JoinPage() {
   const { code } = useLocalSearchParams<{ code: string }>();
@@ -107,7 +108,7 @@ export default function JoinPage() {
 
   if (isLoading) {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <View style={styles.card}>
           <ActivityIndicator size="large" color="#8b5cf6" style={styles.spinner} />
           <Text style={styles.title}>Joining Event...</Text>
@@ -115,13 +116,13 @@ export default function JoinPage() {
             Please wait while we verify your event access.
           </Text>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (error) {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <View style={styles.card}>
           <View style={styles.errorIconContainer}>
             <AlertCircle size={32} color="#dc2626" />
@@ -132,20 +133,20 @@ export default function JoinPage() {
             <Text style={styles.buttonText}>Return to Home</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   // This should not be reached due to redirects, but just in case
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.card}>
         <Text style={styles.title}>Processing...</Text>
         <Text style={styles.subtitle}>
           Redirecting you to the event.
         </Text>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 

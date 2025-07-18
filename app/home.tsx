@@ -16,6 +16,7 @@ import { Heart, QrCode, Hash, Shield, Clock, Users, X, Camera } from 'lucide-rea
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Event } from '../lib/firebaseApi';
 import * as ImagePicker from 'expo-image-picker';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 
@@ -156,132 +157,134 @@ export default function Home() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      {/* Hero Section */}
-      <View style={styles.heroSection}>
-        <View style={styles.logoContainer}>
-          <Heart size={40} color="white" />
-        </View>
-        <Text style={styles.title}>
-          Meet Singles at{'\n'}
-          <Text style={styles.gradientText}>This Event</Text>
-        </Text>
-        <Text style={styles.subtitle}>
-          Connect with other singles privately and safely — only at this specific event
-        </Text>
-      </View>
-
-      {/* Access Methods */}
-      <View style={styles.accessMethods}>
-        {/* QR Code Card */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <View style={styles.iconContainer}>
-              <QrCode size={24} color="white" />
-            </View>
-            <View style={styles.cardTextContainer}>
-              <Text style={styles.cardTitle}>Scan QR Code</Text>
-              <Text style={styles.cardSubtitle}>Quick access with your camera</Text>
-            </View>
+    <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.contentContainer}>
+        {/* Hero Section */}
+        <View style={styles.heroSection}>
+          <View style={styles.logoContainer}>
+            <Heart size={40} color="white" />
           </View>
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={handleCameraAccess}
-            disabled={isProcessing}
-          >
-            {isProcessing ? (
-              <ActivityIndicator size="small" color="white" />
-            ) : (
-              <Text style={styles.primaryButtonText}>Scan QR Code</Text>
-            )}
-          </TouchableOpacity>
+          <Text style={styles.title}>
+            Meet Singles at{'\n'}
+            <Text style={styles.gradientText}>This Event</Text>
+          </Text>
+          <Text style={styles.subtitle}>
+            Connect with other singles privately and safely — only at this specific event
+          </Text>
         </View>
 
-        {/* Manual Entry Card */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <View style={[styles.iconContainer, styles.purpleGradient]}>
-              <Hash size={24} color="white" />
+        {/* Access Methods */}
+        <View style={styles.accessMethods}>
+          {/* QR Code Card */}
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <View style={styles.iconContainer}>
+                <QrCode size={24} color="white" />
+              </View>
+              <View style={styles.cardTextContainer}>
+                <Text style={styles.cardTitle}>Scan QR Code</Text>
+                <Text style={styles.cardSubtitle}>Quick access with your camera</Text>
+              </View>
             </View>
-            <View style={styles.cardTextContainer}>
-              <Text style={styles.cardTitle}>Enter Event Code</Text>
-              <Text style={styles.cardSubtitle}>Manual entry option</Text>
-            </View>
-          </View>
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => openModal('manualCodeEntry')}
-          >
-            <Text style={styles.secondaryButtonText}>Enter Code Manually</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Features */}
-      <View style={styles.featuresContainer}>
-        <View style={styles.featureCard}>
-          <Shield size={32} color="#10b981" />
-          <Text style={styles.featureTitle}>Private</Text>
-          <Text style={styles.featureSubtitle}>Your data stays secure</Text>
-        </View>
-        <View style={styles.featureCard}>
-          <Clock size={32} color="#3b82f6" />
-          <Text style={styles.featureTitle}>Temporary</Text>
-          <Text style={styles.featureSubtitle}>Expires after event</Text>
-        </View>
-      </View>
-
-      {/* Info Card */}
-      <View style={styles.infoCard}>
-        <View style={styles.infoContent}>
-          <Users size={20} color="#ec4899" style={styles.infoIcon} />
-          <View style={styles.infoTextContainer}>
-            <Text style={styles.infoTitle}>How it works</Text>
-            <Text style={styles.infoText}>• Scan the event's unique QR code{'\n'}
-              • Create a temporary profile {'\n'}
-              • Discover other singles at this event{'\n'}
-              • Match and chat privately{'\n'}
-              • Everything expires when the event ends</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Manual Code Entry Modal */}
-      <Modal
-        visible={activeModal === 'manualCodeEntry'}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={closeModal}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Enter Event Code</Text>
-              <TouchableOpacity onPress={closeModal} style={styles.modalCloseButton}>
-                <X size={24} color="#6b7280" />
-              </TouchableOpacity>
-            </View>
-            <TextInput
-              style={styles.manualCodeInput}
-              placeholder="Enter event code"
-              placeholderTextColor="#9ca3af"
-              value={manualCode}
-              onChangeText={setManualCode}
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoFocus={true}
-              keyboardType="default"
-            />
             <TouchableOpacity
-              style={styles.manualSubmitButton}
-              onPress={handleManualSubmit}
+              style={styles.primaryButton}
+              onPress={handleCameraAccess}
+              disabled={isProcessing}
             >
-              <Text style={styles.manualSubmitButtonText}>Submit</Text>
+              {isProcessing ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Text style={styles.primaryButtonText}>Scan QR Code</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* Manual Entry Card */}
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <View style={[styles.iconContainer, styles.purpleGradient]}>
+                <Hash size={24} color="white" />
+              </View>
+              <View style={styles.cardTextContainer}>
+                <Text style={styles.cardTitle}>Enter Event Code</Text>
+                <Text style={styles.cardSubtitle}>Manual entry option</Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={() => openModal('manualCodeEntry')}
+            >
+              <Text style={styles.secondaryButtonText}>Enter Code Manually</Text>
             </TouchableOpacity>
           </View>
         </View>
-      </Modal>
-    </ScrollView>
+
+        {/* Features */}
+        <View style={styles.featuresContainer}>
+          <View style={styles.featureCard}>
+            <Shield size={32} color="#10b981" />
+            <Text style={styles.featureTitle}>Private</Text>
+            <Text style={styles.featureSubtitle}>Your data stays secure</Text>
+          </View>
+          <View style={styles.featureCard}>
+            <Clock size={32} color="#3b82f6" />
+            <Text style={styles.featureTitle}>Temporary</Text>
+            <Text style={styles.featureSubtitle}>Expires after event</Text>
+          </View>
+        </View>
+
+        {/* Info Card */}
+        <View style={styles.infoCard}>
+          <View style={styles.infoContent}>
+            <Users size={20} color="#ec4899" style={styles.infoIcon} />
+            <View style={styles.infoTextContainer}>
+              <Text style={styles.infoTitle}>How it works</Text>
+              <Text style={styles.infoText}>• Scan the event's unique QR code{'\n'}
+                • Create a temporary profile {'\n'}
+                • Discover other singles at this event{'\n'}
+                • Match and chat privately{'\n'}
+                • Everything expires when the event ends</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Manual Code Entry Modal */}
+        <Modal
+          visible={activeModal === 'manualCodeEntry'}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={closeModal}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Enter Event Code</Text>
+                <TouchableOpacity onPress={closeModal} style={styles.modalCloseButton}>
+                  <X size={24} color="#6b7280" />
+                </TouchableOpacity>
+              </View>
+              <TextInput
+                style={styles.manualCodeInput}
+                placeholder="Enter event code"
+                placeholderTextColor="#9ca3af"
+                value={manualCode}
+                onChangeText={setManualCode}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoFocus={true}
+                keyboardType="default"
+              />
+              <TouchableOpacity
+                style={styles.manualSubmitButton}
+                onPress={handleManualSubmit}
+              >
+                <Text style={styles.manualSubmitButtonText}>Submit</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 

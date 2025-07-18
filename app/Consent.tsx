@@ -9,12 +9,16 @@ import {
   Alert,
   StyleSheet,
   Image,
+  Keyboard,
+  TouchableWithoutFeedback,
+  Modal,
 } from 'react-native';
 import { router } from 'expo-router';
 import { User, EventProfile, Event, UploadFile } from '../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User as UserIcon, Camera, Upload } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Simple UUID v4 generator function
 function generateUUID() {
@@ -30,7 +34,7 @@ export default function Consent() {
   const [formData, setFormData] = useState({
     first_name: '',
     email: '',
-    age: '',
+    age: '25',
     gender_identity: '',
     interested_in: '',
     profile_photo_url: ''
@@ -38,6 +42,7 @@ export default function Consent() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [showAgePicker, setShowAgePicker] = useState(false);
 
   useEffect(() => {
     const fetchEvent = async () => {
@@ -162,7 +167,7 @@ export default function Consent() {
 
   if (step === 'processing') {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <View style={styles.card}>
           <ActivityIndicator size="large" color="#8b5cf6" style={styles.spinner} />
           <Text style={styles.title}>Creating Your Profile...</Text>
@@ -170,13 +175,13 @@ export default function Consent() {
             Just a moment while we get you into the event.
           </Text>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (step === 'error') {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <View style={styles.card}>
           <Text style={styles.errorTitle}>Something went wrong</Text>
           <Text style={styles.errorText}>{error}</Text>
@@ -184,146 +189,227 @@ export default function Consent() {
             <Text style={styles.buttonText}>Try Again</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      <View style={styles.card}>
-        <View style={styles.header}>
-          <View style={styles.logoContainer}>
-            <UserIcon size={32} color="white" />
-          </View>
-          <Text style={styles.title}>
-            Create Your Event Profile For:
-          </Text>
-          <Text style={styles.title}>
-            {event?.name || 'This Event'}
-          </Text>
-        </View>
+    <SafeAreaView style={styles.container}>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <ScrollView contentContainerStyle={styles.contentContainer}>
+          <View style={styles.card}>
+            <View style={styles.header}>
+              <View style={styles.logoContainer}>
+                <UserIcon size={32} color="white" />
+              </View>
+              <Text style={styles.title}>
+                Create Your Event Profile For:
+              </Text>
+              <Text style={styles.eventName}>{event?.name}</Text>
+            </View>
 
-        <View style={styles.form}>
-          {/* Profile Photo Upload */}
-          <View style={styles.photoSection}>
-            <Text style={styles.label}>Profile Photo *</Text>
-            <View style={styles.photoContainer}>
-              {formData.profile_photo_url ? (
-                <View style={styles.photoPreviewContainer}>
+            {/* Profile Photo Section */}
+            <View style={styles.photoSection}>
+              <Text style={styles.sectionTitle}>Profile Photo *</Text>
+              <TouchableOpacity
+                style={styles.photoUploadArea}
+                onPress={handlePhotoUpload}
+                disabled={isUploadingPhoto}
+              >
+                {formData.profile_photo_url ? (
                   <Image
                     source={{ uri: formData.profile_photo_url }}
-                    style={styles.photoPreview}
+                    style={styles.uploadedPhoto}
+                    resizeMode="cover"
                   />
-                  <TouchableOpacity
-                    style={styles.photoOverlay}
-                    onPress={handlePhotoUpload}
-                  >
-                    <Camera size={24} color="white" />
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <TouchableOpacity
-                  style={styles.uploadArea}
-                  onPress={handlePhotoUpload}
-                  disabled={isUploadingPhoto}
-                >
-                  <Upload size={24} color="#9ca3af" />
-                  <Text style={styles.uploadText}>Upload Photo</Text>
-                </TouchableOpacity>
-              )}
+                ) : (
+                  <View style={styles.uploadPlaceholder}>
+                    <Upload size={32} color="#9ca3af" />
+                    <Text style={styles.uploadText}>Upload Photo</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+              <Text style={styles.photoRequirements}>
+                Required • Max 5MB • JPG, PNG, or GIF
+              </Text>
             </View>
-            <Text style={styles.photoHint}>
-              Required • Max 5MB • JPG, PNG, or GIF
-            </Text>
-          </View>
 
-          <TextInput
-            style={styles.input}
-            placeholder="First Name *"
-            value={formData.first_name}
-            onChangeText={(text) => setFormData({...formData, first_name: text})}
-          />
-
-          <TextInput
-            style={styles.input}
-            placeholder="Email (private, for feedback only) *"
-            value={formData.email}
-            onChangeText={(text) => setFormData({...formData, email: text})}
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-
-          <TextInput
-            style={styles.input}
-            placeholder="Age *"
-            value={formData.age}
-            onChangeText={(text) => setFormData({...formData, age: text})}
-            keyboardType="numeric"
-          />
-
-          <View style={styles.selectContainer}>
-            <Text style={styles.selectLabel}>I am a... *</Text>
-            <View style={styles.selectButtons}>
-              {['man', 'woman'].map((option) => (
-                <TouchableOpacity
-                  key={option}
-                  style={[
-                    styles.selectButton,
-                    formData.gender_identity === option && styles.selectButtonActive
-                  ]}
-                  onPress={() => setFormData({...formData, gender_identity: option})}
-                >
-                  <Text style={[
-                    styles.selectButtonText,
-                    formData.gender_identity === option && styles.selectButtonTextActive
-                  ]}>
-                    {option.charAt(0).toUpperCase() + option.slice(1)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            {/* Form Fields */}
+            <View style={styles.formSection}>
+              <TextInput
+                style={styles.input}
+                placeholder="First Name *"
+                placeholderTextColor="#9ca3af"
+                value={formData.first_name}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, first_name: text }))}
+                returnKeyType="next"
+              />
+              
+              <TextInput
+                style={styles.input}
+                placeholder="Email (private, for feedback only) *"
+                placeholderTextColor="#9ca3af"
+                value={formData.email}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, email: text }))}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                returnKeyType="next"
+              />
+              
+              {/* Age Selection */}
+              <TouchableOpacity
+                style={styles.input}
+                onPress={() => setShowAgePicker(true)}
+              >
+                <Text style={formData.age ? styles.inputText : styles.placeholderText}>
+                  {formData.age ? `Age: ${formData.age}` : 'Age *'}
+                </Text>
+              </TouchableOpacity>
             </View>
-          </View>
 
-          <View style={styles.selectContainer}>
-            <Text style={styles.selectLabel}>I'm interested in... *</Text>
-            <View style={styles.selectButtons}>
-              {['men', 'women', 'everyone'].map((option) => (
-                <TouchableOpacity
-                  key={option}
-                  style={[
-                    styles.selectButton,
-                    formData.interested_in === option && styles.selectButtonActive
-                  ]}
-                  onPress={() => setFormData({...formData, interested_in: option})}
-                >
-                  <Text style={[
-                    styles.selectButtonText,
-                    formData.interested_in === option && styles.selectButtonTextActive
-                  ]}>
-                    {option.charAt(0).toUpperCase() + option.slice(1)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+          {/* Gender Selection */}
+          <View style={styles.selectionSection}>
+            <Text style={styles.sectionTitle}>I am a... *</Text>
+            <View style={styles.selectionButtons}>
+              <TouchableOpacity
+                style={[
+                  styles.selectionButton,
+                  formData.gender_identity === 'man' && styles.selectionButtonActive
+                ]}
+                onPress={() => setFormData(prev => ({ ...prev, gender_identity: 'man' }))}
+              >
+                <Text style={[
+                  styles.selectionButtonText,
+                  formData.gender_identity === 'man' && styles.selectionButtonTextActive
+                ]}>
+                  Man
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.selectionButton,
+                  formData.gender_identity === 'woman' && styles.selectionButtonActive
+                ]}
+                onPress={() => setFormData(prev => ({ ...prev, gender_identity: 'woman' }))}
+              >
+                <Text style={[
+                  styles.selectionButtonText,
+                  formData.gender_identity === 'woman' && styles.selectionButtonTextActive
+                ]}>
+                  Woman
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
 
+          {/* Interest Selection */}
+          <View style={styles.selectionSection}>
+            <Text style={styles.sectionTitle}>I'm interested in... *</Text>
+            <View style={styles.selectionButtons}>
+              <TouchableOpacity
+                style={[
+                  styles.selectionButton,
+                  formData.interested_in === 'men' && styles.selectionButtonActive
+                ]}
+                onPress={() => setFormData(prev => ({ ...prev, interested_in: 'men' }))}
+              >
+                <Text style={[
+                  styles.selectionButtonText,
+                  formData.interested_in === 'men' && styles.selectionButtonTextActive
+                ]}>
+                  Men
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.selectionButton,
+                  formData.interested_in === 'women' && styles.selectionButtonActive
+                ]}
+                onPress={() => setFormData(prev => ({ ...prev, interested_in: 'women' }))}
+              >
+                <Text style={[
+                  styles.selectionButtonText,
+                  formData.interested_in === 'women' && styles.selectionButtonTextActive
+                ]}>
+                  Women
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.selectionButton,
+                  formData.interested_in === 'everyone' && styles.selectionButtonActive
+                ]}
+                onPress={() => setFormData(prev => ({ ...prev, interested_in: 'everyone' }))}
+              >
+                <Text style={[
+                  styles.selectionButtonText,
+                  formData.interested_in === 'everyone' && styles.selectionButtonTextActive
+                ]}>
+                  Everyone
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Submit Button */}
           <TouchableOpacity
-            style={[styles.submitButton, (isSubmitting || isUploadingPhoto) && styles.submitButtonDisabled]}
+            style={styles.submitButton}
             onPress={handleSubmit}
-            disabled={isSubmitting || isUploadingPhoto}
+            disabled={isSubmitting}
           >
-            {isSubmitting ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="small" color="white" />
-                <Text style={styles.submitButtonText}>Creating Profile...</Text>
-              </View>
-            ) : (
-              <Text style={styles.submitButtonText}>Join Event</Text>
-            )}
+            <Text style={styles.submitButtonText}>Join Event</Text>
           </TouchableOpacity>
         </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </TouchableWithoutFeedback>
+
+    {/* Age Picker Modal */}
+      <Modal
+        visible={showAgePicker}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowAgePicker(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setShowAgePicker(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.agePickerContainer}>
+              <Text style={styles.agePickerTitle}>Select Your Age</Text>
+              <ScrollView style={styles.agePickerScroll}>
+                {Array.from({ length: 83 }, (_, i) => i + 18).map((age) => (
+                  <TouchableOpacity
+                    key={age}
+                    style={[
+                      styles.ageOption,
+                      formData.age === age.toString() && styles.ageOptionSelected
+                    ]}
+                    onPress={() => {
+                      setFormData(prev => ({ ...prev, age: age.toString() }));
+                      setShowAgePicker(false);
+                    }}
+                  >
+                    <Text style={[
+                      styles.ageOptionText,
+                      formData.age === age.toString() && styles.ageOptionTextSelected
+                    ]}>
+                      {age}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setShowAgePicker(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+    </SafeAreaView>
   );
 }
 
@@ -368,6 +454,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 4,
   },
+  eventName: {
+    fontSize: 20,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginTop: 4,
+  },
   subtitle: {
     fontSize: 16,
     color: '#6b7280',
@@ -379,58 +471,51 @@ const styles = StyleSheet.create({
   },
   photoSection: {
     alignItems: 'center',
+    marginBottom: 24,
   },
-  label: {
-    fontSize: 14,
-    fontWeight: '500',
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
     color: '#374151',
-    marginBottom: 8,
+    marginBottom: 12,
+    textAlign: 'left',
+    width: '100%',
   },
-  photoContainer: {
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  photoPreviewContainer: {
-    position: 'relative',
-  },
-  photoPreview: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    borderWidth: 4,
-    borderColor: '#e5e7eb',
-  },
-  photoOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  uploadArea: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+  photoUploadArea: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
     borderWidth: 2,
     borderColor: '#d1d5db',
     borderStyle: 'dashed',
     backgroundColor: '#f9fafb',
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 12,
+  },
+  uploadedPhoto: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 60,
+  },
+  uploadPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   uploadText: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#6b7280',
-    marginTop: 4,
+    marginTop: 8,
   },
-  photoHint: {
+  photoRequirements: {
     fontSize: 12,
     color: '#6b7280',
     textAlign: 'center',
+    marginTop: 8,
+  },
+  formSection: {
+    gap: 12,
+    width: '100%',
   },
   input: {
     borderWidth: 1,
@@ -472,12 +557,41 @@ const styles = StyleSheet.create({
   selectButtonTextActive: {
     color: 'white',
   },
+  selectionSection: {
+    marginTop: 24,
+    width: '100%',
+  },
+  selectionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  selectionButton: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    backgroundColor: 'white',
+  },
+  selectionButtonActive: {
+    borderColor: '#8b5cf6',
+    backgroundColor: '#8b5cf6',
+  },
+  selectionButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#374151',
+  },
+  selectionButtonTextActive: {
+    color: 'white',
+  },
   submitButton: {
     backgroundColor: '#8b5cf6',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 24,
   },
   submitButtonDisabled: {
     backgroundColor: '#9ca3af',
@@ -519,6 +633,68 @@ const styles = StyleSheet.create({
   buttonText: {
     color: 'white',
     fontSize: 16,
+    fontWeight: '500',
+  },
+  inputText: {
+    fontSize: 16,
+    color: '#1f2937',
+  },
+  placeholderText: {
+    fontSize: 16,
+    color: '#9ca3af',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  agePickerContainer: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 20,
+    width: '80%',
+    maxHeight: '70%',
+  },
+  agePickerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1f2937',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  agePickerScroll: {
+    maxHeight: 300,
+  },
+  ageOption: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  ageOptionSelected: {
+    backgroundColor: '#8b5cf6',
+  },
+  ageOptionText: {
+    fontSize: 16,
+    color: '#1f2937',
+    textAlign: 'center',
+  },
+  ageOptionTextSelected: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  cancelButton: {
+    marginTop: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    color: '#6b7280',
     fontWeight: '500',
   },
 }); 

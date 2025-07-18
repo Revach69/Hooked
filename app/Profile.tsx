@@ -10,10 +10,11 @@ import {
   StyleSheet,
 } from 'react-native';
 import { router } from 'expo-router';
-import { User, Settings, LogOut, Edit, Camera } from 'lucide-react-native';
+import { User, Settings, LogOut, Edit, Camera, Users, MessageCircle } from 'lucide-react-native';
 import { EventProfile, Event, UploadFile } from '../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function Profile() {
   const [profile, setProfile] = useState<any>(null);
@@ -149,7 +150,7 @@ export default function Profile() {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Your Profile</Text>
@@ -213,7 +214,7 @@ export default function Profile() {
         {/* Actions */}
         <View style={styles.actionsSection}>
           <TouchableOpacity style={styles.actionButton}>
-            <Edit size={16} color="#6b7280" />
+            <Edit size={20} color="#6b7280" />
             <Text style={styles.actionText}>Edit Profile</Text>
           </TouchableOpacity>
           
@@ -221,12 +222,39 @@ export default function Profile() {
             style={[styles.actionButton, styles.logoutButton]}
             onPress={handleLogout}
           >
-            <LogOut size={16} color="#dc2626" />
+            <LogOut size={20} color="#ef4444" />
             <Text style={[styles.actionText, styles.logoutText]}>Logout</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </View>
+
+      {/* Bottom Navigation */}
+      <View style={styles.bottomNavigation}>
+        <TouchableOpacity
+          style={styles.navButton}
+          onPress={() => router.push('/discovery')}
+        >
+          <Users size={24} color="#9ca3af" />
+          <Text style={styles.navButtonText}>Discover</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={styles.navButton}
+          onPress={() => router.push('/matches')}
+        >
+          <MessageCircle size={24} color="#9ca3af" />
+          <Text style={styles.navButtonText}>Matches</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[styles.navButton, styles.navButtonActive]}
+          onPress={() => {}} // Already on profile page
+        >
+          <User size={24} color="#8b5cf6" />
+          <Text style={[styles.navButtonText, styles.navButtonTextActive]}>Profile</Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
   );
 }
 
@@ -379,5 +407,31 @@ const styles = StyleSheet.create({
   },
   logoutText: {
     color: '#dc2626',
+  },
+  bottomNavigation: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingVertical: 10,
+    backgroundColor: 'white',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  navButton: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  navButtonText: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 4,
+  },
+  navButtonActive: {
+    borderBottomWidth: 2,
+    borderBottomColor: '#8b5cf6',
+  },
+  navButtonTextActive: {
+    color: '#8b5cf6',
+    fontWeight: 'bold',
   },
 }); 

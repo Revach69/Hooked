@@ -12,9 +12,10 @@ import {
   AppState,
 } from 'react-native';
 import { router } from 'expo-router';
-import { Heart, Filter, Users } from 'lucide-react-native';
+import { Heart, Filter, Users, User, MessageCircle } from 'lucide-react-native';
 import { EventProfile, Like, Event } from '../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 const cardSize = (width - 48) / 3; // 3 columns with padding
@@ -121,12 +122,29 @@ export default function Discovery() {
       setProfiles(otherUsersProfiles);
       
       if (!userProfile) {
-        console.warn("Current user profile not found for session, redirecting.");
+        console.warn("Current user profile not found for session, clearing session data and redirecting.");
+        // Clear all session data to prevent infinite redirect loop
+        await AsyncStorage.multiRemove([
+          'currentEventId',
+          'currentSessionId',
+          'currentEventCode',
+          'currentProfileColor',
+          'currentProfilePhotoUrl'
+        ]);
         router.replace('/home');
       }
 
     } catch (error) {
       console.error("Error loading profiles:", error);
+      // Also clear session data on error to prevent loops
+      await AsyncStorage.multiRemove([
+        'currentEventId',
+        'currentSessionId',
+        'currentEventCode',
+        'currentProfileColor',
+        'currentProfilePhotoUrl'
+      ]);
+      router.replace('/home');
     }
   };
 
@@ -280,7 +298,7 @@ export default function Discovery() {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerText}>
@@ -364,10 +382,37 @@ export default function Discovery() {
         )}
       </ScrollView>
 
+      {/* Bottom Navigation */}
+      <View style={styles.bottomNavigation}>
+        <TouchableOpacity
+          style={[styles.navButton, styles.navButtonActive]}
+          onPress={() => {}} // Already on discovery page
+        >
+          <Users size={24} color="#8b5cf6" />
+          <Text style={[styles.navButtonText, styles.navButtonTextActive]}>Discover</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={styles.navButton}
+          onPress={() => router.push('/matches')}
+        >
+          <MessageCircle size={24} color="#9ca3af" />
+          <Text style={styles.navButtonText}>Matches</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={styles.navButton}
+          onPress={() => router.push('/profile')}
+        >
+          <User size={24} color="#9ca3af" />
+          <Text style={styles.navButtonText}>Profile</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* TODO: Add Filter Modal */}
       {/* TODO: Add Profile Detail Modal */}
       {/* TODO: Add First Time Guide Modal */}
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -520,5 +565,34 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6b7280',
     fontWeight: '500',
+  },
+  bottomNavigation: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    backgroundColor: 'white',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  navButton: {
+    alignItems: 'center',
+  },
+  navButtonText: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginTop: 4,
+  },
+  navButtonActive: {
+    // Active state styling handled in the component
+  },
+  navButtonTextActive: {
+    fontWeight: '600',
   },
 }); 
