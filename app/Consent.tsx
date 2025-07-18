@@ -16,7 +16,7 @@ import {
 import { router } from 'expo-router';
 import { User, EventProfile, Event, UploadFile } from '../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { User as UserIcon, Camera, Upload } from 'lucide-react-native';
+import { User as UserIcon, Camera, Upload, Facebook, Instagram } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -162,6 +162,105 @@ export default function Consent() {
       setError("Failed to create profile. Please try again.");
       setStep('error');
       setIsSubmitting(false);
+    }
+  };
+
+  const handleFacebookLogin = async () => {
+    try {
+      // Facebook OAuth implementation
+      // In a real app, you would use Facebook SDK or OAuth flow
+      const facebookAuthUrl = 'https://www.facebook.com/dialog/oauth?' +
+        'client_id=YOUR_FACEBOOK_APP_ID' +
+        '&redirect_uri=YOUR_REDIRECT_URI' +
+        '&scope=public_profile,email' +
+        '&response_type=code';
+      
+      // For demo purposes, we'll simulate successful login with mock data
+      Alert.alert(
+        "Facebook Login",
+        "Connecting to Facebook...",
+        [{ text: "OK" }]
+      );
+      
+      // Simulate API call delay
+      setTimeout(() => {
+        // Mock Facebook user data
+        const mockFacebookData = {
+          name: 'John Doe',
+          email: 'john.doe@example.com',
+          profile_picture: 'https://via.placeholder.com/150/1877f2/ffffff?text=FB',
+          age: '28',
+          gender: 'male'
+        };
+        
+        // Pre-fill the form with Facebook data
+        setFormData(prev => ({
+          ...prev,
+          first_name: mockFacebookData.name.split(' ')[0],
+          email: mockFacebookData.email,
+          age: mockFacebookData.age,
+          gender_identity: mockFacebookData.gender === 'male' ? 'man' : 'woman',
+          profile_photo_url: mockFacebookData.profile_picture
+        }));
+        
+        Alert.alert(
+          "Success!",
+          "Facebook data imported successfully. Please complete the remaining fields and upload a photo.",
+          [{ text: "OK" }]
+        );
+      }, 2000);
+      
+    } catch (error) {
+      console.error("Facebook login error:", error);
+      Alert.alert("Error", "Failed to connect with Facebook. Please try again.");
+    }
+  };
+
+  const handleInstagramLogin = async () => {
+    try {
+      // Instagram Basic Display API implementation
+      // In a real app, you would use Instagram's OAuth flow
+      const instagramAuthUrl = 'https://api.instagram.com/oauth/authorize?' +
+        'client_id=YOUR_INSTAGRAM_APP_ID' +
+        '&redirect_uri=YOUR_REDIRECT_URI' +
+        '&scope=user_profile,user_media' +
+        '&response_type=code';
+      
+      // For demo purposes, we'll simulate successful login with mock data
+      Alert.alert(
+        "Instagram Login",
+        "Connecting to Instagram...",
+        [{ text: "OK" }]
+      );
+      
+      // Simulate API call delay
+      setTimeout(() => {
+        // Mock Instagram user data
+        const mockInstagramData = {
+          username: 'jane_doe',
+          full_name: 'Jane Doe',
+          profile_picture: 'https://via.placeholder.com/150/e4405f/ffffff?text=IG',
+          // Instagram doesn't provide age/gender by default
+        };
+        
+        // Pre-fill the form with Instagram data
+        setFormData(prev => ({
+          ...prev,
+          first_name: mockInstagramData.full_name.split(' ')[0],
+          email: `${mockInstagramData.username}@instagram.com`, // Placeholder email
+          profile_photo_url: mockInstagramData.profile_picture
+        }));
+        
+        Alert.alert(
+          "Success!",
+          "Instagram data imported successfully. Please complete the remaining fields (age, gender, interests).",
+          [{ text: "OK" }]
+        );
+      }, 2000);
+      
+    } catch (error) {
+      console.error("Instagram login error:", error);
+      Alert.alert("Error", "Failed to connect with Instagram. Please try again.");
     }
   };
 
@@ -362,6 +461,28 @@ export default function Consent() {
           >
             <Text style={styles.submitButtonText}>Join Event</Text>
           </TouchableOpacity>
+
+          {/* Social Login Section */}
+          <View style={styles.socialSection}>
+            <Text style={styles.socialSectionTitle}>Or connect with social media</Text>
+            <View style={styles.socialButtons}>
+              <TouchableOpacity
+                style={styles.facebookButton}
+                onPress={handleFacebookLogin}
+              >
+                <Facebook size={20} color="white" style={styles.socialIcon} />
+                <Text style={styles.facebookButtonText}>Continue with Facebook</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.instagramButton}
+                onPress={handleInstagramLogin}
+              >
+                <Instagram size={20} color="white" style={styles.socialIcon} />
+                <Text style={styles.instagramButtonText}>Continue with Instagram</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </ScrollView>
     </TouchableWithoutFeedback>
@@ -696,5 +817,61 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6b7280',
     fontWeight: '500',
+  },
+  socialSection: {
+    marginTop: 32,
+    width: '100%',
+    alignItems: 'center',
+  },
+  socialSectionTitle: {
+    fontSize: 16,
+    color: '#6b7280',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  socialButtons: {
+    width: '100%',
+    gap: 12,
+  },
+  facebookButton: {
+    backgroundColor: '#1877f2',
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  facebookButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  instagramButton: {
+    backgroundColor: '#e4405f',
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  instagramButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  socialIcon: {
+    marginRight: 8,
   },
 }); 

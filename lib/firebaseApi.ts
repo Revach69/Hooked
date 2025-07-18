@@ -52,12 +52,15 @@ export interface EventProfile {
   email: string;
   age: number;
   gender_identity: string;
-  interested_in: string;
+  interested_in?: string; // Gender preference: 'men', 'women', 'everyone'
   profile_color: string;
   profile_photo_url?: string;
   is_visible: boolean;
   created_at: string;
   updated_at: string;
+  about_me?: string;
+  height_cm?: number;
+  interests?: string[];
 }
 
 export interface Like {
@@ -216,6 +219,16 @@ export const EventProfileAPI = {
       });
     } catch (error) {
       console.error('Error updating event profile:', error);
+      throw error;
+    }
+  },
+
+  async delete(id: string): Promise<void> {
+    try {
+      const docRef = doc(db, 'event_profiles', id);
+      await deleteDoc(docRef);
+    } catch (error) {
+      console.error('Error deleting event profile:', error);
       throw error;
     }
   }

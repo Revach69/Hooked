@@ -385,6 +385,14 @@ export default function Discovery() {
       {/* Bottom Navigation */}
       <View style={styles.bottomNavigation}>
         <TouchableOpacity
+          style={styles.navButton}
+          onPress={() => router.push('/profile')}
+        >
+          <User size={24} color="#9ca3af" />
+          <Text style={styles.navButtonText}>Profile</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
           style={[styles.navButton, styles.navButtonActive]}
           onPress={() => {}} // Already on discovery page
         >
@@ -398,14 +406,6 @@ export default function Discovery() {
         >
           <MessageCircle size={24} color="#9ca3af" />
           <Text style={styles.navButtonText}>Matches</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={styles.navButton}
-          onPress={() => router.push('/profile')}
-        >
-          <User size={24} color="#9ca3af" />
-          <Text style={styles.navButtonText}>Profile</Text>
         </TouchableOpacity>
       </View>
 

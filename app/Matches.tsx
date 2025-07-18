@@ -176,6 +176,14 @@ export default function Matches() {
       <View style={styles.bottomNavigation}>
         <TouchableOpacity
           style={styles.navButton}
+          onPress={() => router.push('/profile')}
+        >
+          <User size={24} color="#9ca3af" />
+          <Text style={styles.navButtonText}>Profile</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={styles.navButton}
           onPress={() => router.push('/discovery')}
         >
           <Users size={24} color="#9ca3af" />
@@ -188,14 +196,6 @@ export default function Matches() {
         >
           <MessageCircle size={24} color="#8b5cf6" />
           <Text style={[styles.navButtonText, styles.navButtonTextActive]}>Matches</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={styles.navButton}
-          onPress={() => router.push('/profile')}
-        >
-          <User size={24} color="#9ca3af" />
-          <Text style={styles.navButtonText}>Profile</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
