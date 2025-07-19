@@ -54,7 +54,6 @@ export default function Discovery() {
   const [likedProfiles, setLikedProfiles] = useState(new Set<string>());
   const [selectedProfileForDetail, setSelectedProfileForDetail] = useState<any>(null);
   const [isAppActive, setIsAppActive] = useState(true);
-  const [showGuide, setShowGuide] = useState(false);
 
   useEffect(() => {
     initializeSession();
@@ -103,11 +102,7 @@ export default function Discovery() {
 
     setCurrentSessionId(sessionId);
 
-    // Check if the user has seen the guide for this event
-    const hasSeenGuide = await AsyncStorage.getItem(`hasSeenGuide_${eventId}`);
-    if (!hasSeenGuide) {
-      setShowGuide(true);
-    }
+
     
     try {
       const events = await Event.filter({ id: eventId });
@@ -301,13 +296,7 @@ export default function Discovery() {
     setSelectedProfileForDetail(profile);
   };
 
-  const handleCloseGuide = async () => {
-    const eventId = await AsyncStorage.getItem('currentEventId');
-    if (eventId) {
-      await AsyncStorage.setItem(`hasSeenGuide_${eventId}`, 'true');
-    }
-    setShowGuide(false);
-  };
+
 
   const handleToggleInterest = (interest: string) => {
     let newInterests = [...filters.interests];
@@ -903,7 +892,7 @@ export default function Discovery() {
       </Modal>
 
       {/* TODO: Add Profile Detail Modal */}
-      {/* TODO: Add First Time Guide Modal */}
+
     </SafeAreaView>
   );
 } 

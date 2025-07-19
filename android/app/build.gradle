@@ -87,9 +87,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.hooked.app'
+    namespace 'com.hookedapp.app'
     defaultConfig {
-        applicationId 'com.hooked.app'
+        applicationId 'com.hookedapp.app'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

@@ -16,14 +16,14 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.hooked.app"
+      "bundleIdentifier": "com.hookedapp.app"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.hooked.app",
+      "package": "com.hookedapp.app",
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -56,6 +56,10 @@
         "messagingSenderId": "741889428835",
         "appId": "1:741889428835:web:d5f88b43a503c9e6351756",
         "measurementId": "G-6YHKXLN806"
+      },
+      "router": {},
+      "eas": {
+        "projectId": "7a1de260-e3cb-4cbb-863c-1557213d69f0"
       }
     }
   }

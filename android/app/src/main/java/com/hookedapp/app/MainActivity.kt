@@ -1,4 +1,4 @@
-package com.hooked.app
+package com.hookedapp.app
 
 import android.os.Build
 import android.os.Bundle

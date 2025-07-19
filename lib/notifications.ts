@@ -56,7 +56,7 @@ export async function getPushToken(): Promise<string | null> {
   try {
     // Specify the project ID explicitly
     const token = await Notifications.getExpoPushTokenAsync({
-      projectId: '5034a8e3' // Your expo project ID
+      projectId: '7a1de260' // Your expo project ID
     });
     return token.data;
   } catch (error) {

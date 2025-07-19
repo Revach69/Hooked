@@ -28,7 +28,7 @@
         <key>CFBundleURLSchemes</key>
         <array>
           <string>hooked</string>
-          <string>com.hooked.app</string>
+          <string>com.hookedapp.app</string>
         </array>
       </dict>
     </array>
