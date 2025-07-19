@@ -20,6 +20,7 @@ import { EventProfile, Event, UploadFile } from '../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LikeAPI, MessageAPI } from '../lib/firebaseApi';
 
 export default function Profile() {
   const colorScheme = useColorScheme();
@@ -104,7 +105,7 @@ export default function Profile() {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -224,21 +225,62 @@ export default function Profile() {
           style: "destructive",
           onPress: async () => {
             try {
+              const eventId = await AsyncStorage.getItem('currentEventId');
+              const sessionId = await AsyncStorage.getItem('currentSessionId');
+              
+              if (eventId && sessionId) {
+                // Delete all likes where this user is the liker
+                const likesAsLiker = await LikeAPI.filter({
+                  event_id: eventId,
+                  liker_session_id: sessionId
+                });
+                for (const like of likesAsLiker) {
+                  await LikeAPI.delete(like.id);
+                }
+
+                // Delete all likes where this user is the liked
+                const likesAsLiked = await LikeAPI.filter({
+                  event_id: eventId,
+                  liked_session_id: sessionId
+                });
+                for (const like of likesAsLiked) {
+                  await LikeAPI.delete(like.id);
+                }
+
+                // Delete all messages where this user is the sender
+                const messagesAsSender = await MessageAPI.filter({
+                  event_id: eventId,
+                  from_profile_id: sessionId
+                });
+                for (const message of messagesAsSender) {
+                  await MessageAPI.delete(message.id);
+                }
+
+                // Delete all messages where this user is the recipient
+                const messagesAsRecipient = await MessageAPI.filter({
+                  event_id: eventId,
+                  to_profile_id: sessionId
+                });
+                for (const message of messagesAsRecipient) {
+                  await MessageAPI.delete(message.id);
+                }
+              }
+
               // Delete profile from backend
               if (profile?.id) {
                 await EventProfile.delete(profile.id);
               }
               
               // Clear all session data
-            await AsyncStorage.multiRemove([
-              'currentEventId',
-              'currentSessionId',
-              'currentEventCode',
-              'currentProfileColor',
-              'currentProfilePhotoUrl'
-            ]);
+              await AsyncStorage.multiRemove([
+                'currentEventId',
+                'currentSessionId',
+                'currentEventCode',
+                'currentProfileColor',
+                'currentProfilePhotoUrl'
+              ]);
               
-            router.replace('/home');
+              router.replace('/home');
             } catch (error) {
               console.error("Error deleting profile:", error);
               Alert.alert("Error", "Failed to delete profile. Please try again.");
@@ -280,9 +322,50 @@ export default function Profile() {
     setSaving(false);
   };
   const handleToggleVisibility = async (value: boolean) => {
-    setEventVisible(value);
-    await EventProfile.update(profile.id, { is_visible: value });
-    setProfile((prev: any) => ({ ...prev, is_visible: value }));
+    // If turning off visibility, show confirmation dialog
+    if (!value) {
+      Alert.alert(
+        "Hide Profile",
+        "Are you sure you want to hide your profile? You will not be able to see other profiles while hidden.",
+        [
+          {
+            text: "Cancel",
+            style: "cancel",
+            onPress: () => {
+              // Revert the toggle back to visible
+              setEventVisible(true);
+            }
+          },
+          {
+            text: "Continue",
+            onPress: async () => {
+              try {
+                await EventProfile.update(profile.id, { is_visible: false });
+                setProfile((prev: any) => ({ ...prev, is_visible: false }));
+                setEventVisible(false);
+              } catch (error) {
+                console.error("Error updating visibility:", error);
+                Alert.alert("Error", "Failed to update visibility. Please try again.");
+                // Revert the toggle if update failed
+                setEventVisible(true);
+              }
+            }
+          }
+        ]
+      );
+    } else {
+      // Turning on visibility - no confirmation needed
+      try {
+        await EventProfile.update(profile.id, { is_visible: true });
+        setProfile((prev: any) => ({ ...prev, is_visible: true }));
+        setEventVisible(true);
+      } catch (error) {
+        console.error("Error updating visibility:", error);
+        Alert.alert("Error", "Failed to update visibility. Please try again.");
+        // Revert the toggle if update failed
+        setEventVisible(false);
+      }
+    }
   };
 
   const handleUpdateGender = async (gender: string) => {
@@ -478,8 +561,9 @@ export default function Profile() {
     },
     interestsSectionHeader: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
+      justifyContent: 'center',
       alignItems: 'center',
+      paddingVertical: 10,
       paddingBottom: 10,
       borderBottomWidth: 1,
       borderBottomColor: isDark ? '#374151' : '#e5e7eb',

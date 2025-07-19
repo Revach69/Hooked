@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import * as Notifications from 'expo-notifications';
 import { 
   checkNotificationPermission, 
   requestNotificationPermission,
@@ -127,7 +128,7 @@ export default function NotificationTest() {
       const identifier = await scheduleLocalNotification(
         'Local Test',
         'This is a local notification test!',
-        { seconds: 5 }
+        { seconds: 5 } as Notifications.NotificationTriggerInput
       );
       setStatus(identifier ? '✅ Local notification scheduled (5 seconds)' : '❌ Failed to schedule');
     } catch (error) {

@@ -39,14 +39,25 @@ export async function checkNotificationPermission(): Promise<NotificationPermiss
 }
 
 /**
- * Request notification permissions
+ * Request notification permissions with platform-specific handling
  */
 export async function requestNotificationPermission(): Promise<NotificationPermission> {
-  const { status, canAskAgain } = await Notifications.requestPermissionsAsync();
-  return {
-    granted: status === 'granted',
-    canAskAgain,
-  };
+  try {
+    // For iOS, this will show the native permission popup
+    // For Android 13+ (API level 33+), this will also show the native permission popup
+    const { status, canAskAgain } = await Notifications.requestPermissionsAsync();
+    
+    return {
+      granted: status === 'granted',
+      canAskAgain,
+    };
+  } catch (error) {
+    console.error('Error requesting notification permission:', error);
+    return {
+      granted: false,
+      canAskAgain: false,
+    };
+  }
 }
 
 /**
@@ -156,13 +167,14 @@ export async function initializeNotifications(): Promise<{
 
 /**
  * Request permission and initialize notifications if granted
+ * This function is now simplified to avoid double permission requests
  */
 export async function requestAndInitializeNotifications(): Promise<{
   permissionGranted: boolean;
   tokenSaved: boolean;
 }> {
   try {
-    // Request permission
+    // Request permission directly - this will show the native popup
     const permission = await requestNotificationPermission();
     
     if (!permission.granted) {

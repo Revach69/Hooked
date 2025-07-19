@@ -10,7 +10,7 @@ import {
   useColorScheme,
 } from 'react-native';
 import { router } from 'expo-router';
-import { BarChart3, Users, Heart, MessageCircle, Settings, LogOut } from 'lucide-react-native';
+import { BarChart3, Users, Heart, MessageCircle, Settings, LogOut, AlertTriangle } from 'lucide-react-native';
 import { Event, EventProfile, Like, Message } from '../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -337,6 +337,14 @@ export default function Admin() {
           <TouchableOpacity style={styles.actionButton}>
             <Settings size={20} color="#6b7280" />
             <Text style={styles.actionText}>Event Settings</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => router.push('/errorInsights')}
+          >
+            <AlertTriangle size={20} color="#ef4444" />
+            <Text style={styles.actionText}>Error Insights</Text>
           </TouchableOpacity>
           
           <TouchableOpacity 

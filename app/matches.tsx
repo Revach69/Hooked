@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,9 @@ import { Heart, MessageCircle, Users, User } from 'lucide-react-native';
 import { EventProfile, Like, Event } from '../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '../lib/firebaseConfig';
+import UserProfileModal from '../lib/UserProfileModal';
 
 export default function Matches() {
   const colorScheme = useColorScheme();
@@ -21,11 +24,140 @@ export default function Matches() {
   const [matches, setMatches] = useState<any[]>([]);
   const [currentEvent, setCurrentEvent] = useState<any>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [currentUserProfile, setCurrentUserProfile] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedProfileForDetail, setSelectedProfileForDetail] = useState<any>(null);
+  const unsubscribeRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     initializeSession();
   }, []);
+
+  // Cleanup all listeners on unmount
+  useEffect(() => {
+    return () => {
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+      }
+    };
+  }, []);
+
+  // Add real-time listener for user profile and matches
+  useEffect(() => {
+    if (!currentEvent?.id || !currentSessionId) return;
+
+    // Clean up existing listener
+    if (unsubscribeRef.current) {
+      unsubscribeRef.current();
+      unsubscribeRef.current = null;
+    }
+
+    // First, get the current user's profile to check visibility
+    const userProfileQuery = query(
+      collection(db, 'event_profiles'),
+      where('event_id', '==', currentEvent.id),
+      where('session_id', '==', currentSessionId)
+    );
+
+    const userProfileUnsubscribe = onSnapshot(userProfileQuery, async (userSnapshot) => {
+      const userProfiles = userSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as any[];
+      
+      const userProfile = userProfiles[0];
+      setCurrentUserProfile(userProfile);
+
+      if (!userProfile) {
+        console.warn("Current user profile not found for session, clearing session data and redirecting.");
+        AsyncStorage.multiRemove([
+          'currentEventId',
+          'currentSessionId',
+          'currentEventCode',
+          'currentProfileColor',
+          'currentProfilePhotoUrl'
+        ]).then(() => {
+          router.replace('/home');
+        });
+        return;
+      }
+
+      // If user is not visible, don't load matches
+      if (!userProfile.is_visible) {
+        setMatches([]);
+        return;
+      }
+
+      // Only load matches if current user is visible
+      const mutualLikesQuery = query(
+        collection(db, 'likes'),
+        where('event_id', '==', currentEvent.id),
+        where('is_mutual', '==', true)
+      );
+
+      const matchesUnsubscribe = onSnapshot(mutualLikesQuery, async (snapshot) => {
+        try {
+          const mutualLikes = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as any[];
+
+          // Filter to only include likes where this user is involved
+          const userMatches = mutualLikes.filter(like => 
+            like.liker_session_id === currentSessionId || like.liked_session_id === currentSessionId
+          );
+
+          // Get the other person's session ID for each match (remove duplicates)
+          const otherSessionIds = [...new Set(userMatches.map(like => 
+            like.liker_session_id === currentSessionId ? like.liked_session_id : like.liker_session_id
+          ))];
+
+          // Get profiles for all matched users
+          const matchedProfiles = [];
+          for (const otherSessionId of otherSessionIds) {
+            const profiles = await EventProfile.filter({
+              session_id: otherSessionId,
+              event_id: currentEvent.id
+            });
+            if (profiles.length > 0) {
+              matchedProfiles.push(profiles[0]);
+            }
+          }
+
+          setMatches(matchedProfiles);
+        } catch (error) {
+          console.error("Error processing matches update:", error);
+        }
+      }, (error) => {
+        console.error("Error listening to matches:", error);
+      });
+
+      // Store the unsubscribe function for cleanup
+      unsubscribeRef.current = () => {
+        matchesUnsubscribe();
+      };
+    }, (error) => {
+      console.error("Error listening to user profile:", error);
+    });
+
+    // Store the main unsubscribe function
+    const mainUnsubscribe = () => {
+      userProfileUnsubscribe();
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+      }
+    };
+
+    unsubscribeRef.current = mainUnsubscribe;
+
+    return () => {
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+      }
+    };
+  }, [currentEvent?.id, currentSessionId]);
 
   const initializeSession = async () => {
     const eventId = await AsyncStorage.getItem('currentEventId');
@@ -47,52 +179,17 @@ export default function Matches() {
         return;
       }
 
-      await loadMatches(eventId, sessionId);
+      // Matches are now handled by real-time listener
     } catch (error) {
       console.error("Error initializing session:", error);
     }
     setIsLoading(false);
   };
 
-  const loadMatches = async (eventId: string, sessionId: string) => {
-    try {
-      // Get all mutual likes for this user
-      const mutualLikes = await Like.filter({ 
-        event_id: eventId,
-        is_mutual: true 
-      });
-
-      // Filter to only include likes where this user is involved
-      const userMatches = mutualLikes.filter(like => 
-        like.liker_session_id === sessionId || like.liked_session_id === sessionId
-      );
-
-      // Get the other person's session ID for each match
-      const otherSessionIds = userMatches.map(like => 
-        like.liker_session_id === sessionId ? like.liked_session_id : like.liker_session_id
-      );
-
-      // Get profiles for all matched users (Firebase doesn't support $in, so we need to fetch individually)
-      const matchedProfiles = [];
-      for (const sessionId of otherSessionIds) {
-        const profiles = await EventProfile.filter({
-          session_id: sessionId,
-          event_id: eventId
-        });
-        if (profiles.length > 0) {
-          matchedProfiles.push(profiles[0]);
-        }
-      }
-
-      setMatches(matchedProfiles);
-    } catch (error) {
-      console.error("Error loading matches:", error);
-    }
-  };
+  // Remove the old loadMatches function since we're using real-time listeners now
 
   const handleProfileTap = (profile: any) => {
-    // TODO: Navigate to chat or profile detail
-    console.log('Profile tapped:', profile.first_name);
+    setSelectedProfileForDetail(profile);
   };
 
   const styles = StyleSheet.create({
@@ -269,6 +366,42 @@ export default function Matches() {
       fontWeight: '600',
       color: '#8b5cf6',
     },
+    hiddenStateContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: 32,
+    },
+    hiddenStateContent: {
+      alignItems: 'center',
+      maxWidth: 300,
+    },
+    hiddenStateTitle: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: isDark ? '#ffffff' : '#1f2937',
+      marginTop: 16,
+      marginBottom: 12,
+      textAlign: 'center',
+    },
+    hiddenStateText: {
+      fontSize: 16,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      textAlign: 'center',
+      lineHeight: 24,
+      marginBottom: 24,
+    },
+    makeVisibleButton: {
+      backgroundColor: '#8b5cf6',
+      borderRadius: 12,
+      paddingVertical: 16,
+      paddingHorizontal: 32,
+    },
+    makeVisibleButtonText: {
+      fontSize: 16,
+      color: 'white',
+      fontWeight: '600',
+    },
   });
 
   if (isLoading) {
@@ -277,6 +410,68 @@ export default function Matches() {
         <ActivityIndicator size="large" color="#8b5cf6" />
         <Text style={styles.loadingText}>Loading your matches...</Text>
       </View>
+    );
+  }
+
+  // Show hidden state if user is not visible
+  if (currentUserProfile && !currentUserProfile.is_visible) {
+    return (
+      <SafeAreaView style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerText}>
+            <Text style={styles.title}>
+              Profile Hidden
+            </Text>
+            <Text style={styles.subtitle}>You are currently hidden from other users</Text>
+          </View>
+        </View>
+
+        {/* Hidden State Content */}
+        <View style={styles.hiddenStateContainer}>
+          <View style={styles.hiddenStateContent}>
+            <User size={64} color="#9ca3af" />
+            <Text style={styles.hiddenStateTitle}>Your Profile is Hidden</Text>
+            <Text style={styles.hiddenStateText}>
+              While your profile is hidden, you cannot see other users and they cannot see you. 
+              To access your matches again, make your profile visible in your profile settings.
+            </Text>
+            <TouchableOpacity
+              style={styles.makeVisibleButton}
+              onPress={() => router.push('/profile')}
+            >
+              <Text style={styles.makeVisibleButtonText}>Go to Profile</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Bottom Navigation */}
+        <View style={styles.bottomNavigation}>
+          <TouchableOpacity
+            style={[styles.navButton, styles.navButtonActive]}
+            onPress={() => router.push('/profile')}
+          >
+            <User size={24} color="#8b5cf6" />
+            <Text style={[styles.navButtonText, styles.navButtonTextActive]}>Profile</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.navButton}
+            onPress={() => router.push('/discovery')}
+          >
+            <Users size={24} color="#9ca3af" />
+            <Text style={styles.navButtonText}>Discover</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.navButton}
+            onPress={() => {}} // Already on matches page but hidden
+          >
+            <MessageCircle size={24} color="#9ca3af" />
+            <Text style={styles.navButtonText}>Matches</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -325,7 +520,16 @@ export default function Matches() {
                   <Text style={styles.matchName}>{match.first_name}</Text>
                   <Text style={styles.matchAge}>{match.age} years old</Text>
                   <View style={styles.matchActions}>
-                    <TouchableOpacity style={styles.actionButton}>
+                    <TouchableOpacity 
+                      style={styles.actionButton}
+                      onPress={() => router.push({
+                        pathname: '/chat',
+                        params: { 
+                          matchId: match.session_id,
+                          matchName: match.first_name
+                        }
+                      })}
+                    >
                       <MessageCircle size={16} color="#6b7280" />
                       <Text style={styles.actionText}>Message</Text>
                     </TouchableOpacity>
@@ -377,6 +581,13 @@ export default function Matches() {
           <Text style={[styles.navButtonText, styles.navButtonTextActive]}>Matches</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Profile Detail Modal */}
+      <UserProfileModal
+        visible={selectedProfileForDetail !== null}
+        profile={selectedProfileForDetail}
+        onClose={() => setSelectedProfileForDetail(null)}
+      />
     </SafeAreaView>
   );
 } 

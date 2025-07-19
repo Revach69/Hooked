@@ -138,6 +138,25 @@ export async function sendMatchNotification(
 }
 
 /**
+ * Send like notification (when someone likes you back)
+ */
+export async function sendLikeNotification(
+  userId: string,
+  likerName: string
+): Promise<boolean> {
+  const notification: NotificationData = {
+    title: "Someone liked you! ❤️",
+    body: `${likerName} liked your profile`,
+    data: {
+      type: 'like',
+      likerName,
+    },
+  };
+
+  return await sendPushNotificationToUser(userId, notification);
+}
+
+/**
  * Send message notification
  */
 export async function sendMessageNotification(

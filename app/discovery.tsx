@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -17,13 +17,16 @@ import {
 import { router } from 'expo-router';
 import { Heart, Filter, Users, User, MessageCircle, X } from 'lucide-react-native';
 import { EventProfile, Like, Event } from '../lib/firebaseApi';
-import { sendMatchNotification } from '../lib/notificationService';
+import { sendMatchNotification, sendLikeNotification } from '../lib/notificationService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Slider from '@react-native-community/slider';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '../lib/firebaseConfig';
+import UserProfileModal from '../lib/UserProfileModal';
 
 const { width } = Dimensions.get('window');
-const cardSize = (width - 48) / 3; // 3 columns with padding
+const cardSize = (width - 64) / 3; // 3 columns with 16px padding on each side and 8px gap between cards
 
 const BASIC_INTERESTS = [
   'music', 'tech', 'food', 'books', 'travel', 'art', 'fitness', 'nature', 'movies', 'business', 'photography', 'dancing'
@@ -54,42 +57,169 @@ export default function Discovery() {
   const [likedProfiles, setLikedProfiles] = useState(new Set<string>());
   const [selectedProfileForDetail, setSelectedProfileForDetail] = useState<any>(null);
   const [isAppActive, setIsAppActive] = useState(true);
+  const unsubscribeRef = useRef<(() => void) | null>(null);
+  const likesUnsubscribeRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     initializeSession();
   }, []);
 
+  // Cleanup all listeners on unmount
   useEffect(() => {
-    if (currentUserProfile && profiles.length >= 0) {
-      applyFilters();
-    }
-  }, [profiles, filters, currentUserProfile]);
+    return () => {
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+      }
+      if (likesUnsubscribeRef.current) {
+        likesUnsubscribeRef.current();
+        likesUnsubscribeRef.current = null;
+      }
+    };
+  }, []);
 
-  // App state detection
   useEffect(() => {
     const handleAppStateChange = (nextAppState: string) => {
       setIsAppActive(nextAppState === 'active');
     };
 
     const subscription = AppState.addEventListener('change', handleAppStateChange);
-    return () => {
-      subscription?.remove();
-    };
+    return () => subscription?.remove();
   }, []);
 
-  // Real-time polling for updates
+  // Add real-time listener for profiles
   useEffect(() => {
-    if (!currentSessionId || !currentEvent) return;
+    if (!currentEvent?.id || !currentSessionId) return;
 
-    const pollInterval = setInterval(() => {
-      if (isAppActive) {
-        loadProfiles(currentEvent.id, currentSessionId);
-        loadLikes(currentEvent.id, currentSessionId);
+    // Clean up existing listener
+    if (unsubscribeRef.current) {
+      unsubscribeRef.current();
+      unsubscribeRef.current = null;
+    }
+
+    // First, get the current user's profile to check visibility
+    const userProfileQuery = query(
+      collection(db, 'event_profiles'),
+      where('event_id', '==', currentEvent.id),
+      where('session_id', '==', currentSessionId)
+    );
+
+    const userProfileUnsubscribe = onSnapshot(userProfileQuery, async (userSnapshot) => {
+      const userProfiles = userSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as any[];
+      
+      const userProfile = userProfiles[0];
+      setCurrentUserProfile(userProfile);
+
+      if (!userProfile) {
+        console.warn("Current user profile not found for session, clearing session data and redirecting.");
+        // Clear all session data to prevent infinite redirect loop
+        AsyncStorage.multiRemove([
+          'currentEventId',
+          'currentSessionId',
+          'currentEventCode',
+          'currentProfileColor',
+          'currentProfilePhotoUrl'
+        ]).then(() => {
+          router.replace('/home');
+        });
+        return;
       }
-    }, 60000); // 60 seconds
 
-    return () => clearInterval(pollInterval);
-  }, [currentSessionId, currentEvent, isAppActive]);
+      // If user is not visible, don't load other profiles
+      if (!userProfile.is_visible) {
+        setProfiles([]);
+        return;
+      }
+
+      // Only load other visible profiles if current user is visible
+      const otherProfilesQuery = query(
+        collection(db, 'event_profiles'),
+        where('event_id', '==', currentEvent.id),
+        where('is_visible', '==', true)
+      );
+
+      const otherProfilesUnsubscribe = onSnapshot(otherProfilesQuery, (otherSnapshot) => {
+        const allVisibleProfiles = otherSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as any[];
+        
+        const otherUsersProfiles = allVisibleProfiles.filter(p => p.session_id !== currentSessionId);
+        setProfiles(otherUsersProfiles);
+      }, (error) => {
+        console.error("Error listening to other profiles:", error);
+      });
+
+      // Store the unsubscribe function for cleanup
+      unsubscribeRef.current = () => {
+        otherProfilesUnsubscribe();
+      };
+    }, (error) => {
+      console.error("Error listening to user profile:", error);
+    });
+
+    // Store the main unsubscribe function
+    const mainUnsubscribe = () => {
+      userProfileUnsubscribe();
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+      }
+    };
+
+    unsubscribeRef.current = mainUnsubscribe;
+
+    return () => {
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+      }
+    };
+  }, [currentEvent?.id, currentSessionId]);
+
+  // Add real-time listener for likes
+  useEffect(() => {
+    if (!currentEvent?.id || !currentSessionId) return;
+
+    // Clean up existing listener
+    if (likesUnsubscribeRef.current) {
+      likesUnsubscribeRef.current();
+      likesUnsubscribeRef.current = null;
+    }
+
+    const likesQuery = query(
+      collection(db, 'likes'),
+      where('event_id', '==', currentEvent.id),
+      where('liker_session_id', '==', currentSessionId)
+    );
+
+    const unsubscribe = onSnapshot(likesQuery, (snapshot) => {
+      const likes = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as any[];
+      
+      setLikedProfiles(new Set(likes.map(like => like.liked_session_id)));
+    }, (error) => {
+      console.error("Error listening to likes:", error);
+    });
+
+    likesUnsubscribeRef.current = unsubscribe;
+
+    return () => {
+      if (likesUnsubscribeRef.current) {
+        likesUnsubscribeRef.current();
+        likesUnsubscribeRef.current = null;
+      }
+    };
+  }, [currentEvent?.id, currentSessionId]);
+
+  // Apply filters whenever profiles or currentUserProfile changes
+  useEffect(() => {
+    applyFilters();
+  }, [profiles, currentUserProfile, filters]);
 
   const initializeSession = async () => {
     const eventId = await AsyncStorage.getItem('currentEventId');
@@ -101,8 +231,6 @@ export default function Discovery() {
     }
 
     setCurrentSessionId(sessionId);
-
-
     
     try {
       const events = await Event.filter({ id: eventId });
@@ -113,64 +241,14 @@ export default function Discovery() {
         return;
       }
 
-      await Promise.all([loadProfiles(eventId, sessionId), loadLikes(eventId, sessionId)]);
+      // Likes are now handled by real-time listener
     } catch (error) {
       console.error("Error initializing session:", error);
     }
     setIsLoading(false);
   };
 
-  const loadProfiles = async (eventId: string, sessionId: string) => {
-    try {
-      const allVisibleProfiles = await EventProfile.filter({ 
-        event_id: eventId,
-        is_visible: true 
-      });
-      
-      const userProfile = allVisibleProfiles.find(p => p.session_id === sessionId);
-      setCurrentUserProfile(userProfile);
 
-      const otherUsersProfiles = allVisibleProfiles.filter(p => p.session_id !== sessionId);
-      setProfiles(otherUsersProfiles);
-      
-      if (!userProfile) {
-        console.warn("Current user profile not found for session, clearing session data and redirecting.");
-        // Clear all session data to prevent infinite redirect loop
-        await AsyncStorage.multiRemove([
-          'currentEventId',
-          'currentSessionId',
-          'currentEventCode',
-          'currentProfileColor',
-          'currentProfilePhotoUrl'
-        ]);
-        router.replace('/home');
-      }
-
-    } catch (error) {
-      console.error("Error loading profiles:", error);
-      // Also clear session data on error to prevent loops
-      await AsyncStorage.multiRemove([
-        'currentEventId',
-        'currentSessionId',
-        'currentEventCode',
-        'currentProfileColor',
-        'currentProfilePhotoUrl'
-      ]);
-      router.replace('/home');
-    }
-  };
-
-  const loadLikes = async (eventId: string, sessionId: string) => {
-    try {
-      const likes = await Like.filter({ 
-        liker_session_id: sessionId,
-        event_id: eventId 
-      });
-      setLikedProfiles(new Set(likes.map(like => like.liked_session_id)));
-    } catch (error) {
-      console.error("Error loading likes:", error);
-    }
-  };
 
   const applyFilters = () => {
     if (!currentUserProfile) {
@@ -235,6 +313,14 @@ export default function Discovery() {
         liked_notified_of_match: false
       });
 
+      // Send notification to the person being liked (they get notified that someone liked them)
+      try {
+        await sendLikeNotification(likedProfile.session_id, currentUserProfile.first_name);
+        console.log('Like notification sent successfully!');
+      } catch (notificationError) {
+        console.error('Error sending like notification:', notificationError);
+      }
+
       // Check for mutual match
       const theirLikesToMe = await Like.filter({
         event_id: eventId,
@@ -243,6 +329,13 @@ export default function Discovery() {
       });
 
       if (theirLikesToMe.length > 0) {
+        // They already liked us! Send them a notification that we liked them back
+        try {
+          await sendLikeNotification(likedProfile.session_id, currentUserProfile.first_name);
+          console.log('Like back notification sent successfully!');
+        } catch (notificationError) {
+          console.error('Error sending like back notification:', notificationError);
+        }
         const theirLikeRecord = theirLikesToMe[0];
 
         // Update both records for mutual match
@@ -265,6 +358,7 @@ export default function Discovery() {
         } catch (notificationError) {
           console.error('Error sending match notifications:', notificationError);
         }
+
         
         Alert.alert(
           "🎉 It's a Match!", 
@@ -374,14 +468,14 @@ export default function Discovery() {
     profilesGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      justifyContent: 'flex-start',
-      gap: 12,
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
     },
     profileCard: {
       width: cardSize,
       backgroundColor: isDark ? '#2d2d2d' : 'white',
       borderRadius: 16,
-      padding: 12,
+      padding: 8,
       margin: 4,
       alignItems: 'center',
       shadowColor: '#000',
@@ -391,9 +485,9 @@ export default function Discovery() {
       elevation: 2,
     },
     profileImageContainer: {
-      width: cardSize - 24,
-      height: cardSize - 24,
-      borderRadius: (cardSize - 24) / 2,
+      width: cardSize - 16,
+      height: cardSize - 16,
+      borderRadius: 12,
       overflow: 'hidden',
       marginBottom: 8,
       backgroundColor: isDark ? '#404040' : '#e5e7eb',
@@ -403,12 +497,12 @@ export default function Discovery() {
     profileImage: {
       width: '100%',
       height: '100%',
-      borderRadius: (cardSize - 24) / 2,
+      borderRadius: 12,
     },
     fallbackAvatar: {
-      width: cardSize - 24,
-      height: cardSize - 24,
-      borderRadius: (cardSize - 24) / 2,
+      width: cardSize - 16,
+      height: cardSize - 16,
+      borderRadius: 12,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: isDark ? '#404040' : '#cccccc',
@@ -642,6 +736,42 @@ export default function Discovery() {
       fontSize: 16,
       color: isDark ? '#9ca3af' : '#6b7280',
     },
+    hiddenStateContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: 32,
+    },
+    hiddenStateContent: {
+      alignItems: 'center',
+      maxWidth: 300,
+    },
+    hiddenStateTitle: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: isDark ? '#ffffff' : '#1f2937',
+      marginTop: 16,
+      marginBottom: 12,
+      textAlign: 'center',
+    },
+    hiddenStateText: {
+      fontSize: 16,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      textAlign: 'center',
+      lineHeight: 24,
+      marginBottom: 24,
+    },
+    makeVisibleButton: {
+      backgroundColor: '#8b5cf6',
+      borderRadius: 12,
+      paddingVertical: 16,
+      paddingHorizontal: 32,
+    },
+    makeVisibleButtonText: {
+      fontSize: 16,
+      color: 'white',
+      fontWeight: '600',
+    },
   });
 
   if (isLoading) {
@@ -650,6 +780,68 @@ export default function Discovery() {
         <ActivityIndicator size="large" color="#8b5cf6" />
         <Text style={styles.loadingText}>Loading singles at this event...</Text>
       </View>
+    );
+  }
+
+  // Show hidden state if user is not visible
+  if (currentUserProfile && !currentUserProfile.is_visible) {
+    return (
+      <SafeAreaView style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerText}>
+            <Text style={styles.title}>
+              Profile Hidden
+            </Text>
+            <Text style={styles.subtitle}>You are currently hidden from other users</Text>
+          </View>
+        </View>
+
+        {/* Hidden State Content */}
+        <View style={styles.hiddenStateContainer}>
+          <View style={styles.hiddenStateContent}>
+            <User size={64} color="#9ca3af" />
+            <Text style={styles.hiddenStateTitle}>Your Profile is Hidden</Text>
+            <Text style={styles.hiddenStateText}>
+              While your profile is hidden, you cannot see other users and they cannot see you. 
+              To start discovering people again, make your profile visible in your profile settings.
+            </Text>
+            <TouchableOpacity
+              style={styles.makeVisibleButton}
+              onPress={() => router.push('/profile')}
+            >
+              <Text style={styles.makeVisibleButtonText}>Go to Profile</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Bottom Navigation */}
+        <View style={styles.bottomNavigation}>
+          <TouchableOpacity
+            style={[styles.navButton, styles.navButtonActive]}
+            onPress={() => router.push('/profile')}
+          >
+            <User size={24} color="#8b5cf6" />
+            <Text style={[styles.navButtonText, styles.navButtonTextActive]}>Profile</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.navButton}
+            onPress={() => {}} // Already on discovery page but hidden
+          >
+            <Users size={24} color="#9ca3af" />
+            <Text style={styles.navButtonText}>Discover</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.navButton}
+            onPress={() => router.push('/matches')}
+          >
+            <MessageCircle size={24} color="#9ca3af" />
+            <Text style={styles.navButtonText}>Matches</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -891,7 +1083,12 @@ export default function Discovery() {
         </View>
       </Modal>
 
-      {/* TODO: Add Profile Detail Modal */}
+      {/* Profile Detail Modal */}
+      <UserProfileModal
+        visible={selectedProfileForDetail !== null}
+        profile={selectedProfileForDetail}
+        onClose={() => setSelectedProfileForDetail(null)}
+      />
 
     </SafeAreaView>
   );

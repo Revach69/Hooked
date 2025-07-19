@@ -3,12 +3,10 @@ import { StatusBar } from 'expo-status-bar';
 import { Platform, useColorScheme } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useEffect, useState } from 'react';
-import { initializeNotifications, checkNotificationPermission } from '../lib/notifications';
-import NotificationPermissionModal from '../lib/NotificationPermissionModal';
+import { initializeNotifications, checkNotificationPermission, requestNotificationPermission } from '../lib/notifications';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
-  const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [permissionChecked, setPermissionChecked] = useState(false);
 
   useEffect(() => {
@@ -21,8 +19,14 @@ export default function RootLayout() {
           // Initialize notifications if permission is already granted
           await initializeNotifications();
         } else if (permission.canAskAgain) {
-          // Show custom permission modal if we can ask again
-          setShowPermissionModal(true);
+          // For Android 13+ (API level 33+), we need to request POST_NOTIFICATIONS permission
+          // For iOS and older Android versions, this will show the native permission popup
+          const result = await requestNotificationPermission();
+          
+          if (result.granted) {
+            // Initialize notifications if permission was just granted
+            await initializeNotifications();
+          }
         }
         
         setPermissionChecked(true);
@@ -33,18 +37,10 @@ export default function RootLayout() {
     };
 
     // Delay the permission check to avoid showing modal immediately on app launch
-    const timer = setTimeout(initNotifications, 3000); // Increased delay
+    const timer = setTimeout(initNotifications, 2000);
     
     return () => clearTimeout(timer);
   }, []);
-
-  const handlePermissionGranted = () => {
-    console.log('Notification permission granted');
-  };
-
-  const handleClosePermissionModal = () => {
-    setShowPermissionModal(false);
-  };
 
   return (
     <SafeAreaProvider>
@@ -54,12 +50,6 @@ export default function RootLayout() {
           headerShown: false,
           animation: Platform.OS === 'ios' ? 'default' : 'slide_from_right',
         }}
-      />
-      
-      <NotificationPermissionModal
-        visible={showPermissionModal && permissionChecked}
-        onClose={handleClosePermissionModal}
-        onPermissionGranted={handlePermissionGranted}
       />
     </SafeAreaProvider>
   );

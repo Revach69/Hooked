@@ -13,11 +13,12 @@ import {
   TouchableWithoutFeedback,
   Modal,
   useColorScheme,
+  Switch,
 } from 'react-native';
 import { router } from 'expo-router';
 import { User, EventProfile, Event, UploadFile } from '../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { User as UserIcon, Camera, Upload, Facebook, Instagram } from 'lucide-react-native';
+import { User as UserIcon, Camera, Upload } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -46,6 +47,7 @@ export default function Consent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [showAgePicker, setShowAgePicker] = useState(false);
+  const [rememberProfile, setRememberProfile] = useState(false);
 
   useEffect(() => {
     const fetchEvent = async () => {
@@ -69,8 +71,76 @@ export default function Consent() {
     fetchEvent();
   }, []);
 
+  // Load saved profile data if available
+  useEffect(() => {
+    const loadSavedProfile = async () => {
+      try {
+        const savedProfile = await AsyncStorage.getItem('savedProfileData');
+        if (savedProfile) {
+          const profileData = JSON.parse(savedProfile);
+          setFormData(profileData);
+          setRememberProfile(true);
+        }
+      } catch (error) {
+        console.error("Error loading saved profile:", error);
+      }
+    };
+    loadSavedProfile();
+  }, []);
+
   // Handler for profile photo upload
   const handlePhotoUpload = async () => {
+    try {
+      Alert.alert(
+        "Choose Photo",
+        "How would you like to add your profile photo?",
+        [
+          {
+            text: "Take Photo",
+            onPress: () => handleCameraCapture()
+          },
+          {
+            text: "Choose from Gallery",
+            onPress: () => handleGalleryPick()
+          },
+          {
+            text: "Cancel",
+            style: "cancel"
+          }
+        ]
+      );
+    } catch (error) {
+      console.error("Error in photo upload:", error);
+      Alert.alert("Error", "Failed to open photo options. Please try again.");
+    }
+  };
+
+  const handleCameraCapture = async () => {
+    try {
+      const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+      
+      if (permissionResult.granted === false) {
+        Alert.alert("Permission Required", "Camera permission is required to take a photo!");
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        await processImageAsset(result.assets[0]);
+      }
+    } catch (error) {
+      console.error("Error capturing photo:", error);
+      Alert.alert("Error", "Failed to capture photo. Please try again.");
+    }
+  };
+
+  const handleGalleryPick = async () => {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       
@@ -80,41 +150,43 @@ export default function Consent() {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
       });
 
       if (!result.canceled && result.assets[0]) {
-        const asset = result.assets[0];
-        
-        // Validate file size (5MB limit)
-        if (asset.fileSize && asset.fileSize > 5 * 1024 * 1024) {
-          Alert.alert("File Too Large", "Image must be smaller than 5MB.");
-          return;
-        }
-
-        setIsUploadingPhoto(true);
-        try {
-          // Convert asset to file-like object for upload
-          const response = await fetch(asset.uri);
-          const blob = await response.blob();
-          const file = new File([blob], 'profile-photo.jpg', { type: 'image/jpeg' });
-          
-          const { file_url } = await UploadFile(file);
-          setFormData(prev => ({ ...prev, profile_photo_url: file_url }));
-          // Removed the success alert - photo upload is now silent
-        } catch (err) {
-          console.error("Error uploading photo:", err);
-          Alert.alert("Upload Failed", "Failed to upload photo. Please try again.");
-        } finally {
-          setIsUploadingPhoto(false);
-        }
+        await processImageAsset(result.assets[0]);
       }
     } catch (error) {
       console.error("Error picking image:", error);
       Alert.alert("Error", "Failed to pick image. Please try again.");
+    }
+  };
+
+  const processImageAsset = async (asset: any) => {
+    // Validate file size (5MB limit)
+    if (asset.fileSize && asset.fileSize > 5 * 1024 * 1024) {
+      Alert.alert("File Too Large", "Image must be smaller than 5MB.");
+      return;
+    }
+
+    setIsUploadingPhoto(true);
+    try {
+      // Convert asset to file-like object for upload
+      const response = await fetch(asset.uri);
+      const blob = await response.blob();
+      const file = new File([blob], 'profile-photo.jpg', { type: 'image/jpeg' });
+      
+      const { file_url } = await UploadFile(file);
+      setFormData(prev => ({ ...prev, profile_photo_url: file_url }));
+      // Removed the success alert - photo upload is now silent
+    } catch (err) {
+      console.error("Error uploading photo:", err);
+      Alert.alert("Upload Failed", "Failed to upload photo. Please try again.");
+    } finally {
+      setIsUploadingPhoto(false);
     }
   };
 
@@ -137,8 +209,21 @@ export default function Consent() {
       const sessionId = generateUUID();
       const profileColor = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
 
-      // Removed User.updateProfile() call since we're not using Firebase Auth
-      // This was causing the "No user logged in" error
+      // Save profile data locally if "remember profile" is checked
+      if (rememberProfile) {
+        try {
+          await AsyncStorage.setItem('savedProfileData', JSON.stringify(formData));
+        } catch (error) {
+          console.error("Error saving profile data:", error);
+        }
+      } else {
+        // Clear saved profile data if not checked
+        try {
+          await AsyncStorage.removeItem('savedProfileData');
+        } catch (error) {
+          console.error("Error clearing saved profile data:", error);
+        }
+      }
 
       // Create event profile with photo
       await EventProfile.create({
@@ -168,104 +253,313 @@ export default function Consent() {
     }
   };
 
-  const handleFacebookLogin = async () => {
-    try {
-      // Facebook OAuth implementation
-      // In a real app, you would use Facebook SDK or OAuth flow
-      const facebookAuthUrl = 'https://www.facebook.com/dialog/oauth?' +
-        'client_id=YOUR_FACEBOOK_APP_ID' +
-        '&redirect_uri=YOUR_REDIRECT_URI' +
-        '&scope=public_profile,email' +
-        '&response_type=code';
-      
-      // For demo purposes, we'll simulate successful login with mock data
-      Alert.alert(
-        "Facebook Login",
-        "Connecting to Facebook...",
-        [{ text: "OK" }]
-      );
-      
-      // Simulate API call delay
-      setTimeout(() => {
-        // Mock Facebook user data
-        const mockFacebookData = {
-          name: 'John Doe',
-          email: 'john.doe@example.com',
-          profile_picture: 'https://via.placeholder.com/150/1877f2/ffffff?text=FB',
-          age: '28',
-          gender: 'male'
-        };
-        
-        // Pre-fill the form with Facebook data
-        setFormData(prev => ({
-          ...prev,
-          first_name: mockFacebookData.name.split(' ')[0],
-          email: mockFacebookData.email,
-          age: mockFacebookData.age,
-          gender_identity: mockFacebookData.gender === 'male' ? 'man' : 'woman',
-          profile_photo_url: mockFacebookData.profile_picture
-        }));
-        
-        Alert.alert(
-          "Success!",
-          "Facebook data imported successfully. Please complete the remaining fields and upload a photo.",
-          [{ text: "OK" }]
-        );
-      }, 2000);
-      
-    } catch (error) {
-      console.error("Facebook login error:", error);
-      Alert.alert("Error", "Failed to connect with Facebook. Please try again.");
-    }
-  };
-
-  const handleInstagramLogin = async () => {
-    try {
-      // Instagram Basic Display API implementation
-      // In a real app, you would use Instagram's OAuth flow
-      const instagramAuthUrl = 'https://api.instagram.com/oauth/authorize?' +
-        'client_id=YOUR_INSTAGRAM_APP_ID' +
-        '&redirect_uri=YOUR_REDIRECT_URI' +
-        '&scope=user_profile,user_media' +
-        '&response_type=code';
-      
-      // For demo purposes, we'll simulate successful login with mock data
-      Alert.alert(
-        "Instagram Login",
-        "Connecting to Instagram...",
-        [{ text: "OK" }]
-      );
-      
-      // Simulate API call delay
-      setTimeout(() => {
-        // Mock Instagram user data
-        const mockInstagramData = {
-          username: 'jane_doe',
-          full_name: 'Jane Doe',
-          profile_picture: 'https://via.placeholder.com/150/e4405f/ffffff?text=IG',
-          // Instagram doesn't provide age/gender by default
-        };
-        
-        // Pre-fill the form with Instagram data
-        setFormData(prev => ({
-          ...prev,
-          first_name: mockInstagramData.full_name.split(' ')[0],
-          email: `${mockInstagramData.username}@instagram.com`, // Placeholder email
-          profile_photo_url: mockInstagramData.profile_picture
-        }));
-        
-        Alert.alert(
-          "Success!",
-          "Instagram data imported successfully. Please complete the remaining fields (age, gender, interests).",
-          [{ text: "OK" }]
-        );
-      }, 2000);
-      
-    } catch (error) {
-      console.error("Instagram login error:", error);
-      Alert.alert("Error", "Failed to connect with Instagram. Please try again.");
-    }
-  };
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: isDark ? '#1a1a1a' : '#f8fafc',
+    },
+    contentContainer: {
+      padding: 16,
+      alignItems: 'center',
+    },
+    card: {
+      backgroundColor: isDark ? '#2d2d2d' : 'white',
+      borderRadius: 16,
+      padding: 24,
+      maxWidth: 400,
+      width: '100%',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: isDark ? 0.3 : 0.1,
+      shadowRadius: 12,
+      elevation: 4,
+    },
+    header: {
+      alignItems: 'center',
+      marginBottom: 24,
+    },
+    logoContainer: {
+      width: 64,
+      height: 64,
+      backgroundColor: '#8b5cf6',
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 16,
+    },
+    title: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: isDark ? '#ffffff' : '#1f2937',
+      textAlign: 'center',
+      marginBottom: 4,
+    },
+    eventName: {
+      fontSize: 20,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      textAlign: 'center',
+      marginTop: 4,
+    },
+    subtitle: {
+      fontSize: 16,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      textAlign: 'center',
+      lineHeight: 24,
+    },
+    form: {
+      gap: 16,
+    },
+    photoSection: {
+      alignItems: 'center',
+      marginBottom: 24,
+    },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: isDark ? '#e5e7eb' : '#374151',
+      marginBottom: 12,
+      textAlign: 'left',
+      width: '100%',
+    },
+    photoUploadArea: {
+      width: 120,
+      height: 120,
+      borderRadius: 60,
+      borderWidth: 2,
+      borderColor: isDark ? '#404040' : '#d1d5db',
+      borderStyle: 'dashed',
+      backgroundColor: isDark ? '#374151' : '#f9fafb',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 12,
+    },
+    uploadedPhoto: {
+      width: '100%',
+      height: '100%',
+      borderRadius: 60,
+    },
+    uploadPlaceholder: {
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    uploadText: {
+      fontSize: 14,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      marginTop: 8,
+    },
+    photoRequirements: {
+      fontSize: 12,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      textAlign: 'center',
+      marginTop: 8,
+    },
+    formSection: {
+      gap: 12,
+      width: '100%',
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: isDark ? '#404040' : '#d1d5db',
+      borderRadius: 8,
+      padding: 12,
+      fontSize: 16,
+      backgroundColor: isDark ? '#374151' : 'white',
+      color: isDark ? '#e5e7eb' : '#1f2937',
+    },
+    selectContainer: {
+      gap: 8,
+    },
+    selectLabel: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: isDark ? '#e5e7eb' : '#374151',
+    },
+    selectButtons: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    selectButton: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: isDark ? '#404040' : '#d1d5db',
+      borderRadius: 8,
+      padding: 12,
+      alignItems: 'center',
+      backgroundColor: isDark ? '#374151' : 'white',
+    },
+    selectButtonActive: {
+      borderColor: '#8b5cf6',
+      backgroundColor: '#8b5cf6',
+    },
+    selectButtonText: {
+      fontSize: 14,
+      color: isDark ? '#e5e7eb' : '#374151',
+    },
+    selectButtonTextActive: {
+      color: 'white',
+    },
+    selectionSection: {
+      marginTop: 24,
+      width: '100%',
+    },
+    selectionButtons: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    selectionButton: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: isDark ? '#404040' : '#d1d5db',
+      borderRadius: 12,
+      paddingVertical: 12,
+      alignItems: 'center',
+      backgroundColor: isDark ? '#374151' : 'white',
+    },
+    selectionButtonActive: {
+      borderColor: '#8b5cf6',
+      backgroundColor: '#8b5cf6',
+    },
+    selectionButtonText: {
+      fontSize: 16,
+      fontWeight: '500',
+      color: isDark ? '#e5e7eb' : '#374151',
+    },
+    selectionButtonTextActive: {
+      color: 'white',
+    },
+    submitButton: {
+      backgroundColor: '#8b5cf6',
+      borderRadius: 12,
+      padding: 16,
+      alignItems: 'center',
+      marginTop: 24,
+    },
+    submitButtonDisabled: {
+      backgroundColor: '#9ca3af',
+    },
+    submitButtonText: {
+      color: 'white',
+      fontSize: 16,
+      fontWeight: '500',
+    },
+    loadingContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    spinner: {
+      marginBottom: 24,
+    },
+    errorTitle: {
+      fontSize: 20,
+      fontWeight: '600',
+      color: '#dc2626',
+      marginBottom: 8,
+      textAlign: 'center',
+    },
+    errorText: {
+      fontSize: 16,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      textAlign: 'center',
+      marginBottom: 24,
+      lineHeight: 24,
+    },
+    button: {
+      backgroundColor: '#8b5cf6',
+      borderRadius: 12,
+      paddingVertical: 16,
+      paddingHorizontal: 24,
+      alignItems: 'center',
+    },
+    buttonText: {
+      color: 'white',
+      fontSize: 16,
+      fontWeight: '500',
+    },
+    inputText: {
+      fontSize: 16,
+      color: isDark ? '#e5e7eb' : '#1f2937',
+    },
+    placeholderText: {
+      fontSize: 16,
+      color: isDark ? '#9ca3af' : '#9ca3af',
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    agePickerContainer: {
+      backgroundColor: isDark ? '#2d2d2d' : 'white',
+      borderRadius: 16,
+      padding: 20,
+      width: '80%',
+      maxHeight: '70%',
+    },
+    agePickerTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: isDark ? '#ffffff' : '#1f2937',
+      textAlign: 'center',
+      marginBottom: 16,
+    },
+    agePickerScroll: {
+      maxHeight: 300,
+    },
+    ageOption: {
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? '#404040' : '#e5e7eb',
+    },
+    ageOptionSelected: {
+      backgroundColor: '#8b5cf6',
+    },
+    ageOptionText: {
+      fontSize: 16,
+      color: isDark ? '#e5e7eb' : '#1f2937',
+      textAlign: 'center',
+    },
+    ageOptionTextSelected: {
+      color: 'white',
+      fontWeight: '600',
+    },
+    cancelButton: {
+      marginTop: 16,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      backgroundColor: isDark ? '#374151' : '#f3f4f6',
+      borderRadius: 8,
+      alignItems: 'center',
+    },
+    cancelButtonText: {
+      fontSize: 16,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      fontWeight: '500',
+    },
+    rememberSection: {
+      marginTop: 24,
+      width: '100%',
+    },
+    checkboxContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    checkboxText: {
+      fontSize: 16,
+      color: isDark ? '#e5e7eb' : '#374151',
+      marginLeft: 12,
+      flex: 1,
+    },
+    checkboxDescription: {
+      fontSize: 14,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      marginLeft: 44,
+      lineHeight: 20,
+    },
+  });
 
   if (step === 'processing') {
     return (
@@ -456,6 +750,24 @@ export default function Consent() {
             </View>
           </View>
 
+          {/* Remember Profile Checkbox */}
+          <View style={styles.rememberSection}>
+            <View style={styles.checkboxContainer}>
+              <Switch
+                value={rememberProfile}
+                onValueChange={setRememberProfile}
+                trackColor={{ false: '#d1d5db', true: '#8b5cf6' }}
+                thumbColor={rememberProfile ? '#ffffff' : '#ffffff'}
+              />
+              <Text style={styles.checkboxText}>
+                Remember my profile for future events
+              </Text>
+            </View>
+            <Text style={styles.checkboxDescription}>
+              Your form data will be saved locally and auto-filled for future events
+            </Text>
+          </View>
+
           {/* Submit Button */}
           <TouchableOpacity
             style={styles.submitButton}
@@ -464,28 +776,6 @@ export default function Consent() {
           >
             <Text style={styles.submitButtonText}>Join Event</Text>
           </TouchableOpacity>
-
-          {/* Social Login Section */}
-          <View style={styles.socialSection}>
-            <Text style={styles.socialSectionTitle}>Or connect with social media</Text>
-            <View style={styles.socialButtons}>
-              <TouchableOpacity
-                style={styles.facebookButton}
-                onPress={handleFacebookLogin}
-              >
-                <Facebook size={20} color="white" style={styles.socialIcon} />
-                <Text style={styles.facebookButtonText}>Continue with Facebook</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.instagramButton}
-                onPress={handleInstagramLogin}
-              >
-                <Instagram size={20} color="white" style={styles.socialIcon} />
-                <Text style={styles.instagramButtonText}>Continue with Instagram</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
         </View>
       </ScrollView>
     </TouchableWithoutFeedback>
@@ -535,346 +825,4 @@ export default function Consent() {
       </Modal>
     </SafeAreaView>
   );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-  },
-  contentContainer: {
-    padding: 16,
-    alignItems: 'center',
-  },
-  card: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 24,
-    maxWidth: 400,
-    width: '100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  logoContainer: {
-    width: 64,
-    height: 64,
-    backgroundColor: '#8b5cf6',
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  eventName: {
-    fontSize: 20,
-    color: '#6b7280',
-    textAlign: 'center',
-    marginTop: 4,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#6b7280',
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  form: {
-    gap: 16,
-  },
-  photoSection: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 12,
-    textAlign: 'left',
-    width: '100%',
-  },
-  photoUploadArea: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 2,
-    borderColor: '#d1d5db',
-    borderStyle: 'dashed',
-    backgroundColor: '#f9fafb',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  uploadedPhoto: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 60,
-  },
-  uploadPlaceholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  uploadText: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginTop: 8,
-  },
-  photoRequirements: {
-    fontSize: 12,
-    color: '#6b7280',
-    textAlign: 'center',
-    marginTop: 8,
-  },
-  formSection: {
-    gap: 12,
-    width: '100%',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    backgroundColor: 'white',
-  },
-  selectContainer: {
-    gap: 8,
-  },
-  selectLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#374151',
-  },
-  selectButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  selectButton: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
-    backgroundColor: 'white',
-  },
-  selectButtonActive: {
-    borderColor: '#8b5cf6',
-    backgroundColor: '#8b5cf6',
-  },
-  selectButtonText: {
-    fontSize: 14,
-    color: '#374151',
-  },
-  selectButtonTextActive: {
-    color: 'white',
-  },
-  selectionSection: {
-    marginTop: 24,
-    width: '100%',
-  },
-  selectionButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  selectionButton: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-    backgroundColor: 'white',
-  },
-  selectionButtonActive: {
-    borderColor: '#8b5cf6',
-    backgroundColor: '#8b5cf6',
-  },
-  selectionButtonText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#374151',
-  },
-  selectionButtonTextActive: {
-    color: 'white',
-  },
-  submitButton: {
-    backgroundColor: '#8b5cf6',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    marginTop: 24,
-  },
-  submitButtonDisabled: {
-    backgroundColor: '#9ca3af',
-  },
-  submitButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  loadingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  spinner: {
-    marginBottom: 24,
-  },
-  errorTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#dc2626',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  errorText: {
-    fontSize: 16,
-    color: '#6b7280',
-    textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 24,
-  },
-  button: {
-    backgroundColor: '#8b5cf6',
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  inputText: {
-    fontSize: 16,
-    color: '#1f2937',
-  },
-  placeholderText: {
-    fontSize: 16,
-    color: '#9ca3af',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  agePickerContainer: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 20,
-    width: '80%',
-    maxHeight: '70%',
-  },
-  agePickerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1f2937',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  agePickerScroll: {
-    maxHeight: 300,
-  },
-  ageOption: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  ageOptionSelected: {
-    backgroundColor: '#8b5cf6',
-  },
-  ageOptionText: {
-    fontSize: 16,
-    color: '#1f2937',
-    textAlign: 'center',
-  },
-  ageOptionTextSelected: {
-    color: 'white',
-    fontWeight: '600',
-  },
-  cancelButton: {
-    marginTop: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: '#f3f4f6',
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    color: '#6b7280',
-    fontWeight: '500',
-  },
-  socialSection: {
-    marginTop: 32,
-    width: '100%',
-    alignItems: 'center',
-  },
-  socialSectionTitle: {
-    fontSize: 16,
-    color: '#6b7280',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  socialButtons: {
-    width: '100%',
-    gap: 12,
-  },
-  facebookButton: {
-    backgroundColor: '#1877f2',
-    borderRadius: 12,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  facebookButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  instagramButton: {
-    backgroundColor: '#e4405f',
-    borderRadius: 12,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  instagramButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  socialIcon: {
-    marginRight: 8,
-  },
-}); 
+} 
