@@ -39,7 +39,7 @@ export default function EventCard({
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const [isLoadingQR, setIsLoadingQR] = useState(false);
 
-  const joinLink = `https://www.hooked-app.com/join?code=${event.event_code}`;
+  const joinLink = `https://www.hooked-app.com/join-instant?code=${event.event_code}`;
 
   const generateQRCode = async () => {
     if (qrCodeUrl) return qrCodeUrl;
