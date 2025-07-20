@@ -87,7 +87,7 @@ export default function AdminDashboard() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedEvent]);
+  }, []); // Remove selectedEvent dependency to prevent circular dependency
 
   // Define useEffect last
   useEffect(() => {
@@ -107,6 +107,13 @@ export default function AdminDashboard() {
       }
     }
   }, [loadData]);
+
+  // Add effect to reload stats when selectedEvent changes
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadStats(selectedEvent);
+    }
+  }, [selectedEvent, isAuthenticated]);
 
   const handleLogin = async () => {
     if (password === 'HOOKEDADMIN25') {
