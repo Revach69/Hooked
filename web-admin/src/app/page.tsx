@@ -37,6 +37,59 @@ export default function AdminDashboard() {
   const [events, setEvents] = useState<Event[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<string>('all');
 
+  // Define loadStats first
+  const loadStats = async (eventId: string) => {
+    try {
+      let profiles, likes, messages;
+      
+      if (eventId === 'all') {
+        [profiles, likes, messages] = await Promise.all([
+          EventProfile.filter({}),
+          Like.filter({}),
+          Message.filter({})
+        ]);
+      } else {
+        [profiles, likes, messages] = await Promise.all([
+          EventProfile.filter({ event_id: eventId }),
+          Like.filter({ event_id: eventId }),
+          Message.filter({ event_id: eventId })
+        ]);
+      }
+
+      const mutualLikes = likes.filter((like: Like) => like.is_mutual);
+      const allEvents = await Event.filter({});
+
+      setStats({
+        totalProfiles: profiles.length,
+        totalLikes: likes.length,
+        totalMatches: mutualLikes.length,
+        totalMessages: messages.length,
+        totalEvents: allEvents.length,
+      });
+    } catch (error) {
+      console.error('Error loading stats:', error);
+    }
+  };
+
+  // Define loadData second
+  const loadData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      
+      // Load all events
+      const allEvents = await Event.filter({});
+      setEvents(allEvents);
+      
+      // Load stats based on selected event
+      await loadStats(selectedEvent);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedEvent]);
+
+  // Define useEffect last
   useEffect(() => {
     // Check if already authenticated
     const adminSession = localStorage.getItem('adminSession');
@@ -82,56 +135,6 @@ export default function AdminDashboard() {
     localStorage.removeItem('adminSession');
     setIsAuthenticated(false);
     setPassword('');
-  };
-
-  const loadData = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      
-      // Load all events
-      const allEvents = await Event.filter({});
-      setEvents(allEvents);
-      
-      // Load stats based on selected event
-      await loadStats(selectedEvent);
-    } catch (error) {
-      console.error('Error loading data:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [selectedEvent]);
-
-  const loadStats = async (eventId: string) => {
-    try {
-      let profiles, likes, messages;
-      
-      if (eventId === 'all') {
-        [profiles, likes, messages] = await Promise.all([
-          EventProfile.filter({}),
-          Like.filter({}),
-          Message.filter({})
-        ]);
-      } else {
-        [profiles, likes, messages] = await Promise.all([
-          EventProfile.filter({ event_id: eventId }),
-          Like.filter({ event_id: eventId }),
-          Message.filter({ event_id: eventId })
-        ]);
-      }
-
-      const mutualLikes = likes.filter((like: Like) => like.is_mutual);
-      const allEvents = await Event.filter({});
-
-      setStats({
-        totalProfiles: profiles.length,
-        totalLikes: likes.length,
-        totalMatches: mutualLikes.length,
-        totalMessages: messages.length,
-        totalEvents: allEvents.length,
-      });
-    } catch (error) {
-      console.error('Error loading stats:', error);
-    }
   };
 
   const handleEventChange = (eventId: string) => {
