@@ -107,7 +107,7 @@ export default function EventCard({
           <div className="flex-1">
             <h3 className="text-2xl font-bold mb-1">{event.name}</h3>
             <div className="flex items-center gap-4 text-sm">
-              <span className="bg-white bg-opacity-20 px-3 py-1 rounded-full font-medium">
+              <span className="font-medium">
                 #{event.event_code}
               </span>
               <div className="flex items-center gap-1">
