@@ -31,26 +31,37 @@ export default function Admin() {
   }, []);
 
   const initializeSession = async () => {
-    const eventId = await AsyncStorage.getItem('currentEventId');
+    // Check if user has admin access
+    const isAdmin = await AsyncStorage.getItem('isAdmin');
+    const adminAccessTime = await AsyncStorage.getItem('adminAccessTime');
     
-    if (!eventId) {
+    if (!isAdmin || !adminAccessTime) {
       router.replace('/home');
       return;
     }
     
-    try {
-      const events = await Event.filter({ id: eventId });
-      if (events.length > 0) {
-        setCurrentEvent(events[0]);
-        await loadStats(eventId);
-      } else {
-        router.replace('/home');
-        return;
-      }
-    } catch (error) {
-      console.error("Error initializing session:", error);
+    // Check if admin session is still valid (24 hours)
+    const accessTime = new Date(adminAccessTime);
+    const now = new Date();
+    const hoursDiff = (now.getTime() - accessTime.getTime()) / (1000 * 60 * 60);
+    
+    if (hoursDiff > 24) {
+      // Admin session expired, clear and redirect
+      await AsyncStorage.multiRemove(['isAdmin', 'adminAccessTime']);
       router.replace('/home');
+      return;
     }
+    
+    // For admin access, we don't need a specific event
+    // Admin can view all events or select one
+    setCurrentEvent({ 
+      name: 'Admin Dashboard', 
+      event_code: 'ADMIN',
+      is_active: true 
+    });
+    
+    // Load overall stats or allow event selection
+    await loadAdminStats();
     setIsLoading(false);
   };
 
@@ -75,6 +86,28 @@ export default function Admin() {
     }
   };
 
+  const loadAdminStats = async () => {
+    try {
+      // Load overall stats across all events
+      const [allProfiles, allLikes, allMessages] = await Promise.all([
+        EventProfile.filter({}),
+        Like.filter({}),
+        Message.filter({})
+      ]);
+
+      const mutualLikes = allLikes.filter((like: any) => like.is_mutual);
+
+      setStats({
+        totalProfiles: allProfiles.length,
+        totalLikes: allLikes.length,
+        totalMatches: mutualLikes.length,
+        totalMessages: allMessages.length,
+      });
+    } catch (error) {
+      console.error("Error loading admin stats:", error);
+    }
+  };
+
   const handleLogout = async () => {
     Alert.alert(
       "Logout",
@@ -93,7 +126,9 @@ export default function Admin() {
               'currentSessionId',
               'currentEventCode',
               'currentProfileColor',
-              'currentProfilePhotoUrl'
+              'currentProfilePhotoUrl',
+              'isAdmin',
+              'adminAccessTime'
             ]);
             router.replace('/home');
           }

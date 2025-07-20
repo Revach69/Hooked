@@ -33,6 +33,15 @@ export default function JoinPage() {
         return;
       }
 
+      // Check for admin code first
+      if (code.toUpperCase() === 'HOOKEDADMIN25') {
+        // Store admin session
+        await AsyncStorage.setItem('isAdmin', 'true');
+        await AsyncStorage.setItem('adminAccessTime', new Date().toISOString());
+        router.replace('/admin');
+        return;
+      }
+
       // Validate the event code
       const events = await Event.filter({ event_code: code.toUpperCase() });
       
