@@ -9,10 +9,7 @@ import {
   deleteDoc,
   query,
   where,
-  orderBy,
-  limit,
   serverTimestamp,
-  Timestamp,
 } from 'firebase/firestore';
 
 // Types matching the mobile app

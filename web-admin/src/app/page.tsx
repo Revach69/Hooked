@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Event, EventProfile, Like, Message } from '@/lib/firebaseApi';
 import { 
   Users, 
@@ -53,7 +53,7 @@ export default function AdminDashboard() {
         localStorage.removeItem('adminSession');
       }
     }
-  }, []);
+  }, [loadData]);
 
   const handleLogin = async () => {
     if (password === 'HOOKEDADMIN25') {
@@ -84,7 +84,7 @@ export default function AdminDashboard() {
     setPassword('');
   };
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setIsLoading(true);
       
@@ -99,7 +99,7 @@ export default function AdminDashboard() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [selectedEvent]);
 
   const loadStats = async (eventId: string) => {
     try {
@@ -119,7 +119,7 @@ export default function AdminDashboard() {
         ]);
       }
 
-      const mutualLikes = likes.filter((like: any) => like.is_mutual);
+      const mutualLikes = likes.filter((like: Like) => like.is_mutual);
       const allEvents = await Event.filter({});
 
       setStats({
