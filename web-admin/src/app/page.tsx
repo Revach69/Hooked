@@ -3,26 +3,24 @@
 import { useState, useEffect } from 'react';
 import { EventAPI, EventProfile, Like, Message, type Event } from '@/lib/firebaseApi';
 import { 
-  Eye,
-  EyeOff,
   LogOut,
   Plus,
   Download,
-  FileText
+  FileText,
+  User
 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 import dynamic from 'next/dynamic';
 
 // Dynamic imports to avoid SSR issues
 const EventCard = dynamic(() => import('@/components/EventCard'), { ssr: false });
 const AnalyticsModal = dynamic(() => import('@/components/AnalyticsModal'), { ssr: false });
 const EventForm = dynamic(() => import('@/components/EventForm'), { ssr: false });
+const LoginForm = dynamic(() => import('@/components/LoginForm'), { ssr: false });
 
 export default function AdminDashboard() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const { user, loading: authLoading, logout } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(true);
   const [events, setEvents] = useState<Event[]>([]);
   
   // Modal states
@@ -31,34 +29,12 @@ export default function AdminDashboard() {
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [analyticsEvent, setAnalyticsEvent] = useState<{ id: string; name: string } | null>(null);
 
-  // Check authentication on mount
+  // Load events when user is authenticated
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const adminSession = localStorage.getItem('adminSession');
-        if (adminSession) {
-          const sessionData = JSON.parse(adminSession);
-          const now = new Date();
-          const sessionTime = new Date(sessionData.timestamp);
-          const hoursDiff = (now.getTime() - sessionTime.getTime()) / (1000 * 60 * 60);
-          
-          if (hoursDiff < 24) {
-            setIsAuthenticated(true);
-            await loadEvents();
-          } else {
-            localStorage.removeItem('adminSession');
-          }
-        }
-      } catch (error) {
-        console.error('Error checking authentication:', error);
-        localStorage.removeItem('adminSession');
-      } finally {
-        setIsInitializing(false);
-      }
-    };
-
-    checkAuth();
-  }, []);
+    if (user) {
+      loadEvents();
+    }
+  }, [user]);
 
   const loadEvents = async () => {
     try {
@@ -72,32 +48,12 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleLogin = async () => {
-    if (password === 'HOOKEDADMIN25') {
-      setIsLoading(true);
-      try {
-        localStorage.setItem('adminSession', JSON.stringify({
-          timestamp: new Date().toISOString(),
-          authenticated: true
-        }));
-        
-        setIsAuthenticated(true);
-        await loadEvents();
-      } catch (error) {
-        console.error('Error during login:', error);
-        alert('Login failed. Please try again.');
-      } finally {
-        setIsLoading(false);
-      }
-    } else {
-      alert('Invalid password');
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      console.error('Error during logout:', error);
     }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('adminSession');
-    setIsAuthenticated(false);
-    setPassword('');
   };
 
   const handleCreateEvent = () => {
@@ -213,56 +169,20 @@ export default function AdminDashboard() {
   };
 
   // Show loading while checking authentication
-  if (isInitializing) {
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-pink-100 to-purple-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 w-full max-w-md text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Initializing...</p>
+          <p className="text-gray-600 dark:text-gray-400">Checking authentication...</p>
         </div>
       </div>
     );
   }
 
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-pink-100 to-purple-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 w-full max-w-md">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Hooked Admin</h1>
-            <p className="text-gray-600 dark:text-gray-400">Enter admin password to continue</p>
-          </div>
-          
-          <div className="space-y-4">
-            <div className="relative">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter password"
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-              >
-                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-              </button>
-            </div>
-            
-            <button
-              onClick={handleLogin}
-              disabled={isLoading}
-              className="w-full bg-pink-600 text-white py-3 px-4 rounded-lg hover:bg-pink-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-            >
-              {isLoading ? 'Logging in...' : 'Login'}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
+  // Show login form if not authenticated
+  if (!user) {
+    return <LoginForm />;
   }
 
   return (
@@ -284,6 +204,12 @@ export default function AdminDashboard() {
             </div>
             
             <div className="flex items-center gap-4">
+              {/* User Info */}
+              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                <User size={16} />
+                <span>{user.email}</span>
+              </div>
+              
               <button
                 onClick={handleCreateEvent}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
