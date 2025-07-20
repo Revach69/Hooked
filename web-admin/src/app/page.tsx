@@ -27,6 +27,7 @@ export default function AdminDashboard() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
   const [stats, setStats] = useState<Stats>({
     totalProfiles: 0,
     totalLikes: 0,
@@ -89,22 +90,34 @@ export default function AdminDashboard() {
     }
   };
 
-  // Check authentication on mount
+  // Check authentication on mount - but don't load data yet
   useEffect(() => {
-    const adminSession = localStorage.getItem('adminSession');
-    if (adminSession) {
-      const sessionData = JSON.parse(adminSession);
-      const now = new Date();
-      const sessionTime = new Date(sessionData.timestamp);
-      const hoursDiff = (now.getTime() - sessionTime.getTime()) / (1000 * 60 * 60);
-      
-      if (hoursDiff < 24) {
-        setIsAuthenticated(true);
-        loadInitialData();
-      } else {
+    const checkAuth = async () => {
+      try {
+        const adminSession = localStorage.getItem('adminSession');
+        if (adminSession) {
+          const sessionData = JSON.parse(adminSession);
+          const now = new Date();
+          const sessionTime = new Date(sessionData.timestamp);
+          const hoursDiff = (now.getTime() - sessionTime.getTime()) / (1000 * 60 * 60);
+          
+          if (hoursDiff < 24) {
+            setIsAuthenticated(true);
+            // Load data after authentication is confirmed
+            await loadInitialData();
+          } else {
+            localStorage.removeItem('adminSession');
+          }
+        }
+      } catch (error) {
+        console.error('Error checking authentication:', error);
         localStorage.removeItem('adminSession');
+      } finally {
+        setIsInitializing(false);
       }
-    }
+    };
+
+    checkAuth();
   }, []);
 
   // Handle event changes
@@ -146,6 +159,18 @@ export default function AdminDashboard() {
   const handleEventChange = (eventId: string) => {
     setSelectedEvent(eventId);
   };
+
+  // Show loading while checking authentication
+  if (isInitializing) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Initializing...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return (
