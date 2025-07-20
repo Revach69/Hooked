@@ -105,9 +105,14 @@ export default function EventForm({
 
       await onSave(eventData);
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving event:', error);
-      setErrors({ submit: 'Failed to save event. Please try again.' });
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        stack: error.stack
+      });
+      setErrors({ submit: `Failed to save event: ${error.message}` });
     } finally {
       setIsLoading(false);
     }

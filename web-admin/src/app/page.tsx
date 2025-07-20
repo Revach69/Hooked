@@ -118,8 +118,13 @@ export default function AdminDashboard() {
         await EventAPI.create(eventData as Omit<Event, 'id' | 'created_at' | 'updated_at'>);
       }
       await loadEvents();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving event:', error);
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        stack: error.stack
+      });
       throw error;
     }
   };
