@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Event, EventProfile, Like, Message } from '@/lib/firebaseApi';
 import { 
   Users, 
@@ -37,7 +37,7 @@ export default function AdminDashboard() {
   const [events, setEvents] = useState<Event[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<string>('all');
 
-  // Define loadStats first
+  // Simple function to load stats without dependencies
   const loadStats = async (eventId: string) => {
     try {
       let profiles, likes, messages;
@@ -71,8 +71,8 @@ export default function AdminDashboard() {
     }
   };
 
-  // Define loadData second
-  const loadData = useCallback(async () => {
+  // Simple function to load initial data
+  const loadInitialData = async () => {
     try {
       setIsLoading(true);
       
@@ -87,11 +87,10 @@ export default function AdminDashboard() {
     } finally {
       setIsLoading(false);
     }
-  }, []); // Remove selectedEvent dependency to prevent circular dependency
+  };
 
-  // Define useEffect last
+  // Check authentication on mount
   useEffect(() => {
-    // Check if already authenticated
     const adminSession = localStorage.getItem('adminSession');
     if (adminSession) {
       const sessionData = JSON.parse(adminSession);
@@ -101,19 +100,19 @@ export default function AdminDashboard() {
       
       if (hoursDiff < 24) {
         setIsAuthenticated(true);
-        loadData();
+        loadInitialData();
       } else {
         localStorage.removeItem('adminSession');
       }
     }
-  }, [loadData]);
+  }, []);
 
-  // Add effect to reload stats when selectedEvent changes
+  // Handle event changes
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && events.length > 0) {
       loadStats(selectedEvent);
     }
-  }, [selectedEvent, isAuthenticated]);
+  }, [selectedEvent, isAuthenticated, events.length]);
 
   const handleLogin = async () => {
     if (password === 'HOOKEDADMIN25') {
@@ -126,7 +125,7 @@ export default function AdminDashboard() {
         }));
         
         setIsAuthenticated(true);
-        await loadData();
+        await loadInitialData();
       } catch (error) {
         console.error('Error during login:', error);
         alert('Login failed. Please try again.');
@@ -146,7 +145,6 @@ export default function AdminDashboard() {
 
   const handleEventChange = (eventId: string) => {
     setSelectedEvent(eventId);
-    loadStats(eventId);
   };
 
   if (!isAuthenticated) {
