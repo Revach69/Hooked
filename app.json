@@ -16,7 +16,10 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.hookedapp.app"
+      "bundleIdentifier": "com.hookedapp.app",
+      "associatedDomains": [
+        "applinks:hooked.com"
+      ]
     },
     "android": {
       "adaptiveIcon": {
@@ -31,6 +34,23 @@
         "android.permission.VIBRATE",
         "android.permission.INTERNET",
         "android.permission.POST_NOTIFICATIONS"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "hooked.com",
+              "pathPrefix": "/join"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
       ]
     },
     "web": {

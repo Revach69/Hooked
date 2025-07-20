@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Join Hooked Event</title>
+    <meta name="description" content="Join the Hooked event and connect with people around you">
+    
+    <!-- iOS Universal Links -->
+    <meta name="apple-itunes-app" content="app-id=YOUR_APP_STORE_ID">
+    
+    <!-- Android App Links -->
+    <link rel="alternate" href="android-app://YOUR_PACKAGE_NAME/join">
+    
+    <!-- Open Graph -->
+    <meta property="og:title" content="Join Hooked Event">
+    <meta property="og:description" content="Join the Hooked event and connect with people around you">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://hooked.com/join">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        
+        .logo {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            font-size: 32px;
+            font-weight: bold;
+            color: white;
+        }
+        
+        h1 {
+            color: #1f2937;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+        
+        p {
+            color: #6b7280;
+            margin-bottom: 30px;
+            line-height: 1.5;
+        }
+        
+        .event-code {
+            background: #f3f4f6;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            font-family: monospace;
+            font-size: 18px;
+            font-weight: bold;
+            color: #1f2937;
+        }
+        
+        .button {
+            background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%);
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin: 10px;
+            text-decoration: none;
+            display: inline-block;
+            transition: transform 0.2s;
+        }
+        
+        .button:hover {
+            transform: translateY(-2px);
+        }
+        
+        .button.secondary {
+            background: #6b7280;
+        }
+        
+        .loading {
+            display: none;
+            margin: 20px 0;
+        }
+        
+        .spinner {
+            border: 3px solid #f3f4f6;
+            border-top: 3px solid #ec4899;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .error {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #dc2626;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">H</div>
+        <h1>Join Hooked Event</h1>
+        <p>Connect with people at this event using the Hooked app</p>
+        
+        <div class="event-code" id="eventCode">Loading...</div>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Opening Hooked app...</p>
+        </div>
+        
+        <div class="error" id="error">
+            <p>This event code is invalid or has expired.</p>
+        </div>
+        
+        <button class="button" id="openApp" onclick="openApp()">
+            Open Hooked App
+        </button>
+        
+        <a href="#" class="button secondary" id="downloadApp" onclick="downloadApp()">
+            Download Hooked App
+        </a>
+    </div>
+
+    <script>
+        // Get event code from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const eventCode = urlParams.get('code');
+        
+        // Update event code display
+        document.getElementById('eventCode').textContent = eventCode ? `#${eventCode}` : 'No code provided';
+        
+        // App store URLs (replace with your actual app IDs)
+        const APP_STORE_URL = 'https://apps.apple.com/app/hooked/YOUR_APP_STORE_ID';
+        const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=YOUR_PACKAGE_NAME';
+        
+        // Deep link URLs
+        const IOS_DEEP_LINK = `hooked://join?code=${eventCode}`;
+        const ANDROID_DEEP_LINK = `hooked://join?code=${eventCode}`;
+        
+        // Detect platform
+        function getPlatform() {
+            const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+            if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) {
+                return 'ios';
+            } else if (/android/i.test(userAgent)) {
+                return 'android';
+            }
+            return 'web';
+        }
+        
+        // Open app with fallback to app store
+        function openApp() {
+            const platform = getPlatform();
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            
+            loading.style.display = 'block';
+            error.style.display = 'none';
+            
+            // Hide buttons during loading
+            document.getElementById('openApp').style.display = 'none';
+            document.getElementById('downloadApp').style.display = 'none';
+            
+            // Try to open the app
+            let deepLink;
+            if (platform === 'ios') {
+                deepLink = IOS_DEEP_LINK;
+            } else if (platform === 'android') {
+                deepLink = ANDROID_DEEP_LINK;
+            } else {
+                // For web, just redirect to app store
+                window.location.href = APP_STORE_URL;
+                return;
+            }
+            
+            // Attempt to open the app
+            window.location.href = deepLink;
+            
+            // Fallback: if app doesn't open within 2 seconds, redirect to app store
+            setTimeout(() => {
+                if (platform === 'ios') {
+                    window.location.href = APP_STORE_URL;
+                } else if (platform === 'android') {
+                    window.location.href = PLAY_STORE_URL;
+                }
+            }, 2000);
+        }
+        
+        // Download app
+        function downloadApp() {
+            const platform = getPlatform();
+            if (platform === 'ios') {
+                window.location.href = APP_STORE_URL;
+            } else if (platform === 'android') {
+                window.location.href = PLAY_STORE_URL;
+            } else {
+                // For web, show both options
+                window.open(APP_STORE_URL, '_blank');
+                setTimeout(() => {
+                    window.open(PLAY_STORE_URL, '_blank');
+                }, 100);
+            }
+        }
+        
+        // Auto-attempt to open app on page load
+        window.addEventListener('load', () => {
+            // Small delay to let the page render
+            setTimeout(() => {
+                openApp();
+            }, 500);
+        });
+        
+        // Handle visibility change (user returned from app)
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                // User returned to the page, show download option
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('openApp').style.display = 'inline-block';
+                document.getElementById('downloadApp').style.display = 'inline-block';
+            }
+        });
+    </script>
+</body>
+</html> 
