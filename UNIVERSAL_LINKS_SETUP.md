@@ -4,7 +4,7 @@ This guide explains how to set up Universal Links (iOS) and App Links (Android) 
 
 ## 🔗 **How It Works**
 
-1. **User clicks link/QR** → Opens `https://hooked.com/join?code=TEST123`
+1. **User clicks link/QR** → Opens `https://www.hooked-app.com/join?code=TEST123`
 2. **If app installed** → Automatically opens the app with the code
 3. **If app not installed** → Redirects to App Store/Play Store
 
@@ -21,7 +21,7 @@ The `app.json` already includes:
 ```
 
 ### 2. **Deploy Apple App Site Association**
-The file `web-admin/public/.well-known/apple-app-site-association` needs to be deployed to `https://hooked.com/.well-known/apple-app-site-association`
+The file `web-admin/public/.well-known/apple-app-site-association` needs to be deployed to `https://www.hooked-app.com/.well-known/apple-app-site-association`
 
 **Update the file with your actual Team ID:**
 ```json
@@ -51,7 +51,7 @@ The file `web-admin/public/.well-known/apple-app-site-association` needs to be d
 The `app.json` already includes the intent filters for Android.
 
 ### 2. **Deploy Digital Asset Links**
-The file `web-admin/public/.well-known/assetlinks.json` needs to be deployed to `https://hooked.com/.well-known/assetlinks.json`
+The file `web-admin/public/.well-known/assetlinks.json` needs to be deployed to `https://www.hooked-app.com/.well-known/assetlinks.json`
 
 **Update the file with your actual signing certificate fingerprint:**
 ```json
@@ -85,7 +85,7 @@ keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -sto
 ## 🌐 **Web Handler Setup**
 
 ### 1. **Deploy the Web Handler**
-The file `web-admin/public/join.html` needs to be deployed to `https://hooked.com/join.html`
+The file `web-admin/public/join.html` needs to be deployed to `https://www.hooked-app.com/join.html`
 
 ### 2. **Update App Store URLs**
 In `join.html`, replace the placeholder URLs:
@@ -114,12 +114,12 @@ Before deploying, update these files with your actual values:
 
 #### **Test Universal Links (iOS):**
 1. Build and install the app on a device
-2. Send yourself a link: `https://hooked.com/join?code=TEST123`
+2. Send yourself a link: `https://www.hooked-app.com/join?code=TEST123`
 3. Click the link - it should open the app directly
 
 #### **Test App Links (Android):**
 1. Build and install the app on a device
-2. Send yourself a link: `https://hooked.com/join?code=TEST123`
+2. Send yourself a link: `https://www.hooked-app.com/join?code=TEST123`
 3. Click the link - it should open the app directly
 
 #### **Test Fallback:**
@@ -141,14 +141,14 @@ Before deploying, update these files with your actual values:
 ### **General Issues:**
 - Clear browser cache and app data
 - Test on physical devices (not simulators)
-- Check that the domain `hooked.com` is properly configured
+- Check that the domain `www.hooked-app.com` is properly configured
 
 ## 📋 **Checklist**
 
 - [ ] Update `apple-app-site-association` with your Team ID
 - [ ] Update `assetlinks.json` with your SHA-256 fingerprint
 - [ ] Update `join.html` with your App Store ID
-- [ ] Deploy all files to `https://hooked.com`
+- [ ] Deploy all files to `https://www.hooked-app.com`
 - [ ] Test Universal Links on iOS device
 - [ ] Test App Links on Android device
 - [ ] Test fallback to app stores
