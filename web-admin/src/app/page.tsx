@@ -3,24 +3,19 @@
 import { useState, useEffect } from 'react';
 import { EventAPI, EventProfile, Like, Message, type Event } from '@/lib/firebaseApi';
 import { 
-  Users, 
-  Heart, 
-  MessageCircle, 
-  BarChart3, 
-  Settings, 
-  LogOut, 
-  Calendar,
   Eye,
-  EyeOff
+  EyeOff,
+  LogOut,
+  Plus,
+  Download,
+  FileText
 } from 'lucide-react';
+import dynamic from 'next/dynamic';
 
-interface Stats {
-  totalProfiles: number;
-  totalLikes: number;
-  totalMatches: number;
-  totalMessages: number;
-  totalEvents: number;
-}
+// Dynamic imports to avoid SSR issues
+const EventCard = dynamic(() => import('@/components/EventCard'), { ssr: false });
+const AnalyticsModal = dynamic(() => import('@/components/AnalyticsModal'), { ssr: false });
+const EventForm = dynamic(() => import('@/components/EventForm'), { ssr: false });
 
 export default function AdminDashboard() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -28,69 +23,15 @@ export default function AdminDashboard() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
-  const [stats, setStats] = useState<Stats>({
-    totalProfiles: 0,
-    totalLikes: 0,
-    totalMatches: 0,
-    totalMessages: 0,
-    totalEvents: 0,
-  });
   const [events, setEvents] = useState<Event[]>([]);
-  const [selectedEvent, setSelectedEvent] = useState<string>('all');
+  
+  // Modal states
+  const [showEventForm, setShowEventForm] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<Event | null>(null);
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [analyticsEvent, setAnalyticsEvent] = useState<{ id: string; name: string } | null>(null);
 
-  // Simple function to load stats without dependencies
-  const loadStats = async (eventId: string) => {
-    try {
-      let profiles, likes, messages;
-      
-      if (eventId === 'all') {
-        [profiles, likes, messages] = await Promise.all([
-          EventProfile.filter({}),
-          Like.filter({}),
-          Message.filter({})
-        ]);
-      } else {
-        [profiles, likes, messages] = await Promise.all([
-          EventProfile.filter({ event_id: eventId }),
-          Like.filter({ event_id: eventId }),
-          Message.filter({ event_id: eventId })
-        ]);
-      }
-
-      const mutualLikes = likes.filter((like: Like) => like.is_mutual);
-      const allEvents = await EventAPI.filter({});
-
-      setStats({
-        totalProfiles: profiles.length,
-        totalLikes: likes.length,
-        totalMatches: mutualLikes.length,
-        totalMessages: messages.length,
-        totalEvents: allEvents.length,
-      });
-    } catch (error) {
-      console.error('Error loading stats:', error);
-    }
-  };
-
-  // Simple function to load initial data
-  const loadInitialData = async () => {
-    try {
-      setIsLoading(true);
-      
-      // Load all events
-      const allEvents = await EventAPI.filter({});
-      setEvents(allEvents);
-      
-      // Load stats based on selected event
-      await loadStats(selectedEvent);
-    } catch (error) {
-      console.error('Error loading data:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Check authentication on mount - but don't load data yet
+  // Check authentication on mount
   useEffect(() => {
     const checkAuth = async () => {
       try {
@@ -103,8 +44,7 @@ export default function AdminDashboard() {
           
           if (hoursDiff < 24) {
             setIsAuthenticated(true);
-            // Load data after authentication is confirmed
-            await loadInitialData();
+            await loadEvents();
           } else {
             localStorage.removeItem('adminSession');
           }
@@ -120,25 +60,29 @@ export default function AdminDashboard() {
     checkAuth();
   }, []);
 
-  // Handle event changes
-  useEffect(() => {
-    if (isAuthenticated && events.length > 0) {
-      loadStats(selectedEvent);
+  const loadEvents = async () => {
+    try {
+      setIsLoading(true);
+      const allEvents = await EventAPI.filter({});
+      setEvents(allEvents);
+    } catch (error) {
+      console.error('Error loading events:', error);
+    } finally {
+      setIsLoading(false);
     }
-  }, [selectedEvent, isAuthenticated, events.length]);
+  };
 
   const handleLogin = async () => {
     if (password === 'HOOKEDADMIN25') {
       setIsLoading(true);
       try {
-        // Store admin session
         localStorage.setItem('adminSession', JSON.stringify({
           timestamp: new Date().toISOString(),
           authenticated: true
         }));
         
         setIsAuthenticated(true);
-        await loadInitialData();
+        await loadEvents();
       } catch (error) {
         console.error('Error during login:', error);
         alert('Login failed. Please try again.');
@@ -156,17 +100,120 @@ export default function AdminDashboard() {
     setPassword('');
   };
 
-  const handleEventChange = (eventId: string) => {
-    setSelectedEvent(eventId);
+  const handleCreateEvent = () => {
+    setEditingEvent(null);
+    setShowEventForm(true);
+  };
+
+  const handleEditEvent = (event: Event) => {
+    setEditingEvent(event);
+    setShowEventForm(true);
+  };
+
+  const handleSaveEvent = async (eventData: Partial<Event>) => {
+    try {
+      if (editingEvent) {
+        await EventAPI.update(editingEvent.id, eventData);
+      } else {
+        await EventAPI.create(eventData as Omit<Event, 'id' | 'created_at' | 'updated_at'>);
+      }
+      await loadEvents();
+    } catch (error) {
+      console.error('Error saving event:', error);
+      throw error;
+    }
+  };
+
+  const handleDeleteEvent = async (eventId: string) => {
+    if (confirm('Are you sure you want to delete this event? This action cannot be undone.')) {
+      try {
+        await EventAPI.delete(eventId);
+        await loadEvents();
+      } catch (error) {
+        console.error('Error deleting event:', error);
+        alert('Failed to delete event. Please try again.');
+      }
+    }
+  };
+
+  const handleAnalytics = (eventId: string) => {
+    const event = events.find(e => e.id === eventId);
+    if (event) {
+      setAnalyticsEvent({ id: eventId, name: event.name });
+      setShowAnalytics(true);
+    }
+  };
+
+  const handleDownloadData = async (eventId: string) => {
+    try {
+      const [profiles, likes, messages] = await Promise.all([
+        EventProfile.filter({ event_id: eventId }),
+        Like.filter({ event_id: eventId }),
+        Message.filter({ event_id: eventId })
+      ]);
+
+      // Create CSV data
+      const profilesCsv = convertToCSV(profiles, 'profiles');
+      const likesCsv = convertToCSV(likes, 'likes');
+      const messagesCsv = convertToCSV(messages, 'messages');
+
+      // Download files
+      downloadCSV(profilesCsv, `event-${eventId}-profiles.csv`);
+      downloadCSV(likesCsv, `event-${eventId}-likes.csv`);
+      downloadCSV(messagesCsv, `event-${eventId}-messages.csv`);
+    } catch (error) {
+      console.error('Error downloading data:', error);
+      alert('Failed to download data. Please try again.');
+    }
+  };
+
+  const handleDownloadQR = async (eventId: string) => {
+    // This is handled within the EventCard component
+  };
+
+  const handleDownloadQRSign = async (eventId: string) => {
+    // TODO: Implement QR sign template download
+    alert('QR Sign download feature will be implemented soon!');
+  };
+
+  const convertToCSV = (data: any[], type: string): string => {
+    if (data.length === 0) return '';
+    
+    const headers = Object.keys(data[0]);
+    const csvContent = [
+      headers.join(','),
+      ...data.map(row => 
+        headers.map(header => {
+          const value = row[header];
+          return typeof value === 'string' && value.includes(',') 
+            ? `"${value}"` 
+            : value;
+        }).join(',')
+      )
+    ].join('\n');
+    
+    return csvContent;
+  };
+
+  const downloadCSV = (csvContent: string, filename: string) => {
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   // Show loading while checking authentication
   if (isInitializing) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Initializing...</p>
+      <div className="min-h-screen bg-gradient-to-br from-pink-100 to-purple-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 w-full max-w-md text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Initializing...</p>
         </div>
       </div>
     );
@@ -174,11 +221,11 @@ export default function AdminDashboard() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
+      <div className="min-h-screen bg-gradient-to-br from-pink-100 to-purple-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 w-full max-w-md">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Hooked Admin</h1>
-            <p className="text-gray-600">Enter admin password to continue</p>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Hooked Admin</h1>
+            <p className="text-gray-600 dark:text-gray-400">Enter admin password to continue</p>
           </div>
           
           <div className="space-y-4">
@@ -188,13 +235,13 @@ export default function AdminDashboard() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter password"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
               >
                 {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
@@ -203,7 +250,7 @@ export default function AdminDashboard() {
             <button
               onClick={handleLogin}
               disabled={isLoading}
-              className="w-full bg-purple-600 text-white py-3 px-4 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+              className="w-full bg-pink-600 text-white py-3 px-4 rounded-lg hover:bg-pink-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
             >
               {isLoading ? 'Logging in...' : 'Login'}
             </button>
@@ -214,137 +261,97 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
+      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Hooked Admin Dashboard</h1>
-              <p className="text-sm text-gray-600">Event Management & Analytics</p>
+          <div className="flex justify-between items-center py-6">
+            <div className="flex items-center gap-4">
+              {/* Logo */}
+              <div className="w-12 h-12 bg-gradient-to-r from-pink-500 to-purple-600 rounded-xl flex items-center justify-center">
+                <span className="text-white font-bold text-xl">H</span>
+              </div>
+              
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Event Management</h1>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Create and manage Hooked events</p>
+              </div>
             </div>
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-2 px-4 py-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
-            >
-              <LogOut size={20} />
-              Logout
-            </button>
+            
+            <div className="flex items-center gap-4">
+              <button
+                onClick={handleCreateEvent}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Plus size={20} />
+                Create Event
+              </button>
+              
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-4 py-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+              >
+                <LogOut size={20} />
+                Logout
+              </button>
+            </div>
           </div>
         </div>
       </header>
 
+      {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Event Selector */}
-        <div className="mb-8">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Select Event
-          </label>
-          <select
-            value={selectedEvent}
-            onChange={(e) => handleEventChange(e.target.value)}
-            className="w-full max-w-xs px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-          >
-            <option value="all">All Events</option>
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-600"></div>
+          </div>
+        ) : events.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="w-24 h-24 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+              <FileText size={48} className="text-gray-400" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No events yet</h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">Create your first event to get started</p>
+            <button
+              onClick={handleCreateEvent}
+              className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors mx-auto"
+            >
+              <Plus size={20} />
+              Create Event
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-8">
             {events.map((event) => (
-              <option key={event.id} value={event.id}>
-                {event.name} ({event.event_code})
-              </option>
+              <EventCard
+                key={event.id}
+                event={event}
+                onAnalytics={handleAnalytics}
+                onEdit={handleEditEvent}
+                onDelete={handleDeleteEvent}
+                onDownloadData={handleDownloadData}
+                onDownloadQR={handleDownloadQR}
+                onDownloadQRSign={handleDownloadQRSign}
+              />
             ))}
-          </select>
-        </div>
-
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
-          <div className="bg-white rounded-xl shadow-sm p-6 border">
-            <div className="flex items-center">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <Users className="h-6 w-6 text-blue-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Total Profiles</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.totalProfiles}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-sm p-6 border">
-            <div className="flex items-center">
-              <div className="p-2 bg-pink-100 rounded-lg">
-                <Heart className="h-6 w-6 text-pink-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Total Likes</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.totalLikes}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-sm p-6 border">
-            <div className="flex items-center">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <BarChart3 className="h-6 w-6 text-green-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Total Matches</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.totalMatches}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-sm p-6 border">
-            <div className="flex items-center">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <MessageCircle className="h-6 w-6 text-purple-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Total Messages</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.totalMessages}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-sm p-6 border">
-            <div className="flex items-center">
-              <div className="p-2 bg-orange-100 rounded-lg">
-                <Calendar className="h-6 w-6 text-orange-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Total Events</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.totalEvents}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Quick Actions */}
-        <div className="bg-white rounded-xl shadow-sm p-6 border">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <button className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors">
-              <BarChart3 size={20} />
-              View Analytics
-            </button>
-            <button className="flex items-center justify-center gap-2 px-4 py-3 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors">
-              <Users size={20} />
-              Manage Users
-            </button>
-            <button className="flex items-center justify-center gap-2 px-4 py-3 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors">
-              <Settings size={20} />
-              Event Settings
-            </button>
-          </div>
-        </div>
-
-        {isLoading && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto"></div>
-              <p className="mt-2 text-gray-600">Loading...</p>
-            </div>
           </div>
         )}
       </div>
+
+      {/* Modals */}
+      <EventForm
+        event={editingEvent}
+        isOpen={showEventForm}
+        onClose={() => setShowEventForm(false)}
+        onSave={handleSaveEvent}
+      />
+
+      <AnalyticsModal
+        eventId={analyticsEvent?.id || ''}
+        eventName={analyticsEvent?.name || ''}
+        isOpen={showAnalytics}
+        onClose={() => setShowAnalytics(false)}
+      />
     </div>
   );
 }
