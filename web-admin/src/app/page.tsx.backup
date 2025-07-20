@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { EventAPI, EventProfile, Like, Message, type Event } from '@/lib/firebaseApi';
+import { useState, useEffect, useCallback } from 'react';
+import { Event, EventProfile, Like, Message } from '@/lib/firebaseApi';
 import { 
   Users, 
   Heart, 
@@ -37,7 +37,70 @@ export default function AdminDashboard() {
   const [events, setEvents] = useState<Event[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<string>('all');
 
-  // Simple function to load stats without dependencies
+  useEffect(() => {
+    // Check if already authenticated
+    const adminSession = localStorage.getItem('adminSession');
+    if (adminSession) {
+      const sessionData = JSON.parse(adminSession);
+      const now = new Date();
+      const sessionTime = new Date(sessionData.timestamp);
+      const hoursDiff = (now.getTime() - sessionTime.getTime()) / (1000 * 60 * 60);
+      
+      if (hoursDiff < 24) {
+        setIsAuthenticated(true);
+        loadData();
+      } else {
+        localStorage.removeItem('adminSession');
+      }
+    }
+  }, [loadData]);
+
+  const handleLogin = async () => {
+    if (password === 'HOOKEDADMIN25') {
+      setIsLoading(true);
+      try {
+        // Store admin session
+        localStorage.setItem('adminSession', JSON.stringify({
+          timestamp: new Date().toISOString(),
+          authenticated: true
+        }));
+        
+        setIsAuthenticated(true);
+        await loadData();
+      } catch (error) {
+        console.error('Error during login:', error);
+        alert('Login failed. Please try again.');
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      alert('Invalid password');
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('adminSession');
+    setIsAuthenticated(false);
+    setPassword('');
+  };
+
+  const loadData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      
+      // Load all events
+      const allEvents = await Event.filter({});
+      setEvents(allEvents);
+      
+      // Load stats based on selected event
+      await loadStats(selectedEvent);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedEvent]);
+
   const loadStats = async (eventId: string) => {
     try {
       let profiles, likes, messages;
@@ -57,7 +120,7 @@ export default function AdminDashboard() {
       }
 
       const mutualLikes = likes.filter((like: Like) => like.is_mutual);
-      const allEvents = await EventAPI.filter({});
+      const allEvents = await Event.filter({});
 
       setStats({
         totalProfiles: profiles.length,
@@ -71,80 +134,9 @@ export default function AdminDashboard() {
     }
   };
 
-  // Simple function to load initial data
-  const loadInitialData = async () => {
-    try {
-      setIsLoading(true);
-      
-      // Load all events
-      const allEvents = await EventAPI.filter({});
-      setEvents(allEvents);
-      
-      // Load stats based on selected event
-      await loadStats(selectedEvent);
-    } catch (error) {
-      console.error('Error loading data:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Check authentication on mount
-  useEffect(() => {
-    const adminSession = localStorage.getItem('adminSession');
-    if (adminSession) {
-      const sessionData = JSON.parse(adminSession);
-      const now = new Date();
-      const sessionTime = new Date(sessionData.timestamp);
-      const hoursDiff = (now.getTime() - sessionTime.getTime()) / (1000 * 60 * 60);
-      
-      if (hoursDiff < 24) {
-        setIsAuthenticated(true);
-        loadInitialData();
-      } else {
-        localStorage.removeItem('adminSession');
-      }
-    }
-  }, []);
-
-  // Handle event changes
-  useEffect(() => {
-    if (isAuthenticated && events.length > 0) {
-      loadStats(selectedEvent);
-    }
-  }, [selectedEvent, isAuthenticated, events.length]);
-
-  const handleLogin = async () => {
-    if (password === 'HOOKEDADMIN25') {
-      setIsLoading(true);
-      try {
-        // Store admin session
-        localStorage.setItem('adminSession', JSON.stringify({
-          timestamp: new Date().toISOString(),
-          authenticated: true
-        }));
-        
-        setIsAuthenticated(true);
-        await loadInitialData();
-      } catch (error) {
-        console.error('Error during login:', error);
-        alert('Login failed. Please try again.');
-      } finally {
-        setIsLoading(false);
-      }
-    } else {
-      alert('Invalid password');
-    }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('adminSession');
-    setIsAuthenticated(false);
-    setPassword('');
-  };
-
   const handleEventChange = (eventId: string) => {
     setSelectedEvent(eventId);
+    loadStats(eventId);
   };
 
   if (!isAuthenticated) {

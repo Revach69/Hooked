@@ -67,8 +67,8 @@ export interface Message {
   created_at: string;
 }
 
-// Event API
-export const Event = {
+// Event API - renamed to avoid conflict with browser Event
+export const EventAPI = {
   async create(data: Omit<Event, 'id' | 'created_at' | 'updated_at'>): Promise<Event> {
     const docRef = await addDoc(collection(db, 'events'), {
       ...data,
