@@ -34,11 +34,9 @@ export default function JoinPage() {
       }
 
       // Check for admin code first
-      if (code.toUpperCase() === 'HOOKEDADMIN25') {
-        // Store admin session
-        await AsyncStorage.setItem('isAdmin', 'true');
-        await AsyncStorage.setItem('adminAccessTime', new Date().toISOString());
-        router.replace('/admin');
+      if (code.toUpperCase() === 'ADMIN') {
+        // Redirect to admin login page
+        router.replace('/adminLogin');
         return;
       }
 

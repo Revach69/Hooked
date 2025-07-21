@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { BarChart3, Users, Heart, MessageCircle, Settings, LogOut, AlertTriangle } from 'lucide-react-native';
-import { Event, EventProfile, Like, Message } from '../lib/firebaseApi';
+import { Event, EventProfile, Like, Message, User } from '../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function Admin() {
@@ -25,31 +25,36 @@ export default function Admin() {
     totalMessages: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [adminEmail, setAdminEmail] = useState<string>('');
 
   useEffect(() => {
     initializeSession();
   }, []);
 
   const initializeSession = async () => {
-    // Check if user has admin access
-    const isAdmin = await AsyncStorage.getItem('isAdmin');
-    const adminAccessTime = await AsyncStorage.getItem('adminAccessTime');
+    // Check if user is authenticated with Firebase
+    const currentUser = User.getCurrentUser();
     
-    if (!isAdmin || !adminAccessTime) {
+    if (!currentUser) {
+      // No authenticated user, redirect to home
       router.replace('/home');
       return;
     }
     
     // Check if admin session is still valid (24 hours)
-    const accessTime = new Date(adminAccessTime);
-    const now = new Date();
-    const hoursDiff = (now.getTime() - accessTime.getTime()) / (1000 * 60 * 60);
-    
-    if (hoursDiff > 24) {
-      // Admin session expired, clear and redirect
-      await AsyncStorage.multiRemove(['isAdmin', 'adminAccessTime']);
-      router.replace('/home');
-      return;
+    const adminAccessTime = await AsyncStorage.getItem('adminAccessTime');
+    if (adminAccessTime) {
+      const accessTime = new Date(adminAccessTime);
+      const now = new Date();
+      const hoursDiff = (now.getTime() - accessTime.getTime()) / (1000 * 60 * 60);
+      
+      if (hoursDiff > 24) {
+        // Admin session expired, sign out and redirect
+        await User.signOut();
+        await AsyncStorage.multiRemove(['isAdmin', 'adminAccessTime', 'adminEmail', 'adminUid']);
+        router.replace('/home');
+        return;
+      }
     }
     
     // For admin access, we don't need a specific event
@@ -59,6 +64,9 @@ export default function Admin() {
       event_code: 'ADMIN',
       is_active: true 
     });
+    
+    // Set admin email for display
+    setAdminEmail(currentUser.email || '');
     
     // Load overall stats or allow event selection
     await loadAdminStats();
@@ -121,16 +129,28 @@ export default function Admin() {
           text: "Logout",
           style: "destructive",
           onPress: async () => {
-            await AsyncStorage.multiRemove([
-              'currentEventId',
-              'currentSessionId',
-              'currentEventCode',
-              'currentProfileColor',
-              'currentProfilePhotoUrl',
-              'isAdmin',
-              'adminAccessTime'
-            ]);
-            router.replace('/home');
+            try {
+              // Sign out from Firebase
+              await User.signOut();
+              
+              // Clear all admin-related storage
+              await AsyncStorage.multiRemove([
+                'currentEventId',
+                'currentSessionId',
+                'currentEventCode',
+                'currentProfileColor',
+                'currentProfilePhotoUrl',
+                'isAdmin',
+                'adminAccessTime',
+                'adminEmail',
+                'adminUid'
+              ]);
+              
+              router.replace('/home');
+            } catch (error) {
+              console.error('Error during logout:', error);
+              Alert.alert('Error', 'Failed to logout. Please try again.');
+            }
           }
         }
       ]
@@ -163,6 +183,11 @@ export default function Admin() {
       fontSize: 24,
       fontWeight: 'bold',
       color: isDark ? '#ffffff' : '#1f2937',
+    },
+    adminEmail: {
+      fontSize: 14,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      marginTop: 4,
     },
     settingsButton: {
       width: 40,
@@ -298,7 +323,12 @@ export default function Admin() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Admin Dashboard</Text>
+        <View>
+          <Text style={styles.title}>Admin Dashboard</Text>
+          {adminEmail && (
+            <Text style={styles.adminEmail}>{adminEmail}</Text>
+          )}
+        </View>
         <TouchableOpacity style={styles.settingsButton}>
           <Settings size={20} color="#6b7280" />
         </TouchableOpacity>

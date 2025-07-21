@@ -24,7 +24,7 @@ export default function RootLayout({
         className={`${inter.variable} antialiased`}
       >
         <AuthProvider>
-          {children}
+        {children}
         </AuthProvider>
       </body>
     </html>
