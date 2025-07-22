@@ -353,6 +353,21 @@ export const EventAPI = {
       }
       return null;
     }, 'Get Event');
+  },
+
+  async update(id: string, data: Partial<Event>): Promise<void> {
+    return executeWithOfflineSupport(async () => {
+      await updateDoc(doc(db, 'events', id), {
+        ...data,
+        updated_at: serverTimestamp()
+      });
+    }, 'Update Event');
+  },
+
+  async delete(id: string): Promise<void> {
+    return executeWithOfflineSupport(async () => {
+      await deleteDoc(doc(db, 'events', id));
+    }, 'Delete Event');
   }
 };
 

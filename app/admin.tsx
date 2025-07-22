@@ -8,17 +8,21 @@ import {
   Alert,
   StyleSheet,
   useColorScheme,
+  SafeAreaView,
 } from 'react-native';
 import { router } from 'expo-router';
-import { BarChart3, Users, Heart, MessageCircle, Settings, LogOut, AlertTriangle } from 'lucide-react-native';
+import { BarChart3, Users, Heart, MessageCircle, Plus, LogOut, AlertTriangle, Calendar, MapPin } from 'lucide-react-native';
 import { Event, EventProfile, Like, Message, User } from '../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function Admin() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const [currentEvent, setCurrentEvent] = useState<any>(null);
+  const [events, setEvents] = useState<Event[]>([]);
   const [stats, setStats] = useState({
+    totalEvents: 0,
+    activeEvents: 0,
+    futureEvents: 0,
     totalProfiles: 0,
     totalLikes: 0,
     totalMatches: 0,
@@ -57,40 +61,21 @@ export default function Admin() {
       }
     }
     
-    // For admin access, we don't need a specific event
-    // Admin can view all events or select one
-    setCurrentEvent({ 
-      name: 'Admin Dashboard', 
-      event_code: 'ADMIN',
-      is_active: true 
-    });
-    
     // Set admin email for display
     setAdminEmail(currentUser.email || '');
     
-    // Load overall stats or allow event selection
+    // Load events and stats
+    await loadEvents();
     await loadAdminStats();
     setIsLoading(false);
   };
 
-  const loadStats = async (eventId: string) => {
+  const loadEvents = async () => {
     try {
-      const [profiles, likes, messages] = await Promise.all([
-        EventProfile.filter({ event_id: eventId }),
-        Like.filter({ event_id: eventId }),
-        Message.filter({ event_id: eventId })
-      ]);
-
-      const mutualLikes = likes.filter(like => like.is_mutual);
-
-      setStats({
-        totalProfiles: profiles.length,
-        totalLikes: likes.length,
-        totalMatches: mutualLikes.length,
-        totalMessages: messages.length,
-      });
+      const allEvents = await Event.filter({});
+      setEvents(allEvents);
     } catch (error) {
-      console.error("Error loading stats:", error);
+      console.error("Error loading events:", error);
     }
   };
 
@@ -104,8 +89,23 @@ export default function Admin() {
       ]);
 
       const mutualLikes = allLikes.filter((like: any) => like.is_mutual);
+      const now = new Date();
+      
+      const activeEvents = events.filter(event => {
+        const startDate = new Date(event.starts_at);
+        const endDate = new Date(event.expires_at);
+        return now >= startDate && now <= endDate;
+      });
+
+      const futureEvents = events.filter(event => {
+        const startDate = new Date(event.starts_at);
+        return now < startDate;
+      });
 
       setStats({
+        totalEvents: events.length,
+        activeEvents: activeEvents.length,
+        futureEvents: futureEvents.length,
         totalProfiles: allProfiles.length,
         totalLikes: allLikes.length,
         totalMatches: mutualLikes.length,
@@ -114,6 +114,19 @@ export default function Admin() {
     } catch (error) {
       console.error("Error loading admin stats:", error);
     }
+  };
+
+  const handleCreateEvent = () => {
+    // Navigate to event creation page
+    router.push('/admin/create-event');
+  };
+
+  const handleEventPress = (event: Event) => {
+    // Navigate to specific event details page
+    router.push({
+      pathname: '/admin/event-details',
+      params: { eventId: event.id }
+    });
   };
 
   const handleLogout = async () => {
@@ -157,6 +170,25 @@ export default function Admin() {
     );
   };
 
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const getEventStatus = (event: Event) => {
+    const now = new Date();
+    const startDate = new Date(event.starts_at);
+    const endDate = new Date(event.expires_at);
+    
+    if (now < startDate) return { text: 'Upcoming', color: '#3b82f6' };
+    if (now >= startDate && now <= endDate) return { text: 'Active', color: '#10b981' };
+    return { text: 'Ended', color: '#6b7280' };
+  };
+
   const styles = StyleSheet.create({
     container: {
       flex: 1,
@@ -177,7 +209,7 @@ export default function Admin() {
       justifyContent: 'space-between',
       alignItems: 'center',
       padding: 16,
-      paddingTop: 32,
+      paddingTop: 60, // Extra padding for iPhone camera holder
     },
     title: {
       fontSize: 24,
@@ -189,7 +221,7 @@ export default function Admin() {
       color: isDark ? '#9ca3af' : '#6b7280',
       marginTop: 4,
     },
-    settingsButton: {
+    createButton: {
       width: 40,
       height: 40,
       borderRadius: 20,
@@ -203,7 +235,7 @@ export default function Admin() {
       flex: 1,
       paddingHorizontal: 16,
     },
-    eventSection: {
+    statsSection: {
       marginBottom: 24,
     },
     sectionTitle: {
@@ -211,34 +243,6 @@ export default function Admin() {
       fontWeight: '600',
       color: isDark ? '#ffffff' : '#1f2937',
       marginBottom: 12,
-    },
-    eventCard: {
-      backgroundColor: isDark ? '#2d2d2d' : 'white',
-      borderRadius: 12,
-      padding: 16,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: isDark ? 0.3 : 0.1,
-      shadowRadius: 4,
-      elevation: 3,
-    },
-    eventName: {
-      fontSize: 18,
-      fontWeight: 'bold',
-      color: isDark ? '#ffffff' : '#1f2937',
-      marginBottom: 4,
-    },
-    eventCode: {
-      fontSize: 14,
-      color: isDark ? '#9ca3af' : '#6b7280',
-      marginBottom: 4,
-    },
-    eventStatus: {
-      fontSize: 14,
-      color: isDark ? '#9ca3af' : '#6b7280',
-    },
-    statsSection: {
-      marginBottom: 24,
     },
     statsGrid: {
       flexDirection: 'row',
@@ -278,6 +282,50 @@ export default function Admin() {
       color: isDark ? '#9ca3af' : '#6b7280',
       textAlign: 'center',
     },
+    eventsSection: {
+      marginBottom: 24,
+    },
+    eventCard: {
+      backgroundColor: isDark ? '#2d2d2d' : 'white',
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 12,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: isDark ? 0.3 : 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    eventHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: 8,
+    },
+    eventName: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: isDark ? '#ffffff' : '#1f2937',
+      flex: 1,
+      marginRight: 8,
+    },
+    eventStatus: {
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 12,
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    eventDetails: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 4,
+    },
+    eventDetailText: {
+      fontSize: 14,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      marginLeft: 4,
+    },
     actionsSection: {
       marginBottom: 24,
     },
@@ -308,19 +356,31 @@ export default function Admin() {
     logoutText: {
       color: isDark ? '#ffffff' : '#dc2626',
     },
+    emptyState: {
+      alignItems: 'center',
+      paddingVertical: 40,
+    },
+    emptyStateText: {
+      fontSize: 16,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      textAlign: 'center',
+      marginTop: 12,
+    },
   });
 
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#8b5cf6" />
-        <Text style={styles.loadingText}>Loading admin dashboard...</Text>
-      </View>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#8b5cf6" />
+          <Text style={styles.loadingText}>Loading admin dashboard...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <View>
@@ -329,80 +389,105 @@ export default function Admin() {
             <Text style={styles.adminEmail}>{adminEmail}</Text>
           )}
         </View>
-        <TouchableOpacity style={styles.settingsButton}>
-          <Settings size={20} color="#6b7280" />
+        <TouchableOpacity style={styles.createButton} onPress={handleCreateEvent}>
+          <Plus size={20} color="#6b7280" />
         </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content}>
-        {/* Event Info */}
-        <View style={styles.eventSection}>
-          <Text style={styles.sectionTitle}>Event Information</Text>
-          <View style={styles.eventCard}>
-            <Text style={styles.eventName}>{currentEvent?.name}</Text>
-            <Text style={styles.eventCode}>Code: {currentEvent?.event_code}</Text>
-            <Text style={styles.eventStatus}>
-              Status: {currentEvent?.is_active ? 'Active' : 'Inactive'}
-            </Text>
-          </View>
-        </View>
-
-        {/* Stats Grid */}
+        {/* General Analytics */}
         <View style={styles.statsSection}>
-          <Text style={styles.sectionTitle}>Event Statistics</Text>
+          <Text style={styles.sectionTitle}>General Analytics</Text>
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
               <View style={styles.statIcon}>
-                <Users size={24} color="#3b82f6" />
+                <Calendar size={24} color="#3b82f6" />
               </View>
-              <Text style={styles.statNumber}>{stats.totalProfiles}</Text>
-              <Text style={styles.statLabel}>Total Profiles</Text>
-            </View>
-
-            <View style={styles.statCard}>
-              <View style={styles.statIcon}>
-                <Heart size={24} color="#ec4899" />
-              </View>
-              <Text style={styles.statNumber}>{stats.totalLikes}</Text>
-              <Text style={styles.statLabel}>Total Likes</Text>
+              <Text style={styles.statNumber}>{stats.totalEvents}</Text>
+              <Text style={styles.statLabel}>Total Events</Text>
             </View>
 
             <View style={styles.statCard}>
               <View style={styles.statIcon}>
                 <BarChart3 size={24} color="#10b981" />
               </View>
-              <Text style={styles.statNumber}>{stats.totalMatches}</Text>
-              <Text style={styles.statLabel}>Total Matches</Text>
+              <Text style={styles.statNumber}>{stats.activeEvents}</Text>
+              <Text style={styles.statLabel}>Active Events</Text>
             </View>
 
             <View style={styles.statCard}>
               <View style={styles.statIcon}>
-                <MessageCircle size={24} color="#8b5cf6" />
+                <Calendar size={24} color="#8b5cf6" />
               </View>
-              <Text style={styles.statNumber}>{stats.totalMessages}</Text>
-              <Text style={styles.statLabel}>Total Messages</Text>
+              <Text style={styles.statNumber}>{stats.futureEvents}</Text>
+              <Text style={styles.statLabel}>Future Events</Text>
+            </View>
+
+            <View style={styles.statCard}>
+              <View style={styles.statIcon}>
+                <Users size={24} color="#ec4899" />
+              </View>
+              <Text style={styles.statNumber}>{stats.totalProfiles}</Text>
+              <Text style={styles.statLabel}>Total Profiles</Text>
             </View>
           </View>
+        </View>
+
+        {/* Events List */}
+        <View style={styles.eventsSection}>
+          <Text style={styles.sectionTitle}>Events</Text>
+          {events.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>No events created yet</Text>
+              <TouchableOpacity style={styles.actionButton} onPress={handleCreateEvent}>
+                <Plus size={20} color="#6b7280" />
+                <Text style={styles.actionText}>Create Your First Event</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            events.map((event) => {
+              const status = getEventStatus(event);
+              return (
+                <TouchableOpacity
+                  key={event.id}
+                  style={styles.eventCard}
+                  onPress={() => handleEventPress(event)}
+                >
+                  <View style={styles.eventHeader}>
+                    <Text style={styles.eventName}>{event.name}</Text>
+                    <View style={[styles.eventStatus, { backgroundColor: status.color + '20' }]}>
+                      <Text style={[styles.eventDetailText, { color: status.color }]}>
+                        {status.text}
+                      </Text>
+                    </View>
+                  </View>
+                  
+                  <View style={styles.eventDetails}>
+                    <Text style={styles.eventDetailText}>Code: #{event.event_code}</Text>
+                  </View>
+                  
+                  {event.location && (
+                    <View style={styles.eventDetails}>
+                      <MapPin size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
+                      <Text style={styles.eventDetailText}>{event.location}</Text>
+                    </View>
+                  )}
+                  
+                  <View style={styles.eventDetails}>
+                    <Calendar size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
+                    <Text style={styles.eventDetailText}>
+                      {formatDate(event.starts_at)}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })
+          )}
         </View>
 
         {/* Actions */}
         <View style={styles.actionsSection}>
           <Text style={styles.sectionTitle}>Admin Actions</Text>
-          
-          <TouchableOpacity style={styles.actionButton}>
-            <BarChart3 size={20} color="#6b7280" />
-            <Text style={styles.actionText}>View Analytics</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.actionButton}>
-            <Users size={20} color="#6b7280" />
-            <Text style={styles.actionText}>Manage Users</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.actionButton}>
-            <Settings size={20} color="#6b7280" />
-            <Text style={styles.actionText}>Event Settings</Text>
-          </TouchableOpacity>
           
           <TouchableOpacity 
             style={styles.actionButton}
@@ -421,6 +506,6 @@ export default function Admin() {
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 } 
