@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import {
   Platform,
 } from 'react-native';
 import { router } from 'expo-router';
-import { Eye, EyeOff, Lock, Mail } from 'lucide-react-native';
+import { Eye, EyeOff, Lock, Mail, Check } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { User } from '../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -23,8 +23,64 @@ export default function AdminLogin() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rememberMe, setRememberMe] = useState(false);
+  const [isCheckingSavedCredentials, setIsCheckingSavedCredentials] = useState(true);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+
+  // Check for saved credentials on component mount
+  useEffect(() => {
+    checkSavedCredentials();
+  }, []);
+
+  const checkSavedCredentials = async () => {
+    try {
+      const savedEmail = await AsyncStorage.getItem('adminSavedEmail');
+      const savedPassword = await AsyncStorage.getItem('adminSavedPassword');
+      const rememberMeEnabled = await AsyncStorage.getItem('adminRememberMe');
+      
+      if (savedEmail && savedPassword && rememberMeEnabled === 'true') {
+        setEmail(savedEmail);
+        setPassword(savedPassword);
+        setRememberMe(true);
+        
+        // Auto-login with saved credentials
+        await handleAutoLogin(savedEmail, savedPassword);
+      }
+    } catch (error) {
+      console.error('Error checking saved credentials:', error);
+    } finally {
+      setIsCheckingSavedCredentials(false);
+    }
+  };
+
+  const handleAutoLogin = async (savedEmail: string, savedPassword: string) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const user = await User.signIn(savedEmail, savedPassword);
+      
+      if (user) {
+        // Store admin session with Firebase auth
+        await AsyncStorage.setItem('isAdmin', 'true');
+        await AsyncStorage.setItem('adminAccessTime', new Date().toISOString());
+        await AsyncStorage.setItem('adminEmail', user.email || '');
+        await AsyncStorage.setItem('adminUid', user.uid);
+        
+        // Navigate to admin dashboard
+        router.replace('/admin');
+      }
+    } catch (error: any) {
+      console.error('Auto-login error:', error);
+      // Clear saved credentials if auto-login fails
+      await AsyncStorage.multiRemove(['adminSavedEmail', 'adminSavedPassword', 'adminRememberMe']);
+      setRememberMe(false);
+      setPassword('');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -44,6 +100,16 @@ export default function AdminLogin() {
         await AsyncStorage.setItem('adminAccessTime', new Date().toISOString());
         await AsyncStorage.setItem('adminEmail', user.email || '');
         await AsyncStorage.setItem('adminUid', user.uid);
+        
+        // Save credentials if "Remember Me" is checked
+        if (rememberMe) {
+          await AsyncStorage.setItem('adminSavedEmail', email.trim());
+          await AsyncStorage.setItem('adminSavedPassword', password);
+          await AsyncStorage.setItem('adminRememberMe', 'true');
+        } else {
+          // Clear saved credentials if "Remember Me" is unchecked
+          await AsyncStorage.multiRemove(['adminSavedEmail', 'adminSavedPassword', 'adminRememberMe']);
+        }
         
         // Navigate to admin dashboard
         router.replace('/admin');
@@ -188,7 +254,54 @@ export default function AdminLogin() {
       fontWeight: '600',
       marginLeft: 8,
     },
+    rememberMeContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 20,
+      paddingVertical: 8,
+    },
+    checkbox: {
+      width: 20,
+      height: 20,
+      borderRadius: 4,
+      borderWidth: 2,
+      borderColor: isDark ? '#6b7280' : '#9ca3af',
+      marginRight: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    checkboxChecked: {
+      backgroundColor: '#8b5cf6',
+      borderColor: '#8b5cf6',
+    },
+    rememberMeText: {
+      fontSize: 16,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      fontWeight: '500',
+    },
   });
+
+  // Show loading screen while checking saved credentials
+  if (isCheckingSavedCredentials) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.content}>
+          <View style={styles.header}>
+            <View style={styles.logo}>
+              <Lock size={32} color="#8b5cf6" />
+            </View>
+            <Text style={styles.title}>Admin Access</Text>
+            <Text style={styles.subtitle}>
+              Checking saved credentials...
+            </Text>
+          </View>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#8b5cf6" />
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -261,6 +374,21 @@ export default function AdminLogin() {
 
             {/* Error Message */}
             {error && <Text style={styles.errorText}>{error}</Text>}
+
+            {/* Remember Me Checkbox */}
+            <TouchableOpacity
+              style={styles.rememberMeContainer}
+              onPress={() => setRememberMe(!rememberMe)}
+              disabled={isLoading}
+            >
+              <View style={[
+                styles.checkbox,
+                rememberMe && styles.checkboxChecked
+              ]}>
+                {rememberMe && <Check size={16} color="white" />}
+              </View>
+              <Text style={styles.rememberMeText}>Remember Me</Text>
+            </TouchableOpacity>
 
             {/* Login Button */}
             <TouchableOpacity

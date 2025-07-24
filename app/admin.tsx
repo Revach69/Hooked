@@ -156,7 +156,10 @@ export default function Admin() {
                 'isAdmin',
                 'adminAccessTime',
                 'adminEmail',
-                'adminUid'
+                'adminUid',
+                'adminSavedEmail',
+                'adminSavedPassword',
+                'adminRememberMe'
               ]);
               
               router.replace('/home');
