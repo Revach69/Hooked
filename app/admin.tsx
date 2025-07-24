@@ -11,7 +11,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { router } from 'expo-router';
-import { BarChart3, Users, Heart, MessageCircle, Plus, LogOut, AlertTriangle, Calendar, MapPin } from 'lucide-react-native';
+import { BarChart3, Users, Heart, MessageCircle, Plus, LogOut, AlertTriangle, Calendar, MapPin, Home } from 'lucide-react-native';
 import { Event, EventProfile, Like, Message, User } from '../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -127,6 +127,12 @@ export default function Admin() {
       pathname: '/admin/event-details',
       params: { eventId: event.id }
     });
+  };
+
+  const handleBackToHome = () => {
+    // Navigate back to home without logging out
+    // This preserves the admin session and auto-login functionality
+    router.replace('/home');
   };
 
   const handleLogout = async () => {
@@ -498,6 +504,14 @@ export default function Admin() {
           >
             <AlertTriangle size={20} color="#ef4444" />
             <Text style={styles.actionText}>Error Insights</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={handleBackToHome}
+          >
+            <Home size={20} color="#6b7280" />
+            <Text style={styles.actionText}>Back to Home</Text>
           </TouchableOpacity>
           
           <TouchableOpacity 
