@@ -27,6 +27,21 @@ interface EventCardProps {
   onDownloadQRSign: (eventId: string) => void;
 }
 
+// Function to determine event status based on current time and event dates
+const getEventStatus = (event: Event): { status: string; color: string } => {
+  const now = new Date();
+  const startDate = new Date(event.starts_at);
+  const expiryDate = new Date(event.expires_at);
+
+  if (now < startDate) {
+    return { status: 'Upcoming', color: 'bg-yellow-500' };
+  } else if (now >= startDate && now <= expiryDate) {
+    return { status: 'Active', color: 'bg-green-500' };
+  } else {
+    return { status: 'Expired', color: 'bg-red-500' };
+  }
+};
+
 export default function EventCard({
   event,
   onAnalytics,
@@ -40,6 +55,7 @@ export default function EventCard({
   const [isLoadingQR, setIsLoadingQR] = useState(false);
 
   const joinLink = `https://www.hooked-app.com/join-instant?code=${event.event_code}`;
+  const eventStatus = getEventStatus(event);
 
   const generateQRCode = async () => {
     if (qrCodeUrl) return qrCodeUrl;
@@ -116,8 +132,8 @@ export default function EventCard({
               </div>
             </div>
           </div>
-          <div className="bg-green-500 text-white px-3 py-1 rounded-full text-sm font-medium">
-            Active
+          <div className={`${eventStatus.color} text-white px-3 py-1 rounded-full text-sm font-medium`}>
+            {eventStatus.status}
           </div>
         </div>
       </div>
