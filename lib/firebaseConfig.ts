@@ -28,7 +28,7 @@ export const db = getFirestore(app);
 // Configure Storage
 export const storage = getStorage(app);
 
-// Enhanced network management with exponential backoff
+// Enhanced network management with exponential backoff and better error handling
 const enableNetworkWithRetry = async (maxRetries = 3, baseDelay = 1000) => {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -36,6 +36,16 @@ const enableNetworkWithRetry = async (maxRetries = 3, baseDelay = 1000) => {
       console.log(`✅ Firestore network enabled successfully on attempt ${attempt}`);
       return;
     } catch (error: any) {
+      // Check if it's an internal assertion error
+      if (error.message && error.message.includes('INTERNAL ASSERTION FAILED')) {
+        console.warn(`⚠️ Internal assertion error detected (attempt ${attempt}/${maxRetries}), retrying...`);
+        // For internal assertion errors, use a longer delay
+        const delay = baseDelay * Math.pow(3, attempt - 1) + Math.random() * 2000;
+        console.log(`⏳ Retrying network enable in ${Math.round(delay)}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      
       console.error(`❌ Error enabling Firestore network (attempt ${attempt}/${maxRetries}):`, {
         operation: 'enableNetwork',
         platform: Platform.OS,
@@ -64,6 +74,14 @@ const disableNetworkWithRetry = async (maxRetries = 2, baseDelay = 500) => {
       console.log(`✅ Firestore network disabled successfully on attempt ${attempt}`);
       return;
     } catch (error: any) {
+      // Check if it's an internal assertion error
+      if (error.message && error.message.includes('INTERNAL ASSERTION FAILED')) {
+        console.warn(`⚠️ Internal assertion error detected during disable (attempt ${attempt}/${maxRetries}), retrying...`);
+        const delay = baseDelay * Math.pow(2, attempt - 1) + Math.random() * 1000;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      
       console.error(`❌ Error disabling Firestore network (attempt ${attempt}/${maxRetries}):`, {
         operation: 'disableNetwork',
         platform: Platform.OS,
@@ -83,13 +101,15 @@ const disableNetworkWithRetry = async (maxRetries = 2, baseDelay = 500) => {
   }
 };
 
-// Circuit breaker for network operations
+// Circuit breaker for network operations with better internal assertion error handling
 class NetworkCircuitBreaker {
   private failureCount = 0;
   private lastFailureTime = 0;
-  private readonly failureThreshold = 5;
-  private readonly resetTimeout = 30000; // 30 seconds
+  private readonly failureThreshold = 3; // Reduced from 5 to 3
+  private readonly resetTimeout = 60000; // Increased from 30 seconds to 60 seconds
   private isOpen = false;
+  private internalAssertionErrorCount = 0;
+  private readonly maxInternalAssertionErrors = 2;
 
   async execute<T>(operation: () => Promise<T>): Promise<T> {
     if (this.isOpen) {
@@ -97,6 +117,7 @@ class NetworkCircuitBreaker {
         console.log('🔄 Circuit breaker resetting...');
         this.isOpen = false;
         this.failureCount = 0;
+        this.internalAssertionErrorCount = 0;
       } else {
         throw new Error('Circuit breaker is open - too many recent failures');
       }
@@ -105,10 +126,29 @@ class NetworkCircuitBreaker {
     try {
       const result = await operation();
       this.failureCount = 0;
+      this.internalAssertionErrorCount = 0;
       return result;
-    } catch (error) {
+    } catch (error: any) {
       this.failureCount++;
       this.lastFailureTime = Date.now();
+      
+      // Special handling for internal assertion errors
+      if (error.message && error.message.includes('INTERNAL ASSERTION FAILED')) {
+        this.internalAssertionErrorCount++;
+        console.warn(`⚠️ Internal assertion error detected (${this.internalAssertionErrorCount}/${this.maxInternalAssertionErrors})`);
+        
+        if (this.internalAssertionErrorCount >= this.maxInternalAssertionErrors) {
+          this.isOpen = true;
+          console.error('🚨 Circuit breaker opened due to repeated internal assertion errors');
+          throw new Error('Circuit breaker opened due to repeated internal assertion errors - please restart the app');
+        }
+        
+        // For internal assertion errors, use a longer delay before retry
+        const delay = 5000 + Math.random() * 5000; // 5-10 seconds
+        console.log(`⏳ Waiting ${Math.round(delay)}ms before retry due to internal assertion error...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        throw error;
+      }
       
       if (this.failureCount >= this.failureThreshold) {
         this.isOpen = true;
@@ -122,20 +162,27 @@ class NetworkCircuitBreaker {
 
 const networkCircuitBreaker = new NetworkCircuitBreaker();
 
-// iOS Simulator specific connection handling with improved timing
+// iOS Simulator specific connection handling with improved timing and error prevention
 if (Platform.OS === 'ios' && __DEV__) {
-  // Increased delay for iOS simulator to prevent race conditions
+  // Increased delay for iOS simulator to prevent race conditions and internal assertion errors
   setTimeout(async () => {
     try {
       await networkCircuitBreaker.execute(() => enableNetworkWithRetry());
-    } catch (error) {
+    } catch (error: any) {
+      if (error.message && error.message.includes('INTERNAL ASSERTION FAILED')) {
+        console.error('❌ Internal assertion error during iOS simulator network enable - this may require app restart');
+        // Don't retry immediately for internal assertion errors
+        return;
+      }
       console.error('❌ Failed to enable Firestore network on iOS simulator:', error);
     }
-  }, 1500); // Increased from 1000ms to 1500ms
+  }, 2000); // Increased from 1500ms to 2000ms for better stability
 }
 
-// Enhanced network connectivity monitoring
+// Enhanced network connectivity monitoring with better error handling
 let isNetworkListenerActive = false;
+let lastNetworkOperation = 0;
+const MIN_NETWORK_OPERATION_INTERVAL = 3000; // Minimum 3 seconds between network operations
 
 const setupNetworkListener = () => {
   if (isNetworkListenerActive) return;
@@ -147,14 +194,25 @@ const setupNetworkListener = () => {
       timestamp: new Date().toISOString()
     });
 
+    const now = Date.now();
+    if (now - lastNetworkOperation < MIN_NETWORK_OPERATION_INTERVAL) {
+      console.log('⏳ Skipping network operation - too soon since last operation');
+      return;
+    }
+
     if (state.isConnected) {
       // Add delay for iOS simulator with better timing
-      const delay = Platform.OS === 'ios' && __DEV__ ? 800 : 200;
+      const delay = Platform.OS === 'ios' && __DEV__ ? 1200 : 300; // Increased delays
       
       setTimeout(async () => {
         try {
+          lastNetworkOperation = Date.now();
           await networkCircuitBreaker.execute(() => enableNetworkWithRetry());
-        } catch (error) {
+        } catch (error: any) {
+          if (error.message && error.message.includes('INTERNAL ASSERTION FAILED')) {
+            console.error('❌ Internal assertion error during network enable - skipping retry');
+            return;
+          }
           console.error('❌ Failed to enable Firestore network after connection restored:', error);
         }
       }, delay);
@@ -162,11 +220,16 @@ const setupNetworkListener = () => {
       // Disable Firestore network when connection is lost
       setTimeout(async () => {
         try {
+          lastNetworkOperation = Date.now();
           await networkCircuitBreaker.execute(() => disableNetworkWithRetry());
-        } catch (error) {
+        } catch (error: any) {
+          if (error.message && error.message.includes('INTERNAL ASSERTION FAILED')) {
+            console.error('❌ Internal assertion error during network disable - skipping retry');
+            return;
+          }
           console.error('❌ Failed to disable Firestore network after connection lost:', error);
         }
-      }, 100);
+      }, 200); // Increased from 100ms
     }
   });
   

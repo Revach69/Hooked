@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
 export interface ErrorLog {
   id: string;
@@ -20,6 +21,16 @@ export interface ErrorStats {
   errorsByCode: Record<string, number>;
   errorsByHour: Record<string, number>;
   recentErrors: ErrorLog[];
+}
+
+export interface FirebaseErrorContext {
+  operation: string;
+  retryCount?: number;
+  networkStatus?: string;
+  listenerType?: string;
+  timestamp: string;
+  platform: string;
+  isDev: boolean;
 }
 
 class ErrorMonitor {
@@ -153,29 +164,179 @@ class ErrorMonitor {
 
 export const errorMonitor = new ErrorMonitor();
 
-// Helper function to log errors with context
-export const logFirebaseError = async (
-  error: any, 
-  operation: string, 
-  context?: {
-    userId?: string;
-    eventId?: string;
-    retryCount?: number;
-    networkStatus?: string;
+// Enhanced error monitoring with specific handling for internal assertion errors
+export async function logFirebaseError(error: any, operation: string, context: Partial<FirebaseErrorContext> = {}) {
+  const errorContext: FirebaseErrorContext = {
+    operation,
+    timestamp: new Date().toISOString(),
+    platform: Platform.OS,
+    isDev: __DEV__,
+    ...context
+  };
+
+  // Special handling for internal assertion errors
+  if (error.message && error.message.includes('INTERNAL ASSERTION FAILED')) {
+    console.error('🚨 CRITICAL: Firebase Internal Assertion Error Detected:', {
+      error: error.message,
+      context: errorContext,
+      recommendation: 'This may require app restart or Firebase reinitialization'
+    });
+
+    // Log to persistent storage for debugging
+    try {
+      const errorLog = {
+        type: 'INTERNAL_ASSERTION_ERROR',
+        error: error.message,
+        context: errorContext,
+        timestamp: new Date().toISOString()
+      };
+      
+      // You could send this to a logging service or store locally
+      console.log('📝 Internal assertion error logged:', errorLog);
+    } catch (logError) {
+      console.error('Failed to log internal assertion error:', logError);
+    }
+
+    return;
   }
-): Promise<void> => {
-  await errorMonitor.logError(error, operation, context);
-};
 
-// Helper function to get error insights
-export const getErrorInsights = async (): Promise<{
-  stats: ErrorStats;
-  patterns: Awaited<ReturnType<typeof errorMonitor.getErrorPatterns>>;
-}> => {
-  const [stats, patterns] = await Promise.all([
-    errorMonitor.getStats(),
-    errorMonitor.getErrorPatterns()
-  ]);
+  // Regular error logging
+  console.error('❌ Firebase Error:', {
+    error: error.message,
+    code: error.code,
+    context: errorContext
+  });
+}
 
-  return { stats, patterns };
-}; 
+// Listener management utility to prevent conflicts
+class ListenerManager {
+  private activeListeners = new Map<string, () => void>();
+  private listenerCounts = new Map<string, number>();
+
+  registerListener(id: string, unsubscribe: () => void) {
+    // Clean up existing listener if it exists
+    if (this.activeListeners.has(id)) {
+      try {
+        this.activeListeners.get(id)!();
+      } catch (error) {
+        console.warn(`Error cleaning up existing listener ${id}:`, error);
+      }
+    }
+
+    this.activeListeners.set(id, unsubscribe);
+    this.listenerCounts.set(id, (this.listenerCounts.get(id) || 0) + 1);
+    
+    console.log(`📡 Listener registered: ${id} (total: ${this.listenerCounts.get(id)})`);
+  }
+
+  unregisterListener(id: string) {
+    if (this.activeListeners.has(id)) {
+      try {
+        this.activeListeners.get(id)!();
+        this.activeListeners.delete(id);
+        const count = (this.listenerCounts.get(id) || 1) - 1;
+        this.listenerCounts.set(id, Math.max(0, count));
+        
+        console.log(`📡 Listener unregistered: ${id} (remaining: ${count})`);
+      } catch (error) {
+        console.warn(`Error unregistering listener ${id}:`, error);
+      }
+    }
+  }
+
+  cleanupAll() {
+    console.log(`🧹 Cleaning up ${this.activeListeners.size} active listeners...`);
+    
+    for (const [id, unsubscribe] of this.activeListeners) {
+      try {
+        unsubscribe();
+        console.log(`📡 Cleaned up listener: ${id}`);
+      } catch (error) {
+        console.warn(`Error cleaning up listener ${id}:`, error);
+      }
+    }
+    
+    this.activeListeners.clear();
+    this.listenerCounts.clear();
+  }
+
+  getActiveListenerCount() {
+    return this.activeListeners.size;
+  }
+
+  getListenerInfo() {
+    return {
+      activeCount: this.activeListeners.size,
+      listeners: Array.from(this.activeListeners.keys()),
+      counts: Object.fromEntries(this.listenerCounts)
+    };
+  }
+}
+
+// Global listener manager instance
+export const listenerManager = new ListenerManager();
+
+// Utility function to safely create listeners with error handling
+export function createSafeListener<T>(
+  id: string,
+  query: any,
+  onNext: (data: T) => void,
+  onError?: (error: any) => void
+) {
+  try {
+    // Clean up existing listener first
+    listenerManager.unregisterListener(id);
+
+    const unsubscribe = query.onSnapshot(
+      (snapshot: any) => {
+        try {
+          onNext(snapshot);
+        } catch (error) {
+          console.error(`Error in listener callback for ${id}:`, error);
+          logFirebaseError(error, `listener_callback_${id}`);
+        }
+      },
+      (error: any) => {
+        console.error(`Listener error for ${id}:`, error);
+        logFirebaseError(error, `listener_error_${id}`, { listenerType: id });
+        
+        if (onError) {
+          onError(error);
+        }
+      }
+    );
+
+    listenerManager.registerListener(id, unsubscribe);
+    return unsubscribe;
+  } catch (error) {
+    console.error(`Error creating listener ${id}:`, error);
+    logFirebaseError(error, `create_listener_${id}`, { listenerType: id });
+    throw error;
+  }
+}
+
+// Utility to check if we should retry operations
+export function shouldRetryOperation(error: any, retryCount: number): boolean {
+  const maxRetries = 3;
+  
+  if (retryCount >= maxRetries) {
+    return false;
+  }
+
+  // Don't retry internal assertion errors immediately
+  if (error.message && error.message.includes('INTERNAL ASSERTION FAILED')) {
+    return false;
+  }
+
+  // Don't retry permission errors
+  if (error.code === 'permission-denied') {
+    return false;
+  }
+
+  return true;
+}
+
+// Utility to get retry delay with exponential backoff
+export function getRetryDelay(retryCount: number, baseDelay: number = 1000): number {
+  return baseDelay * Math.pow(2, retryCount) + Math.random() * 1000;
+} 

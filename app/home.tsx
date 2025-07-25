@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   useColorScheme,
   Image,
+  Linking,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Heart, QrCode, Hash, Shield, Clock, Users, X, Camera } from 'lucide-react-native';
@@ -114,6 +115,7 @@ export default function Home() {
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
+        allowsMultipleSelection: false,
       });
 
       if (!result.canceled && result.assets && result.assets[0]) {
@@ -200,7 +202,8 @@ export default function Home() {
       fontWeight: 'bold',
       color: 'white',
       textAlign: 'center',
-      marginBottom: 16,
+      marginBottom: 40,
+      marginTop: 20,
     },
     bottomSection: {
       alignItems: 'center',
@@ -251,7 +254,7 @@ export default function Home() {
       backgroundColor: 'rgba(0,0,0,0.7)',
     },
     modalContent: {
-      backgroundColor: '#2d2d2d',
+      backgroundColor: isDark ? '#2d2d2d' : '#ffffff',
       borderRadius: 20,
       padding: 24,
       width: '90%',
@@ -273,7 +276,7 @@ export default function Home() {
     modalTitle: {
       fontSize: 24,
       fontWeight: 'bold',
-      color: 'white',
+      color: isDark ? 'white' : '#1f2937',
     },
     modalCloseButton: {
       padding: 5,
@@ -358,14 +361,14 @@ export default function Home() {
     manualCodeInput: {
       width: '100%',
       height: 50,
-      borderColor: '#404040',
+      borderColor: isDark ? '#404040' : '#d1d5db',
       borderWidth: 2,
       borderRadius: 12,
       paddingHorizontal: 16,
       fontSize: 16,
-      color: 'white',
+      color: isDark ? 'white' : '#1f2937',
       marginBottom: 20,
-      backgroundColor: '#1a1a1a',
+      backgroundColor: isDark ? '#1a1a1a' : '#f9fafb',
     },
     manualSubmitButton: {
       backgroundColor: '#ec4899',
@@ -462,12 +465,12 @@ export default function Home() {
         <View style={styles.legalDisclaimer}>
           <Text style={styles.legalText}>
             By creating a temporary profile, you agree to our{' '}
-            <Text style={styles.legalLink} onPress={() => console.log('Terms clicked')}>
+            <Text style={styles.legalLink} onPress={() => Linking.openURL('https://www.hooked-app.com/terms')}>
               Terms
             </Text>
             .{'\n'}
             See how we use your data in our{' '}
-            <Text style={styles.legalLink} onPress={() => console.log('Privacy Policy clicked')}>
+            <Text style={styles.legalLink} onPress={() => Linking.openURL('https://www.hooked-app.com/privacy')}>
               Privacy Policy
             </Text>
             .
@@ -519,7 +522,7 @@ export default function Home() {
               <TextInput
                 style={styles.manualCodeInput}
                 placeholder="Enter event code"
-                placeholderTextColor="#9ca3af"
+                placeholderTextColor={isDark ? "#9ca3af" : "#6b7280"}
                 value={manualCode}
                 onChangeText={setManualCode}
                 autoCapitalize="none"

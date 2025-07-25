@@ -251,7 +251,6 @@ export interface EventProfile {
   event_id: string;
   session_id: string;
   first_name: string;
-  email: string;
   age: number;
   gender_identity: string;
   interested_in?: string; // Gender preference: 'men', 'women', 'everyone'

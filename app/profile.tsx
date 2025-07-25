@@ -104,18 +104,48 @@ export default function Profile() {
         return;
       }
 
-      const result = await ImagePicker.launchImageLibraryAsync({
+      // Try with standard settings first
+      let result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
+        allowsMultipleSelection: false,
+        base64: false,
+        exif: false,
       });
+
+      // If the first attempt fails or is canceled, try with different settings
+      if (result.canceled) {
+        console.log('First image picker attempt was canceled, trying alternative approach...');
+        
+        // Try without editing first, then we can handle cropping differently
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['images'],
+          allowsEditing: false,
+          quality: 0.8,
+          allowsMultipleSelection: false,
+          base64: false,
+          exif: false,
+        });
+      }
 
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
         
-        if (asset.fileSize && asset.fileSize > 5 * 1024 * 1024) {
-          Alert.alert("File Too Large", "Image must be smaller than 5MB.");
+        // Debug logging for image properties
+        console.log('Selected image asset:', {
+          uri: asset.uri,
+          width: asset.width,
+          height: asset.height,
+          fileSize: asset.fileSize,
+          type: asset.type,
+          fileName: asset.fileName,
+          aspectRatio: asset.width && asset.height ? asset.width / asset.height : 'unknown'
+        });
+        
+        if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
+          Alert.alert("File Too Large", "Image must be smaller than 10MB.");
           return;
         }
 
@@ -123,7 +153,16 @@ export default function Profile() {
         try {
           const response = await fetch(asset.uri);
           const blob = await response.blob();
-          const file = new File([blob], 'profile-photo.jpg', { type: 'image/jpeg' });
+          
+          // Force JPEG format for better compatibility with image picker and cropping
+          // This helps ensure consistent behavior across different image formats
+          let fileExtension = 'jpg';
+          let mimeType = 'image/jpeg';
+          
+          // Create file with JPEG mime type regardless of original format
+          // This helps the image picker handle the image properly
+          const fileName = `profile-photo.${fileExtension}`;
+          const file = new File([blob], fileName, { type: mimeType });
           
           const { file_url } = await UploadFile(file);
           

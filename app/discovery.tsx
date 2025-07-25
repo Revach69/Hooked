@@ -57,8 +57,13 @@ export default function Discovery() {
   const [likedProfiles, setLikedProfiles] = useState(new Set<string>());
   const [selectedProfileForDetail, setSelectedProfileForDetail] = useState<any>(null);
   const [isAppActive, setIsAppActive] = useState(true);
-  const unsubscribeRef = useRef<(() => void) | null>(null);
-  const likesUnsubscribeRef = useRef<(() => void) | null>(null);
+  
+  // Single ref to hold all unsubscribe functions
+  const listenersRef = useRef<{
+    userProfile?: () => void;
+    otherProfiles?: () => void;
+    likes?: () => void;
+  }>({});
 
   useEffect(() => {
     initializeSession();
@@ -67,14 +72,7 @@ export default function Discovery() {
   // Cleanup all listeners on unmount
   useEffect(() => {
     return () => {
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current();
-        unsubscribeRef.current = null;
-      }
-      if (likesUnsubscribeRef.current) {
-        likesUnsubscribeRef.current();
-        likesUnsubscribeRef.current = null;
-      }
+      cleanupAllListeners();
     };
   }, []);
 
@@ -87,54 +85,86 @@ export default function Discovery() {
     return () => subscription?.remove();
   }, []);
 
-  // Add real-time listener for profiles
+  // Consolidated listener setup with proper cleanup
   useEffect(() => {
-    if (!currentEvent?.id || !currentSessionId) return;
-
-    // Clean up existing listener
-    if (unsubscribeRef.current) {
-      unsubscribeRef.current();
-      unsubscribeRef.current = null;
+    if (!currentEvent?.id || !currentSessionId) {
+      cleanupAllListeners();
+      return;
     }
 
-    // First, get the current user's profile to check visibility
-    const userProfileQuery = query(
-      collection(db, 'event_profiles'),
-      where('event_id', '==', currentEvent.id),
-      where('session_id', '==', currentSessionId)
-    );
+    // Clean up existing listeners before creating new ones
+    cleanupAllListeners();
 
-    const userProfileUnsubscribe = onSnapshot(userProfileQuery, async (userSnapshot) => {
-      const userProfiles = userSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as any[];
-      
-      const userProfile = userProfiles[0];
-      setCurrentUserProfile(userProfile);
+    try {
+      // 1. User profile listener
+      const userProfileQuery = query(
+        collection(db, 'event_profiles'),
+        where('event_id', '==', currentEvent.id),
+        where('session_id', '==', currentSessionId)
+      );
 
-      if (!userProfile) {
-        console.warn("Current user profile not found for session, clearing session data and redirecting.");
-        // Clear all session data to prevent infinite redirect loop
-        AsyncStorage.multiRemove([
-          'currentEventId',
-          'currentSessionId',
-          'currentEventCode',
-          'currentProfileColor',
-          'currentProfilePhotoUrl'
-        ]).then(() => {
-          router.replace('/home');
-        });
-        return;
-      }
+      const userProfileUnsubscribe = onSnapshot(userProfileQuery, (userSnapshot) => {
+        try {
+          const userProfiles = userSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as any[];
+          const userProfile = userProfiles[0];
+          setCurrentUserProfile(userProfile);
 
-      // If user is not visible, don't load other profiles
-      if (!userProfile.is_visible) {
-        setProfiles([]);
-        return;
-      }
+          if (!userProfile) {
+            console.warn("Current user profile not found for session, clearing session data and redirecting.");
+            AsyncStorage.multiRemove([
+              'currentEventId',
+              'currentSessionId',
+              'currentEventCode',
+              'currentProfileColor',
+              'currentProfilePhotoUrl'
+            ]).then(() => {
+              router.replace('/home');
+            });
+            return;
+          }
 
-      // Only load other visible profiles if current user is visible
+          // If user is not visible, don't load other profiles
+          if (!userProfile.is_visible) {
+            setProfiles([]);
+            // Clean up other listeners when user is not visible
+            if (listenersRef.current.otherProfiles) {
+              listenersRef.current.otherProfiles();
+              listenersRef.current.otherProfiles = undefined;
+            }
+            if (listenersRef.current.likes) {
+              listenersRef.current.likes();
+              listenersRef.current.likes = undefined;
+            }
+          } else {
+            // User is visible, set up other listeners
+            setupOtherListeners();
+          }
+        } catch (error) {
+          console.error("Error processing user profile update:", error);
+        }
+      }, (error) => {
+        console.error("Error listening to user profile:", error);
+      });
+
+      listenersRef.current.userProfile = userProfileUnsubscribe;
+
+    } catch (error) {
+      console.error("Error setting up listeners:", error);
+    }
+
+    return () => {
+      cleanupAllListeners();
+    };
+  }, [currentEvent?.id, currentSessionId]);
+
+  const setupOtherListeners = () => {
+    if (!currentEvent?.id || !currentSessionId) return;
+
+    try {
+      // 2. Other visible profiles listener
       const otherProfilesQuery = query(
         collection(db, 'event_profiles'),
         where('event_id', '==', currentEvent.id),
@@ -142,79 +172,69 @@ export default function Discovery() {
       );
 
       const otherProfilesUnsubscribe = onSnapshot(otherProfilesQuery, (otherSnapshot) => {
-        const allVisibleProfiles = otherSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as any[];
-        
-        const otherUsersProfiles = allVisibleProfiles.filter(p => p.session_id !== currentSessionId);
-        setProfiles(otherUsersProfiles);
+        try {
+          const allVisibleProfiles = otherSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as any[];
+          const otherUsersProfiles = allVisibleProfiles.filter(p => p.session_id !== currentSessionId);
+          setProfiles(otherUsersProfiles);
+        } catch (error) {
+          console.error("Error processing other profiles update:", error);
+        }
       }, (error) => {
         console.error("Error listening to other profiles:", error);
       });
 
-      // Store the unsubscribe function for cleanup
-      unsubscribeRef.current = () => {
-        otherProfilesUnsubscribe();
-      };
-    }, (error) => {
-      console.error("Error listening to user profile:", error);
-    });
+      listenersRef.current.otherProfiles = otherProfilesUnsubscribe;
 
-    // Store the main unsubscribe function
-    const mainUnsubscribe = () => {
-      userProfileUnsubscribe();
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current();
-      }
-    };
+      // 3. Likes listener
+      const likesQuery = query(
+        collection(db, 'likes'),
+        where('event_id', '==', currentEvent.id),
+        where('liker_session_id', '==', currentSessionId)
+      );
 
-    unsubscribeRef.current = mainUnsubscribe;
+      const likesUnsubscribe = onSnapshot(likesQuery, (snapshot) => {
+        try {
+          const likes = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as any[];
+          
+          setLikedProfiles(new Set(likes.map(like => like.liked_session_id)));
+        } catch (error) {
+          console.error("Error processing likes update:", error);
+        }
+      }, (error) => {
+        console.error("Error listening to likes:", error);
+      });
 
-    return () => {
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current();
-        unsubscribeRef.current = null;
-      }
-    };
-  }, [currentEvent?.id, currentSessionId]);
+      listenersRef.current.likes = likesUnsubscribe;
 
-  // Add real-time listener for likes
-  useEffect(() => {
-    if (!currentEvent?.id || !currentSessionId) return;
-
-    // Clean up existing listener
-    if (likesUnsubscribeRef.current) {
-      likesUnsubscribeRef.current();
-      likesUnsubscribeRef.current = null;
+    } catch (error) {
+      console.error("Error setting up other listeners:", error);
     }
+  };
 
-    const likesQuery = query(
-      collection(db, 'likes'),
-      where('event_id', '==', currentEvent.id),
-      where('liker_session_id', '==', currentSessionId)
-    );
-
-    const unsubscribe = onSnapshot(likesQuery, (snapshot) => {
-      const likes = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as any[];
-      
-      setLikedProfiles(new Set(likes.map(like => like.liked_session_id)));
-    }, (error) => {
-      console.error("Error listening to likes:", error);
-    });
-
-    likesUnsubscribeRef.current = unsubscribe;
-
-    return () => {
-      if (likesUnsubscribeRef.current) {
-        likesUnsubscribeRef.current();
-        likesUnsubscribeRef.current = null;
+  const cleanupAllListeners = () => {
+    try {
+      if (listenersRef.current.userProfile) {
+        listenersRef.current.userProfile();
+        listenersRef.current.userProfile = undefined;
       }
-    };
-  }, [currentEvent?.id, currentSessionId]);
+      if (listenersRef.current.otherProfiles) {
+        listenersRef.current.otherProfiles();
+        listenersRef.current.otherProfiles = undefined;
+      }
+      if (listenersRef.current.likes) {
+        listenersRef.current.likes();
+        listenersRef.current.likes = undefined;
+      }
+    } catch (error) {
+      console.error("Error cleaning up listeners:", error);
+    }
+  };
 
   // Apply filters whenever profiles or currentUserProfile changes
   useEffect(() => {
@@ -436,7 +456,16 @@ export default function Discovery() {
       justifyContent: 'space-between',
       alignItems: 'center',
       padding: 16,
-      paddingTop: 32,
+      paddingTop: 8,
+    },
+    logoContainer: {
+      alignItems: 'flex-start',
+      paddingVertical: 0,
+      paddingHorizontal: 16,
+    },
+    logo: {
+      width: 120,
+      height: 36,
     },
     headerText: {
       flex: 1,
@@ -475,8 +504,8 @@ export default function Discovery() {
       width: cardSize,
       backgroundColor: isDark ? '#2d2d2d' : 'white',
       borderRadius: 16,
-      padding: 8,
-      margin: 4,
+      padding: 6,
+      marginBottom: 8,
       alignItems: 'center',
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 2 },
@@ -485,8 +514,8 @@ export default function Discovery() {
       elevation: 2,
     },
     profileImageContainer: {
-      width: cardSize - 16,
-      height: cardSize - 16,
+      width: cardSize - 12,
+      height: cardSize - 12,
       borderRadius: 12,
       overflow: 'hidden',
       marginBottom: 8,
@@ -500,8 +529,8 @@ export default function Discovery() {
       borderRadius: 12,
     },
     fallbackAvatar: {
-      width: cardSize - 16,
-      height: cardSize - 16,
+      width: cardSize - 12,
+      height: cardSize - 12,
       borderRadius: 12,
       alignItems: 'center',
       justifyContent: 'center',
@@ -536,13 +565,13 @@ export default function Discovery() {
       bottom: 0,
       left: 0,
       right: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.7)',
+      backgroundColor: isDark ? 'rgba(0, 0, 0, 0.7)' : 'rgba(0, 0, 0, 0.8)',
       padding: 8,
     },
     profileName: {
       fontSize: 14,
       fontWeight: '600',
-      color: isDark ? '#ffffff' : '#1f2937',
+      color: '#ffffff',
     },
     emptyState: {
       alignItems: 'center',
@@ -847,6 +876,15 @@ export default function Discovery() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Logo Section */}
+      <View style={styles.logoContainer}>
+        <Image 
+          source={require('../assets/Hooked Full Logo.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
+      </View>
+
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerText}>

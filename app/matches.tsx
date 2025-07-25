@@ -27,7 +27,11 @@ export default function Matches() {
   const [currentUserProfile, setCurrentUserProfile] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedProfileForDetail, setSelectedProfileForDetail] = useState<any>(null);
-  const unsubscribeRef = useRef<(() => void) | null>(null);
+  // Single ref to hold all unsubscribe functions
+  const listenersRef = useRef<{
+    userProfile?: () => void;
+    matches?: () => void;
+  }>({});
 
   useEffect(() => {
     initializeSession();
@@ -36,60 +40,87 @@ export default function Matches() {
   // Cleanup all listeners on unmount
   useEffect(() => {
     return () => {
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current();
-        unsubscribeRef.current = null;
-      }
+      cleanupAllListeners();
     };
   }, []);
 
-  // Add real-time listener for user profile and matches
+  // Consolidated listener setup with proper cleanup
   useEffect(() => {
-    if (!currentEvent?.id || !currentSessionId) return;
-
-    // Clean up existing listener
-    if (unsubscribeRef.current) {
-      unsubscribeRef.current();
-      unsubscribeRef.current = null;
+    if (!currentEvent?.id || !currentSessionId) {
+      cleanupAllListeners();
+      return;
     }
 
-    // First, get the current user's profile to check visibility
-    const userProfileQuery = query(
-      collection(db, 'event_profiles'),
-      where('event_id', '==', currentEvent.id),
-      where('session_id', '==', currentSessionId)
-    );
+    // Clean up existing listeners before creating new ones
+    cleanupAllListeners();
 
-    const userProfileUnsubscribe = onSnapshot(userProfileQuery, async (userSnapshot) => {
-      const userProfiles = userSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as any[];
-      
-      const userProfile = userProfiles[0];
-      setCurrentUserProfile(userProfile);
+    try {
+      // First, get the current user's profile to check visibility
+      const userProfileQuery = query(
+        collection(db, 'event_profiles'),
+        where('event_id', '==', currentEvent.id),
+        where('session_id', '==', currentSessionId)
+      );
 
-      if (!userProfile) {
-        console.warn("Current user profile not found for session, clearing session data and redirecting.");
-        AsyncStorage.multiRemove([
-          'currentEventId',
-          'currentSessionId',
-          'currentEventCode',
-          'currentProfileColor',
-          'currentProfilePhotoUrl'
-        ]).then(() => {
-          router.replace('/home');
-        });
-        return;
-      }
+      const userProfileUnsubscribe = onSnapshot(userProfileQuery, async (userSnapshot) => {
+        try {
+          const userProfiles = userSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as any[];
+          
+          const userProfile = userProfiles[0];
+          setCurrentUserProfile(userProfile);
 
-      // If user is not visible, don't load matches
-      if (!userProfile.is_visible) {
-        setMatches([]);
-        return;
-      }
+          if (!userProfile) {
+            console.warn("Current user profile not found for session, clearing session data and redirecting.");
+            AsyncStorage.multiRemove([
+              'currentEventId',
+              'currentSessionId',
+              'currentEventCode',
+              'currentProfileColor',
+              'currentProfilePhotoUrl'
+            ]).then(() => {
+              router.replace('/home');
+            });
+            return;
+          }
 
-      // Only load matches if current user is visible
+          // If user is not visible, don't load matches
+          if (!userProfile.is_visible) {
+            setMatches([]);
+            // Clean up matches listener when user is not visible
+            if (listenersRef.current.matches) {
+              listenersRef.current.matches();
+              listenersRef.current.matches = undefined;
+            }
+            return;
+          }
+
+          // Only load matches if current user is visible
+          setupMatchesListener();
+        } catch (error) {
+          console.error("Error processing user profile update:", error);
+        }
+      }, (error) => {
+        console.error("Error listening to user profile:", error);
+      });
+
+      listenersRef.current.userProfile = userProfileUnsubscribe;
+
+    } catch (error) {
+      console.error("Error setting up listeners:", error);
+    }
+
+    return () => {
+      cleanupAllListeners();
+    };
+  }, [currentEvent?.id, currentSessionId]);
+
+  const setupMatchesListener = () => {
+    if (!currentEvent?.id || !currentSessionId) return;
+
+    try {
       const mutualLikesQuery = query(
         collection(db, 'likes'),
         where('event_id', '==', currentEvent.id),
@@ -133,31 +164,27 @@ export default function Matches() {
         console.error("Error listening to matches:", error);
       });
 
-      // Store the unsubscribe function for cleanup
-      unsubscribeRef.current = () => {
-        matchesUnsubscribe();
-      };
-    }, (error) => {
-      console.error("Error listening to user profile:", error);
-    });
+      listenersRef.current.matches = matchesUnsubscribe;
 
-    // Store the main unsubscribe function
-    const mainUnsubscribe = () => {
-      userProfileUnsubscribe();
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current();
+    } catch (error) {
+      console.error("Error setting up matches listener:", error);
+    }
+  };
+
+  const cleanupAllListeners = () => {
+    try {
+      if (listenersRef.current.userProfile) {
+        listenersRef.current.userProfile();
+        listenersRef.current.userProfile = undefined;
       }
-    };
-
-    unsubscribeRef.current = mainUnsubscribe;
-
-    return () => {
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current();
-        unsubscribeRef.current = null;
+      if (listenersRef.current.matches) {
+        listenersRef.current.matches();
+        listenersRef.current.matches = undefined;
       }
-    };
-  }, [currentEvent?.id, currentSessionId]);
+    } catch (error) {
+      console.error("Error cleaning up listeners:", error);
+    }
+  };
 
   const initializeSession = async () => {
     const eventId = await AsyncStorage.getItem('currentEventId');

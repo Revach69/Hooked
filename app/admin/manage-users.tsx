@@ -259,11 +259,7 @@ export default function ManageUsers() {
       color: isDark ? '#ffffff' : '#1f2937',
       marginBottom: 4,
     },
-    userEmail: {
-      fontSize: 14,
-      color: isDark ? '#9ca3af' : '#6b7280',
-      marginBottom: 4,
-    },
+
     userDetails: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -364,7 +360,6 @@ export default function ManageUsers() {
                 <View style={styles.userHeader}>
                   <View style={styles.userInfo}>
                     <Text style={styles.userName}>{user.first_name}</Text>
-                    <Text style={styles.userEmail}>{user.email}</Text>
                     
                     <View style={styles.userDetails}>
                       <Text style={styles.userDetailText}>

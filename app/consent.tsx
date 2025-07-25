@@ -37,7 +37,6 @@ export default function Consent() {
   const [step, setStep] = useState('manual');
   const [formData, setFormData] = useState({
     first_name: '',
-    email: '',
     age: '25',
     gender_identity: '',
     interested_in: '',
@@ -129,6 +128,9 @@ export default function Consent() {
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
+        allowsMultipleSelection: false,
+        base64: false,
+        exif: false,
       });
 
       if (!result.canceled && result.assets[0]) {
@@ -154,6 +156,9 @@ export default function Consent() {
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
+        allowsMultipleSelection: false,
+        base64: false,
+        exif: false,
       });
 
       if (!result.canceled && result.assets[0]) {
@@ -166,18 +171,38 @@ export default function Consent() {
   };
 
   const processImageAsset = async (asset: any) => {
-    // Validate file size (5MB limit)
-    if (asset.fileSize && asset.fileSize > 5 * 1024 * 1024) {
-      Alert.alert("File Too Large", "Image must be smaller than 5MB.");
+    // Validate file size (10MB limit)
+    if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
+      Alert.alert("File Too Large", "Image must be smaller than 10MB.");
       return;
     }
+
+    // Debug logging for image properties
+    console.log('Processing image asset:', {
+      uri: asset.uri,
+      width: asset.width,
+      height: asset.height,
+      fileSize: asset.fileSize,
+      type: asset.type,
+      fileName: asset.fileName,
+      aspectRatio: asset.width && asset.height ? asset.width / asset.height : 'unknown'
+    });
 
     setIsUploadingPhoto(true);
     try {
       // Convert asset to file-like object for upload
       const response = await fetch(asset.uri);
       const blob = await response.blob();
-      const file = new File([blob], 'profile-photo.jpg', { type: 'image/jpeg' });
+      
+      // Force JPEG format for better compatibility with image picker and cropping
+      // This helps ensure consistent behavior across different image formats
+      let fileExtension = 'jpg';
+      let mimeType = 'image/jpeg';
+      
+      // Create file with JPEG mime type regardless of original format
+      // This helps the image picker handle the image properly
+      const fileName = `profile-photo.${fileExtension}`;
+      const file = new File([blob], fileName, { type: mimeType });
       
       const { file_url } = await UploadFile(file);
       setFormData(prev => ({ ...prev, profile_photo_url: file_url }));
@@ -192,7 +217,7 @@ export default function Consent() {
 
   const handleSubmit = async () => {
     // Validate all required fields including photo
-    if (!formData.first_name || !formData.email || !formData.age || !formData.gender_identity || !formData.interested_in) {
+    if (!formData.first_name || !formData.age || !formData.gender_identity || !formData.interested_in) {
       Alert.alert("Missing Information", "Please fill in all fields.");
       return;
     }
@@ -230,7 +255,6 @@ export default function Consent() {
         event_id: event.id,
         session_id: sessionId,
         first_name: formData.first_name,
-        email: formData.email,
         age: parseInt(formData.age),
         gender_identity: formData.gender_identity,
         interested_in: formData.interested_in,
@@ -266,7 +290,7 @@ export default function Consent() {
       backgroundColor: isDark ? '#2d2d2d' : 'white',
       borderRadius: 16,
       padding: 24,
-      maxWidth: 400,
+      maxWidth: 450,
       width: '100%',
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 4 },
@@ -276,29 +300,33 @@ export default function Consent() {
     },
     header: {
       alignItems: 'center',
-      marginBottom: 24,
+      marginBottom: 20,
     },
     logoContainer: {
-      width: 64,
-      height: 64,
-      backgroundColor: '#8b5cf6',
-      borderRadius: 16,
+      width: 80,
+      height: 80,
+      borderRadius: 20,
       alignItems: 'center',
       justifyContent: 'center',
       marginBottom: 16,
     },
+    logoImage: {
+      width: '100%',
+      height: '100%',
+      borderRadius: 20,
+    },
     title: {
-      fontSize: 24,
+      fontSize: 22,
       fontWeight: 'bold',
       color: isDark ? '#ffffff' : '#1f2937',
       textAlign: 'center',
-      marginBottom: 4,
+      marginBottom: 2,
     },
     eventName: {
-      fontSize: 20,
+      fontSize: 18,
       color: isDark ? '#9ca3af' : '#6b7280',
       textAlign: 'center',
-      marginTop: 4,
+      marginTop: 2,
     },
     subtitle: {
       fontSize: 16,
@@ -307,31 +335,31 @@ export default function Consent() {
       lineHeight: 24,
     },
     form: {
-      gap: 16,
+      gap: 12,
     },
     photoSection: {
       alignItems: 'center',
-      marginBottom: 24,
+      marginBottom: 16,
     },
     sectionTitle: {
-      fontSize: 18,
+      fontSize: 16,
       fontWeight: '600',
       color: isDark ? '#e5e7eb' : '#374151',
-      marginBottom: 12,
+      marginBottom: 8,
       textAlign: 'left',
       width: '100%',
     },
     photoUploadArea: {
-      width: 120,
-      height: 120,
-      borderRadius: 60,
+      width: 100,
+      height: 100,
+      borderRadius: 50,
       borderWidth: 2,
       borderColor: isDark ? '#404040' : '#d1d5db',
       borderStyle: 'dashed',
       backgroundColor: isDark ? '#374151' : '#f9fafb',
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: 12,
+      marginBottom: 8,
     },
     uploadedPhoto: {
       width: '100%',
@@ -354,14 +382,14 @@ export default function Consent() {
       marginTop: 8,
     },
     formSection: {
-      gap: 12,
+      gap: 8,
       width: '100%',
     },
     input: {
       borderWidth: 1,
       borderColor: isDark ? '#404040' : '#d1d5db',
       borderRadius: 8,
-      padding: 12,
+      padding: 10,
       fontSize: 16,
       backgroundColor: isDark ? '#374151' : 'white',
       color: isDark ? '#e5e7eb' : '#1f2937',
@@ -399,7 +427,7 @@ export default function Consent() {
       color: 'white',
     },
     selectionSection: {
-      marginTop: 24,
+      marginTop: 20,
       width: '100%',
     },
     selectionButtons: {
@@ -420,7 +448,7 @@ export default function Consent() {
       backgroundColor: '#8b5cf6',
     },
     selectionButtonText: {
-      fontSize: 16,
+      fontSize: 17,
       fontWeight: '500',
       color: isDark ? '#e5e7eb' : '#374151',
     },
@@ -432,14 +460,14 @@ export default function Consent() {
       borderRadius: 12,
       padding: 16,
       alignItems: 'center',
-      marginTop: 24,
+      marginTop: 20,
     },
     submitButtonDisabled: {
       backgroundColor: '#9ca3af',
     },
     submitButtonText: {
       color: 'white',
-      fontSize: 16,
+      fontSize: 17,
       fontWeight: '500',
     },
     loadingContainer: {
@@ -539,7 +567,7 @@ export default function Consent() {
       fontWeight: '500',
     },
     rememberSection: {
-      marginTop: 24,
+      marginTop: 20,
       width: '100%',
     },
     checkboxContainer: {
@@ -548,13 +576,13 @@ export default function Consent() {
       marginBottom: 8,
     },
     checkboxText: {
-      fontSize: 16,
+      fontSize: 17,
       color: isDark ? '#e5e7eb' : '#374151',
       marginLeft: 12,
       flex: 1,
     },
     checkboxDescription: {
-      fontSize: 14,
+      fontSize: 15,
       color: isDark ? '#9ca3af' : '#6b7280',
       marginLeft: 44,
       lineHeight: 20,
@@ -596,7 +624,11 @@ export default function Consent() {
           <View style={styles.card}>
             <View style={styles.header}>
               <View style={styles.logoContainer}>
-                <UserIcon size={32} color="white" />
+                <Image 
+                  source={require('../assets/Home Icon.png')} 
+                  style={styles.logoImage}
+                  resizeMode="contain"
+                />
               </View>
               <Text style={styles.title}>
                 Create Your Event Profile For:
@@ -626,7 +658,7 @@ export default function Consent() {
                 )}
               </TouchableOpacity>
               <Text style={styles.photoRequirements}>
-                Required • Max 5MB • JPG, PNG, or GIF
+                Required • Max 10MB
               </Text>
             </View>
 
@@ -638,17 +670,6 @@ export default function Consent() {
                 placeholderTextColor="#9ca3af"
                 value={formData.first_name}
                 onChangeText={(text) => setFormData(prev => ({ ...prev, first_name: text }))}
-                returnKeyType="next"
-              />
-              
-              <TextInput
-                style={styles.input}
-                placeholder="Email (private, for feedback only) *"
-                placeholderTextColor="#9ca3af"
-                value={formData.email}
-                onChangeText={(text) => setFormData(prev => ({ ...prev, email: text }))}
-                keyboardType="email-address"
-                autoCapitalize="none"
                 returnKeyType="next"
               />
               
@@ -825,4 +846,4 @@ export default function Consent() {
       </Modal>
     </SafeAreaView>
   );
-} 
+}

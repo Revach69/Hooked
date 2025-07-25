@@ -7,22 +7,22 @@ service cloud.firestore {
       allow write: if request.auth != null;  // Require authentication for admin operations
     }
     
-    // Event profiles - require authentication for user data
+    // Event profiles - allow creation and deletion without auth for event participants
     match /event_profiles/{profileId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow create, update, delete: if true;  // Allow all operations without auth for event participants
     }
     
-    // Likes - require authentication
+    // Likes - allow creation and deletion without auth for event participants
     match /likes/{likeId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow create, update, delete: if true;  // Allow all operations without auth for event participants
     }
     
-    // Messages - require authentication
+    // Messages - allow creation and deletion without auth for event participants
     match /messages/{messageId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow create, update, delete: if true;  // Allow all operations without auth for event participants
     }
     
     // Contact shares - require authentication

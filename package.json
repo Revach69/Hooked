@@ -40,6 +40,8 @@
     "react-hook-form": "^7.54.2",
     "react-native": "0.79.5",
     "react-native-gesture-handler": "~2.24.0",
+    "react-native-image-crop-picker": "^0.50.1",
+    "react-native-image-manipulator": "^1.0.6",
     "react-native-linear-gradient": "^2.8.3",
     "react-native-qrcode-svg": "^6.3.15",
     "react-native-reanimated": "~3.17.4",

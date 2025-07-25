@@ -48,10 +48,97 @@ export default function Chat() {
   const [showProfileModal, setShowProfileModal] = useState(false);
   
   const flatListRef = useRef<FlatList>(null);
+  // Single ref to hold unsubscribe function
+  const listenerRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     initializeChat();
   }, []);
+
+  // Cleanup listener on unmount
+  useEffect(() => {
+    return () => {
+      if (listenerRef.current) {
+        listenerRef.current();
+        listenerRef.current = null;
+      }
+    };
+  }, []);
+
+  // Real-time messages listener with proper cleanup
+  useEffect(() => {
+    if (!currentEventId || !currentSessionId || !matchId) {
+      if (listenerRef.current) {
+        listenerRef.current();
+        listenerRef.current = null;
+      }
+      return;
+    }
+
+    // Clean up existing listener before creating new one
+    if (listenerRef.current) {
+      listenerRef.current();
+      listenerRef.current = null;
+    }
+
+    try {
+      const messagesQuery = query(
+        collection(db, 'messages'),
+        where('event_id', '==', currentEventId),
+        orderBy('created_at', 'asc')
+      );
+
+      const unsubscribe = onSnapshot(messagesQuery, async (snapshot) => {
+        try {
+          const allMessages = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as ChatMessage[];
+
+          // Filter messages to only include conversation between these two users
+          const conversationMessages = allMessages.filter(msg => 
+            (msg.from_profile_id === currentSessionId && msg.to_profile_id === matchId) ||
+            (msg.from_profile_id === matchId && msg.to_profile_id === currentSessionId)
+          );
+
+          // Get sender names for messages
+          const messagesWithNames = await Promise.all(
+            conversationMessages.map(async (msg) => {
+              if (msg.senderName) return msg;
+              
+              const senderProfiles = await EventProfile.filter({
+                session_id: msg.from_profile_id,
+                event_id: currentEventId
+              });
+              
+              return {
+                ...msg,
+                senderName: senderProfiles.length > 0 ? senderProfiles[0].first_name : 'Unknown'
+              };
+            })
+          );
+
+          setMessages(messagesWithNames);
+        } catch (error) {
+          console.error('Error processing messages:', error);
+        }
+      }, (error) => {
+        console.error('Error listening to messages:', error);
+      });
+
+      listenerRef.current = unsubscribe;
+
+    } catch (error) {
+      console.error('Error setting up messages listener:', error);
+    }
+
+    return () => {
+      if (listenerRef.current) {
+        listenerRef.current();
+        listenerRef.current = null;
+      }
+    };
+  }, [currentEventId, currentSessionId, matchId]);
 
   const initializeChat = async () => {
     try {
@@ -84,57 +171,6 @@ export default function Chat() {
       router.back();
     }
   };
-
-  // Real-time messages listener
-  useEffect(() => {
-    if (!currentEventId || !currentSessionId || !matchId) return;
-
-    const messagesQuery = query(
-      collection(db, 'messages'),
-      where('event_id', '==', currentEventId),
-      orderBy('created_at', 'asc')
-    );
-
-    const unsubscribe = onSnapshot(messagesQuery, async (snapshot) => {
-      try {
-        const allMessages = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as ChatMessage[];
-
-        // Filter messages to only include conversation between these two users
-        const conversationMessages = allMessages.filter(msg => 
-          (msg.from_profile_id === currentSessionId && msg.to_profile_id === matchId) ||
-          (msg.from_profile_id === matchId && msg.to_profile_id === currentSessionId)
-        );
-
-        // Get sender names for messages
-        const messagesWithNames = await Promise.all(
-          conversationMessages.map(async (msg) => {
-            if (msg.senderName) return msg;
-            
-            const senderProfiles = await EventProfile.filter({
-              session_id: msg.from_profile_id,
-              event_id: currentEventId
-            });
-            
-            return {
-              ...msg,
-              senderName: senderProfiles.length > 0 ? senderProfiles[0].first_name : 'Unknown'
-            };
-          })
-        );
-
-        setMessages(messagesWithNames);
-      } catch (error) {
-        console.error('Error processing messages:', error);
-      }
-    }, (error) => {
-      console.error('Error listening to messages:', error);
-    });
-
-    return () => unsubscribe();
-  }, [currentEventId, currentSessionId, matchId]);
 
   const sendMessage = async () => {
     if (!newMessage.trim() || !currentEventId || !currentSessionId || !matchId) return;
