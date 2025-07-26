@@ -15,7 +15,7 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.hookedapp.app",
       "associatedDomains": [
         "applinks:www.hooked-app.com"
