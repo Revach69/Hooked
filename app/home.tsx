@@ -50,12 +50,24 @@ export default function Home() {
         
         // If event is currently active, auto-resume to Discovery
         if (event.starts_at && event.expires_at && nowISO >= event.starts_at && nowISO <= event.expires_at) {
+          console.log('✅ Active session found, redirecting to Discovery');
           router.replace('/discovery');
           return;
+        } else {
+          console.log('❌ Event is not active:', {
+            now: nowISO,
+            starts_at: event.starts_at,
+            expires_at: event.expires_at,
+            isStarted: nowISO >= event.starts_at,
+            isExpired: nowISO > event.expires_at
+          });
         }
+      } else {
+        console.log('❌ Event not found in database');
       }
       
       // If event is expired, not started, or not found, clear session data
+      console.log('🧹 Clearing expired/invalid session data');
       await AsyncStorage.multiRemove([
         'currentEventId',
         'currentSessionId',
@@ -63,9 +75,17 @@ export default function Home() {
         'currentProfileColor',
         'currentProfilePhotoUrl'
       ]);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error checking active session:", error);
-      // Clear potentially corrupted session data on any error
+      // Only clear session data on specific errors, not all errors
+      if (error.message?.includes('Target ID already exists') || 
+          error.message?.includes('INTERNAL ASSERTION FAILED')) {
+        console.log('⚠️ Firestore internal error detected, keeping session data');
+        return;
+      }
+      
+      // Clear potentially corrupted session data on other errors
+      console.log('🧹 Clearing session data due to error');
       await AsyncStorage.multiRemove([
         'currentEventId',
         'currentSessionId',

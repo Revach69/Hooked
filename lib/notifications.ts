@@ -65,9 +65,9 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
  */
 export async function getPushToken(): Promise<string | null> {
   try {
-    // Specify the project ID explicitly
+    // Use the correct project ID from app.json
     const token = await Notifications.getExpoPushTokenAsync({
-      projectId: '7a1de260' // Your expo project ID
+      projectId: '7a1de260-e3cb-4cbb-863c-1557213d69f0'
     });
     return token.data;
   } catch (error) {

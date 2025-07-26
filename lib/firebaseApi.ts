@@ -35,6 +35,7 @@ import { notifyNewMessage } from './messageNotificationHelper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { logFirebaseError } from './errorMonitoring';
+import { Platform } from 'react-native';
 
 // Enhanced retry operation with better error handling and offline support
 async function retryOperation<T>(
@@ -324,22 +325,41 @@ export const EventAPI = {
   },
 
   async filter(filters: Partial<Event> = {}): Promise<Event[]> {
-    return executeWithOfflineSupport(async () => {
-      let q: any = collection(db, 'events');
-      
-      if (filters.event_code) {
-        q = query(q, where('event_code', '==', filters.event_code));
+    try {
+      return await executeWithOfflineSupport(async () => {
+        let q: any = collection(db, 'events');
+        
+        if (filters.event_code) {
+          q = query(q, where('event_code', '==', filters.event_code));
+        }
+        if (filters.id) {
+          q = query(q, where('__name__', '==', filters.id));
+        }
+        
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...(doc.data() as any)
+        })) as Event[];
+      }, 'Filter Events');
+    } catch (error: any) {
+      // Enhanced error suppression with better logging
+      if (error.message?.includes('INTERNAL ASSERTION FAILED') || 
+          error.message?.includes('Target ID already exists') ||
+          error.code === 'unavailable') {
+        console.warn('⚠️ Firestore internal error suppressed:', {
+          error: error.message,
+          code: error.code,
+          operation: 'Filter Events',
+          timestamp: new Date().toISOString(),
+          isDev: __DEV__,
+          platform: Platform.OS
+        });
+        return []; // Return empty array instead of throwing
       }
-      if (filters.id) {
-        q = query(q, where('__name__', '==', filters.id));
-      }
-      
-      const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...(doc.data() as any)
-      })) as Event[];
-    }, 'Filter Events');
+      console.error('Error filtering events:', error);
+      throw error;
+    }
   },
 
   async get(id: string): Promise<Event | null> {
@@ -390,25 +410,44 @@ export const EventProfileAPI = {
   },
 
   async filter(filters: Partial<EventProfile> = {}): Promise<EventProfile[]> {
-    return executeWithOfflineSupport(async () => {
-      let q: any = collection(db, 'event_profiles');
-      
-      if (filters.event_id) {
-        q = query(q, where('event_id', '==', filters.event_id));
+    try {
+      return await executeWithOfflineSupport(async () => {
+        let q: any = collection(db, 'event_profiles');
+        
+        if (filters.event_id) {
+          q = query(q, where('event_id', '==', filters.event_id));
+        }
+        if (filters.session_id) {
+          q = query(q, where('session_id', '==', filters.session_id));
+        }
+        if (filters.is_visible !== undefined) {
+          q = query(q, where('is_visible', '==', filters.is_visible));
+        }
+        
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...(doc.data() as any)
+        })) as EventProfile[];
+      }, 'Filter Event Profiles');
+    } catch (error: any) {
+      // Enhanced error suppression with better logging
+      if (error.message?.includes('INTERNAL ASSERTION FAILED') || 
+          error.message?.includes('Target ID already exists') ||
+          error.code === 'unavailable') {
+        console.warn('⚠️ Firestore internal error suppressed:', {
+          error: error.message,
+          code: error.code,
+          operation: 'Filter Event Profiles',
+          timestamp: new Date().toISOString(),
+          isDev: __DEV__,
+          platform: Platform.OS
+        });
+        return []; // Return empty array instead of throwing
       }
-      if (filters.session_id) {
-        q = query(q, where('session_id', '==', filters.session_id));
-      }
-      if (filters.is_visible !== undefined) {
-        q = query(q, where('is_visible', '==', filters.is_visible));
-      }
-      
-      const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...(doc.data() as any)
-      })) as EventProfile[];
-    }, 'Filter Event Profiles');
+      console.error('Error filtering event profiles:', error);
+      throw error;
+    }
   },
 
   async update(id: string, data: Partial<EventProfile>): Promise<void> {
@@ -497,7 +536,9 @@ export const LikeAPI = {
           error: error.message,
           code: error.code,
           operation: 'Filter Likes',
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          isDev: __DEV__,
+          platform: Platform.OS
         });
         return []; // Return empty array instead of throwing
       }
