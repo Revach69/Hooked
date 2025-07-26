@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo from '@react-native-community/netinfo';
 import { Platform } from 'react-native';
 
 export interface ErrorLog {
@@ -191,8 +192,18 @@ export async function logFirebaseError(error: any, operation: string, context: P
         timestamp: new Date().toISOString()
       };
       
-      // You could send this to a logging service or store locally
-      console.log('📝 Internal assertion error logged:', errorLog);
+      // Store in AsyncStorage for debugging
+      const existingLogs = await AsyncStorage.getItem('firebase_critical_errors');
+      const logs = existingLogs ? JSON.parse(existingLogs) : [];
+      logs.push(errorLog);
+      
+      // Keep only last 10 critical errors
+      if (logs.length > 10) {
+        logs.splice(0, logs.length - 10);
+      }
+      
+      await AsyncStorage.setItem('firebase_critical_errors', JSON.stringify(logs));
+      console.log('📝 Internal assertion error logged to storage');
     } catch (logError) {
       console.error('Failed to log internal assertion error:', logError);
     }
@@ -276,7 +287,7 @@ class ListenerManager {
 // Global listener manager instance
 export const listenerManager = new ListenerManager();
 
-// Utility function to safely create listeners with error handling
+// Enhanced safe listener creation with better error handling
 export function createSafeListener<T>(
   id: string,
   query: any,
@@ -284,59 +295,167 @@ export function createSafeListener<T>(
   onError?: (error: any) => void
 ) {
   try {
-    // Clean up existing listener first
-    listenerManager.unregisterListener(id);
-
-    const unsubscribe = query.onSnapshot(
-      (snapshot: any) => {
+    const unsubscribe = onSnapshot(
+      query,
+      (snapshot) => {
         try {
-          onNext(snapshot);
+          const data = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as T;
+          onNext(data);
         } catch (error) {
-          console.error(`Error in listener callback for ${id}:`, error);
           logFirebaseError(error, `listener_callback_${id}`);
+          onError?.(error);
         }
       },
-      (error: any) => {
-        console.error(`Listener error for ${id}:`, error);
+      (error) => {
         logFirebaseError(error, `listener_error_${id}`, { listenerType: id });
-        
-        if (onError) {
-          onError(error);
-        }
+        onError?.(error);
       }
     );
 
     listenerManager.registerListener(id, unsubscribe);
     return unsubscribe;
   } catch (error) {
-    console.error(`Error creating listener ${id}:`, error);
     logFirebaseError(error, `create_listener_${id}`, { listenerType: id });
     throw error;
   }
 }
 
-// Utility to check if we should retry operations
+// Enhanced retry logic with better error classification
 export function shouldRetryOperation(error: any, retryCount: number): boolean {
-  const maxRetries = 3;
+  // Don't retry if max retries reached
+  if (retryCount >= 3) return false;
   
-  if (retryCount >= maxRetries) {
-    return false;
+  // Don't retry on permission errors
+  if (error.code === 'permission-denied') return false;
+  
+  // Don't retry on not found errors
+  if (error.code === 'not-found') return false;
+  
+  // Don't retry on invalid arguments
+  if (error.code === 'invalid-argument') return false;
+  
+  // Don't retry on already exists errors
+  if (error.code === 'already-exists') return false;
+  
+  // Retry on network errors, unavailable, and internal errors
+  if (error.code === 'unavailable' || 
+      error.code === 'deadline-exceeded' ||
+      error.message?.includes('INTERNAL ASSERTION FAILED') ||
+      error.message?.includes('network') ||
+      error.message?.includes('timeout')) {
+    return true;
   }
-
-  // Don't retry internal assertion errors immediately
-  if (error.message && error.message.includes('INTERNAL ASSERTION FAILED')) {
-    return false;
-  }
-
-  // Don't retry permission errors
-  if (error.code === 'permission-denied') {
-    return false;
-  }
-
-  return true;
+  
+  // Retry on unknown errors (might be network related)
+  if (!error.code) return true;
+  
+  return false;
 }
 
-// Utility to get retry delay with exponential backoff
+// Enhanced retry delay calculation
 export function getRetryDelay(retryCount: number, baseDelay: number = 1000): number {
-  return baseDelay * Math.pow(2, retryCount) + Math.random() * 1000;
+  // Use exponential backoff with jitter
+  const exponentialDelay = baseDelay * Math.pow(2, retryCount);
+  const jitter = Math.random() * 1000;
+  
+  // Cap the maximum delay at 30 seconds
+  return Math.min(exponentialDelay + jitter, 30000);
+}
+
+// Error recovery utilities
+export class ErrorRecovery {
+  private static recoveryAttempts = new Map<string, number>();
+  private static readonly maxRecoveryAttempts = 3;
+
+  static async attemptRecovery(operation: string, recoveryFunction: () => Promise<void>): Promise<boolean> {
+    const attempts = this.recoveryAttempts.get(operation) || 0;
+    
+    if (attempts >= this.maxRecoveryAttempts) {
+      console.warn(`⚠️ Max recovery attempts reached for ${operation}`);
+      return false;
+    }
+
+    try {
+      await recoveryFunction();
+      this.recoveryAttempts.set(operation, 0); // Reset on success
+      console.log(`✅ Recovery successful for ${operation}`);
+      return true;
+    } catch (error) {
+      this.recoveryAttempts.set(operation, attempts + 1);
+      console.error(`❌ Recovery attempt ${attempts + 1} failed for ${operation}:`, error);
+      return false;
+    }
+  }
+
+  static resetRecoveryAttempts(operation: string): void {
+    this.recoveryAttempts.delete(operation);
+  }
+
+  static getRecoveryAttempts(operation: string): number {
+    return this.recoveryAttempts.get(operation) || 0;
+  }
+}
+
+// Network-aware error handling
+export class NetworkAwareErrorHandler {
+  static async handleError(error: any, operation: string): Promise<void> {
+    const netInfo = await NetInfo.fetch();
+    
+    if (!netInfo.isConnected) {
+      console.warn(`⚠️ Network disconnected during ${operation}, error may be network-related`);
+      // Could trigger offline mode or queue operation
+    }
+    
+    if (error.code === 'unavailable') {
+      console.warn(`⚠️ Service unavailable for ${operation}, may be temporary`);
+      // Could implement circuit breaker pattern
+    }
+    
+    if (error.message?.includes('INTERNAL ASSERTION FAILED')) {
+      console.error(`🚨 Internal assertion error in ${operation}, may require app restart`);
+      // Could trigger app restart or Firebase reinitialization
+    }
+  }
+}
+
+// Error analytics and reporting
+export class ErrorAnalytics {
+  private static errorCounts = new Map<string, number>();
+  private static errorTimestamps = new Map<string, string[]>();
+
+  static recordError(error: any, operation: string): void {
+    const errorKey = `${operation}:${error.code || 'unknown'}`;
+    const count = this.errorCounts.get(errorKey) || 0;
+    this.errorCounts.set(errorKey, count + 1);
+    
+    const timestamps = this.errorTimestamps.get(errorKey) || [];
+    timestamps.push(new Date().toISOString());
+    
+    // Keep only last 24 hours of timestamps
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const recentTimestamps = timestamps.filter(ts => ts > oneDayAgo);
+    this.errorTimestamps.set(errorKey, recentTimestamps);
+  }
+
+  static getErrorStats(): Record<string, number> {
+    const stats: Record<string, number> = {};
+    for (const [key, count] of this.errorCounts) {
+      stats[key] = count;
+    }
+    return stats;
+  }
+
+  static getErrorFrequency(errorKey: string, hours: number = 1): number {
+    const timestamps = this.errorTimestamps.get(errorKey) || [];
+    const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+    return timestamps.filter(ts => ts > cutoff).length;
+  }
+
+  static clearStats(): void {
+    this.errorCounts.clear();
+    this.errorTimestamps.clear();
+  }
 } 

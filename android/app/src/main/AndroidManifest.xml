@@ -1,12 +1,37 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
   <uses-permission android:name="android.permission.CAMERA"/>
   <uses-permission android:name="android.permission.INTERNET"/>
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
   <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
   <uses-permission android:name="android.permission.RECORD_AUDIO"/>
   <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
   <uses-permission android:name="android.permission.VIBRATE"/>
   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
-  <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+  
+  <!-- Disable tablets by restricting to phone screen sizes only -->
+  <supports-screens
+    android:smallScreens="true"
+    android:normalScreens="true"
+    android:largeScreens="false"
+    android:xlargeScreens="false"
+    android:requiresSmallestWidthDp="320"
+    android:compatibleWidthLimitDp="600" />
+  
+  <compatible-screens>
+    <!-- Phone screen sizes only -->
+    <screen android:screenSize="small" android:screenDensity="ldpi" />
+    <screen android:screenSize="small" android:screenDensity="mdpi" />
+    <screen android:screenSize="small" android:screenDensity="hdpi" />
+    <screen android:screenSize="small" android:screenDensity="xhdpi" />
+    <screen android:screenSize="small" android:screenDensity="xxhdpi" />
+    <screen android:screenSize="small" android:screenDensity="xxxhdpi" />
+    <screen android:screenSize="normal" android:screenDensity="ldpi" />
+    <screen android:screenSize="normal" android:screenDensity="mdpi" />
+    <screen android:screenSize="normal" android:screenDensity="hdpi" />
+    <screen android:screenSize="normal" android:screenDensity="xhdpi" />
+    <screen android:screenSize="normal" android:screenDensity="xxhdpi" />
+    <screen android:screenSize="normal" android:screenDensity="xxxhdpi" />
+  </compatible-screens>
   <queries>
     <intent>
       <action android:name="android.intent.action.VIEW"/>
@@ -32,6 +57,12 @@
         <category android:name="android.intent.category.DEFAULT"/>
         <category android:name="android.intent.category.BROWSABLE"/>
         <data android:scheme="hooked"/>
+      </intent-filter>
+      <intent-filter android:autoVerify="true" data-generated="true">
+        <action android:name="android.intent.action.VIEW"/>
+        <data android:scheme="https" android:host="www.hooked-app.com" android:pathPrefix="/join"/>
+        <category android:name="android.intent.category.BROWSABLE"/>
+        <category android:name="android.intent.category.DEFAULT"/>
       </intent-filter>
     </activity>
   </application>

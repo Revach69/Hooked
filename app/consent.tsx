@@ -261,6 +261,7 @@ export default function Consent() {
         profile_color: profileColor,
         profile_photo_url: formData.profile_photo_url,
         is_visible: true,
+        expires_at: event.expires_at,
       });
 
       await AsyncStorage.setItem('currentSessionId', sessionId);

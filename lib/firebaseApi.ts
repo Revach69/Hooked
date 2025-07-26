@@ -37,7 +37,7 @@ import NetInfo from '@react-native-community/netinfo';
 import { logFirebaseError } from './errorMonitoring';
 import { Platform } from 'react-native';
 
-// Enhanced retry operation with better error handling and offline support
+// Enhanced retry operation with better error handling and recovery
 async function retryOperation<T>(
   operation: () => Promise<T>,
   maxRetries: number = 3,
@@ -48,20 +48,7 @@ async function retryOperation<T>(
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      // Check network connectivity before attempting operation
-      const netInfo = await NetInfo.fetch();
-      if (!netInfo.isConnected) {
-        throw new Error('No network connectivity');
-      }
-      
-      const result = await operation();
-      
-      // Log successful operation
-      if (attempt > 1) {
-        console.log(`✅ ${operationName} succeeded on attempt ${attempt}`);
-      }
-      
-      return result;
+      return await operation();
     } catch (error: any) {
       lastError = error;
       
@@ -75,7 +62,8 @@ async function retryOperation<T>(
         code: error.code,
         isNetworkError: !error.code || error.code === 'unavailable',
         isPermissionError: error.code === 'permission-denied',
-        isNotFoundError: error.code === 'not-found'
+        isNotFoundError: error.code === 'not-found',
+        isInternalError: error.message?.includes('INTERNAL ASSERTION FAILED')
       });
 
       // Log error to monitoring system
@@ -92,6 +80,19 @@ async function retryOperation<T>(
       // Don't retry if no network connectivity
       if (error.message === 'No network connectivity') {
         throw error;
+      }
+      
+      // Special handling for internal assertion errors
+      if (error.message?.includes('INTERNAL ASSERTION FAILED')) {
+        if (attempt === maxRetries) {
+          console.error('🚨 Max retries reached for internal assertion error - this may require app restart');
+          throw error;
+        }
+        // Use longer delay for internal assertion errors
+        const backoffDelay = delay * Math.pow(3, attempt - 1) + Math.random() * 3000;
+        console.log(`⏳ Retrying ${operationName} after internal assertion error in ${Math.round(backoffDelay)}ms...`);
+        await new Promise(resolve => setTimeout(resolve, backoffDelay));
+        continue;
       }
       
       if (attempt < maxRetries) {
@@ -450,54 +451,49 @@ export const EventProfileAPI = {
     }
   },
 
+  async get(id: string): Promise<EventProfile | null> {
+    return executeWithOfflineSupport(async () => {
+      const docRef = doc(db, 'event_profiles', id);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        return { id: docSnap.id, ...docSnap.data() } as EventProfile;
+      }
+      return null;
+    }, 'Get Event Profile');
+  },
+
   async update(id: string, data: Partial<EventProfile>): Promise<void> {
-    try {
-      await executeWithOfflineSupport(async () => {
-        const docRef = doc(db, 'event_profiles', id);
-        await updateDoc(docRef, {
-          ...data,
-          updated_at: serverTimestamp()
-        });
-      }, 'Update Event Profile');
-    } catch (error) {
-      console.error('Error updating event profile:', error);
-      throw error;
-    }
+    return executeWithOfflineSupport(async () => {
+      await updateDoc(doc(db, 'event_profiles', id), {
+        ...data,
+        updated_at: serverTimestamp()
+      });
+    }, 'Update Event Profile');
   },
 
   async delete(id: string): Promise<void> {
-    try {
-      await executeWithOfflineSupport(async () => {
-        const docRef = doc(db, 'event_profiles', id);
-        await deleteDoc(docRef);
-      }, 'Delete Event Profile');
-    } catch (error) {
-      console.error('Error deleting event profile:', error);
-      throw error;
-    }
+    return executeWithOfflineSupport(async () => {
+      await deleteDoc(doc(db, 'event_profiles', id));
+    }, 'Delete Event Profile');
   }
 };
 
 // Like API
 export const LikeAPI = {
   async create(data: Omit<Like, 'id' | 'created_at'>): Promise<Like> {
-    try {
-      return await executeWithOfflineSupport(async () => {
-        const docRef = await addDoc(collection(db, 'likes'), {
-          ...data,
-          created_at: serverTimestamp()
-        });
-        
-        return {
-          id: docRef.id,
-          ...data,
-          created_at: new Date().toISOString()
-        };
-      }, 'Create Like');
-    } catch (error) {
-      console.error('Error creating like:', error);
-      throw error;
-    }
+    return executeWithOfflineSupport(async () => {
+      const docRef = await addDoc(collection(db, 'likes'), {
+        ...data,
+        created_at: serverTimestamp()
+      });
+      
+      return {
+        id: docRef.id,
+        ...data,
+        created_at: new Date().toISOString()
+      };
+    }, 'Create Like');
   },
 
   async filter(filters: Partial<Like> = {}): Promise<Like[]> {
@@ -513,12 +509,6 @@ export const LikeAPI = {
         }
         if (filters.to_profile_id) {
           q = query(q, where('to_profile_id', '==', filters.to_profile_id));
-        }
-        if (filters.liker_session_id) {
-          q = query(q, where('liker_session_id', '==', filters.liker_session_id));
-        }
-        if (filters.liked_session_id) {
-          q = query(q, where('liked_session_id', '==', filters.liked_session_id));
         }
         
         const querySnapshot = await getDocs(q);
@@ -547,77 +537,46 @@ export const LikeAPI = {
     }
   },
 
+  async get(id: string): Promise<Like | null> {
+    return executeWithOfflineSupport(async () => {
+      const docRef = doc(db, 'likes', id);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        return { id: docSnap.id, ...docSnap.data() } as Like;
+      }
+      return null;
+    }, 'Get Like');
+  },
+
   async update(id: string, data: Partial<Like>): Promise<void> {
-    try {
-      await executeWithOfflineSupport(async () => {
-        const docRef = doc(db, 'likes', id);
-        await updateDoc(docRef, {
-          ...data,
-          updated_at: serverTimestamp()
-        });
-      }, 'Update Like');
-    } catch (error) {
-      console.error('Error updating like:', error);
-      throw error;
-    }
+    return executeWithOfflineSupport(async () => {
+      await updateDoc(doc(db, 'likes', id), data);
+    }, 'Update Like');
   },
 
   async delete(id: string): Promise<void> {
-    try {
-      await executeWithOfflineSupport(async () => {
-        const docRef = doc(db, 'likes', id);
-        await deleteDoc(docRef);
-      }, 'Delete Like');
-    } catch (error) {
-      console.error('Error deleting like:', error);
-      throw error;
-    }
+    return executeWithOfflineSupport(async () => {
+      await deleteDoc(doc(db, 'likes', id));
+    }, 'Delete Like');
   }
 };
 
 // Message API
 export const MessageAPI = {
   async create(data: Omit<Message, 'id' | 'created_at'>): Promise<Message> {
-    try {
-      return await executeWithOfflineSupport(async () => {
-        const docRef = await addDoc(collection(db, 'messages'), {
-          ...data,
-          created_at: serverTimestamp()
-        });
-        
-        const message = {
-          id: docRef.id,
-          ...data,
-          created_at: new Date().toISOString()
-        };
-        
-        // 🎉 SEND MESSAGE NOTIFICATION
-        try {
-          // Get sender's profile to get their name
-          const senderProfiles = await EventProfileAPI.filter({
-            event_id: data.event_id,
-            session_id: data.from_profile_id
-          });
-          
-          const senderName = senderProfiles.length > 0 ? senderProfiles[0].first_name : undefined;
-          
-          await notifyNewMessage(
-            data.event_id,
-            data.from_profile_id,
-            data.to_profile_id,
-            data.content,
-            senderName
-          );
-        } catch (notificationError) {
-          console.error('Error sending message notification:', notificationError);
-        }
-        
-        return message;
-      }, 'Create Message');
-    } catch (error) {
-      console.error('Error creating message:', error);
-      throw error;
-    }
+    return executeWithOfflineSupport(async () => {
+      const docRef = await addDoc(collection(db, 'messages'), {
+        ...data,
+        created_at: serverTimestamp()
+      });
+      
+      return {
+        id: docRef.id,
+        ...data,
+        created_at: new Date().toISOString()
+      };
+    }, 'Create Message');
   },
 
   async filter(filters: Partial<Message> = {}): Promise<Message[]> {
@@ -643,120 +602,97 @@ export const MessageAPI = {
           ...(doc.data() as any)
         })) as Message[];
       }, 'Filter Messages');
-    } catch (error) {
+    } catch (error: any) {
+      // Enhanced error suppression with better logging
+      if (error.message?.includes('INTERNAL ASSERTION FAILED') || 
+          error.message?.includes('Target ID already exists') ||
+          error.code === 'unavailable') {
+        console.warn('⚠️ Firestore internal error suppressed:', {
+          error: error.message,
+          code: error.code,
+          operation: 'Filter Messages',
+          timestamp: new Date().toISOString(),
+          isDev: __DEV__,
+          platform: Platform.OS
+        });
+        return []; // Return empty array instead of throwing
+      }
       console.error('Error filtering messages:', error);
       throw error;
     }
   },
 
   async delete(id: string): Promise<void> {
-    try {
-      await executeWithOfflineSupport(async () => {
-        const docRef = doc(db, 'messages', id);
-        await deleteDoc(docRef);
-      }, 'Delete Message');
-    } catch (error) {
-      console.error('Error deleting message:', error);
-      throw error;
-    }
+    return executeWithOfflineSupport(async () => {
+      await deleteDoc(doc(db, 'messages', id));
+    }, 'Delete Message');
   }
 };
 
 // ContactShare API
 export const ContactShareAPI = {
   async create(data: Omit<ContactShare, 'id' | 'created_at'>): Promise<ContactShare> {
-    try {
-      return await executeWithOfflineSupport(async () => {
-        const docRef = await addDoc(collection(db, 'contact_shares'), {
-          ...data,
-          created_at: serverTimestamp()
-        });
-        
-        return {
-          id: docRef.id,
-          ...data,
-          created_at: new Date().toISOString()
-        };
-      }, 'Create Contact Share');
-    } catch (error) {
-      console.error('Error creating contact share:', error);
-      throw error;
-    }
+    return executeWithOfflineSupport(async () => {
+      const docRef = await addDoc(collection(db, 'contact_shares'), {
+        ...data,
+        created_at: serverTimestamp()
+      });
+      
+      return {
+        id: docRef.id,
+        ...data,
+        created_at: new Date().toISOString()
+      };
+    }, 'Create Contact Share');
   }
 };
 
 // EventFeedback API
 export const EventFeedbackAPI = {
   async create(data: Omit<EventFeedback, 'id' | 'created_at'>): Promise<EventFeedback> {
-    try {
-      return await executeWithOfflineSupport(async () => {
-        const docRef = await addDoc(collection(db, 'event_feedback'), {
-          ...data,
-          created_at: serverTimestamp()
-        });
-        
-        return {
-          id: docRef.id,
-          ...data,
-          created_at: new Date().toISOString()
-        };
-      }, 'Create Event Feedback');
-    } catch (error) {
-      console.error('Error creating event feedback:', error);
-      throw error;
-    }
+    return executeWithOfflineSupport(async () => {
+      const docRef = await addDoc(collection(db, 'event_feedback'), {
+        ...data,
+        created_at: serverTimestamp()
+      });
+      
+      return {
+        id: docRef.id,
+        ...data,
+        created_at: new Date().toISOString()
+      };
+    }, 'Create Event Feedback');
   }
 };
 
-// Auth API
-export const AuthAPI = {
+// User API
+export const User = {
   async signUp(email: string, password: string): Promise<FirebaseUser> {
-    try {
-      return await executeWithOfflineSupport(async () => {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        return userCredential.user;
-      }, 'Sign Up', false); // Don't queue auth operations
-    } catch (error) {
-      console.error('Error signing up:', error);
-      throw error;
-    }
+    return executeWithOfflineSupport(async () => {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      return userCredential.user;
+    }, 'User Sign Up');
   },
 
   async signIn(email: string, password: string): Promise<FirebaseUser> {
-    try {
-      return await executeWithOfflineSupport(async () => {
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        return userCredential.user;
-      }, 'Sign In', false); // Don't queue auth operations
-    } catch (error) {
-      console.error('Error signing in:', error);
-      throw error;
-    }
+    return executeWithOfflineSupport(async () => {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      return userCredential.user;
+    }, 'User Sign In');
   },
 
   async signOut(): Promise<void> {
-    try {
-      await executeWithOfflineSupport(async () => {
-        await signOut(auth);
-      }, 'Sign Out', false); // Don't queue auth operations
-    } catch (error) {
-      console.error('Error signing out:', error);
-      throw error;
-    }
+    return executeWithOfflineSupport(async () => {
+      await signOut(auth);
+    }, 'User Sign Out');
   },
 
   async updateProfile(data: { displayName?: string; photoURL?: string }): Promise<void> {
-    try {
-      await executeWithOfflineSupport(async () => {
-        const user = auth.currentUser;
-        if (!user) throw new Error('No user logged in');
-        
-        await updateProfile(user, data);
-      }, 'Update Profile', false); // Don't queue auth operations
-    } catch (error) {
-      console.error('Error updating profile:', error);
-      throw error;
-    }
+    return executeWithOfflineSupport(async () => {
+      const user = auth.currentUser;
+      if (!user) throw new Error('No user signed in');
+      await updateProfile(user, data);
+    }, 'Update User Profile');
   },
 
   getCurrentUser(): FirebaseUser | null {
@@ -764,26 +700,136 @@ export const AuthAPI = {
   },
 
   async uploadFile(file: File): Promise<{ file_url: string }> {
-    try {
-      return await executeWithOfflineSupport(async () => {
-        const storageRef = ref(storage, `uploads/${Date.now()}_${file.name}`);
-        await uploadBytes(storageRef, file);
-        const downloadURL = await getDownloadURL(storageRef);
-        return { file_url: downloadURL };
-      }, 'Upload File');
-    } catch (error) {
-      console.error('Error uploading file:', error);
-      throw error;
-    }
+    return executeWithOfflineSupport(async () => {
+      const storageRef = ref(storage, `uploads/${Date.now()}_${file.name}`);
+      await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(storageRef);
+      return { file_url: downloadURL };
+    }, 'Upload File');
   }
 };
 
-// Export aliases for backward compatibility
+// Export all APIs
 export const Event = EventAPI;
 export const EventProfile = EventProfileAPI;
 export const Like = LikeAPI;
 export const Message = MessageAPI;
 export const ContactShare = ContactShareAPI;
 export const EventFeedback = EventFeedbackAPI;
-export const User = AuthAPI;
-export const UploadFile = AuthAPI.uploadFile; 
+
+// User Saved Profile API for local profile storage
+export interface SavedProfile {
+  id: string;
+  user_id: string;
+  profile_data: {
+    first_name: string;
+    age: number;
+    gender_identity: string;
+    interested_in?: string;
+    profile_color: string;
+    about_me?: string;
+    height_cm?: number;
+    interests?: string[];
+  };
+  created_at: string;
+}
+
+export const SavedProfileAPI = {
+  // Save profile data locally on device
+  async saveProfileLocally(profileData: SavedProfile['profile_data']): Promise<void> {
+    try {
+      const savedProfiles = await this.getLocalProfiles();
+      const newProfile: SavedProfile = {
+        id: `local_${Date.now()}`,
+        user_id: 'local_user',
+        profile_data: profileData,
+        created_at: new Date().toISOString()
+      };
+      
+      savedProfiles.push(newProfile);
+      await AsyncStorage.setItem('saved_profiles', JSON.stringify(savedProfiles));
+      console.log('✅ Profile saved locally');
+    } catch (error) {
+      console.error('❌ Error saving profile locally:', error);
+      throw error;
+    }
+  },
+
+  // Get all locally saved profiles
+  async getLocalProfiles(): Promise<SavedProfile[]> {
+    try {
+      const savedProfilesJson = await AsyncStorage.getItem('saved_profiles');
+      return savedProfilesJson ? JSON.parse(savedProfilesJson) : [];
+    } catch (error) {
+      console.error('❌ Error getting local profiles:', error);
+      return [];
+    }
+  },
+
+  // Delete a locally saved profile
+  async deleteLocalProfile(profileId: string): Promise<void> {
+    try {
+      const savedProfiles = await this.getLocalProfiles();
+      const filteredProfiles = savedProfiles.filter(profile => profile.id !== profileId);
+      await AsyncStorage.setItem('saved_profiles', JSON.stringify(filteredProfiles));
+      console.log('✅ Profile deleted locally');
+    } catch (error) {
+      console.error('❌ Error deleting local profile:', error);
+      throw error;
+    }
+  },
+
+  // Save profile to Firebase (requires authentication)
+  async saveProfileToCloud(profileData: SavedProfile['profile_data']): Promise<string> {
+    return executeWithOfflineSupport(async () => {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        throw new Error('User must be authenticated to save profile to cloud');
+      }
+
+      const docRef = await addDoc(collection(db, 'user_saved_profiles'), {
+        user_id: currentUser.uid,
+        profile_data: profileData,
+        created_at: serverTimestamp()
+      });
+      
+      console.log('✅ Profile saved to cloud');
+      return docRef.id;
+    }, 'Save Profile to Cloud');
+  },
+
+  // Get user's saved profiles from Firebase
+  async getCloudProfiles(): Promise<SavedProfile[]> {
+    return executeWithOfflineSupport(async () => {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        throw new Error('User must be authenticated to get cloud profiles');
+      }
+
+      const q = query(
+        collection(db, 'user_saved_profiles'),
+        where('user_id', '==', currentUser.uid),
+        orderBy('created_at', 'desc')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as SavedProfile[];
+    }, 'Get Cloud Profiles');
+  },
+
+  // Delete a cloud saved profile
+  async deleteCloudProfile(profileId: string): Promise<void> {
+    return executeWithOfflineSupport(async () => {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        throw new Error('User must be authenticated to delete cloud profile');
+      }
+
+      await deleteDoc(doc(db, 'user_saved_profiles', profileId));
+      console.log('✅ Profile deleted from cloud');
+    }, 'Delete Cloud Profile');
+  }
+}; 

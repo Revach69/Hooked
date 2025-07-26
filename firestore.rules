@@ -1,46 +1,296 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Events collection - require authentication for admin dashboard
+    
+    // ===== EVENTS COLLECTION =====
+    // Events are publicly readable but only authenticated admins can create/modify
     match /events/{eventId} {
+      // ✅ Everyone can view events (for joining)
       allow read: if true;
-      allow write: if request.auth != null;  // Require authentication for admin operations
+      
+      // ✅ Only authenticated admins can create/modify events
+      allow write: if request.auth != null && 
+        request.auth.token.admin == true;
+      
+      // ✅ Allow event deletion only by admins
+      allow delete: if request.auth != null && 
+        request.auth.token.admin == true;
     }
     
-    // Event profiles - allow creation and deletion without auth for event participants
+    // ===== EVENT PROFILES COLLECTION =====
+    // Profiles are scoped to events and have time-based expiration
     match /event_profiles/{profileId} {
-      allow read: if true;
-      allow create, update, delete: if true;  // Allow all operations without auth for event participants
+      // ✅ Allow reading profiles only for active events and before expiration
+      allow read: if 
+        // Event must exist and be active
+        exists(/databases/$(database)/documents/events/$(resource.data.event_id)) &&
+        // Profile must not be expired
+        request.time < resource.data.expires_at &&
+        // Event must not be expired
+        request.time < get(/databases/$(database)/documents/events/$(resource.data.event_id)).data.expires_at;
+      
+      // ✅ Allow creating profiles with strict validation
+      allow create: if 
+        // Event must exist and be active
+        exists(/databases/$(database)/documents/events/$(request.resource.data.event_id)) &&
+        // Event must not be expired
+        request.time < get(/databases/$(database)/documents/events/$(request.resource.data.event_id)).data.expires_at &&
+        // Profile must have required fields
+        request.resource.data.keys().hasAll(['event_id', 'session_id', 'first_name', 'age', 'gender_identity', 'profile_color', 'created_at', 'expires_at']) &&
+        // Age must be valid
+        request.resource.data.age is int &&
+        request.resource.data.age >= 18 &&
+        request.resource.data.age <= 100 &&
+        // Profile color must be valid hex
+        request.resource.data.profile_color.matches('^#[0-9A-Fa-f]{6}$') &&
+        // Expiration must be set to event expiration
+        request.resource.data.expires_at == get(/databases/$(database)/documents/events/$(request.resource.data.event_id)).data.expires_at &&
+        // Created timestamp must be current
+        request.resource.data.created_at == request.time &&
+        // Session ID must be a valid UUID format
+        request.resource.data.session_id.matches('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$');
+      
+      // ✅ Allow updating only own profile with restrictions
+      allow update: if 
+        // Can only update own profile (by session_id)
+        request.auth != null &&
+        request.auth.uid == resource.data.session_id &&
+        // Profile must not be expired
+        request.time < resource.data.expires_at &&
+        // Event must not be expired
+        request.time < get(/databases/$(database)/documents/events/$(resource.data.event_id)).data.expires_at &&
+        // Cannot change critical fields
+        request.resource.data.event_id == resource.data.event_id &&
+        request.resource.data.session_id == resource.data.session_id &&
+        request.resource.data.created_at == resource.data.created_at &&
+        request.resource.data.expires_at == resource.data.expires_at &&
+        // Age validation
+        request.resource.data.age is int &&
+        request.resource.data.age >= 18 &&
+        request.resource.data.age <= 100 &&
+        // Profile color validation
+        request.resource.data.profile_color.matches('^#[0-9A-Fa-f]{6}$');
+      
+      // ✅ Allow deleting only own profile
+      allow delete: if 
+        request.auth != null &&
+        request.auth.uid == resource.data.session_id &&
+        // Can delete even if expired (for cleanup)
+        true;
     }
     
-    // Likes - allow creation and deletion without auth for event participants
+    // ===== LIKES COLLECTION =====
+    // Likes are scoped to events and profiles
     match /likes/{likeId} {
-      allow read: if true;
-      allow create, update, delete: if true;  // Allow all operations without auth for event participants
+      // ✅ Allow reading likes only for active events
+      allow read: if 
+        exists(/databases/$(database)/documents/events/$(resource.data.event_id)) &&
+        request.time < get(/databases/$(database)/documents/events/$(resource.data.event_id)).data.expires_at;
+      
+      // ✅ Allow creating likes with validation
+      allow create: if 
+        // Event must exist and be active
+        exists(/databases/$(database)/documents/events/$(request.resource.data.event_id)) &&
+        request.time < get(/databases/$(database)/documents/events/$(request.resource.data.event_id)).data.expires_at &&
+        // Both profiles must exist and be active
+        exists(/databases/$(database)/documents/event_profiles/$(request.resource.data.from_profile_id)) &&
+        exists(/databases/$(database)/documents/event_profiles/$(request.resource.data.to_profile_id)) &&
+        // Cannot like own profile
+        request.resource.data.from_profile_id != request.resource.data.to_profile_id &&
+        // Required fields
+        request.resource.data.keys().hasAll(['event_id', 'from_profile_id', 'to_profile_id', 'created_at']) &&
+        // Created timestamp must be current
+        request.resource.data.created_at == request.time;
+      
+      // ✅ Allow updating likes (for mutual match status)
+      allow update: if 
+        // Can only update own likes
+        request.auth != null &&
+        request.auth.uid == resource.data.from_profile_id &&
+        // Event must not be expired
+        request.time < get(/databases/$(database)/documents/events/$(resource.data.event_id)).data.expires_at &&
+        // Cannot change critical fields
+        request.resource.data.event_id == resource.data.event_id &&
+        request.resource.data.from_profile_id == resource.data.from_profile_id &&
+        request.resource.data.to_profile_id == resource.data.to_profile_id &&
+        request.resource.data.created_at == resource.data.created_at;
+      
+      // ✅ Allow deleting own likes
+      allow delete: if 
+        request.auth != null &&
+        request.auth.uid == resource.data.from_profile_id;
     }
     
-    // Messages - allow creation and deletion without auth for event participants
+    // ===== MESSAGES COLLECTION =====
+    // Messages between matched users
     match /messages/{messageId} {
-      allow read: if true;
-      allow create, update, delete: if true;  // Allow all operations without auth for event participants
+      // ✅ Allow reading messages only if user is participant
+      allow read: if 
+        // Event must exist and be active
+        exists(/databases/$(database)/documents/events/$(resource.data.event_id)) &&
+        request.time < get(/databases/$(database)/documents/events/$(resource.data.event_id)).data.expires_at &&
+        // User must be sender or receiver
+        (request.auth != null && 
+         (request.auth.uid == resource.data.from_profile_id || 
+          request.auth.uid == resource.data.to_profile_id));
+      
+      // ✅ Allow creating messages with validation
+      allow create: if 
+        // Event must exist and be active
+        exists(/databases/$(database)/documents/events/$(request.resource.data.event_id)) &&
+        request.time < get(/databases/$(database)/documents/events/$(request.resource.data.event_id)).data.expires_at &&
+        // Sender must be authenticated
+        request.auth != null &&
+        request.auth.uid == request.resource.data.from_profile_id &&
+        // Both profiles must exist
+        exists(/databases/$(database)/documents/event_profiles/$(request.resource.data.from_profile_id)) &&
+        exists(/databases/$(database)/documents/event_profiles/$(request.resource.data.to_profile_id)) &&
+        // Cannot message self
+        request.resource.data.from_profile_id != request.resource.data.to_profile_id &&
+        // Required fields
+        request.resource.data.keys().hasAll(['event_id', 'from_profile_id', 'to_profile_id', 'content', 'created_at']) &&
+        // Content must not be empty
+        request.resource.data.content.size() > 0 &&
+        request.resource.data.content.size() <= 1000 &&
+        // Created timestamp must be current
+        request.resource.data.created_at == request.time;
+      
+      // ✅ Allow updating only own messages (for editing)
+      allow update: if 
+        request.auth != null &&
+        request.auth.uid == resource.data.from_profile_id &&
+        // Event must not be expired
+        request.time < get(/databases/$(database)/documents/events/$(resource.data.event_id)).data.expires_at &&
+        // Cannot change critical fields
+        request.resource.data.event_id == resource.data.event_id &&
+        request.resource.data.from_profile_id == resource.data.from_profile_id &&
+        request.resource.data.to_profile_id == resource.data.to_profile_id &&
+        request.resource.data.created_at == resource.data.created_at &&
+        // Content validation
+        request.resource.data.content.size() > 0 &&
+        request.resource.data.content.size() <= 1000;
+      
+      // ✅ Allow deleting own messages
+      allow delete: if 
+        request.auth != null &&
+        request.auth.uid == resource.data.from_profile_id;
     }
     
-    // Contact shares - require authentication
+    // ===== CONTACT SHARES COLLECTION =====
+    // Contact information sharing between matched users
     match /contact_shares/{shareId} {
-      allow read: if true;
-      allow write: if request.auth != null;
+      // ✅ Allow reading only if user is participant
+      allow read: if 
+        request.auth != null &&
+        (request.auth.uid == resource.data.from_profile_id || 
+         request.auth.uid == resource.data.to_profile_id);
+      
+      // ✅ Allow creating contact shares with validation
+      allow create: if 
+        request.auth != null &&
+        request.auth.uid == request.resource.data.from_profile_id &&
+        // Both profiles must exist
+        exists(/databases/$(database)/documents/event_profiles/$(request.resource.data.from_profile_id)) &&
+        exists(/databases/$(database)/documents/event_profiles/$(request.resource.data.to_profile_id)) &&
+        // Cannot share with self
+        request.resource.data.from_profile_id != request.resource.data.to_profile_id &&
+        // Required fields
+        request.resource.data.keys().hasAll(['event_id', 'from_profile_id', 'to_profile_id', 'contact_info', 'created_at']) &&
+        // Contact info must not be empty
+        request.resource.data.contact_info.size() > 0 &&
+        request.resource.data.contact_info.size() <= 500 &&
+        // Created timestamp must be current
+        request.resource.data.created_at == request.time;
+      
+      // ✅ Allow updating only own contact shares
+      allow update: if 
+        request.auth != null &&
+        request.auth.uid == resource.data.from_profile_id &&
+        // Cannot change critical fields
+        request.resource.data.event_id == resource.data.event_id &&
+        request.resource.data.from_profile_id == resource.data.from_profile_id &&
+        request.resource.data.to_profile_id == resource.data.to_profile_id &&
+        request.resource.data.created_at == resource.data.created_at &&
+        // Contact info validation
+        request.resource.data.contact_info.size() > 0 &&
+        request.resource.data.contact_info.size() <= 500;
+      
+      // ✅ Allow deleting own contact shares
+      allow delete: if 
+        request.auth != null &&
+        request.auth.uid == resource.data.from_profile_id;
     }
     
-    // Event feedback - require authentication
+    // ===== EVENT FEEDBACK COLLECTION =====
+    // Anonymous feedback for events
     match /event_feedback/{feedbackId} {
-      allow read: if true;
-      allow write: if request.auth != null;
+      // ✅ Allow reading feedback only by admins
+      allow read: if request.auth != null && request.auth.token.admin == true;
+      
+      // ✅ Allow creating anonymous feedback
+      allow create: if 
+        // Event must exist
+        exists(/databases/$(database)/documents/events/$(request.resource.data.event_id)) &&
+        // Required fields
+        request.resource.data.keys().hasAll(['event_id', 'rating', 'feedback_text', 'created_at']) &&
+        // Rating must be valid
+        request.resource.data.rating is int &&
+        request.resource.data.rating >= 1 &&
+        request.resource.data.rating <= 5 &&
+        // Feedback text validation
+        request.resource.data.feedback_text.size() > 0 &&
+        request.resource.data.feedback_text.size() <= 1000 &&
+        // Created timestamp must be current
+        request.resource.data.created_at == request.time;
+      
+      // ✅ No updates allowed (feedback is immutable)
+      allow update: if false;
+      
+      // ✅ Only admins can delete feedback
+      allow delete: if request.auth != null && request.auth.token.admin == true;
     }
     
-    // Default rule for any other collections
+    // ===== ANALYTICS COLLECTION =====
+    // Write-only collection for backend analytics
+    match /analytics/{eventId}/{docId} {
+      // ✅ No direct reads (analytics data is sensitive)
+      allow read: if false;
+      
+      // ✅ Only Cloud Functions/admin can write analytics
+      allow write: if request.auth != null && request.auth.token.admin == true;
+    }
+    
+    // ===== USER SAVED PROFILES COLLECTION =====
+    // Locally saved profile data for future use
+    match /user_saved_profiles/{profileId} {
+      // ✅ Allow reading only own saved profiles
+      allow read: if request.auth != null && request.auth.uid == resource.data.user_id;
+      
+      // ✅ Allow creating saved profiles
+      allow create: if 
+        request.auth != null &&
+        request.auth.uid == request.resource.data.user_id &&
+        // Required fields
+        request.resource.data.keys().hasAll(['user_id', 'profile_data', 'created_at']) &&
+        // Created timestamp must be current
+        request.resource.data.created_at == request.time;
+      
+      // ✅ Allow updating own saved profiles
+      allow update: if 
+        request.auth != null &&
+        request.auth.uid == resource.data.user_id &&
+        // Cannot change user_id
+        request.resource.data.user_id == resource.data.user_id &&
+        request.resource.data.created_at == resource.data.created_at;
+      
+      // ✅ Allow deleting own saved profiles
+      allow delete: if request.auth != null && request.auth.uid == resource.data.user_id;
+    }
+    
+    // ===== DEFAULT RULE =====
+    // Deny all other operations by default
     match /{document=**} {
-      allow read: if true;
-      allow write: if request.auth != null;
+      allow read, write: if false;
     }
   }
 } 

@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getAuth, connectAuthEmulator } from 'firebase/auth';
 import { getFirestore, enableNetwork, disableNetwork, connectFirestoreEmulator } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
+import { getStorage, connectStorageEmulator } from 'firebase/storage';
 import NetInfo from '@react-native-community/netinfo';
 import { Platform } from 'react-native';
 
@@ -16,17 +16,48 @@ const firebaseConfig = {
   measurementId: "G-6YHKXLN806"
 };
 
-// Initialize Firebase app
-const app = initializeApp(firebaseConfig);
+// Initialize Firebase app with error handling
+let app;
+try {
+  app = initializeApp(firebaseConfig);
+  console.log('✅ Firebase app initialized successfully');
+} catch (error: any) {
+  console.error('❌ Failed to initialize Firebase app:', error);
+  // Create a fallback app with a different name if initialization fails
+  try {
+    app = initializeApp(firebaseConfig, 'fallback-app');
+    console.log('✅ Firebase app initialized with fallback name');
+  } catch (fallbackError: any) {
+    console.error('❌ Failed to initialize Firebase app with fallback:', fallbackError);
+    throw new Error('Firebase initialization failed completely');
+  }
+}
 
-// Initialize Firebase services
+// Initialize Firebase services with error handling
 export const auth = getAuth(app);
-
-// Configure Firestore with iOS simulator specific settings
 export const db = getFirestore(app);
-
-// Configure Storage
 export const storage = getStorage(app);
+
+// Connect to emulators in development
+if (__DEV__) {
+  try {
+    // Only connect to emulators if they're not already connected
+    if (!auth.config.emulator) {
+      connectAuthEmulator(auth, 'http://localhost:9099');
+      console.log('✅ Connected to Auth emulator');
+    }
+    if (!db._delegate._databaseId.projectId.includes('demo-')) {
+      connectFirestoreEmulator(db, 'localhost', 8080);
+      console.log('✅ Connected to Firestore emulator');
+    }
+    if (!storage.app.options.storageBucket.includes('demo-')) {
+      connectStorageEmulator(storage, 'localhost', 9199);
+      console.log('✅ Connected to Storage emulator');
+    }
+  } catch (emulatorError: any) {
+    console.warn('⚠️ Failed to connect to emulators (this is normal if emulators are not running):', emulatorError.message);
+  }
+}
 
 // Enhanced network management with exponential backoff and better error handling
 const enableNetworkWithRetry = async (maxRetries = 3, baseDelay = 1000) => {
@@ -105,8 +136,8 @@ const disableNetworkWithRetry = async (maxRetries = 2, baseDelay = 500) => {
 class NetworkCircuitBreaker {
   private failureCount = 0;
   private lastFailureTime = 0;
-  private readonly failureThreshold = 3; // Reduced from 5 to 3
-  private readonly resetTimeout = 60000; // Increased from 30 seconds to 60 seconds
+  private readonly failureThreshold = 3;
+  private readonly resetTimeout = 60000;
   private isOpen = false;
   private internalAssertionErrorCount = 0;
   private readonly maxInternalAssertionErrors = 2;
@@ -176,7 +207,7 @@ if (Platform.OS === 'ios' && __DEV__) {
       }
       console.error('❌ Failed to enable Firestore network on iOS simulator:', error);
     }
-  }, 2000); // Increased from 1500ms to 2000ms for better stability
+  }, 2000);
 }
 
 // Enhanced network connectivity monitoring with better error handling
@@ -202,7 +233,7 @@ const setupNetworkListener = () => {
 
     if (state.isConnected) {
       // Add delay for iOS simulator with better timing
-      const delay = Platform.OS === 'ios' && __DEV__ ? 1200 : 300; // Increased delays
+      const delay = Platform.OS === 'ios' && __DEV__ ? 1200 : 300;
       
       setTimeout(async () => {
         try {
@@ -229,7 +260,7 @@ const setupNetworkListener = () => {
           }
           console.error('❌ Failed to disable Firestore network after connection lost:', error);
         }
-      }, 200); // Increased from 100ms
+      }, 200);
     }
   });
   

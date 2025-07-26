@@ -35,6 +35,7 @@
         "android.permission.INTERNET",
         "android.permission.POST_NOTIFICATIONS"
       ],
+      "supportsTablet": false,
       "intentFilters": [
         {
           "action": "VIEW",
