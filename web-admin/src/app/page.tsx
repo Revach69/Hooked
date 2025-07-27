@@ -7,7 +7,16 @@ import {
   Plus,
   Download,
   FileText,
-  User
+  User,
+  ChevronDown,
+  ChevronUp,
+  BarChart3,
+  Edit,
+  QrCode,
+  Trash2,
+  MapPin,
+  Calendar,
+  Clock
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import dynamic from 'next/dynamic';
@@ -22,6 +31,7 @@ export default function AdminDashboard() {
   const { user, loading: authLoading, logout } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [events, setEvents] = useState<Event[]>([]);
+  const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
   
   // Modal states
   const [showEventForm, setShowEventForm] = useState(false);
@@ -137,6 +147,188 @@ export default function AdminDashboard() {
     alert('QR Sign download feature will be implemented soon!');
   };
 
+  const toggleEventExpansion = (eventId: string) => {
+    const newExpanded = new Set(expandedEvents);
+    if (newExpanded.has(eventId)) {
+      newExpanded.delete(eventId);
+    } else {
+      newExpanded.add(eventId);
+    }
+    setExpandedEvents(newExpanded);
+  };
+
+  const getEventStatus = (event: Event): { status: string; color: string; bgColor: string } => {
+    const now = new Date();
+    const startDate = new Date(event.starts_at);
+    const expiryDate = new Date(event.expires_at);
+
+    if (now < startDate) {
+      return { status: 'Upcoming', color: 'text-blue-600', bgColor: 'bg-blue-100' };
+    } else if (now >= startDate && now <= expiryDate) {
+      return { status: 'Active', color: 'text-green-600', bgColor: 'bg-green-100' };
+    } else {
+      return { status: 'Expired', color: 'text-gray-600', bgColor: 'bg-gray-100' };
+    }
+  };
+
+  const categorizeEvents = () => {
+    const now = new Date();
+    const categorized = {
+      active: [] as Event[],
+      future: [] as Event[],
+      past: [] as Event[]
+    };
+
+    events.forEach(event => {
+      const startDate = new Date(event.starts_at);
+      const endDate = new Date(event.expires_at);
+      
+      if (now >= startDate && now <= endDate) {
+        categorized.active.push(event);
+      } else if (now < startDate) {
+        categorized.future.push(event);
+      } else {
+        categorized.past.push(event);
+      }
+    });
+
+    return categorized;
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const renderEventCard = (event: Event) => {
+    const status = getEventStatus(event);
+    const isExpanded = expandedEvents.has(event.id);
+    const joinLink = `https://www.hooked-app.com/join-instant?code=${event.event_code}`;
+
+    return (
+      <div key={event.id} className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+        {/* Event Header - Always Visible */}
+        <div 
+          className="p-6 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+          onClick={() => toggleEventExpansion(event.id)}
+        >
+          <div className="flex justify-between items-start">
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-2">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">{event.name}</h3>
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${status.bgColor} ${status.color}`}>
+                  {status.status}
+                </span>
+              </div>
+              
+              <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+                <span className="font-medium">#{event.event_code}</span>
+                {event.location && (
+                  <div className="flex items-center gap-1">
+                    <MapPin size={16} />
+                    <span>{event.location}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              {isExpanded ? (
+                <ChevronUp size={20} className="text-gray-500" />
+              ) : (
+                <ChevronDown size={20} className="text-gray-500" />
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Expanded Content */}
+        {isExpanded && (
+          <div className="border-t border-gray-200 dark:border-gray-700 p-6 bg-gray-50 dark:bg-gray-700">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Left Side - Schedule */}
+              <div>
+                <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Schedule</h4>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 text-gray-700 dark:text-gray-300">
+                    <Clock size={16} />
+                    <span className="font-medium">Starts:</span>
+                    <span>{formatDate(event.starts_at)}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-gray-700 dark:text-gray-300">
+                    <Calendar size={16} />
+                    <span className="font-medium">Expires:</span>
+                    <span>{formatDate(event.expires_at)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Side - Actions */}
+              <div>
+                <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Actions</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => handleAnalytics(event.id)}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                  >
+                    <BarChart3 size={16} />
+                    Analytics
+                  </button>
+                  
+                  <button
+                    onClick={() => handleEditEvent(event)}
+                    className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm"
+                  >
+                    <Edit size={16} />
+                    Edit
+                  </button>
+                  
+                  <button
+                    onClick={() => handleDownloadData(event.id)}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
+                  >
+                    <Download size={16} />
+                    Download Data
+                  </button>
+                  
+                  <button
+                    onClick={() => handleDeleteEvent(event.id)}
+                    className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+                  >
+                    <Trash2 size={16} />
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderEventCategory = (title: string, events: Event[], color: string) => {
+    if (events.length === 0) return null;
+
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <div className={`w-1 h-6 rounded-full ${color}`}></div>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{title}</h2>
+          <span className="text-lg text-gray-600 dark:text-gray-400 font-medium">({events.length})</span>
+        </div>
+        <div className="space-y-4">
+          {events.map(renderEventCard)}
+        </div>
+      </div>
+    );
+  };
+
   const convertToCSV = (data: any[], type: string): string => {
     if (data.length === 0) return '';
     
@@ -184,6 +376,8 @@ export default function AdminDashboard() {
   if (!user) {
     return <LoginForm />;
   }
+
+  const categorizedEvents = categorizeEvents();
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -252,19 +446,10 @@ export default function AdminDashboard() {
             </button>
           </div>
         ) : (
-          <div className="space-y-8">
-            {events.map((event) => (
-              <EventCard
-                key={event.id}
-                event={event}
-                onAnalytics={handleAnalytics}
-                onEdit={handleEditEvent}
-                onDelete={handleDeleteEvent}
-                onDownloadData={handleDownloadData}
-                onDownloadQR={handleDownloadQR}
-                onDownloadQRSign={handleDownloadQRSign}
-              />
-            ))}
+          <div className="space-y-12">
+            {renderEventCategory('Active Events', categorizedEvents.active, 'bg-green-500')}
+            {renderEventCategory('Future Events', categorizedEvents.future, 'bg-blue-500')}
+            {renderEventCategory('Past Events', categorizedEvents.past, 'bg-gray-500')}
           </div>
         )}
       </div>

@@ -9,9 +9,10 @@ import {
   StyleSheet,
   useColorScheme,
   SafeAreaView,
+  Animated,
 } from 'react-native';
 import { router } from 'expo-router';
-import { BarChart3, Users, Heart, MessageCircle, Plus, LogOut, AlertTriangle, Calendar, MapPin, Home } from 'lucide-react-native';
+import { BarChart3, Users, Heart, MessageCircle, Plus, LogOut, AlertTriangle, Calendar, MapPin, Home, ChevronDown, ChevronUp, QrCode, Edit, Trash2, Download } from 'lucide-react-native';
 import { Event, EventProfile, Like, Message, User } from '../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -23,6 +24,7 @@ export default function Admin() {
     totalEvents: 0,
     activeEvents: 0,
     futureEvents: 0,
+    pastEvents: 0,
     totalProfiles: 0,
     totalLikes: 0,
     totalMatches: 0,
@@ -30,6 +32,7 @@ export default function Admin() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [adminEmail, setAdminEmail] = useState<string>('');
+  const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     initializeSession();
@@ -102,10 +105,16 @@ export default function Admin() {
         return now < startDate;
       });
 
+      const pastEvents = events.filter(event => {
+        const endDate = new Date(event.expires_at);
+        return now > endDate;
+      });
+
       setStats({
         totalEvents: events.length,
         activeEvents: activeEvents.length,
         futureEvents: futureEvents.length,
+        pastEvents: pastEvents.length,
         totalProfiles: allProfiles.length,
         totalLikes: allLikes.length,
         totalMatches: mutualLikes.length,
@@ -127,6 +136,16 @@ export default function Admin() {
       pathname: '/admin/event-details',
       params: { eventId: event.id }
     });
+  };
+
+  const toggleEventExpansion = (eventId: string) => {
+    const newExpanded = new Set(expandedEvents);
+    if (newExpanded.has(eventId)) {
+      newExpanded.delete(eventId);
+    } else {
+      newExpanded.add(eventId);
+    }
+    setExpandedEvents(newExpanded);
   };
 
   const handleBackToHome = () => {
@@ -196,6 +215,149 @@ export default function Admin() {
     if (now < startDate) return { text: 'Upcoming', color: '#3b82f6' };
     if (now >= startDate && now <= endDate) return { text: 'Active', color: '#10b981' };
     return { text: 'Ended', color: '#6b7280' };
+  };
+
+  const categorizeEvents = () => {
+    const now = new Date();
+    const categorized = {
+      active: [] as Event[],
+      future: [] as Event[],
+      past: [] as Event[]
+    };
+
+    events.forEach(event => {
+      const startDate = new Date(event.starts_at);
+      const endDate = new Date(event.expires_at);
+      
+      if (now >= startDate && now <= endDate) {
+        categorized.active.push(event);
+      } else if (now < startDate) {
+        categorized.future.push(event);
+      } else {
+        categorized.past.push(event);
+      }
+    });
+
+    return categorized;
+  };
+
+  const renderEventCard = (event: Event) => {
+    const status = getEventStatus(event);
+    const isExpanded = expandedEvents.has(event.id);
+    const joinLink = `https://www.hooked-app.com/join-instant?code=${event.event_code}`;
+
+    return (
+      <View key={event.id} style={styles.eventCard}>
+        {/* Event Header - Always Visible */}
+        <TouchableOpacity 
+          style={styles.eventHeader}
+          onPress={() => toggleEventExpansion(event.id)}
+        >
+          <View style={styles.eventHeaderContent}>
+            <Text style={styles.eventName}>{event.name}</Text>
+            <View style={[styles.eventStatus, { backgroundColor: status.color + '20' }]}>
+              <Text style={[styles.eventDetailText, { color: status.color }]}>
+                {status.text}
+              </Text>
+            </View>
+          </View>
+          
+          <View style={styles.eventHeaderDetails}>
+            <View style={styles.eventDetails}>
+              <Text style={styles.eventDetailText}>Code: #{event.event_code}</Text>
+            </View>
+            
+            {event.location && (
+              <View style={styles.eventDetails}>
+                <MapPin size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
+                <Text style={styles.eventDetailText}>{event.location}</Text>
+              </View>
+            )}
+          </View>
+          
+          <View style={styles.expandIcon}>
+            {isExpanded ? (
+              <ChevronUp size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+            ) : (
+              <ChevronDown size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+            )}
+          </View>
+        </TouchableOpacity>
+
+        {/* Expanded Content */}
+        {isExpanded && (
+          <View style={styles.expandedContent}>
+            <View style={styles.eventSchedule}>
+              <Text style={styles.sectionTitle}>Schedule</Text>
+              <View style={styles.scheduleItem}>
+                <Calendar size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
+                <Text style={styles.eventDetailText}>
+                  Starts: {formatDate(event.starts_at)}
+                </Text>
+              </View>
+              <View style={styles.scheduleItem}>
+                <Calendar size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
+                <Text style={styles.eventDetailText}>
+                  Expires: {formatDate(event.expires_at)}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.eventActions}>
+              <Text style={styles.sectionTitle}>Actions</Text>
+              <View style={styles.actionButtons}>
+                <TouchableOpacity 
+                  style={styles.actionButton}
+                  onPress={() => handleEventPress(event)}
+                >
+                  <BarChart3 size={16} color="#3b82f6" />
+                  <Text style={styles.actionButtonText}>Analytics</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.actionButton}
+                  onPress={() => handleEventPress(event)}
+                >
+                  <Edit size={16} color="#6b7280" />
+                  <Text style={styles.actionButtonText}>Edit</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.actionButton}
+                  onPress={() => handleEventPress(event)}
+                >
+                  <QrCode size={16} color="#10b981" />
+                  <Text style={styles.actionButtonText}>QR Code</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.actionButton}
+                  onPress={() => handleEventPress(event)}
+                >
+                  <Download size={16} color="#8b5cf6" />
+                  <Text style={styles.actionButtonText}>Download</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  const renderEventCategory = (title: string, events: Event[], color: string) => {
+    if (events.length === 0) return null;
+
+    return (
+      <View style={styles.eventCategory}>
+        <View style={styles.categoryHeader}>
+          <View style={[styles.categoryIndicator, { backgroundColor: color }]} />
+          <Text style={styles.categoryTitle}>{title}</Text>
+          <Text style={styles.categoryCount}>({events.length})</Text>
+        </View>
+        {events.map(renderEventCard)}
+      </View>
+    );
   };
 
   const styles = StyleSheet.create({
@@ -291,21 +453,46 @@ export default function Admin() {
       color: isDark ? '#9ca3af' : '#6b7280',
       textAlign: 'center',
     },
-    eventsSection: {
+    eventCategory: {
       marginBottom: 24,
+    },
+    categoryHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    categoryIndicator: {
+      width: 4,
+      height: 20,
+      borderRadius: 2,
+      marginRight: 8,
+    },
+    categoryTitle: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      color: isDark ? '#ffffff' : '#1f2937',
+      flex: 1,
+    },
+    categoryCount: {
+      fontSize: 16,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      fontWeight: '500',
     },
     eventCard: {
       backgroundColor: isDark ? '#2d2d2d' : 'white',
       borderRadius: 12,
-      padding: 16,
       marginBottom: 12,
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: isDark ? 0.3 : 0.1,
       shadowRadius: 4,
       elevation: 3,
+      overflow: 'hidden',
     },
     eventHeader: {
+      padding: 16,
+    },
+    eventHeaderContent: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'flex-start',
@@ -325,6 +512,9 @@ export default function Admin() {
       fontSize: 12,
       fontWeight: '600',
     },
+    eventHeaderDetails: {
+      flex: 1,
+    },
     eventDetails: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -335,10 +525,51 @@ export default function Admin() {
       color: isDark ? '#9ca3af' : '#6b7280',
       marginLeft: 4,
     },
+    expandIcon: {
+      position: 'absolute',
+      top: 16,
+      right: 16,
+    },
+    expandedContent: {
+      paddingHorizontal: 16,
+      paddingBottom: 16,
+      borderTopWidth: 1,
+      borderTopColor: isDark ? '#404040' : '#e5e7eb',
+    },
+    eventSchedule: {
+      marginBottom: 16,
+    },
+    scheduleItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    eventActions: {
+      marginBottom: 8,
+    },
+    actionButtons: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    actionButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: isDark ? '#404040' : '#f3f4f6',
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      gap: 6,
+    },
+    actionButtonText: {
+      fontSize: 14,
+      color: isDark ? '#ffffff' : '#1f2937',
+      fontWeight: '500',
+    },
     actionsSection: {
       marginBottom: 24,
     },
-    actionButton: {
+    mainActionButton: {
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: isDark ? '#2d2d2d' : 'white',
@@ -388,6 +619,8 @@ export default function Admin() {
     );
   }
 
+  const categorizedEvents = categorizeEvents();
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -436,70 +669,35 @@ export default function Admin() {
               <View style={styles.statIcon}>
                 <Users size={24} color="#ec4899" />
               </View>
-              <Text style={styles.statNumber}>{stats.totalProfiles}</Text>
-              <Text style={styles.statLabel}>Total Profiles</Text>
+              <Text style={styles.statNumber}>{stats.pastEvents}</Text>
+              <Text style={styles.statLabel}>Past Events</Text>
             </View>
           </View>
         </View>
 
-        {/* Events List */}
-        <View style={styles.eventsSection}>
-          <Text style={styles.sectionTitle}>Events</Text>
-          {events.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>No events created yet</Text>
-              <TouchableOpacity style={styles.actionButton} onPress={handleCreateEvent}>
-                <Plus size={20} color="#6b7280" />
-                <Text style={styles.actionText}>Create Your First Event</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            events.map((event) => {
-              const status = getEventStatus(event);
-              return (
-                <TouchableOpacity
-                  key={event.id}
-                  style={styles.eventCard}
-                  onPress={() => handleEventPress(event)}
-                >
-                  <View style={styles.eventHeader}>
-                    <Text style={styles.eventName}>{event.name}</Text>
-                    <View style={[styles.eventStatus, { backgroundColor: status.color + '20' }]}>
-                      <Text style={[styles.eventDetailText, { color: status.color }]}>
-                        {status.text}
-                      </Text>
-                    </View>
-                  </View>
-                  
-                  <View style={styles.eventDetails}>
-                    <Text style={styles.eventDetailText}>Code: #{event.event_code}</Text>
-                  </View>
-                  
-                  {event.location && (
-                    <View style={styles.eventDetails}>
-                      <MapPin size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
-                      <Text style={styles.eventDetailText}>{event.location}</Text>
-                    </View>
-                  )}
-                  
-                  <View style={styles.eventDetails}>
-                    <Calendar size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
-                    <Text style={styles.eventDetailText}>
-                      {formatDate(event.starts_at)}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })
-          )}
-        </View>
+        {/* Categorized Events */}
+        {events.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>No events created yet</Text>
+            <TouchableOpacity style={styles.mainActionButton} onPress={handleCreateEvent}>
+              <Plus size={20} color="#6b7280" />
+              <Text style={styles.actionText}>Create Your First Event</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            {renderEventCategory('Active Events', categorizedEvents.active, '#10b981')}
+            {renderEventCategory('Future Events', categorizedEvents.future, '#3b82f6')}
+            {renderEventCategory('Past Events', categorizedEvents.past, '#6b7280')}
+          </>
+        )}
 
         {/* Actions */}
         <View style={styles.actionsSection}>
           <Text style={styles.sectionTitle}>Admin Actions</Text>
           
           <TouchableOpacity 
-            style={styles.actionButton}
+            style={styles.mainActionButton}
             onPress={() => router.push('/errorInsights')}
           >
             <AlertTriangle size={20} color="#ef4444" />
@@ -507,7 +705,7 @@ export default function Admin() {
           </TouchableOpacity>
           
           <TouchableOpacity 
-            style={styles.actionButton}
+            style={styles.mainActionButton}
             onPress={handleBackToHome}
           >
             <Home size={20} color="#6b7280" />
@@ -515,7 +713,7 @@ export default function Admin() {
           </TouchableOpacity>
           
           <TouchableOpacity 
-            style={[styles.actionButton, styles.logoutButton]}
+            style={[styles.mainActionButton, styles.logoutButton]}
             onPress={handleLogout}
           >
             <LogOut size={20} color="#dc2626" />
