@@ -15,6 +15,7 @@ import { router } from 'expo-router';
 import { Eye, EyeOff, Lock, Mail, Check } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { User } from '../lib/firebaseApi';
+import { AdminUtils } from '../lib/adminUtils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function AdminLogin() {
@@ -62,14 +63,21 @@ export default function AdminLogin() {
       const user = await User.signIn(savedEmail, savedPassword);
       
       if (user) {
-        // Store admin session with Firebase auth
-        await AsyncStorage.setItem('isAdmin', 'true');
-        await AsyncStorage.setItem('adminAccessTime', new Date().toISOString());
-        await AsyncStorage.setItem('adminEmail', user.email || '');
-        await AsyncStorage.setItem('adminUid', user.uid);
+        // Check if user is admin
+        const isAdmin = await AdminUtils.isAdmin();
         
-        // Navigate to admin dashboard
-        router.replace('/admin');
+        if (isAdmin) {
+          // Set admin session
+          await AdminUtils.setAdminSession(user.email || '');
+          await AsyncStorage.setItem('adminUid', user.uid);
+          
+          // Navigate to admin dashboard
+          router.replace('/admin');
+        } else {
+          // User is not admin
+          await User.signOut();
+          setError('Access denied. You do not have admin privileges.');
+        }
       }
     } catch (error: any) {
       console.error('Auto-login error:', error);
@@ -95,24 +103,31 @@ export default function AdminLogin() {
       const user = await User.signIn(email.trim(), password);
       
       if (user) {
-        // Store admin session with Firebase auth
-        await AsyncStorage.setItem('isAdmin', 'true');
-        await AsyncStorage.setItem('adminAccessTime', new Date().toISOString());
-        await AsyncStorage.setItem('adminEmail', user.email || '');
-        await AsyncStorage.setItem('adminUid', user.uid);
+        // Check if user is admin
+        const isAdmin = await AdminUtils.isAdmin();
         
-        // Save credentials if "Remember Me" is checked
-        if (rememberMe) {
-          await AsyncStorage.setItem('adminSavedEmail', email.trim());
-          await AsyncStorage.setItem('adminSavedPassword', password);
-          await AsyncStorage.setItem('adminRememberMe', 'true');
+        if (isAdmin) {
+          // Set admin session
+          await AdminUtils.setAdminSession(user.email || '');
+          await AsyncStorage.setItem('adminUid', user.uid);
+          
+          // Save credentials if "Remember Me" is checked
+          if (rememberMe) {
+            await AsyncStorage.setItem('adminSavedEmail', email.trim());
+            await AsyncStorage.setItem('adminSavedPassword', password);
+            await AsyncStorage.setItem('adminRememberMe', 'true');
+          } else {
+            // Clear saved credentials if "Remember Me" is unchecked
+            await AsyncStorage.multiRemove(['adminSavedEmail', 'adminSavedPassword', 'adminRememberMe']);
+          }
+          
+          // Navigate to admin dashboard
+          router.replace('/admin');
         } else {
-          // Clear saved credentials if "Remember Me" is unchecked
-          await AsyncStorage.multiRemove(['adminSavedEmail', 'adminSavedPassword', 'adminRememberMe']);
+          // User is not admin
+          await User.signOut();
+          setError('Access denied. You do not have admin privileges.');
         }
-        
-        // Navigate to admin dashboard
-        router.replace('/admin');
       }
     } catch (error: any) {
       console.error('Admin login error:', error);

@@ -10,11 +10,14 @@ import {
   useColorScheme,
   SafeAreaView,
   Animated,
+  Modal,
 } from 'react-native';
 import { router } from 'expo-router';
 import { BarChart3, Users, Heart, MessageCircle, Plus, LogOut, AlertTriangle, Calendar, MapPin, Home, ChevronDown, ChevronUp, QrCode, Edit, Trash2, Download } from 'lucide-react-native';
 import { Event, EventProfile, Like, Message, User } from '../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import QRCodeGenerator from '../lib/QRCodeGenerator';
+import { AdminUtils } from '../lib/adminUtils';
 
 export default function Admin() {
   const colorScheme = useColorScheme();
@@ -33,6 +36,8 @@ export default function Admin() {
   const [isLoading, setIsLoading] = useState(true);
   const [adminEmail, setAdminEmail] = useState<string>('');
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
+  const [showQRCodeModal, setShowQRCodeModal] = useState(false);
+  const [selectedEventForQR, setSelectedEventForQR] = useState<Event | null>(null);
 
   useEffect(() => {
     initializeSession();
@@ -48,20 +53,15 @@ export default function Admin() {
       return;
     }
     
-    // Check if admin session is still valid (24 hours)
-    const adminAccessTime = await AsyncStorage.getItem('adminAccessTime');
-    if (adminAccessTime) {
-      const accessTime = new Date(adminAccessTime);
-      const now = new Date();
-      const hoursDiff = (now.getTime() - accessTime.getTime()) / (1000 * 60 * 60);
-      
-      if (hoursDiff > 24) {
-        // Admin session expired, sign out and redirect
-        await User.signOut();
-        await AsyncStorage.multiRemove(['isAdmin', 'adminAccessTime', 'adminEmail', 'adminUid']);
-        router.replace('/home');
-        return;
-      }
+    // Check if user is admin
+    const isAdmin = await AdminUtils.isAdmin();
+    
+    if (!isAdmin) {
+      // User is not admin, sign out and redirect
+      await User.signOut();
+      await AdminUtils.clearAdminSession();
+      router.replace('/home');
+      return;
     }
     
     // Set admin email for display
@@ -138,6 +138,16 @@ export default function Admin() {
     });
   };
 
+  const handleQRCodePress = (event: Event) => {
+    setSelectedEventForQR(event);
+    setShowQRCodeModal(true);
+  };
+
+  const handleCloseQRModal = () => {
+    setShowQRCodeModal(false);
+    setSelectedEventForQR(null);
+  };
+
   const toggleEventExpansion = (eventId: string) => {
     const newExpanded = new Set(expandedEvents);
     if (newExpanded.has(eventId)) {
@@ -178,14 +188,13 @@ export default function Admin() {
                 'currentEventCode',
                 'currentProfileColor',
                 'currentProfilePhotoUrl',
-                'isAdmin',
-                'adminAccessTime',
-                'adminEmail',
-                'adminUid',
                 'adminSavedEmail',
                 'adminSavedPassword',
                 'adminRememberMe'
               ]);
+              
+              // Clear admin session
+              await AdminUtils.clearAdminSession();
               
               router.replace('/home');
             } catch (error) {
@@ -324,7 +333,7 @@ export default function Admin() {
                 
                 <TouchableOpacity 
                   style={styles.actionButton}
-                  onPress={() => handleEventPress(event)}
+                  onPress={() => handleQRCodePress(event)}
                 >
                   <QrCode size={16} color="#10b981" />
                   <Text style={styles.actionButtonText}>QR Code</Text>
@@ -606,6 +615,12 @@ export default function Admin() {
       textAlign: 'center',
       marginTop: 12,
     },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
   });
 
   if (isLoading) {
@@ -721,6 +736,24 @@ export default function Admin() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* QR Code Modal */}
+      <Modal
+        visible={showQRCodeModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleCloseQRModal}
+      >
+        <View style={styles.modalOverlay}>
+          {selectedEventForQR && (
+            <QRCodeGenerator
+              eventCode={selectedEventForQR.event_code}
+              eventName={selectedEventForQR.name}
+              onClose={handleCloseQRModal}
+            />
+          )}
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 } 

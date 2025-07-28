@@ -31,11 +31,15 @@ import {
   uploadBytes,
   getDownloadURL
 } from 'firebase/storage';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { notifyNewMessage } from './messageNotificationHelper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { logFirebaseError } from './errorMonitoring';
 import { Platform } from 'react-native';
+
+// Initialize Cloud Functions
+const functions = getFunctions();
 
 // Enhanced retry operation with better error handling and recovery
 async function retryOperation<T>(
@@ -706,6 +710,30 @@ export const User = {
       const downloadURL = await getDownloadURL(storageRef);
       return { file_url: downloadURL };
     }, 'Upload File');
+  },
+
+  // Admin functions
+  async setAdminClaim(targetUserId: string, isAdmin: boolean): Promise<void> {
+    return executeWithOfflineSupport(async () => {
+      const setAdminClaimFunction = httpsCallable(functions, 'setAdminClaim');
+      await setAdminClaimFunction({ targetUserId, isAdmin });
+    }, 'Set Admin Claim');
+  },
+
+  async verifyAdminStatus(): Promise<boolean> {
+    return executeWithOfflineSupport(async () => {
+      const verifyAdminStatusFunction = httpsCallable(functions, 'verifyAdminStatus');
+      const result = await verifyAdminStatusFunction({});
+      return (result.data as any).isAdmin;
+    }, 'Verify Admin Status');
+  },
+
+  async forceTokenRefresh(): Promise<void> {
+    return executeWithOfflineSupport(async () => {
+      const user = auth.currentUser;
+      if (!user) throw new Error('No user signed in');
+      await user.getIdToken(true); // Force refresh the token
+    }, 'Force Token Refresh');
   }
 };
 

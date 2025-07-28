@@ -326,4 +326,55 @@ export const getUserSavedProfiles = functions.https.onCall(async (data, context)
     console.error('Error getting user saved profiles:', error);
     throw new functions.https.HttpsError('internal', 'Failed to get saved profiles');
   }
+});
+
+// Cloud Function to set admin claims for a user
+export const setAdminClaim = functions.https.onCall(async (data, context) => {
+  // Verify authentication
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+  
+  const { targetUserId, isAdmin } = data;
+  
+  if (!targetUserId || typeof isAdmin !== 'boolean') {
+    throw new functions.https.HttpsError('invalid-argument', 'targetUserId and isAdmin are required');
+  }
+  
+  try {
+    // Set custom claims for the target user
+    await admin.auth().setCustomUserClaims(targetUserId, { admin: isAdmin });
+    
+    console.log(`Set admin claim for user ${targetUserId}: ${isAdmin}`);
+    
+    return { success: true, message: `Admin claim set to ${isAdmin} for user ${targetUserId}` };
+    
+  } catch (error) {
+    console.error('Error setting admin claim:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to set admin claim');
+  }
+});
+
+// Cloud Function to verify admin status
+export const verifyAdminStatus = functions.https.onCall(async (data, context) => {
+  // Verify authentication
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+  
+  const userId = context.auth.uid;
+  
+  try {
+    // Get user record to check custom claims
+    const userRecord = await admin.auth().getUser(userId);
+    const isAdmin = userRecord.customClaims?.admin === true;
+    
+    console.log(`Verified admin status for user ${userId}: ${isAdmin}`);
+    
+    return { success: true, isAdmin };
+    
+  } catch (error) {
+    console.error('Error verifying admin status:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to verify admin status');
+  }
 }); 

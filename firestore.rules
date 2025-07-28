@@ -8,9 +8,8 @@ service cloud.firestore {
       // ✅ Everyone can view events (for joining)
       allow read: if true;
       
-      // ✅ Only authenticated admins can create/modify events
-      allow write: if request.auth != null && 
-        request.auth.token.admin == true;
+      // ✅ Temporarily allow authenticated users to create events (will be restricted to admins later)
+      allow write: if request.auth != null;
       
       // ✅ Allow event deletion only by admins
       allow delete: if request.auth != null && 
