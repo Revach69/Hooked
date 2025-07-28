@@ -16,8 +16,10 @@ import {
   Trash2,
   MapPin,
   Calendar,
-  Clock
+  Clock,
+  Copy
 } from 'lucide-react';
+import QRCode from 'qrcode';
 import { useAuth } from '@/contexts/AuthContext';
 import dynamic from 'next/dynamic';
 
@@ -26,6 +28,57 @@ const EventCard = dynamic(() => import('@/components/EventCard'), { ssr: false }
 const AnalyticsModal = dynamic(() => import('@/components/AnalyticsModal'), { ssr: false });
 const EventForm = dynamic(() => import('@/components/EventForm'), { ssr: false });
 const LoginForm = dynamic(() => import('@/components/LoginForm'), { ssr: false });
+
+// Inline QR Code Component
+function QRCodeGenerator({ joinLink, eventCode }: { joinLink: string; eventCode: string }) {
+  const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const generateQR = async () => {
+      try {
+        setIsLoading(true);
+        const qrDataUrl = await QRCode.toDataURL(joinLink, {
+          width: 180,
+          margin: 2,
+          color: {
+            dark: '#000000',
+            light: '#FFFFFF'
+          }
+        });
+        setQrCodeUrl(qrDataUrl);
+      } catch (error) {
+        console.error('Error generating QR code:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    generateQR();
+  }, [joinLink]);
+
+  if (isLoading) {
+    return (
+      <div className="w-full h-full flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center">
+      <img 
+        src={qrCodeUrl} 
+        alt={`QR Code for ${eventCode}`}
+        className="w-full h-auto"
+      />
+      <div className="mt-2 text-center">
+        <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">
+          #{eventCode}
+        </p>
+      </div>
+    </div>
+  );
+}
 
 export default function AdminDashboard() {
   const { user, loading: authLoading, logout } = useAuth();
@@ -139,7 +192,30 @@ export default function AdminDashboard() {
   };
 
   const handleDownloadQR = async (eventId: string) => {
-    // This is handled within the EventCard component
+    try {
+      const event = events.find(e => e.id === eventId);
+      if (!event) return;
+      
+      const joinLink = `https://www.hooked-app.com/join-instant?code=${event.event_code}`;
+      const qrDataUrl = await QRCode.toDataURL(joinLink, {
+        width: 400,
+        margin: 4,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      });
+      
+      const link = document.createElement('a');
+      link.href = qrDataUrl;
+      link.download = `qr-${event.event_code}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Error downloading QR code:', error);
+      alert('Failed to download QR code. Please try again.');
+    }
   };
 
   const handleDownloadQRSign = async (eventId: string) => {
@@ -250,8 +326,25 @@ export default function AdminDashboard() {
         {/* Expanded Content */}
         {isExpanded && (
           <div className="border-t border-gray-200 dark:border-gray-700 p-6 bg-gray-50 dark:bg-gray-700">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Left Side - Schedule */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Left Side - QR Code */}
+              <div>
+                <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">QR Code</h4>
+                <div className="flex flex-col items-center">
+                  <div className="w-48 h-48 bg-white rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-600 flex items-center justify-center">
+                    <QRCodeGenerator joinLink={joinLink} eventCode={event.event_code} />
+                  </div>
+                  <button
+                    onClick={() => handleDownloadQR(event.id)}
+                    className="mt-4 flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                  >
+                    <Download size={16} />
+                    Download QR
+                  </button>
+                </div>
+              </div>
+
+              {/* Middle - Schedule */}
               <div>
                 <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Schedule</h4>
                 <div className="space-y-3">
@@ -264,6 +357,26 @@ export default function AdminDashboard() {
                     <Calendar size={16} />
                     <span className="font-medium">Expires:</span>
                     <span>{formatDate(event.expires_at)}</span>
+                  </div>
+                </div>
+                
+                {/* Join Link */}
+                <div className="mt-6">
+                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Join Link</h4>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={joinLink}
+                      readOnly
+                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
+                    />
+                    <button
+                      onClick={() => navigator.clipboard.writeText(joinLink)}
+                      className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                      title="Copy to clipboard"
+                    >
+                      <Copy size={16} />
+                    </button>
                   </div>
                 </div>
               </div>
