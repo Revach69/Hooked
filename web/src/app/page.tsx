@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { QrCode, Hash, X, Heart } from 'lucide-react'
 import Image from 'next/image'
 import { Event } from '@/lib/firebaseApi'
+import jsQR from 'jsqr'
 
 export default function HomePage() {
   const router = useRouter()
@@ -90,17 +91,161 @@ export default function HomePage() {
   }
 
   const handleCameraAccess = async () => {
+    setIsProcessing(true)
+    
     try {
-      setIsProcessing(true)
-      
-      // For web version, we'll show a message that QR scanning is not fully implemented
-      alert(
-        'QR Code scanning is not available in the web version. Please use the manual code entry option.'
-      )
+      // Check if camera access is available
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert('Camera access is not available in this browser. Please use the manual code entry option.')
+        setIsProcessing(false)
+        return
+      }
+
+      // Request camera access
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { 
+          facingMode: 'environment', // Use back camera if available
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        } 
+      })
+
+      // Create video element for camera preview
+      const video = document.createElement('video')
+      video.srcObject = stream
+      video.setAttribute('playsinline', 'true')
+      video.setAttribute('autoplay', 'true')
+      video.style.position = 'fixed'
+      video.style.top = '0'
+      video.style.left = '0'
+      video.style.width = '100%'
+      video.style.height = '100%'
+      video.style.zIndex = '9999'
+      video.style.objectFit = 'cover'
+
+      // Create overlay with capture button
+      const overlay = document.createElement('div')
+      overlay.style.position = 'fixed'
+      overlay.style.top = '0'
+      overlay.style.left = '0'
+      overlay.style.width = '100%'
+      overlay.style.height = '100%'
+      overlay.style.zIndex = '10000'
+      overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.8)'
+      overlay.style.display = 'flex'
+      overlay.style.flexDirection = 'column'
+      overlay.style.alignItems = 'center'
+      overlay.style.justifyContent = 'center'
+
+      // Add instructions
+      const instructions = document.createElement('div')
+      instructions.style.color = 'white'
+      instructions.style.textAlign = 'center'
+      instructions.style.marginBottom = '20px'
+      instructions.style.padding = '20px'
+      instructions.innerHTML = `
+        <h2 style="margin-bottom: 10px;">Scan QR Code</h2>
+        <p>Point your camera at a QR code and tap the button below to capture</p>
+      `
+      overlay.appendChild(instructions)
+
+      // Add capture button
+      const captureBtn = document.createElement('button')
+      captureBtn.textContent = 'Capture QR Code'
+      captureBtn.style.padding = '15px 30px'
+      captureBtn.style.fontSize = '18px'
+      captureBtn.style.backgroundColor = '#ec4899'
+      captureBtn.style.color = 'white'
+      captureBtn.style.border = 'none'
+      captureBtn.style.borderRadius = '25px'
+      captureBtn.style.cursor = 'pointer'
+      captureBtn.style.marginBottom = '20px'
+
+      // Add close button
+      const closeBtn = document.createElement('button')
+      closeBtn.textContent = 'Cancel'
+      closeBtn.style.padding = '10px 20px'
+      closeBtn.style.fontSize = '16px'
+      closeBtn.style.backgroundColor = 'transparent'
+      closeBtn.style.color = 'white'
+      closeBtn.style.border = '2px solid white'
+      closeBtn.style.borderRadius = '20px'
+      closeBtn.style.cursor = 'pointer'
+
+      overlay.appendChild(captureBtn)
+      overlay.appendChild(closeBtn)
+
+      // Add elements to page
+      document.body.appendChild(video)
+      document.body.appendChild(overlay)
+
+      // Handle capture
+      captureBtn.onclick = async () => {
+        try {
+          // Create canvas to capture frame
+          const canvas = document.createElement('canvas')
+          const context = canvas.getContext('2d')
+          canvas.width = video.videoWidth
+          canvas.height = video.videoHeight
+          context?.drawImage(video, 0, 0)
+
+          // Convert to blob
+          const blob = await new Promise<Blob>((resolve) => {
+            canvas.toBlob((blob) => {
+              resolve(blob!)
+            }, 'image/jpeg', 0.8)
+          })
+
+          // Try to scan for QR code using jsQR library
+          const imageData = context?.getImageData(0, 0, canvas.width, canvas.height)
+          if (imageData) {
+            const code = jsQR(imageData.data, imageData.width, imageData.height)
+            if (code) {
+              // QR code found! Extract the event code
+              const eventCode = code.data.trim()
+              console.log('QR Code detected:', eventCode)
+              
+              // Clean up camera
+              stream.getTracks().forEach(track => track.stop())
+              document.body.removeChild(video)
+              document.body.removeChild(overlay)
+              setIsProcessing(false)
+              
+              // Process the event code
+              await handleEventAccess(eventCode)
+              return
+            } else {
+              alert('No QR code found in the image. Please try again with a clearer view of the QR code.')
+            }
+          }
+
+          // Clean up
+          stream.getTracks().forEach(track => track.stop())
+          document.body.removeChild(video)
+          document.body.removeChild(overlay)
+          setIsProcessing(false)
+
+        } catch (error) {
+          console.error('Error capturing image:', error)
+          alert('Failed to capture image. Please try again.')
+          stream.getTracks().forEach(track => track.stop())
+          document.body.removeChild(video)
+          document.body.removeChild(overlay)
+          setIsProcessing(false)
+        }
+      }
+
+      // Handle close
+      closeBtn.onclick = () => {
+        stream.getTracks().forEach(track => track.stop())
+        document.body.removeChild(video)
+        document.body.removeChild(overlay)
+        setIsProcessing(false)
+      }
+
     } catch (error) {
-      console.error('Camera error:', error)
-      alert('Failed to access camera. Please try again.')
-    } finally {
+      console.error('Error accessing camera:', error)
+      alert('Camera access denied or not available. Please use the manual code entry option.')
       setIsProcessing(false)
     }
   }

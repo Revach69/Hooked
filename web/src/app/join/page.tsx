@@ -76,16 +76,25 @@ function JoinPageContent() {
     router.push('/consent')
   }
 
+  const handleDecline = () => {
+    router.back()
+  }
+
   const handleBack = () => {
     router.back()
   }
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-primary flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-          <p className="text-white text-lg">Validating event code...</p>
+      <div className="page-container bg-gradient-primary">
+        <div className="page-content flex items-center justify-center p-4">
+          <div className="bg-gray-800 dark:bg-gray-800 rounded-2xl p-8 max-w-md w-full text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-600 mx-auto mb-4"></div>
+            <h2 className="text-xl font-bold text-white dark:text-white mb-4">Joining Event...</h2>
+            <p className="text-gray-300 dark:text-gray-300">
+              Please wait while we verify your event access.
+            </p>
+          </div>
         </div>
       </div>
     )
@@ -93,117 +102,119 @@ function JoinPageContent() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-primary flex items-center justify-center p-4">
-        <div className="bg-gray-800 dark:bg-gray-800 rounded-2xl p-8 max-w-md w-full text-center">
-          <AlertCircle size={48} className="text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-white dark:text-white mb-4">Event Not Found</h2>
-          <p className="text-gray-300 dark:text-gray-300 mb-6">{error}</p>
-          <button
-            onClick={handleBack}
-            className="w-full bg-gradient-primary text-white font-semibold py-3 px-6 rounded-xl hover:shadow-lg transition-all duration-200"
-          >
-            Go Back
-          </button>
+      <div className="page-container bg-gradient-primary">
+        <div className="page-content flex items-center justify-center p-4">
+          <div className="bg-gray-800 dark:bg-gray-800 rounded-2xl p-8 max-w-md w-full text-center">
+            <AlertCircle size={48} className="text-red-500 mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-white dark:text-white mb-4">Event Not Found</h2>
+            <p className="text-gray-300 dark:text-gray-300 mb-6">{error}</p>
+            <button
+              onClick={handleBack}
+              className="w-full bg-gradient-primary text-white font-semibold py-3 px-6 rounded-xl hover:shadow-lg transition-all duration-200"
+            >
+              Go Back
+            </button>
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-primary">
-      {/* Header */}
-      <div className="pt-12 pb-6 px-4">
-        <button
-          onClick={handleBack}
-          className="flex items-center text-white mb-4"
-        >
-          <ArrowLeft size={24} className="mr-2" />
-          Back
-        </button>
-        
-        <div className="text-center">
-          <CheckCircle size={48} className="text-white mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-white mb-2">
-            Event Found!
-          </h1>
-          <p className="text-white text-lg opacity-90">
-            {currentEvent?.name}
-          </p>
-        </div>
-      </div>
-
-      {/* Event Details */}
-      <div className="px-4 pb-8">
-        <div className="bg-gray-800 dark:bg-gray-800 rounded-2xl p-6 mb-6">
-          <h2 className="text-xl font-bold text-white dark:text-white mb-4">Event Details</h2>
+    <div className="page-container bg-gradient-primary">
+      <div className="page-content">
+        {/* Header */}
+        <div className="pt-12 pb-6 px-4">
+          <button
+            onClick={handleBack}
+            className="flex items-center text-white mb-4"
+          >
+            <ArrowLeft size={24} className="mr-2" />
+            Back
+          </button>
           
+          <div className="text-center">
+            <CheckCircle size={48} className="text-white mx-auto mb-4" />
+            <h1 className="text-2xl font-bold text-white mb-2">
+              Event Found!
+            </h1>
+            <p className="text-white text-lg opacity-90">
+              {currentEvent.name}
+            </p>
+          </div>
+        </div>
+
+        {/* Event Details */}
+        <div className="flex-1 px-4 pb-8">
+          <div className="bg-gray-800 dark:bg-gray-800 rounded-2xl p-6 mb-6">
+            <h2 className="text-xl font-bold text-white dark:text-white mb-4">Event Details</h2>
+            
+            <div className="space-y-3 text-sm text-gray-300 dark:text-gray-300">
+              <div>
+                <span className="font-semibold">Event Name:</span> {currentEvent.name}
+              </div>
+              <div>
+                <span className="font-semibold">Description:</span> {currentEvent.description || 'No description available'}
+              </div>
+              <div>
+                <span className="font-semibold">Location:</span> {currentEvent.location || 'Location TBD'}
+              </div>
+              <div>
+                <span className="font-semibold">Event Code:</span> {currentEvent.event_code}
+              </div>
+            </div>
+          </div>
+
+          {/* Terms & Conditions */}
+          <div className="bg-gray-800 dark:bg-gray-800 rounded-2xl p-6 mb-6">
+            <h2 className="text-xl font-bold text-white dark:text-white mb-4">Terms & Conditions</h2>
+            
+            <div className="space-y-4">
+              <div className="flex items-start space-x-3">
+                <input
+                  type="checkbox"
+                  id="consent"
+                  checked={hasConsented}
+                  onChange={(e) => setHasConsented(e.target.checked)}
+                  className="mt-1 h-4 w-4 text-pink-600 focus:ring-pink-500 border-gray-600 bg-gray-700 rounded"
+                />
+                <label htmlFor="consent" className="text-sm text-white dark:text-white leading-relaxed">
+                  I agree to create a temporary profile for this event and understand that my profile will be visible to other event participants. I also agree to the{' '}
+                  <a href="https://www.hooked-app.com/terms" className="text-pink-400 dark:text-pink-400 underline">
+                    Terms of Service
+                  </a>
+                  {' '}and{' '}
+                  <a href="https://www.hooked-app.com/privacy" className="text-pink-400 dark:text-pink-400 underline">
+                    Privacy Policy
+                  </a>
+                  .
+                </label>
+              </div>
+              
+              {error && (
+                <p className="text-red-500 text-sm">{error}</p>
+              )}
+            </div>
+          </div>
+
+          {/* Action Buttons */}
           <div className="space-y-3">
-            <div>
-              <p className="text-sm text-gray-400 dark:text-gray-400">Event Name</p>
-              <p className="text-white dark:text-white font-medium">{currentEvent?.name}</p>
-            </div>
+            <button
+              onClick={handleConsent}
+              disabled={!hasConsented}
+              className="w-full bg-gradient-primary text-white font-semibold py-4 px-6 rounded-xl hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              I Agree - Create My Profile
+            </button>
             
-            {currentEvent?.description && (
-              <div>
-                <p className="text-sm text-gray-400 dark:text-gray-400">Description</p>
-                <p className="text-white dark:text-white">{currentEvent.description}</p>
-              </div>
-            )}
-            
-            {currentEvent?.location && (
-              <div>
-                <p className="text-sm text-gray-400 dark:text-gray-400">Location</p>
-                <p className="text-white dark:text-white">{currentEvent.location}</p>
-              </div>
-            )}
-            
-            <div>
-              <p className="text-sm text-gray-400 dark:text-gray-400">Event Code</p>
-              <p className="text-white dark:text-white font-mono font-medium">{currentEvent?.event_code}</p>
-            </div>
+            <button
+              onClick={handleDecline}
+              className="w-full bg-gray-700 dark:bg-gray-700 text-gray-300 dark:text-gray-300 font-semibold py-4 px-6 rounded-xl hover:bg-gray-600 dark:hover:bg-gray-600 transition-all duration-200"
+            >
+              Decline
+            </button>
           </div>
         </div>
-
-        {/* Consent */}
-        <div className="bg-gray-800 dark:bg-gray-800 rounded-2xl p-6 mb-6">
-          <h2 className="text-xl font-bold text-white dark:text-white mb-4">Terms & Conditions</h2>
-          
-          <div className="space-y-4">
-            <div className="flex items-start space-x-3">
-              <input
-                type="checkbox"
-                id="consent"
-                checked={hasConsented}
-                onChange={(e) => setHasConsented(e.target.checked)}
-                className="mt-1 h-4 w-4 text-pink-600 focus:ring-pink-500 border-gray-600 bg-gray-700 rounded"
-              />
-              <label htmlFor="consent" className="text-sm text-white dark:text-white leading-relaxed">
-                I agree to create a temporary profile for this event and understand that my profile will be visible to other event participants. I also agree to the{' '}
-                <a href="https://www.hooked-app.com/terms" className="text-pink-400 dark:text-pink-400 underline">
-                  Terms of Service
-                </a>
-                {' '}and{' '}
-                <a href="https://www.hooked-app.com/privacy" className="text-pink-400 dark:text-pink-400 underline">
-                  Privacy Policy
-                </a>
-                .
-              </label>
-            </div>
-            
-            {error && (
-              <p className="text-red-500 text-sm">{error}</p>
-            )}
-          </div>
-        </div>
-
-        {/* Action Button */}
-        <button
-          onClick={handleConsent}
-          disabled={!hasConsented}
-          className="w-full bg-gradient-primary text-white font-semibold py-4 px-6 rounded-xl hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Continue to Create Profile
-        </button>
       </div>
     </div>
   )
@@ -212,10 +223,15 @@ function JoinPageContent() {
 export default function JoinPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gradient-primary flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-          <p className="text-white text-lg">Loading...</p>
+      <div className="page-container bg-gradient-primary">
+        <div className="page-content flex items-center justify-center p-4">
+          <div className="bg-gray-800 dark:bg-gray-800 rounded-2xl p-8 max-w-md w-full text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-600 mx-auto mb-4"></div>
+            <h2 className="text-xl font-bold text-white dark:text-white mb-4">Joining Event...</h2>
+            <p className="text-gray-300 dark:text-gray-300">
+              Please wait while we verify your event access.
+            </p>
+          </div>
         </div>
       </div>
     }>
