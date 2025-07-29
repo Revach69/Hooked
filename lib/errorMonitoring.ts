@@ -37,6 +37,9 @@ export interface FirebaseErrorContext {
 class ErrorMonitor {
   private readonly maxLogs = 1000;
   private readonly storageKey = 'firebase_error_logs';
+  private readonly maxErrorsPerMinute = 10; // Limit error logging rate
+  private errorCounts = new Map<string, number>();
+  private lastResetTime = Date.now();
 
   async logError(error: any, operation: string, context?: {
     userId?: string;
@@ -45,6 +48,24 @@ class ErrorMonitor {
     networkStatus?: string;
   }): Promise<void> {
     try {
+      // Rate limiting: reset counters every minute
+      const now = Date.now();
+      if (now - this.lastResetTime > 60000) {
+        this.errorCounts.clear();
+        this.lastResetTime = now;
+      }
+
+      // Check if we're logging too many errors
+      const errorKey = `${operation}:${error.code || 'unknown'}`;
+      const currentCount = this.errorCounts.get(errorKey) || 0;
+      
+      if (currentCount >= this.maxErrorsPerMinute) {
+        // Don't log this error to prevent spam
+        return;
+      }
+      
+      this.errorCounts.set(errorKey, currentCount + 1);
+
       const errorLog: ErrorLog = {
         id: Math.random().toString(36).substr(2, 9),
         timestamp: new Date().toISOString(),
@@ -69,12 +90,15 @@ class ErrorMonitor {
 
       await AsyncStorage.setItem(this.storageKey, JSON.stringify(existingLogs));
       
-      // Log to console in development
-      if (__DEV__) {
+      // Log to console in development only if not a recursive error
+      if (__DEV__ && !error.message?.includes('Global error caught')) {
         console.error('📊 Error logged:', errorLog);
       }
     } catch (storageError) {
-      console.error('❌ Failed to log error to storage:', storageError);
+      // Don't log storage errors to prevent infinite loops
+      if (__DEV__) {
+        console.warn('❌ Failed to log error to storage (silenced to prevent loops)');
+      }
     }
   }
 
@@ -165,8 +189,78 @@ class ErrorMonitor {
 
 export const errorMonitor = new ErrorMonitor();
 
+// Global error handler setup to prevent recursive error logging
+let isGlobalErrorHandlerSetup = false;
+let errorLogCount = 0;
+const MAX_ERROR_LOGS = 50; // Maximum number of error logs before stopping
+
+export function setupGlobalErrorHandler() {
+  if (isGlobalErrorHandlerSetup) {
+    return; // Already setup
+  }
+
+  isGlobalErrorHandlerSetup = true;
+
+  // Override console.error to prevent recursive logging
+  const originalConsoleError = console.error;
+  console.error = (...args) => {
+    // Check if this is a recursive error log
+    const message = args.join(' ');
+    if (message.includes('Global error caught') || message.includes('🚨 Global error caught')) {
+      errorLogCount++;
+      if (errorLogCount > MAX_ERROR_LOGS) {
+        // Stop logging after max count to prevent infinite loops
+        return;
+      }
+    }
+    
+    // Call original console.error
+    originalConsoleError.apply(console, args);
+  };
+
+  // Setup global error handler for unhandled promise rejections
+  if (typeof global !== 'undefined') {
+    const originalUnhandledRejectionHandler = global.onunhandledrejection;
+    
+    global.onunhandledrejection = (event) => {
+      // Prevent recursive error handling
+      if (event.reason && typeof event.reason === 'object' && event.reason.message) {
+        const message = event.reason.message;
+        if (message.includes('Global error caught') || message.includes('🚨 Global error caught')) {
+          errorLogCount++;
+          if (errorLogCount > MAX_ERROR_LOGS) {
+            event.preventDefault();
+            return;
+          }
+        }
+      }
+      
+      // Call original handler if it exists
+      if (originalUnhandledRejectionHandler) {
+        originalUnhandledRejectionHandler(event);
+      }
+    };
+  }
+
+  console.log('✅ Global error handler setup complete');
+}
+
+// Reset error count (useful for testing or after app restart)
+export function resetErrorCount() {
+  errorLogCount = 0;
+  console.log('🔄 Error count reset');
+}
+
+// Get current error count
+export function getErrorCount() {
+  return errorLogCount;
+}
+
 // Enhanced error monitoring with specific handling for internal assertion errors
 export async function logFirebaseError(error: any, operation: string, context: Partial<FirebaseErrorContext> = {}) {
+  // Setup global error handler if not already done
+  setupGlobalErrorHandler();
+
   const errorContext: FirebaseErrorContext = {
     operation,
     timestamp: new Date().toISOString(),
@@ -211,12 +305,14 @@ export async function logFirebaseError(error: any, operation: string, context: P
     return;
   }
 
-  // Regular error logging
-  console.error('❌ Firebase Error:', {
-    error: error.message,
-    code: error.code,
-    context: errorContext
-  });
+  // Regular error logging with rate limiting
+  if (errorLogCount < MAX_ERROR_LOGS) {
+    console.error('❌ Firebase Error:', {
+      error: error.message,
+      code: error.code,
+      context: errorContext
+    });
+  }
 }
 
 // Listener management utility to prevent conflicts

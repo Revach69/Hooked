@@ -14,9 +14,9 @@ import {
   FlatList,
   useColorScheme,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { User, LogOut, Edit, Camera, Users, MessageCircle, Flag, AlertTriangle, Shield, Clock, Mail, AlertCircle } from 'lucide-react-native';
-import { EventProfile, Event, UploadFile } from '../lib/firebaseApi';
+import { EventProfile, Event, User as UserAPI } from '../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -58,6 +58,40 @@ export default function Profile() {
   useEffect(() => {
     initializeSession();
   }, []);
+
+  // Synchronize eventVisible state with profile data
+  useEffect(() => {
+    if (profile) {
+      const newVisibility = profile.is_visible ?? true;
+      console.log('🔄 Syncing visibility state:', { 
+        profileVisibility: profile.is_visible, 
+        currentEventVisible: eventVisible, 
+        newVisibility 
+      });
+      setEventVisible(newVisibility);
+    }
+  }, [profile]);
+
+  // Refresh profile data when returning to this page
+  useFocusEffect(
+    React.useCallback(() => {
+      if (profile?.id) {
+        console.log('🔄 Refreshing profile data on focus for profile:', profile.id);
+        // Refresh profile data to ensure toggle state is current
+        EventProfile.get(profile.id).then((updatedProfile) => {
+          if (updatedProfile) {
+            console.log('✅ Profile refreshed:', { 
+              oldVisibility: profile.is_visible, 
+              newVisibility: updatedProfile.is_visible 
+            });
+            setProfile(updatedProfile);
+          }
+        }).catch((error) => {
+          console.error("Error refreshing profile:", error);
+        });
+      }
+    }, [profile?.id])
+  );
 
   const initializeSession = async () => {
     const eventId = await AsyncStorage.getItem('currentEventId');
@@ -106,7 +140,7 @@ export default function Profile() {
 
       // Try with standard settings first
       let result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+        mediaTypes: 'Images',
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -121,7 +155,7 @@ export default function Profile() {
         
         // Try without editing first, then we can handle cropping differently
         result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ['images'],
+          mediaTypes: 'Images',
           allowsEditing: false,
           quality: 0.8,
           allowsMultipleSelection: false,
@@ -151,20 +185,14 @@ export default function Profile() {
 
         setIsUploadingPhoto(true);
         try {
-          const response = await fetch(asset.uri);
-          const blob = await response.blob();
+          // Use the asset directly instead of creating a File object
+          const fileObject = {
+            uri: asset.uri,
+            name: asset.fileName || `profile-photo-${Date.now()}.jpg`,
+            type: asset.type || 'image/jpeg'
+          };
           
-          // Force JPEG format for better compatibility with image picker and cropping
-          // This helps ensure consistent behavior across different image formats
-          let fileExtension = 'jpg';
-          let mimeType = 'image/jpeg';
-          
-          // Create file with JPEG mime type regardless of original format
-          // This helps the image picker handle the image properly
-          const fileName = `profile-photo.${fileExtension}`;
-          const file = new File([blob], fileName, { type: mimeType });
-          
-          const { file_url } = await UploadFile(file);
+          const { file_url } = await UserAPI.uploadFile(fileObject);
           
           // Update profile with new photo
           await EventProfile.update(profile.id, { profile_photo_url: file_url });
@@ -361,49 +389,34 @@ export default function Profile() {
     setSaving(false);
   };
   const handleToggleVisibility = async (value: boolean) => {
-    // If turning off visibility, show confirmation dialog
-    if (!value) {
+    try {
+      console.log('🔄 Attempting to update visibility to', value, 'for profile:', profile.id);
+      console.log('📊 Current state:', { 
+        profileVisibility: profile?.is_visible, 
+        eventVisible: eventVisible, 
+        targetValue: value 
+      });
+      
+      // Use the new toggleVisibility function
+      await EventProfile.toggleVisibility(profile.id, value);
+      
+      console.log('✅ Visibility updated successfully to', value);
+      setProfile((prev: any) => ({ ...prev, is_visible: value }));
+      setEventVisible(value);
+      
+      // Show success message
       Alert.alert(
-        "Hide Profile",
-        "Are you sure you want to hide your profile? You will not be able to see other profiles while hidden.",
-        [
-          {
-            text: "Cancel",
-            style: "cancel",
-            onPress: () => {
-              // Revert the toggle back to visible
-              setEventVisible(true);
-            }
-          },
-          {
-            text: "Continue",
-            onPress: async () => {
-              try {
-                await EventProfile.update(profile.id, { is_visible: false });
-                setProfile((prev: any) => ({ ...prev, is_visible: false }));
-                setEventVisible(false);
-              } catch (error) {
-                console.error("Error updating visibility:", error);
-                Alert.alert("Error", "Failed to update visibility. Please try again.");
-                // Revert the toggle if update failed
-                setEventVisible(true);
-              }
-            }
-          }
-        ]
+        value ? "Profile Visible" : "Profile Hidden",
+        value 
+          ? "Your profile is now visible to other users." 
+          : "Your profile is now hidden. You won't see other users and they won't see you."
       );
-    } else {
-      // Turning on visibility - no confirmation needed
-      try {
-        await EventProfile.update(profile.id, { is_visible: true });
-        setProfile((prev: any) => ({ ...prev, is_visible: true }));
-        setEventVisible(true);
-      } catch (error) {
-        console.error("Error updating visibility:", error);
-        Alert.alert("Error", "Failed to update visibility. Please try again.");
-        // Revert the toggle if update failed
-        setEventVisible(false);
-      }
+      
+    } catch (error) {
+      console.error("❌ Error updating visibility:", error);
+      Alert.alert("Error", "Failed to update visibility. Please try again.");
+      // Revert the toggle if update failed
+      setEventVisible(!value);
     }
   };
 

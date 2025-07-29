@@ -86,24 +86,23 @@ export default function Matches() {
             return;
           }
 
-          // If user is not visible, don't load matches
-          if (!userProfile.is_visible) {
-            setMatches([]);
-            // Clean up matches listener when user is not visible
-            if (listenersRef.current.matches) {
-              listenersRef.current.matches();
-              listenersRef.current.matches = undefined;
-            }
-            return;
-          }
-
-          // Only load matches if current user is visible
+          // If user is not visible, still allow matches to be visible
+          // (matches should be accessible even when user is hidden)
           setupMatchesListener();
         } catch (error) {
           console.error("Error processing user profile update:", error);
         }
       }, (error) => {
-        console.error("Error listening to user profile:", error);
+        // Suppress "Target ID already exists" errors as they don't affect functionality
+        if (error.message?.includes('Target ID already exists')) {
+          console.warn('⚠️ Firestore listener error suppressed (Target ID already exists):', {
+            error: error.message,
+            operation: 'User Profile Listener',
+            timestamp: new Date().toISOString()
+          });
+        } else {
+          console.error("Error listening to user profile:", error);
+        }
       });
 
       listenersRef.current.userProfile = userProfileUnsubscribe;
@@ -161,7 +160,16 @@ export default function Matches() {
           console.error("Error processing matches update:", error);
         }
       }, (error) => {
-        console.error("Error listening to matches:", error);
+        // Suppress "Target ID already exists" errors as they don't affect functionality
+        if (error.message?.includes('Target ID already exists')) {
+          console.warn('⚠️ Firestore listener error suppressed (Target ID already exists):', {
+            error: error.message,
+            operation: 'Matches Listener',
+            timestamp: new Date().toISOString()
+          });
+        } else {
+          console.error("Error listening to matches:", error);
+        }
       });
 
       listenersRef.current.matches = matchesUnsubscribe;

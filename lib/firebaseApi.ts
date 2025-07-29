@@ -476,6 +476,17 @@ export const EventProfileAPI = {
     return executeWithOfflineSupport(async () => {
       await deleteDoc(doc(db, 'event_profiles', id));
     }, 'Delete Event Profile');
+  },
+
+  async toggleVisibility(id: string, isVisible: boolean): Promise<void> {
+    return executeWithOfflineSupport(async () => {
+      console.log('🔄 Toggling visibility to', isVisible, 'for profile:', id);
+      await updateDoc(doc(db, 'event_profiles', id), {
+        is_visible: isVisible,
+        updated_at: serverTimestamp()
+      });
+      console.log('✅ Visibility toggled successfully to', isVisible);
+    }, 'Toggle Profile Visibility');
   }
 };
 
@@ -699,10 +710,23 @@ export const User = {
     return auth.currentUser;
   },
 
-  async uploadFile(file: File): Promise<{ file_url: string }> {
+  async uploadFile(file: File | { uri: string; name: string; type: string }): Promise<{ file_url: string }> {
     return executeWithOfflineSupport(async () => {
-      const storageRef = ref(storage, `uploads/${Date.now()}_${file.name}`);
-      await uploadBytes(storageRef, file);
+      const fileName = file.name || `upload_${Date.now()}.jpg`;
+      const storageRef = ref(storage, `uploads/${Date.now()}_${fileName}`);
+      
+      if ('uri' in file) {
+        // React Native file object - use fetch directly with the URI
+        const response = await fetch(file.uri);
+        const blob = await response.blob();
+        
+        // Upload the blob directly to Firebase Storage
+        await uploadBytes(storageRef, blob, { contentType: file.type || 'image/jpeg' });
+      } else {
+        // Web File object
+        await uploadBytes(storageRef, file, { contentType: file.type || 'image/jpeg' });
+      }
+      
       const downloadURL = await getDownloadURL(storageRef);
       return { file_url: downloadURL };
     }, 'Upload File');

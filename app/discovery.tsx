@@ -26,7 +26,8 @@ import { db } from '../lib/firebaseConfig';
 import UserProfileModal from '../lib/UserProfileModal';
 
 const { width } = Dimensions.get('window');
-const cardSize = (width - 64) / 3; // 3 columns with 16px padding on each side and 8px gap between cards
+const gap = 8;
+const cardSize = (width - 64 - gap * 2) / 3; // 3 columns with 16px padding on each side and 8px gap between cards
 
 const BASIC_INTERESTS = [
   'music', 'tech', 'food', 'books', 'travel', 'art', 'fitness', 'nature', 'movies', 'business', 'photography', 'dancing'
@@ -126,9 +127,10 @@ export default function Discovery() {
             return;
           }
 
-          // If user is not visible, don't load other profiles
+          // If user is not visible, don't load other profiles and show hidden state
           if (!userProfile.is_visible) {
             setProfiles([]);
+            setFilteredProfiles([]);
             // Clean up other listeners when user is not visible
             if (listenersRef.current.otherProfiles) {
               listenersRef.current.otherProfiles();
@@ -139,14 +141,25 @@ export default function Discovery() {
               listenersRef.current.likes = undefined;
             }
           } else {
-            // User is visible, set up other listeners
-            setupOtherListeners();
+            // User is visible, set up other listeners only if they don't exist
+            if (!listenersRef.current.otherProfiles && !listenersRef.current.likes) {
+              setupOtherListeners();
+            }
           }
         } catch (error) {
           console.error("Error processing user profile update:", error);
         }
       }, (error) => {
-        console.error("Error listening to user profile:", error);
+        // Suppress "Target ID already exists" errors as they don't affect functionality
+        if (error.message?.includes('Target ID already exists')) {
+          console.warn('⚠️ Firestore listener error suppressed (Target ID already exists):', {
+            error: error.message,
+            operation: 'User Profile Listener',
+            timestamp: new Date().toISOString()
+          });
+        } else {
+          console.error("Error listening to user profile:", error);
+        }
       });
 
       listenersRef.current.userProfile = userProfileUnsubscribe;
@@ -162,6 +175,12 @@ export default function Discovery() {
 
   const setupOtherListeners = () => {
     if (!currentEvent?.id || !currentSessionId) return;
+
+    // Prevent multiple listener creation
+    if (listenersRef.current.otherProfiles || listenersRef.current.likes) {
+      console.log("Listeners already exist, skipping setup");
+      return;
+    }
 
     try {
       // 2. Other visible profiles listener
@@ -183,7 +202,16 @@ export default function Discovery() {
           console.error("Error processing other profiles update:", error);
         }
       }, (error) => {
-        console.error("Error listening to other profiles:", error);
+        // Suppress "Target ID already exists" errors as they don't affect functionality
+        if (error.message?.includes('Target ID already exists')) {
+          console.warn('⚠️ Firestore listener error suppressed (Target ID already exists):', {
+            error: error.message,
+            operation: 'Other Profiles Listener',
+            timestamp: new Date().toISOString()
+          });
+        } else {
+          console.error("Error listening to other profiles:", error);
+        }
       });
 
       listenersRef.current.otherProfiles = otherProfilesUnsubscribe;
@@ -207,7 +235,16 @@ export default function Discovery() {
           console.error("Error processing likes update:", error);
         }
       }, (error) => {
-        console.error("Error listening to likes:", error);
+        // Suppress "Target ID already exists" errors as they don't affect functionality
+        if (error.message?.includes('Target ID already exists')) {
+          console.warn('⚠️ Firestore listener error suppressed (Target ID already exists):', {
+            error: error.message,
+            operation: 'Likes Listener',
+            timestamp: new Date().toISOString()
+          });
+        } else {
+          console.error("Error listening to likes:", error);
+        }
       });
 
       listenersRef.current.likes = likesUnsubscribe;
@@ -219,16 +256,33 @@ export default function Discovery() {
 
   const cleanupAllListeners = () => {
     try {
+      // Clean up user profile listener
       if (listenersRef.current.userProfile) {
-        listenersRef.current.userProfile();
+        try {
+          listenersRef.current.userProfile();
+        } catch (error) {
+          console.warn("Error cleaning up user profile listener:", error);
+        }
         listenersRef.current.userProfile = undefined;
       }
+      
+      // Clean up other profiles listener
       if (listenersRef.current.otherProfiles) {
-        listenersRef.current.otherProfiles();
+        try {
+          listenersRef.current.otherProfiles();
+        } catch (error) {
+          console.warn("Error cleaning up other profiles listener:", error);
+        }
         listenersRef.current.otherProfiles = undefined;
       }
+      
+      // Clean up likes listener
       if (listenersRef.current.likes) {
-        listenersRef.current.likes();
+        try {
+          listenersRef.current.likes();
+        } catch (error) {
+          console.warn("Error cleaning up likes listener:", error);
+        }
         listenersRef.current.likes = undefined;
       }
     } catch (error) {
@@ -495,9 +549,6 @@ export default function Discovery() {
       paddingHorizontal: 16,
     },
     profilesGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      justifyContent: 'space-between',
       paddingHorizontal: 16,
     },
     profileCard: {
@@ -505,7 +556,6 @@ export default function Discovery() {
       backgroundColor: isDark ? '#2d2d2d' : 'white',
       borderRadius: 16,
       padding: 6,
-      marginBottom: 8,
       alignItems: 'center',
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 2 },
@@ -801,6 +851,28 @@ export default function Discovery() {
       color: 'white',
       fontWeight: '600',
     },
+    profileRow: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      width: '100%',
+      marginBottom: 8,
+      gap: 8,
+    },
+    headerButtons: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    visibilityButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: isDark ? '#404040' : '#d1d5db',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: isDark ? '#2d2d2d' : 'white',
+    },
   });
 
   if (isLoading) {
@@ -816,6 +888,15 @@ export default function Discovery() {
   if (currentUserProfile && !currentUserProfile.is_visible) {
     return (
       <SafeAreaView style={styles.container}>
+        {/* Logo Section */}
+        <View style={styles.logoContainer}>
+          <Image 
+            source={require('../assets/Hooked Full Logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+        </View>
+
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerText}>
@@ -904,51 +985,62 @@ export default function Discovery() {
       {/* Profiles Grid */}
       <ScrollView style={styles.profilesContainer}>
         <View style={styles.profilesGrid}>
-          {filteredProfiles.map((profile) => (
-            <TouchableOpacity
-              key={profile.id}
-              style={styles.profileCard}
-              onPress={() => handleProfileTap(profile)}
-            >
-              <View style={styles.profileImageContainer}>
-                {profile.profile_photo_url ? (
-                  <Image
-                    source={{ uri: profile.profile_photo_url }}
-                    style={styles.profileImage}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View style={[styles.fallbackAvatar, { backgroundColor: profile.profile_color || '#cccccc' }]}>
-                    <Text style={styles.fallbackText}>{profile.first_name[0]}</Text>
-                  </View>
-                )}
-                
-                {/* Like Button Overlay */}
-                <TouchableOpacity
-                  style={[
-                    styles.likeButton,
-                    likedProfiles.has(profile.session_id) && styles.likeButtonActive
-                  ]}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    handleLike(profile);
-                  }}
-                  disabled={likedProfiles.has(profile.session_id)}
-                >
-                  <Heart 
-                    size={16} 
-                    color={likedProfiles.has(profile.session_id) ? '#ec4899' : '#9ca3af'} 
-                    fill={likedProfiles.has(profile.session_id) ? '#ec4899' : 'none'}
-                  />
-                </TouchableOpacity>
+          {(() => {
+            const rows = [];
+            for (let i = 0; i < filteredProfiles.length; i += 3) {
+              const rowProfiles = filteredProfiles.slice(i, i + 3);
+              rows.push(
+                <View key={i} style={styles.profileRow}>
+                  {rowProfiles.map((profile) => (
+                    <TouchableOpacity
+                      key={profile.id}
+                      style={styles.profileCard}
+                      onPress={() => handleProfileTap(profile)}
+                    >
+                      <View style={styles.profileImageContainer}>
+                        {profile.profile_photo_url ? (
+                          <Image
+                            source={{ uri: profile.profile_photo_url }}
+                            style={styles.profileImage}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <View style={[styles.fallbackAvatar, { backgroundColor: profile.profile_color || '#cccccc' }]}>
+                            <Text style={styles.fallbackText}>{profile.first_name[0]}</Text>
+                          </View>
+                        )}
+                        
+                        {/* Like Button Overlay */}
+                        <TouchableOpacity
+                          style={[
+                            styles.likeButton,
+                            likedProfiles.has(profile.session_id) && styles.likeButtonActive
+                          ]}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            handleLike(profile);
+                          }}
+                          disabled={likedProfiles.has(profile.session_id)}
+                        >
+                          <Heart 
+                            size={16} 
+                            color={likedProfiles.has(profile.session_id) ? '#ec4899' : '#9ca3af'} 
+                            fill={likedProfiles.has(profile.session_id) ? '#ec4899' : 'none'}
+                          />
+                        </TouchableOpacity>
 
-                {/* Name Overlay */}
-                <View style={styles.nameOverlay}>
-                  <Text style={styles.profileName}>{profile.first_name}</Text>
+                        {/* Name Overlay */}
+                        <View style={styles.nameOverlay}>
+                          <Text style={styles.profileName}>{profile.first_name}</Text>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
                 </View>
-              </View>
-            </TouchableOpacity>
-          ))}
+              );
+            }
+            return rows;
+          })()}
         </View>
 
         {filteredProfiles.length === 0 && !isLoading && (

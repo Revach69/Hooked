@@ -26,6 +26,11 @@ interface State {
 }
 
 export class FirebaseErrorBoundary extends Component<Props, State> {
+  private errorCount = 0;
+  private readonly maxErrorCount = 5; // Limit error catching to prevent infinite loops
+  private lastErrorTime = 0;
+  private readonly errorCooldown = 5000; // 5 seconds cooldown between error catches
+
   constructor(props: Props) {
     super(props);
     this.state = {
@@ -41,8 +46,24 @@ export class FirebaseErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    // Prevent recursive error catching
+    const now = Date.now();
+    if (now - this.lastErrorTime < this.errorCooldown) {
+      // Too soon since last error, don't catch this one
+      return;
+    }
+
+    // Check if we've caught too many errors
+    if (this.errorCount >= this.maxErrorCount) {
+      console.warn('⚠️ Max error count reached in FirebaseErrorBoundary, not catching more errors');
+      return;
+    }
+
     // Check if this is a Firebase-related error
     if (this.isFirebaseError(error)) {
+      this.errorCount++;
+      this.lastErrorTime = now;
+      
       console.error('🚨 Firebase error caught by boundary:', error);
       
       // Record the error
@@ -113,6 +134,8 @@ export class FirebaseErrorBoundary extends Component<Props, State> {
 
         if (success) {
           console.log('✅ Firebase error recovered by boundary');
+          // Reset error count on successful recovery
+          this.errorCount = 0;
           this.setState({
             hasError: false,
             error: null,

@@ -154,7 +154,7 @@ export default function Chat() {
       setCurrentSessionId(sessionId);
       setCurrentEventId(eventId);
 
-      // Get match profile
+      // Get match profile - don't filter by visibility for matches
       const matchProfiles = await EventProfile.filter({
         session_id: matchId as string,
         event_id: eventId
@@ -162,6 +162,12 @@ export default function Chat() {
       
       if (matchProfiles.length > 0) {
         setMatchProfile(matchProfiles[0]);
+      } else {
+        // If profile not found, it might be invisible - try to get it directly
+        console.log('Match profile not found, user might be invisible');
+        Alert.alert('Error', 'Match profile not found');
+        router.back();
+        return;
       }
 
       setIsLoading(false);

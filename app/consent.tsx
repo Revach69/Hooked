@@ -16,7 +16,7 @@ import {
   Switch,
 } from 'react-native';
 import { router } from 'expo-router';
-import { User, EventProfile, Event, UploadFile } from '../lib/firebaseApi';
+import { User as UserAPI, EventProfile, Event } from '../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User as UserIcon, Camera, Upload } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -24,8 +24,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Simple UUID v4 generator function
 function generateUUID() {
+  // Generate a proper UUID v4 format
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
     return v.toString(16);
   });
 }
@@ -51,15 +53,27 @@ export default function Consent() {
   useEffect(() => {
     const fetchEvent = async () => {
       const eventId = await AsyncStorage.getItem('currentEventId');
+      console.log('🔍 Fetching event with ID:', eventId);
       if (!eventId) {
+        console.log('❌ No event ID found, redirecting to home');
         router.replace('/home');
         return;
       }
       try {
         const events = await Event.filter({ id: eventId });
+        console.log('🔍 Found events:', events.length, 'events');
         if (events.length > 0) {
-          setEvent(events[0]);
+          const foundEvent = events[0];
+          console.log('🔍 Event details:', {
+            id: foundEvent.id,
+            name: foundEvent.name,
+            starts_at: foundEvent.starts_at,
+            expires_at: foundEvent.expires_at,
+            event_code: foundEvent.event_code
+          });
+          setEvent(foundEvent);
         } else {
+          console.log('❌ No events found, redirecting to home');
           router.replace('/home');
         }
       } catch (err) {
@@ -124,7 +138,7 @@ export default function Consent() {
       }
 
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ['images'],
+        mediaTypes: 'Images',
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -152,7 +166,7 @@ export default function Consent() {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+        mediaTypes: 'Images',
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -190,21 +204,14 @@ export default function Consent() {
 
     setIsUploadingPhoto(true);
     try {
-      // Convert asset to file-like object for upload
-      const response = await fetch(asset.uri);
-      const blob = await response.blob();
+      // Use the asset directly instead of creating a File object
+      const fileObject = {
+        uri: asset.uri,
+        name: asset.fileName || `profile-photo-${Date.now()}.jpg`,
+        type: asset.type || 'image/jpeg'
+      };
       
-      // Force JPEG format for better compatibility with image picker and cropping
-      // This helps ensure consistent behavior across different image formats
-      let fileExtension = 'jpg';
-      let mimeType = 'image/jpeg';
-      
-      // Create file with JPEG mime type regardless of original format
-      // This helps the image picker handle the image properly
-      const fileName = `profile-photo.${fileExtension}`;
-      const file = new File([blob], fileName, { type: mimeType });
-      
-      const { file_url } = await UploadFile(file);
+      const { file_url } = await UserAPI.uploadFile(fileObject);
       setFormData(prev => ({ ...prev, profile_photo_url: file_url }));
       // Removed the success alert - photo upload is now silent
     } catch (err) {
@@ -233,6 +240,14 @@ export default function Consent() {
     try {
       const sessionId = generateUUID();
       const profileColor = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
+      
+      // Ensure the color is a valid 6-digit hex
+      const validColor = profileColor.length === 7 ? profileColor : '#000000';
+      
+      console.log('🔍 Generated session ID:', sessionId);
+      console.log('🔍 Generated profile color:', validColor);
+      console.log('🔍 Event ID:', event.id);
+      console.log('🔍 Event expires_at:', event.expires_at);
 
       // Save profile data locally if "remember profile" is checked
       if (rememberProfile) {
@@ -251,21 +266,25 @@ export default function Consent() {
       }
 
       // Create event profile with photo
-      await EventProfile.create({
+      const profileData = {
         event_id: event.id,
         session_id: sessionId,
         first_name: formData.first_name,
         age: parseInt(formData.age),
         gender_identity: formData.gender_identity,
         interested_in: formData.interested_in,
-        profile_color: profileColor,
+        profile_color: validColor,
         profile_photo_url: formData.profile_photo_url,
         is_visible: true,
         expires_at: event.expires_at,
-      });
+      };
+      
+      console.log('🔍 Creating profile with data:', JSON.stringify(profileData, null, 2));
+      
+      await EventProfile.create(profileData);
 
       await AsyncStorage.setItem('currentSessionId', sessionId);
-      await AsyncStorage.setItem('currentProfileColor', profileColor);
+      await AsyncStorage.setItem('currentProfileColor', validColor);
       await AsyncStorage.setItem('currentProfilePhotoUrl', formData.profile_photo_url);
       
       Alert.alert("Success", "Profile created! Welcome to the event.");
