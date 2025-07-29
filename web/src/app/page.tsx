@@ -199,11 +199,49 @@ export default function HomePage() {
           // Try to scan for QR code using jsQR library
           const imageData = context?.getImageData(0, 0, canvas.width, canvas.height)
           if (imageData) {
-            const code = jsQR(imageData.data, imageData.width, imageData.height)
+            console.log('Attempting QR code detection...')
+            console.log('Image dimensions:', canvas.width, 'x', canvas.height)
+            
+            // Try multiple detection attempts with different parameters
+            let code = null
+            
+            // First attempt: standard detection
+            code = jsQR(imageData.data, imageData.width, imageData.height)
+            
+            // Second attempt: try with different options if first fails
+            if (!code) {
+              console.log('First attempt failed, trying alternative detection...')
+              // Try with a smaller region (center of image)
+              const centerX = Math.floor(imageData.width / 2)
+              const centerY = Math.floor(imageData.height / 2)
+              const regionSize = Math.min(imageData.width, imageData.height) / 2
+              
+              const startX = Math.max(0, centerX - regionSize / 2)
+              const startY = Math.max(0, centerY - regionSize / 2)
+              const endX = Math.min(imageData.width, centerX + regionSize / 2)
+              const endY = Math.min(imageData.height, centerY + regionSize / 2)
+              
+              // Create a new ImageData for the center region
+              const regionData = new ImageData(endX - startX, endY - startY)
+              for (let y = startY; y < endY; y++) {
+                for (let x = startX; x < endX; x++) {
+                  const srcIndex = (y * imageData.width + x) * 4
+                  const dstIndex = ((y - startY) * regionData.width + (x - startX)) * 4
+                  regionData.data[dstIndex] = imageData.data[srcIndex]     // R
+                  regionData.data[dstIndex + 1] = imageData.data[srcIndex + 1] // G
+                  regionData.data[dstIndex + 2] = imageData.data[srcIndex + 2] // B
+                  regionData.data[dstIndex + 3] = imageData.data[srcIndex + 3] // A
+                }
+              }
+              
+              code = jsQR(regionData.data, regionData.width, regionData.height)
+            }
+            
             if (code) {
               // QR code found! Extract the event code
               const eventCode = code.data.trim()
               console.log('QR Code detected:', eventCode)
+              console.log('QR Code location:', code.location)
               
               // Clean up camera
               stream.getTracks().forEach(track => track.stop())
@@ -215,7 +253,11 @@ export default function HomePage() {
               await handleEventAccess(eventCode)
               return
             } else {
-              alert('No QR code found in the image. Please try again with a clearer view of the QR code.')
+              console.log('No QR code found in image')
+              console.log('Image data length:', imageData.data.length)
+              console.log('Sample pixel values:', imageData.data.slice(0, 20))
+              
+              alert('No QR code found in the image. Please try again with a clearer view of the QR code. Make sure the QR code is well-lit and clearly visible in the frame.')
             }
           }
 
