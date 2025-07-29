@@ -63,77 +63,66 @@ export default function ConsentPage() {
   return (
     <div className="page-container bg-gray-900 dark:bg-gray-900">
       <div className="page-content">
-        {/* Header */}
-        <div className="pt-2 pb-1 px-4">
-          <button
-            onClick={handleBack}
-            className="flex items-center text-white mb-1"
-          >
-            <ArrowLeft size={16} className="mr-1" />
-            Back
-          </button>
-        </div>
-
-        {/* Main Content */}
-        <div className="flex-1 px-4 pb-2 flex items-center justify-center min-h-0">
-          <div className="bg-gray-800 dark:bg-gray-800 rounded-2xl p-3 w-full max-w-md">
+        {/* Main Content - No header, start immediately */}
+        <div className="flex-1 px-3 py-2 flex items-center justify-center min-h-0">
+          <div className="bg-gray-800 dark:bg-gray-800 rounded-xl p-3 w-full max-w-sm">
             {/* Header */}
-            <div className="text-center mb-3">
-              <div className="mb-2">
+            <div className="text-center mb-2">
+              <div className="mb-1">
                 <Image
                   src="/home-icon.png"
                   alt="Hooked Icon"
-                  width={50}
-                  height={50}
+                  width={40}
+                  height={40}
                   className="mx-auto"
                 />
               </div>
-              <h1 className="text-lg font-bold text-white dark:text-white mb-1">
+              <h1 className="text-base font-bold text-white dark:text-white mb-0.5">
                 Create Your Event Profile For:
               </h1>
-              <p className="text-gray-300 dark:text-gray-300 text-sm">
+              <p className="text-gray-300 dark:text-gray-300 text-xs">
                 {currentEvent?.name}
               </p>
             </div>
 
             {/* Privacy Info */}
-            <div className="mb-3">
-              <h2 className="text-base font-bold text-white dark:text-white mb-2">How we protect your privacy</h2>
+            <div className="mb-2">
+              <h2 className="text-sm font-bold text-white dark:text-white mb-1">How we protect your privacy</h2>
               
-              <div className="space-y-1 text-xs text-gray-300 dark:text-gray-300">
-                <div className="flex items-start space-x-2">
-                  <CheckCircle size={12} className="text-green-500 mt-0.5 flex-shrink-0" />
+              <div className="space-y-0.5 text-xs text-gray-300 dark:text-gray-300">
+                <div className="flex items-start space-x-1">
+                  <CheckCircle size={10} className="text-green-500 mt-0.5 flex-shrink-0" />
                   <p>Your profile is temporary and will be deleted after the event ends</p>
                 </div>
                 
-                <div className="flex items-start space-x-2">
-                  <CheckCircle size={12} className="text-green-500 mt-0.5 flex-shrink-0" />
+                <div className="flex items-start space-x-1">
+                  <CheckCircle size={10} className="text-green-500 mt-0.5 flex-shrink-0" />
                   <p>We only share your information with other event participants</p>
                 </div>
                 
-                <div className="flex items-start space-x-2">
-                  <CheckCircle size={12} className="text-green-500 mt-0.5 flex-shrink-0" />
+                <div className="flex items-start space-x-1">
+                  <CheckCircle size={10} className="text-green-500 mt-0.5 flex-shrink-0" />
                   <p>You can hide your profile or delete it at any time</p>
                 </div>
                 
-                <div className="flex items-start space-x-2">
-                  <CheckCircle size={12} className="text-green-500 mt-0.5 flex-shrink-0" />
+                <div className="flex items-start space-x-1">
+                  <CheckCircle size={10} className="text-green-500 mt-0.5 flex-shrink-0" />
                   <p>We don't store your personal information after the event</p>
                 </div>
                 
-                <div className="flex items-start space-x-2">
-                  <CheckCircle size={12} className="text-green-500 mt-0.5 flex-shrink-0" />
+                <div className="flex items-start space-x-1">
+                  <CheckCircle size={10} className="text-green-500 mt-0.5 flex-shrink-0" />
                   <p>Your conversations are private and encrypted</p>
                 </div>
               </div>
             </div>
 
             {/* Terms */}
-            <div className="mb-3">
-              <h2 className="text-base font-bold text-white dark:text-white mb-2">Terms & Conditions</h2>
+            <div className="mb-2">
+              <h2 className="text-sm font-bold text-white dark:text-white mb-1">Terms & Conditions</h2>
               
-              <div className="space-y-2">
-                <div className="flex items-start space-x-2">
+              <div className="space-y-1">
+                <div className="flex items-start space-x-1">
                   <input
                     type="checkbox"
                     id="consent"
@@ -153,18 +142,18 @@ export default function ConsentPage() {
             </div>
 
             {/* Action Buttons */}
-            <div className="space-y-2">
+            <div className="space-y-1">
               <button
                 onClick={handleConsent}
                 disabled={!hasConsented}
-                className="w-full bg-gradient-primary text-white font-semibold py-2.5 px-3 rounded-lg hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                className="w-full bg-gradient-primary text-white font-semibold py-2 px-3 rounded-lg hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-xs"
               >
                 I Agree - Create My Profile
               </button>
               
               <button
                 onClick={handleDecline}
-                className="w-full bg-gray-700 dark:bg-gray-700 text-gray-300 dark:text-gray-300 font-semibold py-2.5 px-3 rounded-lg hover:bg-gray-600 dark:hover:bg-gray-600 transition-all duration-200 text-sm"
+                className="w-full bg-gray-700 dark:bg-gray-700 text-gray-300 dark:text-gray-300 font-semibold py-2 px-3 rounded-lg hover:bg-gray-600 dark:hover:bg-gray-600 transition-all duration-200 text-xs"
               >
                 Decline
               </button>
