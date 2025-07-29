@@ -11,8 +11,13 @@ export const metadata: Metadata = {
   authors: [{ name: 'Hooked App' }],
   manifest: '/manifest.json',
   icons: {
-    icon: '/favicon.png',
+    icon: [
+      { url: '/favicon.png', type: 'image/png' },
+      { url: '/favicon.png', sizes: '32x32', type: 'image/png' },
+      { url: '/favicon.png', sizes: '16x16', type: 'image/png' },
+    ],
     apple: '/apple-touch-icon.png',
+    shortcut: '/favicon.png',
   },
 }
 
@@ -32,6 +37,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        {/* Direct favicon link for better browser compatibility */}
+        <link rel="icon" type="image/png" href="/favicon.png" />
+        <link rel="shortcut icon" type="image/png" href="/favicon.png" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Hooked" />
