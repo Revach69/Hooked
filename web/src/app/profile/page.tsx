@@ -171,195 +171,206 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Profile Form */}
+      {/* Profile Form - Direct on page without card */}
       <div className="px-4 pb-4 flex-1 overflow-y-auto">
-        <div className="bg-gray-800 dark:bg-gray-800 rounded-2xl p-4 mb-4">
-          <h2 className="text-lg font-bold text-white dark:text-white mb-3">Basic Information</h2>
-          
-          <div className="space-y-4">
-            {/* Profile Photo */}
-            <div className="text-center">
-              <div className="relative inline-block">
-                <div 
-                  className="w-24 h-24 rounded-full flex items-center justify-center text-white font-bold text-2xl mb-3"
-                  style={{ backgroundColor: profileColor }}
+        <div className="space-y-4">
+          {/* Profile Photo */}
+          <div className="text-center">
+            <label className="block text-sm font-medium text-white mb-2">
+              Profile Photo *
+            </label>
+            <div className="relative inline-block">
+              <div 
+                className="w-24 h-24 rounded-full flex items-center justify-center text-white font-bold text-2xl mb-3 border-2 border-dashed border-white/30"
+                style={{ backgroundColor: profileColor }}
+              >
+                {profilePhotoUrl ? (
+                  <img 
+                    src={profilePhotoUrl} 
+                    alt="Profile" 
+                    className="w-24 h-24 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="text-center">
+                    <Camera size={24} className="mx-auto mb-1" />
+                    <span className="text-xs">Upload Photo</span>
+                  </div>
+                )}
+              </div>
+              <label className="absolute bottom-0 right-0 bg-white rounded-full p-2 shadow-lg cursor-pointer">
+                <Camera size={16} className="text-gray-600" />
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePhotoUpload}
+                  className="hidden"
+                />
+              </label>
+            </div>
+            <p className="text-xs text-white/70">Required • Max 10MB</p>
+          </div>
+
+          {/* First Name */}
+          <div>
+            <label className="block text-sm font-medium text-white mb-2">
+              First Name *
+            </label>
+            <input
+              type="text"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              className="w-full px-4 py-3 border-2 border-white/20 rounded-xl focus:border-white focus:outline-none transition-colors duration-200 bg-white/10 text-white placeholder-white/50"
+              placeholder="Enter your first name"
+              maxLength={20}
+            />
+          </div>
+
+          {/* Age */}
+          <div>
+            <label className="block text-sm font-medium text-white mb-2">
+              Age *
+            </label>
+            <input
+              type="number"
+              value={age}
+              onChange={(e) => setAge(e.target.value)}
+              className="w-full px-4 py-3 border-2 border-white/20 rounded-xl focus:border-white focus:outline-none transition-colors duration-200 bg-white/10 text-white placeholder-white/50"
+              placeholder="Enter your age"
+              min="18"
+              max="99"
+            />
+          </div>
+
+          {/* Gender Identity */}
+          <div>
+            <label className="block text-sm font-medium text-white mb-2">
+              I am a... *
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              {GENDER_OPTIONS.slice(0, 2).map(option => (
+                <button
+                  key={option.value}
+                  onClick={() => setGenderIdentity(option.value)}
+                  className={`py-3 px-4 rounded-xl border-2 transition-all duration-200 ${
+                    genderIdentity === option.value
+                      ? 'bg-white text-gray-800 border-white'
+                      : 'bg-white/10 text-white border-white/20 hover:bg-white/20'
+                  }`}
                 >
-                  {profilePhotoUrl ? (
-                    <img 
-                      src={profilePhotoUrl} 
-                      alt="Profile" 
-                      className="w-24 h-24 rounded-full object-cover"
-                    />
-                  ) : (
-                    firstName ? firstName[0].toUpperCase() : '?'
-                  )}
-                </div>
-                <label className="absolute bottom-0 right-0 bg-gray-700 dark:bg-gray-700 rounded-full p-2 shadow-lg cursor-pointer">
-                  <Camera size={16} className="text-gray-300 dark:text-gray-300" />
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handlePhotoUpload}
-                    className="hidden"
-                  />
-                </label>
-              </div>
+                  {option.label}
+                </button>
+              ))}
             </div>
+          </div>
 
-            {/* First Name */}
-            <div>
-              <label className="block text-sm font-medium text-white dark:text-white mb-2">
-                First Name *
-              </label>
-              <input
-                type="text"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-600 dark:border-gray-600 rounded-xl focus:border-pink-500 focus:outline-none transition-colors duration-200 bg-gray-900 dark:bg-gray-900 text-white placeholder-gray-400"
-                placeholder="Enter your first name"
-                maxLength={20}
-              />
+          {/* Interested In */}
+          <div>
+            <label className="block text-sm font-medium text-white mb-2">
+              I'm interested in... *
+            </label>
+            <div className="grid grid-cols-3 gap-3">
+              {['Men', 'Women', 'Everyone'].map(option => (
+                <button
+                  key={option}
+                  onClick={() => setInterestedIn(option.toLowerCase())}
+                  className={`py-3 px-4 rounded-xl border-2 transition-all duration-200 ${
+                    interestedIn === option.toLowerCase()
+                      ? 'bg-white text-gray-800 border-white'
+                      : 'bg-white/10 text-white border-white/20 hover:bg-white/20'
+                  }`}
+                >
+                  {option}
+                </button>
+              ))}
             </div>
+          </div>
 
-            {/* Age */}
-            <div>
-              <label className="block text-sm font-medium text-white dark:text-white mb-2">
-                Age *
-              </label>
-              <input
-                type="number"
-                value={age}
-                onChange={(e) => setAge(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-600 dark:border-gray-600 rounded-xl focus:border-pink-500 focus:outline-none transition-colors duration-200 bg-gray-900 dark:bg-gray-900 text-white placeholder-gray-400"
-                placeholder="Enter your age"
-                min="18"
-                max="99"
-              />
+          {/* Profile Color */}
+          <div>
+            <label className="block text-sm font-medium text-white mb-2">
+              Profile Color
+            </label>
+            <div className="flex flex-wrap gap-3">
+              {PROFILE_COLORS.map((color) => (
+                <button
+                  key={color}
+                  onClick={() => setProfileColor(color)}
+                  className={`w-10 h-10 rounded-full border-2 transition-all duration-200 ${
+                    profileColor === color ? 'border-white scale-110' : 'border-white/30'
+                  }`}
+                  style={{ backgroundColor: color }}
+                />
+              ))}
             </div>
+          </div>
 
-            {/* Gender Identity */}
-            <div>
-              <label className="block text-sm font-medium text-white dark:text-white mb-2">
-                Gender Identity *
-              </label>
-              <select
-                value={genderIdentity}
-                onChange={(e) => setGenderIdentity(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-600 dark:border-gray-600 rounded-xl focus:border-pink-500 focus:outline-none transition-colors duration-200 bg-gray-900 dark:bg-gray-900 text-white"
-              >
-                <option value="">Select gender identity</option>
-                {GENDER_OPTIONS.map(option => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+          {/* About Me */}
+          <div>
+            <label className="block text-sm font-medium text-white mb-2">
+              About Me
+            </label>
+            <textarea
+              value={aboutMe}
+              onChange={(e) => setAboutMe(e.target.value)}
+              className="w-full px-4 py-3 border-2 border-white/20 rounded-xl focus:border-white focus:outline-none transition-colors duration-200 bg-white/10 text-white placeholder-white/50"
+              placeholder="Tell others about yourself..."
+              rows={3}
+              maxLength={200}
+            />
+            <p className="text-xs text-white/70 mt-1">
+              {aboutMe.length}/200 characters
+            </p>
+          </div>
+
+          {/* Interests */}
+          <div>
+            <label className="block text-sm font-medium text-white mb-2">
+              Interests (select up to 3)
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {INTEREST_OPTIONS.map(interest => (
+                <button
+                  key={interest}
+                  onClick={() => handleInterestToggle(interest)}
+                  className={`px-3 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                    interests.includes(interest)
+                      ? 'bg-white text-gray-800'
+                      : 'bg-white/10 text-white border border-white/20 hover:bg-white/20'
+                  }`}
+                  disabled={!interests.includes(interest) && interests.length >= 3}
+                >
+                  {interest.charAt(0).toUpperCase() + interest.slice(1)}
+                </button>
+              ))}
             </div>
+          </div>
 
-            {/* Interested In */}
+          {/* Visibility Toggle */}
+          <div className="flex items-center justify-between">
             <div>
-              <label className="block text-sm font-medium text-white dark:text-white mb-2">
-                Interested In *
+              <label className="block text-sm font-medium text-white">
+                Profile Visibility
               </label>
-              <select
-                value={interestedIn}
-                onChange={(e) => setInterestedIn(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-600 dark:border-gray-600 rounded-xl focus:border-pink-500 focus:outline-none transition-colors duration-200 bg-gray-900 dark:bg-gray-900 text-white"
-              >
-                <option value="">Select preference</option>
-                <option value="men">Men</option>
-                <option value="women">Women</option>
-                <option value="everybody">Everybody</option>
-              </select>
-            </div>
-
-            {/* Profile Color */}
-            <div>
-              <label className="block text-sm font-medium text-white dark:text-white mb-2">
-                Profile Color
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {PROFILE_COLORS.map(color => (
-                  <button
-                    key={color}
-                    onClick={() => setProfileColor(color)}
-                    className={`w-8 h-8 rounded-full border-2 transition-all duration-200 ${
-                      profileColor === color ? 'border-gray-800 scale-110' : 'border-gray-300'
-                    }`}
-                    style={{ backgroundColor: color }}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* About Me */}
-            <div>
-              <label className="block text-sm font-medium text-white dark:text-white mb-2">
-                About Me
-              </label>
-              <textarea
-                value={aboutMe}
-                onChange={(e) => setAboutMe(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-600 dark:border-gray-600 rounded-xl focus:border-pink-500 focus:outline-none transition-colors duration-200 bg-gray-900 dark:bg-gray-900 text-white placeholder-gray-400"
-                placeholder="Tell others about yourself..."
-                rows={3}
-                maxLength={200}
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                {aboutMe.length}/200 characters
+              <p className="text-xs text-white/70">
+                {isVisible ? 'Your profile is visible to others' : 'Your profile is hidden'}
               </p>
             </div>
-
-            {/* Interests */}
-            <div>
-              <label className="block text-sm font-medium text-white dark:text-white mb-2">
-                Interests (select up to 3)
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {INTEREST_OPTIONS.map(interest => (
-                  <button
-                    key={interest}
-                    onClick={() => handleInterestToggle(interest)}
-                    className={`px-3 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
-                      interests.includes(interest)
-                        ? 'bg-pink-600 text-white'
-                        : 'bg-gray-700 dark:bg-gray-700 text-gray-300 dark:text-gray-300 hover:bg-gray-600 dark:hover:bg-gray-600'
-                    }`}
-                    disabled={!interests.includes(interest) && interests.length >= 3}
-                  >
-                    {interest.charAt(0).toUpperCase() + interest.slice(1)}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Visibility Toggle */}
-            <div className="flex items-center justify-between">
-              <div>
-                <label className="block text-sm font-medium text-white dark:text-white">
-                  Profile Visibility
-                </label>
-                <p className="text-xs text-gray-400 dark:text-gray-400">
-                  {isVisible ? 'Your profile is visible to others' : 'Your profile is hidden'}
-                </p>
-              </div>
-              <button
-                onClick={() => setIsVisible(!isVisible)}
-                className="flex items-center space-x-2 px-3 py-2 rounded-lg bg-gray-700 dark:bg-gray-700 hover:bg-gray-600 dark:hover:bg-gray-600 transition-colors duration-200"
-              >
-                {isVisible ? <Eye size={16} className="text-gray-300 dark:text-gray-300" /> : <EyeOff size={16} className="text-gray-300 dark:text-gray-300" />}
-                <span className="text-sm font-medium text-gray-300 dark:text-gray-300">
-                  {isVisible ? 'Visible' : 'Hidden'}
-                </span>
-              </button>
-            </div>
+            <button
+              onClick={() => setIsVisible(!isVisible)}
+              className="flex items-center space-x-2 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors duration-200 border border-white/20"
+            >
+              {isVisible ? <Eye size={16} className="text-white" /> : <EyeOff size={16} className="text-white" />}
+              <span className="text-sm font-medium text-white">
+                {isVisible ? 'Visible' : 'Hidden'}
+              </span>
+            </button>
           </div>
         </div>
 
         {/* Error Message */}
         {error && (
-          <div className="bg-red-900 dark:bg-red-900 border border-red-700 dark:border-red-700 rounded-xl p-3 mb-3">
-            <p className="text-red-200 dark:text-red-200 text-sm">{error}</p>
+          <div className="bg-red-500/20 border border-red-500/30 rounded-xl p-3 mt-4">
+            <p className="text-red-200 text-sm">{error}</p>
           </div>
         )}
       </div>
