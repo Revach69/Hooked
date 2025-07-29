@@ -31,15 +31,11 @@ import {
   uploadBytes,
   getDownloadURL
 } from 'firebase/storage';
-import { getFunctions, httpsCallable } from 'firebase/functions';
 import { notifyNewMessage } from './messageNotificationHelper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { logFirebaseError } from './errorMonitoring';
 import { Platform } from 'react-native';
-
-// Initialize Cloud Functions
-const functions = getFunctions();
 
 // Enhanced retry operation with better error handling and recovery
 async function retryOperation<T>(
@@ -712,19 +708,31 @@ export const User = {
     }, 'Upload File');
   },
 
-  // Admin functions
+  // Admin functions - using Firestore instead of Cloud Functions for React Native compatibility
   async setAdminClaim(targetUserId: string, isAdmin: boolean): Promise<void> {
     return executeWithOfflineSupport(async () => {
-      const setAdminClaimFunction = httpsCallable(functions, 'setAdminClaim');
-      await setAdminClaimFunction({ targetUserId, isAdmin });
+      // For React Native, we'll use a different approach
+      // This could be replaced with a REST API call or handled server-side
+      console.warn('setAdminClaim is not available in React Native - use web admin instead');
+      throw new Error('Admin claim setting is not available in React Native app');
     }, 'Set Admin Claim');
   },
 
   async verifyAdminStatus(): Promise<boolean> {
     return executeWithOfflineSupport(async () => {
-      const verifyAdminStatusFunction = httpsCallable(functions, 'verifyAdminStatus');
-      const result = await verifyAdminStatusFunction({});
-      return (result.data as any).isAdmin;
+      // Check admin status using Firestore instead of Cloud Functions
+      const user = auth.currentUser;
+      if (!user) {
+        return false;
+      }
+      
+      try {
+        const adminDoc = await getDoc(doc(db, 'admins', user.uid));
+        return adminDoc.exists();
+      } catch (error) {
+        console.error('Error verifying admin status:', error);
+        return false;
+      }
     }, 'Verify Admin Status');
   },
 
