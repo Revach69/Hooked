@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   authors: [{ name: 'Hooked App' }],
   manifest: '/manifest.json',
   icons: {
-    icon: '/favicon.ico',
+    icon: '/favicon.png',
     apple: '/apple-touch-icon.png',
   },
 }

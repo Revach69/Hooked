@@ -89,11 +89,11 @@ body {
 
 /* Custom gradient backgrounds */
 .bg-gradient-primary {
-  background: linear-gradient(135deg, rgba(236, 72, 153, 0.7) 0%, rgba(139, 92, 246, 0.7) 100%);
+  background: linear-gradient(135deg, #f472b6 0%, #a78bfa 100%);
 }
 
 .bg-gradient-secondary {
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.7) 0%, rgba(239, 68, 68, 0.7) 100%);
+  background: linear-gradient(135deg, #fbbf24 0%, #f87171 100%);
 }
 
 /* Common component styles */
