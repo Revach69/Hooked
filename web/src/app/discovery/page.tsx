@@ -624,6 +624,8 @@ export default function DiscoveryPage() {
           </div>
         </div>
       )}
+        </div>
+      </div>
     </div>
   )
 }
