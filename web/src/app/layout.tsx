@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   authors: [{ name: 'Hooked App' }],
   manifest: '/manifest.json',
   icons: {
-    icon: '/favicon.png',
+    icon: '/favicon.ico',
     apple: '/apple-touch-icon.png',
   },
 }
@@ -32,6 +32,8 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+        <meta name="theme-color" content="#FBA7D5" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Hooked" />
@@ -40,7 +42,7 @@ export default function RootLayout({
         <meta name="msapplication-tap-highlight" content="no" />
       </head>
       <body className={inter.className}>
-        <div className="bg-gradient-primary">
+        <div className="min-h-screen bg-gradient-primary">
           {children}
         </div>
       </body>

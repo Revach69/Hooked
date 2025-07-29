@@ -64,6 +64,7 @@ export default function HomePage() {
       localStorage.setItem('currentEventId', event.id)
       localStorage.setItem('currentEventCode', event.event_code)
       localStorage.setItem('currentEventName', event.name || 'Event')
+      localStorage.setItem('hasConsented', 'true') // Auto-consent to skip consent page
       
       router.push('/profile')
     } catch (error) {
@@ -91,9 +92,9 @@ export default function HomePage() {
   }
 
   const handleCameraAccess = async () => {
-    setIsProcessing(true)
-    
     try {
+      setIsProcessing(true)
+      
       // Check if camera access is available
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         alert('Camera access is not available in this browser. Please use the manual code entry option.')
@@ -199,11 +200,49 @@ export default function HomePage() {
           // Try to scan for QR code using jsQR library
           const imageData = context?.getImageData(0, 0, canvas.width, canvas.height)
           if (imageData) {
-            const code = jsQR(imageData.data, imageData.width, imageData.height)
+            console.log('Attempting QR code detection...')
+            console.log('Image dimensions:', canvas.width, 'x', canvas.height)
+            
+            // Try multiple detection attempts with different parameters
+            let code = null
+            
+            // First attempt: standard detection
+            code = jsQR(imageData.data, imageData.width, imageData.height)
+            
+            // Second attempt: try with different options if first fails
+            if (!code) {
+              console.log('First attempt failed, trying alternative detection...')
+              // Try with a smaller region (center of image)
+              const centerX = Math.floor(imageData.width / 2)
+              const centerY = Math.floor(imageData.height / 2)
+              const regionSize = Math.min(imageData.width, imageData.height) / 2
+              
+              const startX = Math.max(0, centerX - regionSize / 2)
+              const startY = Math.max(0, centerY - regionSize / 2)
+              const endX = Math.min(imageData.width, centerX + regionSize / 2)
+              const endY = Math.min(imageData.height, centerY + regionSize / 2)
+              
+              // Create a new ImageData for the center region
+              const regionData = new ImageData(endX - startX, endY - startY)
+              for (let y = startY; y < endY; y++) {
+                for (let x = startX; x < endX; x++) {
+                  const srcIndex = (y * imageData.width + x) * 4
+                  const dstIndex = ((y - startY) * regionData.width + (x - startX)) * 4
+                  regionData.data[dstIndex] = imageData.data[srcIndex]     // R
+                  regionData.data[dstIndex + 1] = imageData.data[srcIndex + 1] // G
+                  regionData.data[dstIndex + 2] = imageData.data[srcIndex + 2] // B
+                  regionData.data[dstIndex + 3] = imageData.data[srcIndex + 3] // A
+                }
+              }
+              
+              code = jsQR(regionData.data, regionData.width, regionData.height)
+            }
+            
             if (code) {
               // QR code found! Extract the event code
               const eventCode = code.data.trim()
               console.log('QR Code detected:', eventCode)
+              console.log('QR Code location:', code.location)
               
               // Clean up camera
               stream.getTracks().forEach(track => track.stop())
@@ -215,7 +254,11 @@ export default function HomePage() {
               await handleEventAccess(eventCode)
               return
             } else {
-              alert('No QR code found in the image. Please try again with a clearer view of the QR code.')
+              console.log('No QR code found in image')
+              console.log('Image data length:', imageData.data.length)
+              console.log('Sample pixel values:', imageData.data.slice(0, 20))
+              
+              alert('No QR code found in the image. Please try again with a clearer view of the QR code. Make sure the QR code is well-lit and clearly visible in the frame.')
             }
           }
 
@@ -251,84 +294,82 @@ export default function HomePage() {
   }
 
   return (
-    <div className="page-container bg-gradient-primary">
-      <div className="page-content">
-        {/* Header Section */}
-        <div className="flex-1 flex flex-col items-center justify-center px-5 pt-20 pb-10">
-          <div className="text-center mb-10">
-            <div className="mb-5">
-              <Image
-                src="/home-icon.png"
-                alt="Hooked Icon"
-                width={100}
-                height={100}
-                className="mx-auto mb-4"
-              />
-              <Image
-                src="/hooked-logo.png"
-                alt="Hooked"
-                width={180}
-                height={60}
-                className="mx-auto"
-              />
-            </div>
+    <div className="h-screen bg-gradient-primary flex flex-col overflow-hidden">
+      {/* Header Section */}
+      <div className="flex-1 flex flex-col items-center justify-center px-5 pt-16 pb-8">
+        <div className="text-center mb-8">
+          <div className="mb-4">
+            <Image
+              src="/home-icon.png"
+              alt="Hooked Icon"
+              width={80}
+              height={80}
+              className="mx-auto mb-3"
+            />
+            <Image
+              src="/hooked-logo.png"
+              alt="Hooked"
+              width={160}
+              height={50}
+              className="mx-auto"
+            />
           </div>
+        </div>
 
-          {/* Subtitle */}
-          <h2 className="text-2xl font-bold text-white text-center mb-10">
-            Meet singles at this event.
-          </h2>
+        {/* Subtitle */}
+        <h2 className="text-xl font-bold text-white text-center mb-8">
+          Meet singles at this event.
+        </h2>
 
-          {/* How it works link */}
+        {/* How it works link */}
+        <button
+          className="text-base font-bold text-white underline mb-6"
+          onClick={() => openModal('howItWorks')}
+        >
+          See how it works
+        </button>
+
+        {/* Buttons */}
+        <div className="w-full max-w-sm space-y-3">
           <button
-            className="text-lg font-bold text-white underline mb-8"
-            onClick={() => openModal('howItWorks')}
+            className="w-full bg-white text-black font-bold py-3 px-6 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center space-x-3 disabled:opacity-50"
+            onClick={handleCameraAccess}
+            disabled={isProcessing}
           >
-            See how it works
+            {isProcessing ? (
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-black"></div>
+            ) : (
+              <>
+                <QrCode size={24} />
+                <span>Scan QR Code</span>
+              </>
+            )}
           </button>
 
-          {/* Buttons */}
-          <div className="w-full max-w-sm space-y-4">
-            <button
-              className="w-full bg-white text-black font-bold py-4 px-6 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center space-x-3 disabled:opacity-50"
-              onClick={handleCameraAccess}
-              disabled={isProcessing}
-            >
-              {isProcessing ? (
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-black"></div>
-              ) : (
-                <>
-                  <QrCode size={24} />
-                  <span>Scan QR Code</span>
-                </>
-              )}
-            </button>
-
-            <button
-              className="w-full bg-white text-black font-bold py-4 px-6 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center space-x-3"
-              onClick={() => openModal('manualCodeEntry')}
-            >
-              <Hash size={24} />
-              <span>Enter Code Manually</span>
-            </button>
-          </div>
+          <button
+            className="w-full bg-white text-black font-bold py-3 px-6 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center space-x-3"
+            onClick={() => openModal('manualCodeEntry')}
+          >
+            <Hash size={24} />
+            <span>Enter Code Manually</span>
+          </button>
         </div>
+      </div>
 
-        {/* Legal Disclaimer */}
-        <div className="px-5 pb-8 text-center">
-          <p className="text-xs text-white leading-relaxed">
-            By creating a temporary profile, you agree to our{' '}
-            <a href="https://www.hooked-app.com/terms" className="underline">
-              Terms
-            </a>
-            .<br />
-            See how we use your data in our{' '}
-            <a href="https://www.hooked-app.com/privacy" className="underline">
-              Privacy Policy
-            </a>
-            .
-          </p>
-        </div>
+      {/* Legal Disclaimer */}
+      <div className="px-5 pb-6 text-center flex-shrink-0">
+        <p className="text-xs text-white leading-relaxed">
+          By creating a temporary profile, you agree to our{' '}
+          <a href="https://www.hooked-app.com/terms" className="underline">
+            Terms
+          </a>
+          .<br />
+          See how we use your data in our{' '}
+          <a href="https://www.hooked-app.com/privacy" className="underline">
+            Privacy Policy
+          </a>
+          .
+        </p>
       </div>
 
       {/* How it works Modal */}
