@@ -143,31 +143,31 @@ export default function MatchesPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-900 dark:bg-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-600 mx-auto mb-4"></div>
-          <p className="text-gray-300 dark:text-gray-300 text-lg">Loading your matches...</p>
+          <p className="text-gray-600 dark:text-gray-300 text-lg">Loading your matches...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 dark:bg-gray-900">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <div className="bg-gray-800 dark:bg-gray-800 shadow-sm border-b border-gray-700 dark:border-gray-700">
+      <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
         <div className="px-4 py-4">
           <div className="flex items-center justify-between">
             <button
               onClick={handleBack}
-              className="flex items-center text-gray-300 dark:text-gray-300"
+              className="flex items-center text-gray-600 dark:text-gray-300"
             >
               <ArrowLeft size={20} className="mr-2" />
               Back
             </button>
             <div className="text-center">
-              <h1 className="text-xl font-bold text-white dark:text-white">Your Matches</h1>
-              <p className="text-gray-300 dark:text-gray-300">{matches.length} mutual connections</p>
+              <h1 className="text-xl font-bold text-gray-800 dark:text-white">Your Matches</h1>
+              <p className="text-gray-600 dark:text-gray-300">{matches.length} mutual connections</p>
             </div>
             <div className="w-8"></div> {/* Spacer for centering */}
           </div>
@@ -175,11 +175,11 @@ export default function MatchesPage() {
       </div>
 
       {matches.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center px-4">
+        <div className="flex-1 flex items-center justify-center px-4 bg-gray-50 dark:bg-gray-900">
           <div className="text-center max-w-md">
             <Heart size={64} className="text-gray-400 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-white dark:text-white mb-4">No matches yet</h2>
-            <p className="text-gray-300 dark:text-gray-300 mb-6">
+            <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-4">No matches yet</h2>
+            <p className="text-gray-600 dark:text-gray-300 mb-6">
               Start liking profiles in the discovery section to make connections!
             </p>
             <button
@@ -193,9 +193,9 @@ export default function MatchesPage() {
       ) : (
         <div className="flex h-[calc(100vh-80px)]">
           {/* Matches List */}
-          <div className="w-full md:w-1/3 bg-gray-800 dark:bg-gray-800 border-r border-gray-700 dark:border-gray-700">
+          <div className="w-full md:w-1/3 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
             <div className="p-4">
-              <h2 className="text-lg font-semibold text-white dark:text-white mb-4">Matches</h2>
+              <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Matches</h2>
               <div className="space-y-3">
                 {matches.map((match) => (
                   <button
@@ -203,8 +203,8 @@ export default function MatchesPage() {
                     onClick={() => handleMatchSelect(match)}
                     className={`w-full flex items-center space-x-3 p-3 rounded-xl transition-colors duration-200 ${
                       selectedMatch?.id === match.id 
-                        ? 'bg-pink-900 dark:bg-pink-900 border border-pink-700 dark:border-pink-700' 
-                        : 'hover:bg-gray-700 dark:hover:bg-gray-700'
+                        ? 'bg-pink-100 dark:bg-pink-900 border border-pink-200 dark:border-pink-700' 
+                        : 'hover:bg-gray-50 dark:hover:bg-gray-700'
                     }`}
                   >
                     <div 
@@ -222,8 +222,8 @@ export default function MatchesPage() {
                       )}
                     </div>
                     <div className="flex-1 text-left">
-                      <h3 className="font-semibold text-white dark:text-white">{match.first_name}</h3>
-                      <p className="text-sm text-gray-300 dark:text-gray-300">{match.age} years old</p>
+                      <h3 className="font-semibold text-gray-800 dark:text-white">{match.first_name}</h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-300">{match.age} years old</p>
                     </div>
                   </button>
                 ))}

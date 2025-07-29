@@ -149,39 +149,39 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="h-screen bg-gradient-primary flex flex-col overflow-hidden">
+    <div className="h-screen bg-gray-50 dark:bg-gray-900 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="pt-12 pb-4 px-4 flex-shrink-0">
+      <div className="pt-12 pb-4 px-4 flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         <button
           onClick={handleBack}
-          className="flex items-center text-white mb-2"
+          className="flex items-center text-gray-600 dark:text-gray-300 mb-2"
         >
           <ArrowLeft size={20} className="mr-2" />
           Back
         </button>
         
         <div className="text-center">
-          <User size={40} className="text-white mx-auto mb-2" />
-          <h1 className="text-xl font-bold text-white mb-1">
+          <User size={40} className="text-gray-600 dark:text-gray-300 mx-auto mb-2" />
+          <h1 className="text-xl font-bold text-gray-800 dark:text-white mb-1">
             Create Your Profile
           </h1>
-          <p className="text-white text-sm opacity-90">
+          <p className="text-gray-600 dark:text-gray-300 text-sm">
             {currentEvent.name}
           </p>
         </div>
       </div>
 
       {/* Profile Form - Direct on page without card */}
-      <div className="px-4 pb-4 flex-1 overflow-y-auto">
-        <div className="space-y-4">
+      <div className="px-4 pb-4 flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900">
+        <div className="space-y-4 pt-4">
           {/* Profile Photo */}
           <div className="text-center">
-            <label className="block text-sm font-medium text-white mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Profile Photo *
             </label>
             <div className="relative inline-block">
               <div 
-                className="w-24 h-24 rounded-full flex items-center justify-center text-white font-bold text-2xl mb-3 border-2 border-dashed border-white/30"
+                className="w-24 h-24 rounded-full flex items-center justify-center text-white font-bold text-2xl mb-3 border-2 border-dashed border-gray-300 dark:border-gray-600"
                 style={{ backgroundColor: profileColor }}
               >
                 {profilePhotoUrl ? (
@@ -192,13 +192,13 @@ export default function ProfilePage() {
                   />
                 ) : (
                   <div className="text-center">
-                    <Camera size={24} className="mx-auto mb-1" />
-                    <span className="text-xs">Upload Photo</span>
+                    <Camera size={24} className="mx-auto mb-1 text-gray-400 dark:text-gray-500" />
+                    <span className="text-xs text-gray-500 dark:text-gray-400">Upload Photo</span>
                   </div>
                 )}
               </div>
-              <label className="absolute bottom-0 right-0 bg-white rounded-full p-2 shadow-lg cursor-pointer">
-                <Camera size={16} className="text-gray-600" />
+              <label className="absolute bottom-0 right-0 bg-white dark:bg-gray-700 rounded-full p-2 shadow-lg cursor-pointer border border-gray-200 dark:border-gray-600">
+                <Camera size={16} className="text-gray-600 dark:text-gray-300" />
                 <input
                   type="file"
                   accept="image/*"
@@ -207,19 +207,19 @@ export default function ProfilePage() {
                 />
               </label>
             </div>
-            <p className="text-xs text-white/70">Required • Max 10MB</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Required • Max 10MB</p>
           </div>
 
           {/* First Name */}
           <div>
-            <label className="block text-sm font-medium text-white mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               First Name *
             </label>
             <input
               type="text"
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
-              className="w-full px-4 py-3 border-2 border-white/20 rounded-xl focus:border-white focus:outline-none transition-colors duration-200 bg-white/10 text-white placeholder-white/50"
+              className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-xl focus:border-pink-500 dark:focus:border-pink-400 focus:outline-none transition-colors duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
               placeholder="Enter your first name"
               maxLength={20}
             />
@@ -227,14 +227,14 @@ export default function ProfilePage() {
 
           {/* Age */}
           <div>
-            <label className="block text-sm font-medium text-white mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Age *
             </label>
             <input
               type="number"
               value={age}
               onChange={(e) => setAge(e.target.value)}
-              className="w-full px-4 py-3 border-2 border-white/20 rounded-xl focus:border-white focus:outline-none transition-colors duration-200 bg-white/10 text-white placeholder-white/50"
+              className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-xl focus:border-pink-500 dark:focus:border-pink-400 focus:outline-none transition-colors duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
               placeholder="Enter your age"
               min="18"
               max="99"
@@ -243,7 +243,7 @@ export default function ProfilePage() {
 
           {/* Gender Identity */}
           <div>
-            <label className="block text-sm font-medium text-white mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               I am a... *
             </label>
             <div className="grid grid-cols-2 gap-3">
@@ -253,8 +253,8 @@ export default function ProfilePage() {
                   onClick={() => setGenderIdentity(option.value)}
                   className={`py-3 px-4 rounded-xl border-2 transition-all duration-200 ${
                     genderIdentity === option.value
-                      ? 'bg-white text-gray-800 border-white'
-                      : 'bg-white/10 text-white border-white/20 hover:bg-white/20'
+                      ? 'bg-pink-500 text-white border-pink-500'
+                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
                   }`}
                 >
                   {option.label}
@@ -265,7 +265,7 @@ export default function ProfilePage() {
 
           {/* Interested In */}
           <div>
-            <label className="block text-sm font-medium text-white mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               I'm interested in... *
             </label>
             <div className="grid grid-cols-3 gap-3">
@@ -275,8 +275,8 @@ export default function ProfilePage() {
                   onClick={() => setInterestedIn(option.toLowerCase())}
                   className={`py-3 px-4 rounded-xl border-2 transition-all duration-200 ${
                     interestedIn === option.toLowerCase()
-                      ? 'bg-white text-gray-800 border-white'
-                      : 'bg-white/10 text-white border-white/20 hover:bg-white/20'
+                      ? 'bg-pink-500 text-white border-pink-500'
+                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
                   }`}
                 >
                   {option}
@@ -287,7 +287,7 @@ export default function ProfilePage() {
 
           {/* Profile Color */}
           <div>
-            <label className="block text-sm font-medium text-white mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Profile Color
             </label>
             <div className="flex flex-wrap gap-3">
@@ -296,7 +296,7 @@ export default function ProfilePage() {
                   key={color}
                   onClick={() => setProfileColor(color)}
                   className={`w-10 h-10 rounded-full border-2 transition-all duration-200 ${
-                    profileColor === color ? 'border-white scale-110' : 'border-white/30'
+                    profileColor === color ? 'border-pink-500 scale-110' : 'border-gray-300 dark:border-gray-600'
                   }`}
                   style={{ backgroundColor: color }}
                 />
@@ -306,25 +306,25 @@ export default function ProfilePage() {
 
           {/* About Me */}
           <div>
-            <label className="block text-sm font-medium text-white mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               About Me
             </label>
             <textarea
               value={aboutMe}
               onChange={(e) => setAboutMe(e.target.value)}
-              className="w-full px-4 py-3 border-2 border-white/20 rounded-xl focus:border-white focus:outline-none transition-colors duration-200 bg-white/10 text-white placeholder-white/50"
+              className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-xl focus:border-pink-500 dark:focus:border-pink-400 focus:outline-none transition-colors duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
               placeholder="Tell others about yourself..."
               rows={3}
               maxLength={200}
             />
-            <p className="text-xs text-white/70 mt-1">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               {aboutMe.length}/200 characters
             </p>
           </div>
 
           {/* Interests */}
           <div>
-            <label className="block text-sm font-medium text-white mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Interests (select up to 3)
             </label>
             <div className="flex flex-wrap gap-2">
@@ -334,8 +334,8 @@ export default function ProfilePage() {
                   onClick={() => handleInterestToggle(interest)}
                   className={`px-3 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
                     interests.includes(interest)
-                      ? 'bg-white text-gray-800'
-                      : 'bg-white/10 text-white border border-white/20 hover:bg-white/20'
+                      ? 'bg-pink-500 text-white'
+                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
                   }`}
                   disabled={!interests.includes(interest) && interests.length >= 3}
                 >
@@ -344,39 +344,18 @@ export default function ProfilePage() {
               ))}
             </div>
           </div>
-
-          {/* Visibility Toggle */}
-          <div className="flex items-center justify-between">
-            <div>
-              <label className="block text-sm font-medium text-white">
-                Profile Visibility
-              </label>
-              <p className="text-xs text-white/70">
-                {isVisible ? 'Your profile is visible to others' : 'Your profile is hidden'}
-              </p>
-            </div>
-            <button
-              onClick={() => setIsVisible(!isVisible)}
-              className="flex items-center space-x-2 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors duration-200 border border-white/20"
-            >
-              {isVisible ? <Eye size={16} className="text-white" /> : <EyeOff size={16} className="text-white" />}
-              <span className="text-sm font-medium text-white">
-                {isVisible ? 'Visible' : 'Hidden'}
-              </span>
-            </button>
-          </div>
         </div>
 
         {/* Error Message */}
         {error && (
-          <div className="bg-red-500/20 border border-red-500/30 rounded-xl p-3 mt-4">
-            <p className="text-red-200 text-sm">{error}</p>
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-3 mt-4">
+            <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>
           </div>
         )}
       </div>
 
       {/* Submit Button - Sticky at bottom */}
-      <div className="px-4 pb-4 flex-shrink-0">
+      <div className="px-4 pb-4 flex-shrink-0 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
         <button
           onClick={handleSubmit}
           disabled={isLoading}
