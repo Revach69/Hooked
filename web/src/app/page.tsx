@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { QrCode, Hash, X, Heart } from 'lucide-react'
 import Image from 'next/image'
+import { Event } from '@/lib/firebaseApi'
 
 export default function HomePage() {
   const router = useRouter()
@@ -37,9 +38,37 @@ export default function HomePage() {
     }
   }
 
-  const handleEventAccess = (eventCode: string) => {
+  const handleEventAccess = async (eventCode: string) => {
     closeModal()
-    router.push(`/join?code=${eventCode.toUpperCase()}`)
+    
+    try {
+      // Validate the event code directly
+      const events = await Event.filter({ event_code: eventCode.toUpperCase() })
+      
+      if (events.length === 0) {
+        alert('Event not found. Please check your event code and try again.')
+        return
+      }
+      
+      const event = events[0]
+      const nowISO = new Date().toISOString()
+      
+      // Check if event is active
+      if (event.starts_at && event.expires_at && (nowISO < event.starts_at || nowISO > event.expires_at)) {
+        alert('This event is not currently active. Please check the event dates.')
+        return
+      }
+      
+      // Store event data and go directly to profile creation
+      localStorage.setItem('currentEventId', event.id)
+      localStorage.setItem('currentEventCode', event.event_code)
+      localStorage.setItem('currentEventName', event.name || 'Event')
+      
+      router.push('/profile')
+    } catch (error) {
+      console.error('Error validating event:', error)
+      alert('Failed to validate event. Please try again.')
+    }
   }
 
   const openModal = (modalName: string) => {
@@ -77,82 +106,84 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-primary flex flex-col">
-      {/* Header Section */}
-      <div className="flex-1 flex flex-col items-center justify-center px-5 pt-20 pb-10">
-        <div className="text-center mb-10">
-          <div className="mb-5">
-            <Image
-              src="/home-icon.png"
-              alt="Hooked Icon"
-              width={100}
-              height={100}
-              className="mx-auto mb-4"
-            />
-            <Image
-              src="/hooked-logo.png"
-              alt="Hooked"
-              width={180}
-              height={60}
-              className="mx-auto"
-            />
+    <div className="page-container bg-gradient-primary">
+      <div className="page-content">
+        {/* Header Section */}
+        <div className="flex-1 flex flex-col items-center justify-center px-5 pt-20 pb-10">
+          <div className="text-center mb-10">
+            <div className="mb-5">
+              <Image
+                src="/home-icon.png"
+                alt="Hooked Icon"
+                width={100}
+                height={100}
+                className="mx-auto mb-4"
+              />
+              <Image
+                src="/hooked-logo.png"
+                alt="Hooked"
+                width={180}
+                height={60}
+                className="mx-auto"
+              />
+            </div>
+          </div>
+
+          {/* Subtitle */}
+          <h2 className="text-2xl font-bold text-white text-center mb-10">
+            Meet singles at this event.
+          </h2>
+
+          {/* How it works link */}
+          <button
+            className="text-lg font-bold text-white underline mb-8"
+            onClick={() => openModal('howItWorks')}
+          >
+            See how it works
+          </button>
+
+          {/* Buttons */}
+          <div className="w-full max-w-sm space-y-4">
+            <button
+              className="w-full bg-white text-black font-bold py-4 px-6 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center space-x-3 disabled:opacity-50"
+              onClick={handleCameraAccess}
+              disabled={isProcessing}
+            >
+              {isProcessing ? (
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-black"></div>
+              ) : (
+                <>
+                  <QrCode size={24} />
+                  <span>Scan QR Code</span>
+                </>
+              )}
+            </button>
+
+            <button
+              className="w-full bg-white text-black font-bold py-4 px-6 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center space-x-3"
+              onClick={() => openModal('manualCodeEntry')}
+            >
+              <Hash size={24} />
+              <span>Enter Code Manually</span>
+            </button>
           </div>
         </div>
 
-        {/* Subtitle */}
-        <h2 className="text-2xl font-bold text-white text-center mb-10">
-          Meet singles at this event.
-        </h2>
-
-        {/* How it works link */}
-        <button
-          className="text-lg font-bold text-white underline mb-8"
-          onClick={() => openModal('howItWorks')}
-        >
-          See how it works
-        </button>
-
-        {/* Buttons */}
-        <div className="w-full max-w-sm space-y-4">
-          <button
-            className="w-full bg-white text-black font-bold py-4 px-6 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center space-x-3 disabled:opacity-50"
-            onClick={handleCameraAccess}
-            disabled={isProcessing}
-          >
-            {isProcessing ? (
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-black"></div>
-            ) : (
-              <>
-                <QrCode size={24} />
-                <span>Scan QR Code</span>
-              </>
-            )}
-          </button>
-
-          <button
-            className="w-full bg-white text-black font-bold py-4 px-6 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center space-x-3"
-            onClick={() => openModal('manualCodeEntry')}
-          >
-            <Hash size={24} />
-            <span>Enter Code Manually</span>
-          </button>
+        {/* Legal Disclaimer */}
+        <div className="px-5 pb-8 text-center">
+          <p className="text-xs text-white leading-relaxed">
+            By creating a temporary profile, you agree to our{' '}
+            <a href="https://www.hooked-app.com/terms" className="underline">
+              Terms
+            </a>
+            .<br />
+            See how we use your data in our{' '}
+            <a href="https://www.hooked-app.com/privacy" className="underline">
+              Privacy Policy
+            </a>
+            .
+          </p>
         </div>
-      </div>
-
-      {/* Legal Disclaimer */}
-      <div className="px-5 pb-8 text-center">
-        <p className="text-xs text-white leading-relaxed">
-          By creating a temporary profile, you agree to our{' '}
-          <a href="https://www.hooked-app.com/terms" className="underline">
-            Terms
-          </a>
-          .<br />
-          See how we use your data in our{' '}
-          <a href="https://www.hooked-app.com/privacy" className="underline">
-            Privacy Policy
-          </a>
-          .
-        </p>
       </div>
 
       {/* How it works Modal */}

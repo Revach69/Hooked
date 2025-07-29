@@ -248,66 +248,68 @@ export default function DiscoveryPage() {
   // Show hidden state if user is not visible
   if (currentUserProfile && !currentUserProfile.is_visible) {
     return (
-      <div className="min-h-screen bg-gray-900 dark:bg-gray-900">
-        {/* Header */}
-        <div className="bg-gray-800 dark:bg-gray-800 shadow-sm border-b border-gray-700 dark:border-gray-700">
-          <div className="px-4 py-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-xl font-bold text-white dark:text-white">Profile Hidden</h1>
-                <p className="text-gray-300 dark:text-gray-300">You are currently hidden from other users</p>
+      <div className="page-container bg-gray-900 dark:bg-gray-900">
+        <div className="page-content">
+          {/* Header */}
+          <div className="bg-gray-800 dark:bg-gray-800 shadow-sm border-b border-gray-700 dark:border-gray-700">
+            <div className="px-4 py-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-xl font-bold text-white dark:text-white">Profile Hidden</h1>
+                  <p className="text-gray-300 dark:text-gray-300">You are currently hidden from other users</p>
+                </div>
+                <button
+                  onClick={handleToggleVisibility}
+                  className="p-2 rounded-lg bg-gray-700 dark:bg-gray-700 hover:bg-gray-600 dark:hover:bg-gray-600 transition-colors duration-200"
+                >
+                  <Eye size={20} className="text-gray-300 dark:text-gray-300" />
+                </button>
               </div>
+            </div>
+          </div>
+
+          {/* Hidden State Content */}
+          <div className="flex-1 flex items-center justify-center px-4">
+            <div className="text-center max-w-md">
+              <User size={64} className="text-gray-400 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-white dark:text-white mb-4">Your Profile is Hidden</h2>
+              <p className="text-gray-300 dark:text-gray-300 mb-6">
+                While your profile is hidden, you cannot see other users and they cannot see you. 
+                To start discovering people again, make your profile visible.
+              </p>
               <button
                 onClick={handleToggleVisibility}
-                className="p-2 rounded-lg bg-gray-700 dark:bg-gray-700 hover:bg-gray-600 dark:hover:bg-gray-600 transition-colors duration-200"
+                className="bg-gradient-primary text-white font-semibold py-3 px-6 rounded-xl hover:shadow-lg transition-all duration-200"
               >
-                <Eye size={20} className="text-gray-300 dark:text-gray-300" />
+                Make Profile Visible
               </button>
             </div>
           </div>
-        </div>
 
-        {/* Hidden State Content */}
-        <div className="flex-1 flex items-center justify-center px-4">
-          <div className="text-center max-w-md">
-            <User size={64} className="text-gray-400 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-white dark:text-white mb-4">Your Profile is Hidden</h2>
-            <p className="text-gray-300 dark:text-gray-300 mb-6">
-              While your profile is hidden, you cannot see other users and they cannot see you. 
-              To start discovering people again, make your profile visible.
-            </p>
-            <button
-              onClick={handleToggleVisibility}
-              className="bg-gradient-primary text-white font-semibold py-3 px-6 rounded-xl hover:shadow-lg transition-all duration-200"
-            >
-              Make Profile Visible
-            </button>
-          </div>
-        </div>
-
-        {/* Bottom Navigation */}
-        <div className="bg-gray-800 dark:bg-gray-800 border-t border-gray-700 dark:border-gray-700">
-          <div className="flex justify-around py-3">
-            <button
-              onClick={() => router.push('/profile')}
-              className="flex flex-col items-center text-pink-400 dark:text-pink-400"
-            >
-              <User size={24} />
-              <span className="text-xs mt-1">Profile</span>
-            </button>
-            
-            <button className="flex flex-col items-center text-gray-400">
-              <Users size={24} />
-              <span className="text-xs mt-1">Discover</span>
-            </button>
-            
-            <button
-              onClick={() => router.push('/matches')}
-              className="flex flex-col items-center text-gray-400"
-            >
-              <MessageCircle size={24} />
-              <span className="text-xs mt-1">Matches</span>
-            </button>
+          {/* Bottom Navigation */}
+          <div className="bg-gray-800 dark:bg-gray-800 border-t border-gray-700 dark:border-gray-700">
+            <div className="flex justify-around py-3">
+              <button
+                onClick={() => router.push('/profile')}
+                className="flex flex-col items-center text-pink-400 dark:text-pink-400"
+              >
+                <User size={24} />
+                <span className="text-xs mt-1">Profile</span>
+              </button>
+              
+              <button className="flex flex-col items-center text-gray-400">
+                <Users size={24} />
+                <span className="text-xs mt-1">Discover</span>
+              </button>
+              
+              <button
+                onClick={() => router.push('/matches')}
+                className="flex flex-col items-center text-gray-400"
+              >
+                <MessageCircle size={24} />
+                <span className="text-xs mt-1">Matches</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -315,38 +317,39 @@ export default function DiscoveryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 dark:bg-gray-900">
-      {/* Header */}
-      <div className="bg-gray-800 dark:bg-gray-800 shadow-sm border-b border-gray-700 dark:border-gray-700">
-        <div className="px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-xl font-bold text-white dark:text-white">
-                Singles at {currentEvent?.name}
-              </h1>
-              <p className="text-gray-300 dark:text-gray-300">{filteredProfiles.length} people discovered</p>
-            </div>
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={handleToggleVisibility}
-                className="p-2 rounded-lg bg-gray-700 dark:bg-gray-700 hover:bg-gray-600 dark:hover:bg-gray-600 transition-colors duration-200"
-              >
-                {currentUserProfile?.is_visible ? (
-                  <Eye size={20} className="text-gray-300 dark:text-gray-300" />
-                ) : (
-                  <EyeOff size={20} className="text-gray-300 dark:text-gray-300" />
-                )}
-              </button>
-              <button
-                onClick={() => setShowFilters(true)}
-                className="p-2 rounded-lg bg-gray-700 dark:bg-gray-700 hover:bg-gray-600 dark:hover:bg-gray-600 transition-colors duration-200"
-              >
-                <Filter size={20} className="text-gray-300 dark:text-gray-300" />
-              </button>
+    <div className="page-container bg-gray-900 dark:bg-gray-900">
+      <div className="page-content">
+        {/* Header */}
+        <div className="bg-gray-800 dark:bg-gray-800 shadow-sm border-b border-gray-700 dark:border-gray-700">
+          <div className="px-4 py-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-xl font-bold text-white dark:text-white">
+                  Singles at {currentEvent?.name}
+                </h1>
+                <p className="text-gray-300 dark:text-gray-300">{filteredProfiles.length} people discovered</p>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={handleToggleVisibility}
+                  className="p-2 rounded-lg bg-gray-700 dark:bg-gray-700 hover:bg-gray-600 dark:hover:bg-gray-600 transition-colors duration-200"
+                >
+                  {currentUserProfile?.is_visible ? (
+                    <Eye size={20} className="text-gray-300 dark:text-gray-300" />
+                  ) : (
+                    <EyeOff size={20} className="text-gray-300 dark:text-gray-300" />
+                  )}
+                </button>
+                <button
+                  onClick={() => setShowFilters(true)}
+                  className="p-2 rounded-lg bg-gray-700 dark:bg-gray-700 hover:bg-gray-600 dark:hover:bg-gray-600 transition-colors duration-200"
+                >
+                  <Filter size={20} className="text-gray-300 dark:text-gray-300" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
       {/* Profiles Grid */}
       <div className="p-4">
