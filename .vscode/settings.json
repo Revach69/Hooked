@@ -1,4 +1,15 @@
 {
     "java.configuration.updateBuildConfiguration": "automatic",
-    "java.compile.nullAnalysis.mode": "automatic"
+    "java.compile.nullAnalysis.mode": "automatic",
+    "java.project.sourcePaths": [],
+    "java.project.explorer.showNonJavaResources": false,
+    "files.exclude": {
+        "**/node_modules/**/android": true,
+        "**/node_modules/**/build.gradle": true,
+        "**/node_modules/**/build.gradle.kts": true,
+        "**/node_modules/**/.settings": true
+    },
+    "search.exclude": {
+        "**/node_modules/**/android": true
+    }
 }

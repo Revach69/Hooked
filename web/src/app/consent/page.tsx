@@ -84,10 +84,10 @@ export default function ConsentPage() {
 
       {/* Consent Content */}
       <div className="px-4 pb-8">
-        <div className="bg-white rounded-2xl p-6 mb-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">How we protect your privacy</h2>
+        <div className="bg-gray-800 dark:bg-gray-800 rounded-2xl p-6 mb-6">
+          <h2 className="text-xl font-bold text-white dark:text-white mb-4">How we protect your privacy</h2>
           
-          <div className="space-y-4 text-sm text-gray-700">
+          <div className="space-y-4 text-sm text-gray-300 dark:text-gray-300">
             <div className="flex items-start space-x-3">
               <CheckCircle size={20} className="text-green-500 mt-0.5 flex-shrink-0" />
               <p>Your profile is temporary and will be deleted after the event ends</p>
@@ -116,8 +116,8 @@ export default function ConsentPage() {
         </div>
 
         {/* Terms */}
-        <div className="bg-white rounded-2xl p-6 mb-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">Terms & Conditions</h2>
+        <div className="bg-gray-800 dark:bg-gray-800 rounded-2xl p-6 mb-6">
+          <h2 className="text-xl font-bold text-white dark:text-white mb-4">Terms & Conditions</h2>
           
           <div className="space-y-4">
             <div className="flex items-start space-x-3">
@@ -126,9 +126,9 @@ export default function ConsentPage() {
                 id="consent"
                 checked={hasConsented}
                 onChange={(e) => setHasConsented(e.target.checked)}
-                className="mt-1 h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                className="mt-1 h-4 w-4 text-pink-600 focus:ring-pink-500 border-gray-600 bg-gray-700 rounded"
               />
-              <label htmlFor="consent" className="text-sm text-gray-700 leading-relaxed">
+              <label htmlFor="consent" className="text-sm text-white dark:text-white leading-relaxed">
                 I understand and agree to the privacy policy and terms of service. I consent to creating a temporary profile for this event and understand that my information will be shared with other event participants.
               </label>
             </div>
@@ -151,7 +151,7 @@ export default function ConsentPage() {
           
           <button
             onClick={handleDecline}
-            className="w-full bg-gray-200 text-gray-700 font-semibold py-4 px-6 rounded-xl hover:bg-gray-300 transition-all duration-200"
+            className="w-full bg-gray-700 dark:bg-gray-700 text-gray-300 dark:text-gray-300 font-semibold py-4 px-6 rounded-xl hover:bg-gray-600 dark:hover:bg-gray-600 transition-all duration-200"
           >
             Decline
           </button>

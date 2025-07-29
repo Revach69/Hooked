@@ -158,11 +158,11 @@ export default function HomePage() {
       {/* How it works Modal */}
       {activeModal === 'howItWorks' && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+          <div className="bg-gray-800 dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md">
             <div className="flex justify-between items-center mb-5">
-              <h3 className="text-xl font-bold text-gray-800">How it works</h3>
+              <h3 className="text-xl font-bold text-white dark:text-white">How it works</h3>
               <button onClick={closeModal} className="p-1">
-                <X size={24} className="text-gray-500" />
+                <X size={24} className="text-gray-400" />
               </button>
             </div>
             
@@ -182,11 +182,11 @@ export default function HomePage() {
       {/* Manual Code Entry Modal */}
       {activeModal === 'manualCodeEntry' && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+          <div className="bg-gray-800 dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md">
             <div className="flex justify-between items-center mb-5">
-              <h3 className="text-xl font-bold text-gray-800">Enter Event Code</h3>
+              <h3 className="text-xl font-bold text-white dark:text-white">Enter Event Code</h3>
               <button onClick={closeModal} className="p-1">
-                <X size={24} className="text-gray-500" />
+                <X size={24} className="text-gray-400" />
               </button>
             </div>
             
@@ -195,7 +195,7 @@ export default function HomePage() {
               placeholder="Enter event code"
               value={manualCode}
               onChange={(e) => setManualCode(e.target.value)}
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none transition-colors duration-200 mb-5"
+              className="w-full px-4 py-3 border-2 border-gray-600 dark:border-gray-600 rounded-xl focus:border-pink-500 focus:outline-none transition-colors duration-200 mb-5 bg-gray-900 dark:bg-gray-900 text-white placeholder-gray-400"
               autoFocus
             />
             

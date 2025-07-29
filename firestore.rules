@@ -43,8 +43,8 @@ service cloud.firestore {
       
       // ✅ Allow deleting only own profile (session-based auth)
       allow delete: if 
-        // Can delete own profile by session_id - handle partial updates
-        (!('session_id' in request.resource.data) || resource.data.session_id == request.resource.data.session_id);
+        // Allow deletion for session-based users (no auth required)
+        request.auth == null;
     }
     
     // ===== LIKES COLLECTION =====
@@ -85,8 +85,8 @@ service cloud.firestore {
       
       // ✅ Allow deleting own likes
       allow delete: if 
-        // Can delete own likes (session-based auth)
-        resource.data.from_profile_id == request.resource.data.from_profile_id;
+        // Allow deletion for session-based users (no auth required)
+        request.auth == null;
     }
     
     // ===== MESSAGES COLLECTION =====
@@ -130,8 +130,8 @@ service cloud.firestore {
       
       // ✅ Allow deleting own messages
       allow delete: if 
-        // Can delete own messages (session-based auth)
-        resource.data.from_profile_id == request.resource.data.from_profile_id;
+        // Allow deletion for session-based users (no auth required)
+        request.auth == null;
     }
     
     // ===== CONTACT SHARES COLLECTION =====

@@ -94,10 +94,10 @@ function JoinPageContent() {
   if (error) {
     return (
       <div className="min-h-screen bg-gradient-primary flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl p-8 max-w-md w-full text-center">
+        <div className="bg-gray-800 dark:bg-gray-800 rounded-2xl p-8 max-w-md w-full text-center">
           <AlertCircle size={48} className="text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-gray-800 mb-4">Event Not Found</h2>
-          <p className="text-gray-600 mb-6">{error}</p>
+          <h2 className="text-xl font-bold text-white dark:text-white mb-4">Event Not Found</h2>
+          <p className="text-gray-300 dark:text-gray-300 mb-6">{error}</p>
           <button
             onClick={handleBack}
             className="w-full bg-gradient-primary text-white font-semibold py-3 px-6 rounded-xl hover:shadow-lg transition-all duration-200"
@@ -134,39 +134,39 @@ function JoinPageContent() {
 
       {/* Event Details */}
       <div className="px-4 pb-8">
-        <div className="bg-white rounded-2xl p-6 mb-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">Event Details</h2>
+        <div className="bg-gray-800 dark:bg-gray-800 rounded-2xl p-6 mb-6">
+          <h2 className="text-xl font-bold text-white dark:text-white mb-4">Event Details</h2>
           
           <div className="space-y-3">
             <div>
-              <p className="text-sm text-gray-500">Event Name</p>
-              <p className="text-gray-800 font-medium">{currentEvent?.name}</p>
+              <p className="text-sm text-gray-400 dark:text-gray-400">Event Name</p>
+              <p className="text-white dark:text-white font-medium">{currentEvent?.name}</p>
             </div>
             
             {currentEvent?.description && (
               <div>
-                <p className="text-sm text-gray-500">Description</p>
-                <p className="text-gray-800">{currentEvent.description}</p>
+                <p className="text-sm text-gray-400 dark:text-gray-400">Description</p>
+                <p className="text-white dark:text-white">{currentEvent.description}</p>
               </div>
             )}
             
             {currentEvent?.location && (
               <div>
-                <p className="text-sm text-gray-500">Location</p>
-                <p className="text-gray-800">{currentEvent.location}</p>
+                <p className="text-sm text-gray-400 dark:text-gray-400">Location</p>
+                <p className="text-white dark:text-white">{currentEvent.location}</p>
               </div>
             )}
             
             <div>
-              <p className="text-sm text-gray-500">Event Code</p>
-              <p className="text-gray-800 font-mono font-medium">{currentEvent?.event_code}</p>
+              <p className="text-sm text-gray-400 dark:text-gray-400">Event Code</p>
+              <p className="text-white dark:text-white font-mono font-medium">{currentEvent?.event_code}</p>
             </div>
           </div>
         </div>
 
         {/* Consent */}
-        <div className="bg-white rounded-2xl p-6 mb-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">Terms & Conditions</h2>
+        <div className="bg-gray-800 dark:bg-gray-800 rounded-2xl p-6 mb-6">
+          <h2 className="text-xl font-bold text-white dark:text-white mb-4">Terms & Conditions</h2>
           
           <div className="space-y-4">
             <div className="flex items-start space-x-3">
@@ -175,15 +175,15 @@ function JoinPageContent() {
                 id="consent"
                 checked={hasConsented}
                 onChange={(e) => setHasConsented(e.target.checked)}
-                className="mt-1 h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                className="mt-1 h-4 w-4 text-pink-600 focus:ring-pink-500 border-gray-600 bg-gray-700 rounded"
               />
-              <label htmlFor="consent" className="text-sm text-gray-700 leading-relaxed">
+              <label htmlFor="consent" className="text-sm text-white dark:text-white leading-relaxed">
                 I agree to create a temporary profile for this event and understand that my profile will be visible to other event participants. I also agree to the{' '}
-                <a href="https://www.hooked-app.com/terms" className="text-purple-600 underline">
+                <a href="https://www.hooked-app.com/terms" className="text-pink-400 dark:text-pink-400 underline">
                   Terms of Service
                 </a>
                 {' '}and{' '}
-                <a href="https://www.hooked-app.com/privacy" className="text-purple-600 underline">
+                <a href="https://www.hooked-app.com/privacy" className="text-pink-400 dark:text-pink-400 underline">
                   Privacy Policy
                 </a>
                 .

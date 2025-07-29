@@ -174,8 +174,8 @@ export default function ProfilePage() {
 
       {/* Profile Form */}
       <div className="px-4 pb-8">
-        <div className="bg-white rounded-2xl p-6 mb-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">Basic Information</h2>
+        <div className="bg-gray-800 dark:bg-gray-800 rounded-2xl p-6 mb-6">
+          <h2 className="text-xl font-bold text-white dark:text-white mb-4">Basic Information</h2>
           
           <div className="space-y-4">
             {/* Profile Photo */}
@@ -195,8 +195,8 @@ export default function ProfilePage() {
                     firstName ? firstName[0].toUpperCase() : '?'
                   )}
                 </div>
-                <label className="absolute bottom-0 right-0 bg-white rounded-full p-2 shadow-lg cursor-pointer">
-                  <Camera size={16} className="text-gray-600" />
+                <label className="absolute bottom-0 right-0 bg-gray-700 dark:bg-gray-700 rounded-full p-2 shadow-lg cursor-pointer">
+                  <Camera size={16} className="text-gray-300 dark:text-gray-300" />
                   <input
                     type="file"
                     accept="image/*"
@@ -209,14 +209,14 @@ export default function ProfilePage() {
 
             {/* First Name */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-white dark:text-white mb-2">
                 First Name *
               </label>
               <input
                 type="text"
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none transition-colors duration-200"
+                className="w-full px-4 py-3 border-2 border-gray-600 dark:border-gray-600 rounded-xl focus:border-pink-500 focus:outline-none transition-colors duration-200 bg-gray-900 dark:bg-gray-900 text-white placeholder-gray-400"
                 placeholder="Enter your first name"
                 maxLength={20}
               />
@@ -224,14 +224,14 @@ export default function ProfilePage() {
 
             {/* Age */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-white dark:text-white mb-2">
                 Age *
               </label>
               <input
                 type="number"
                 value={age}
                 onChange={(e) => setAge(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none transition-colors duration-200"
+                className="w-full px-4 py-3 border-2 border-gray-600 dark:border-gray-600 rounded-xl focus:border-pink-500 focus:outline-none transition-colors duration-200 bg-gray-900 dark:bg-gray-900 text-white placeholder-gray-400"
                 placeholder="Enter your age"
                 min="18"
                 max="99"
@@ -240,13 +240,13 @@ export default function ProfilePage() {
 
             {/* Gender Identity */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-white dark:text-white mb-2">
                 Gender Identity *
               </label>
               <select
                 value={genderIdentity}
                 onChange={(e) => setGenderIdentity(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none transition-colors duration-200"
+                className="w-full px-4 py-3 border-2 border-gray-600 dark:border-gray-600 rounded-xl focus:border-pink-500 focus:outline-none transition-colors duration-200 bg-gray-900 dark:bg-gray-900 text-white"
               >
                 <option value="">Select gender identity</option>
                 {GENDER_OPTIONS.map(option => (
@@ -259,13 +259,13 @@ export default function ProfilePage() {
 
             {/* Interested In */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-white dark:text-white mb-2">
                 Interested In *
               </label>
               <select
                 value={interestedIn}
                 onChange={(e) => setInterestedIn(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none transition-colors duration-200"
+                className="w-full px-4 py-3 border-2 border-gray-600 dark:border-gray-600 rounded-xl focus:border-pink-500 focus:outline-none transition-colors duration-200 bg-gray-900 dark:bg-gray-900 text-white"
               >
                 <option value="">Select preference</option>
                 <option value="men">Men</option>
@@ -276,7 +276,7 @@ export default function ProfilePage() {
 
             {/* Profile Color */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-white dark:text-white mb-2">
                 Profile Color
               </label>
               <div className="flex flex-wrap gap-2">
@@ -295,13 +295,13 @@ export default function ProfilePage() {
 
             {/* About Me */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-white dark:text-white mb-2">
                 About Me
               </label>
               <textarea
                 value={aboutMe}
                 onChange={(e) => setAboutMe(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none transition-colors duration-200"
+                className="w-full px-4 py-3 border-2 border-gray-600 dark:border-gray-600 rounded-xl focus:border-pink-500 focus:outline-none transition-colors duration-200 bg-gray-900 dark:bg-gray-900 text-white placeholder-gray-400"
                 placeholder="Tell others about yourself..."
                 rows={3}
                 maxLength={200}
@@ -313,7 +313,7 @@ export default function ProfilePage() {
 
             {/* Interests */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-white dark:text-white mb-2">
                 Interests (select up to 3)
               </label>
               <div className="flex flex-wrap gap-2">
@@ -323,8 +323,8 @@ export default function ProfilePage() {
                     onClick={() => handleInterestToggle(interest)}
                     className={`px-3 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
                       interests.includes(interest)
-                        ? 'bg-purple-600 text-white'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        ? 'bg-pink-600 text-white'
+                        : 'bg-gray-700 dark:bg-gray-700 text-gray-300 dark:text-gray-300 hover:bg-gray-600 dark:hover:bg-gray-600'
                     }`}
                     disabled={!interests.includes(interest) && interests.length >= 3}
                   >
@@ -337,19 +337,19 @@ export default function ProfilePage() {
             {/* Visibility Toggle */}
             <div className="flex items-center justify-between">
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-white dark:text-white">
                   Profile Visibility
                 </label>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-400 dark:text-gray-400">
                   {isVisible ? 'Your profile is visible to others' : 'Your profile is hidden'}
                 </p>
               </div>
               <button
                 onClick={() => setIsVisible(!isVisible)}
-                className="flex items-center space-x-2 px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors duration-200"
+                className="flex items-center space-x-2 px-3 py-2 rounded-lg bg-gray-700 dark:bg-gray-700 hover:bg-gray-600 dark:hover:bg-gray-600 transition-colors duration-200"
               >
-                {isVisible ? <Eye size={16} /> : <EyeOff size={16} />}
-                <span className="text-sm font-medium">
+                {isVisible ? <Eye size={16} className="text-gray-300 dark:text-gray-300" /> : <EyeOff size={16} className="text-gray-300 dark:text-gray-300" />}
+                <span className="text-sm font-medium text-gray-300 dark:text-gray-300">
                   {isVisible ? 'Visible' : 'Hidden'}
                 </span>
               </button>
@@ -359,8 +359,8 @@ export default function ProfilePage() {
 
         {/* Error Message */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
-            <p className="text-red-600 text-sm">{error}</p>
+          <div className="bg-red-900 dark:bg-red-900 border border-red-700 dark:border-red-700 rounded-xl p-4 mb-6">
+            <p className="text-red-200 dark:text-red-200 text-sm">{error}</p>
           </div>
         )}
 
