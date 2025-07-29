@@ -236,10 +236,12 @@ export default function DiscoveryPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 text-lg">Loading singles at this event...</p>
+      <div className="page-container bg-gray-900 dark:bg-gray-900">
+        <div className="page-content flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+            <p className="text-gray-300 dark:text-gray-300 text-lg">Loading singles at this event...</p>
+          </div>
         </div>
       </div>
     )
@@ -352,7 +354,7 @@ export default function DiscoveryPage() {
         </div>
 
         {/* Profiles Grid */}
-        <div className="flex-1 p-4 overflow-y-auto">
+        <div className="flex-1 p-4">
           <div className="grid grid-cols-3 gap-3">
             {filteredProfiles.map((profile) => (
               <div
@@ -446,7 +448,7 @@ export default function DiscoveryPage() {
         {/* Filter Modal */}
         {showFilters && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-md">
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-xl font-bold text-gray-800">Filters</h3>
                 <button onClick={() => setShowFilters(false)}>
@@ -561,7 +563,7 @@ export default function DiscoveryPage() {
         {/* Profile Detail Modal */}
         {selectedProfileForDetail && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-md">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl font-bold text-gray-800">Profile Details</h3>
                 <button onClick={() => setSelectedProfileForDetail(null)}>

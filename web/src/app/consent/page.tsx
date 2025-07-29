@@ -84,7 +84,7 @@ export default function ConsentPage() {
         </div>
 
         {/* Consent Content */}
-        <div className="flex-1 px-4 pb-8 overflow-y-auto">
+        <div className="flex-1 px-4 pb-8">
           <div className="bg-gray-800 dark:bg-gray-800 rounded-2xl p-6 mb-6">
             <h2 className="text-xl font-bold text-white dark:text-white mb-4">How we protect your privacy</h2>
             

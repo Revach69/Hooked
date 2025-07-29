@@ -40,7 +40,7 @@ export default function RootLayout({
         <meta name="msapplication-tap-highlight" content="no" />
       </head>
       <body className={inter.className}>
-        <div className="min-h-screen bg-gradient-primary">
+        <div className="bg-gradient-primary">
           {children}
         </div>
       </body>

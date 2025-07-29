@@ -197,7 +197,7 @@ export default function MatchesPage() {
           <div className="flex-1 flex h-full">
             {/* Matches List */}
             <div className="w-full md:w-1/3 bg-gray-800 dark:bg-gray-800 border-r border-gray-700 dark:border-gray-700">
-              <div className="p-4 h-full overflow-y-auto">
+              <div className="p-4 h-full">
                 <h2 className="text-lg font-semibold text-white dark:text-white mb-4">Matches</h2>
                 <div className="space-y-3">
                   {matches.map((match) => (
@@ -263,7 +263,7 @@ export default function MatchesPage() {
                   </div>
 
                   {/* Messages */}
-                  <div className="flex-1 p-4 overflow-y-auto bg-gray-900 dark:bg-gray-900">
+                  <div className="flex-1 p-4 bg-gray-900 dark:bg-gray-900">
                     <div className="space-y-4">
                       {chatMessages.map((message) => {
                         const isFromMe = message.from_profile_id === currentUserProfile?.session_id
