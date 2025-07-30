@@ -198,11 +198,6 @@ export default function Home() {
           >
             See how it works
           </button>
-          <div className="text-white text-sm mt-4 leading-relaxed">
-            <p>Before we start - don't forget to:</p>
-            <p>1. Open in external browser</p>
-            <p>2. Refresh often</p>
-          </div>
         </div>
 
         {/* Action Buttons */}
