@@ -8,7 +8,7 @@ import Discovery from "./Discovery";
 
 import Matches from "./Matches";
 
-import admin from "./admin";
+
 
 import join from "./join";
 
@@ -26,7 +26,7 @@ const PAGES = {
     
     Matches: Matches,
     
-    admin: admin,
+
     
     join: join,
     
@@ -67,7 +67,7 @@ function PagesContent() {
                 
                 <Route path="/Matches" element={<Matches />} />
                 
-                <Route path="/admin" element={<admin />} />
+
                 
                 <Route path="/join" element={<join />} />
                 
