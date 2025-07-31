@@ -3,31 +3,30 @@
 
 ### Executive Summary
 
-Hooked is a social networking platform designed for event-based connections, **not a dating app**. This document outlines our comprehensive content moderation system and compliance measures to ensure the platform meets App Store guidelines and maintains a safe, respectful community.
+Hooked is a dating app designed for romantic connections at events. This document outlines our comprehensive content moderation system and compliance measures to ensure the platform meets App Store guidelines and maintains a safe, respectful dating community.
 
 ---
 
-## 🚫 Dating App Restrictions Compliance
+## 💕 Dating App Compliance
 
-### Key Distinctions from Dating Apps
+### Key Features for Dating Apps
 
-1. **Purpose**: Hooked facilitates social networking at events, not romantic connections
+1. **Purpose**: Hooked facilitates romantic connections at events
 2. **Temporary Nature**: All profiles and connections expire when events end
 3. **Event-Focused**: Users can only connect with people at the same event
-4. **No Dating Language**: Platform explicitly prohibits dating-related content
-5. **Professional Networking**: Encourages business and social connections
+4. **Dating Language**: Platform allows appropriate dating-related content
+5. **Romantic Networking**: Encourages romantic and social connections
 
 ### Content Restrictions Implemented
 
 #### Prohibited Content Categories:
-- ❌ Dating-related language or romantic solicitations
-- ❌ Sexual content or explicit material
-- ❌ Adult content or pornography
+- ❌ Explicit sexual content or pornography
 - ❌ Harassment or bullying
 - ❌ Commercial activity or spam
 - ❌ Personal contact information sharing
 - ❌ Fake profiles or impersonation
 - ❌ Underage users (18+ only)
+- ✅ Dating-related language and romantic content (allowed)
 
 ---
 
@@ -110,13 +109,13 @@ Hooked is a social networking platform designed for event-based connections, **n
 
 ### Age Rating Compliance
 
-#### Current Rating: 17+ (Social Networking)
+#### Current Rating: 18+ (Dating)
 **Justification:**
-- Social networking category
-- No dating or romantic features
+- Dating app category
+- Romantic connections and dating features
 - Content moderation prevents inappropriate material
-- 18+ age requirement for users
-- Professional networking focus
+- 18+ age requirement for users (legally required)
+- Dating and romantic networking focus
 
 #### Age Verification Measures:
 - ✅ Minimum age enforcement (18+)
@@ -246,8 +245,8 @@ Hooked is a social networking platform designed for event-based connections, **n
 ## ✅ Compliance Checklist
 
 ### App Store Requirements
-- [x] No dating app functionality
-- [x] Appropriate age rating (17+)
+- [x] Dating app functionality (properly implemented)
+- [x] Appropriate age rating (18+)
 - [x] Content moderation system
 - [x] User reporting capabilities
 - [x] Clear terms and privacy policies

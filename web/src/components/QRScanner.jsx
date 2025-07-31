@@ -19,7 +19,12 @@ export default function QRScanner({ onScan, onClose, onSwitchToManual }) {
         setIsScanning(false);
       }).catch(err => {
         console.error("Error stopping scanner:", err);
+        // Don't let scanner errors crash the app
+        setIsScanning(false);
       });
+    } else {
+      // If scanner is not running, just set scanning to false
+      setIsScanning(false);
     }
   }, [isScanning]);
 
@@ -77,17 +82,33 @@ export default function QRScanner({ onScan, onClose, onSwitchToManual }) {
   useEffect(() => {
     startScanner();
     return () => {
-      stopScanner();
+      try {
+        stopScanner();
+      } catch (error) {
+        console.error("Error during component cleanup:", error);
+        // Ensure scanning state is reset even if cleanup fails
+        setIsScanning(false);
+      }
     };
   }, [startScanner, stopScanner]);
   
   const handleClose = () => {
-    stopScanner();
+    try {
+      stopScanner();
+    } catch (error) {
+      console.error("Error during scanner cleanup:", error);
+      // Continue with close even if scanner cleanup fails
+    }
     onClose();
   };
 
   const handleManualEntry = () => {
-    stopScanner();
+    try {
+      stopScanner();
+    } catch (error) {
+      console.error("Error during scanner cleanup:", error);
+      // Continue with manual entry even if scanner cleanup fails
+    }
     onSwitchToManual();
   };
 

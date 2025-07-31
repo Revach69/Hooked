@@ -1,5 +1,5 @@
-// Content Moderation System for Hooked App
-// Ensures compliance with App Store guidelines and dating app restrictions
+// Content Moderation System for Hooked Dating App
+// Ensures compliance with App Store guidelines and dating app safety requirements
 
 export interface ContentViolation {
   type: 'inappropriate_language' | 'harassment' | 'spam' | 'inappropriate_photo' | 'underage' | 'commercial' | 'fake_profile';
@@ -34,10 +34,10 @@ export type ReportReason =
   | 'commercial_activity'
   | 'other';
 
-// Inappropriate content patterns
+// Inappropriate content patterns for dating app
 const INAPPROPRIATE_PATTERNS = [
-  // Explicit sexual content
-  /\b(sex|sexual|nude|naked|porn|pornography|adult|erotic)\b/i,
+  // Explicit sexual content (still prohibited)
+  /\b(nude|naked|porn|pornography|adult|erotic)\b/i,
   // Profanity
   /\b(fuck|shit|bitch|asshole|dick|pussy|cunt)\b/i,
   // Harassment patterns
@@ -47,7 +47,7 @@ const INAPPROPRIATE_PATTERNS = [
   // Contact information sharing
   /\b(phone|number|email|address|instagram|snapchat|facebook|twitter)\b/i,
   // Age-related inappropriate content
-  /\b(underage|minor|teen|young|old|age)\b/i,
+  /\b(underage|minor|teen|young)\b/i,
 ];
 
 // Spam patterns
@@ -57,11 +57,11 @@ const SPAM_PATTERNS = [
   /\b(earn money|make money|work from home|investment)\b/i,
 ];
 
-// Commercial activity patterns
+// Commercial activity patterns (still prohibited in dating context)
 const COMMERCIAL_PATTERNS = [
-  /\b(business|company|startup|entrepreneur|consultant|freelancer)\b/i,
+  /\b(buy|sell|price|cost|money|payment|promote|advertise)\b/i,
   /\b(service|product|client|customer|marketing|sales)\b/i,
-  /\b(hire|work|job|employment|career|professional)\b/i,
+  /\b(hire|work|job|employment|career)\b/i,
 ];
 
 export class ContentModeration {
