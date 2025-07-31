@@ -171,17 +171,12 @@
   - **Marketing URL**: Optional but recommended
   - **Note**: This is done in App Store Connect web interface, not in code
 
-### 23. Content Guidelines Compliance ✅ COMPLETED
-- [x] **Review content for guidelines**
-  - ✅ Comprehensive content moderation system implemented
-  - ✅ Automated text filtering for inappropriate content
-  - ✅ Age verification (18+ requirement enforced)
-  - ✅ User reporting system with 8 violation categories
-  - ✅ Photo upload restrictions (10MB limit exists ✅)
-  - ✅ Terms of Service updated with dating app restrictions
-  - ✅ Privacy Policy updated with content moderation details
-  - ✅ **Current**: App is clearly social networking, not dating
-  - ✅ **Documentation**: See CONTENT_GUIDELINES_COMPLIANCE.md
+### 23. Content Guidelines Compliance
+- [ ] **Review content for guidelines**
+  - Ensure no inappropriate content in user-generated content
+  - Verify photo upload restrictions (10MB limit exists ✅)
+  - Check for any adult content or dating app implications
+  - **Current**: App appears to be social networking, not dating
 
 ### 24. Technical Implementation Issues ✅ VERIFIED
 - [x] **Fix potential crashes**

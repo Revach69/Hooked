@@ -20,9 +20,13 @@ export default function JoinPage() {
 
   const handleEventJoin = async () => {
     try {
+      console.log("Starting event join process...");
+      
       // Parse the event code from URL parameters
       const urlParams = new URLSearchParams(window.location.search);
       const eventCode = urlParams.get('code');
+      
+      console.log("Event code from URL:", eventCode);
 
       if (!eventCode) {
         setError("No event code provided in the URL.");
@@ -30,11 +34,23 @@ export default function JoinPage() {
         return;
       }
 
+      console.log("Fetching events with code:", eventCode.toUpperCase());
+      
+      // First, let's try to list all events to see if Firebase is working
+      try {
+        const allEvents = await Event.list();
+        console.log("All events in database:", allEvents);
+      } catch (listError) {
+        console.error("Error listing all events:", listError);
+      }
+      
       // Validate the event code
       const events = await Event.filter({ event_code: eventCode.toUpperCase() });
       
+      console.log("Found events:", events);
+      
       if (events.length === 0) {
-        setError("Invalid event code.");
+        setError(`Event code "${eventCode.toUpperCase()}" not found. Please check the code and try again.`);
         setIsLoading(false);
         return;
       }
@@ -96,7 +112,12 @@ export default function JoinPage() {
 
     } catch (error) {
       console.error("Error processing event join:", error);
-      setError("Unable to process event access. Please try again.");
+      console.error("Error details:", {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+      setError(`Unable to process event access: ${error.message}. Please try again.`);
       setIsLoading(false);
     }
   };
