@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, Calendar, MapPin, Clock } from "lucide-react";
 import { Event, EventProfile } from "@/api/entities"; // Changed import path
+import { testFirebaseConnection } from "@/lib/firebaseConfig";
 
 export default function JoinPage() {
   const navigate = useNavigate();
@@ -22,6 +23,16 @@ export default function JoinPage() {
     try {
       console.log("Starting event join process...");
       
+      // First, test Firebase connection
+      const connectionTest = await testFirebaseConnection();
+      console.log("Firebase connection test result:", connectionTest);
+      
+      if (!connectionTest.success) {
+        setError(`Firebase connection failed: ${connectionTest.error}`);
+        setIsLoading(false);
+        return;
+      }
+      
       // Parse the event code from URL parameters
       const urlParams = new URLSearchParams(window.location.search);
       const eventCode = urlParams.get('code');
@@ -36,13 +47,9 @@ export default function JoinPage() {
 
       console.log("Fetching events with code:", eventCode.toUpperCase());
       
-      // First, let's try to list all events to see if Firebase is working
-      try {
-        const allEvents = await Event.list();
-        console.log("All events in database:", allEvents);
-      } catch (listError) {
-        console.error("Error listing all events:", listError);
-      }
+      // List all events to see what's in the database
+      const allEvents = await Event.list();
+      console.log("All events in database:", allEvents);
       
       // Validate the event code
       const events = await Event.filter({ event_code: eventCode.toUpperCase() });

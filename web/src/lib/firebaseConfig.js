@@ -1,7 +1,8 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, enableIndexedDbPersistence, CACHE_SIZE_UNLIMITED } from 'firebase/firestore';
+import { getFirestore, enableIndexedDbPersistence, CACHE_SIZE_UNLIMITED, getDocs, collection } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
+import { getAnalytics } from 'firebase/analytics';
 
 // Your Firebase configuration (same as mobile app)
 const firebaseConfig = {
@@ -35,6 +36,18 @@ try {
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+
+// Initialize Analytics (only in browser environment)
+let analytics = null;
+if (typeof window !== 'undefined') {
+  try {
+    analytics = getAnalytics(app);
+    console.log('✅ Firebase Analytics initialized');
+  } catch (error) {
+    console.warn('⚠️ Analytics initialization failed:', error);
+  }
+}
+export { analytics };
 
 // Performance optimizations for Firestore
 const initializeFirestoreOptimizations = async () => {
@@ -109,5 +122,29 @@ if (typeof window !== 'undefined') {
     }
   });
 }
+
+// Test Firebase connection
+export const testFirebaseConnection = async () => {
+  try {
+    console.log('🔍 Testing Firebase connection...');
+    
+    // Test Firestore connection by trying to read from a collection
+    const testQuery = await getDocs(collection(db, 'events'));
+    console.log('✅ Firestore connection successful');
+    console.log(`📊 Found ${testQuery.docs.length} events in database`);
+    
+    return {
+      success: true,
+      eventCount: testQuery.docs.length,
+      events: testQuery.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+    };
+  } catch (error) {
+    console.error('❌ Firebase connection test failed:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
 
 export default app; 
