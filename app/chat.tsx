@@ -14,7 +14,7 @@ import {
   Image,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, Send, User } from 'lucide-react-native';
+import { ArrowLeft, Send, User, Flag } from 'lucide-react-native';
 import { Message, EventProfile } from '../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -255,6 +255,10 @@ export default function Chat() {
       marginRight: 12,
       padding: 4,
     },
+    reportButton: {
+      marginRight: 8,
+      padding: 4,
+    },
     headerInfo: {
       flex: 1,
     },
@@ -405,6 +409,34 @@ export default function Chat() {
           onPress={() => router.back()}
         >
           <ArrowLeft size={24} color={isDark ? '#ffffff' : '#1f2937'} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.reportButton}
+          onPress={() => {
+            Alert.alert(
+              `Report ${matchProfile?.first_name || 'User'}`,
+              'Report this user for inappropriate behavior?',
+              [
+                {
+                  text: 'Cancel',
+                  style: 'cancel'
+                },
+                {
+                  text: 'Report',
+                  style: 'destructive',
+                  onPress: () => {
+                    Alert.alert(
+                      'Report Submitted',
+                      `Thank you for your report. We will review the information about ${matchProfile?.first_name || 'this user'}.`,
+                      [{ text: 'OK' }]
+                    );
+                  }
+                }
+              ]
+            );
+          }}
+        >
+          <Flag size={20} color={isDark ? '#ef4444' : '#dc2626'} />
         </TouchableOpacity>
         <TouchableOpacity 
           style={styles.headerInfo}

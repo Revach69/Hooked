@@ -10,7 +10,7 @@ import Matches from "./Matches";
 
 
 
-import join from "./join";
+import Join from "./join";
 
 import Profile from "./Profile";
 
@@ -28,7 +28,7 @@ const PAGES = {
     
 
     
-    join: join,
+    join: Join,
     
     Profile: Profile,
     
@@ -52,6 +52,9 @@ function PagesContent() {
     const location = useLocation();
     const currentPage = _getCurrentPage(location.pathname);
     
+    console.log("🔍 PagesContent - Current location:", location.pathname);
+    console.log("🔍 PagesContent - Current page:", currentPage);
+    
     return (
         <Layout currentPageName={currentPage}>
             <Routes>            
@@ -69,7 +72,7 @@ function PagesContent() {
                 
 
                 
-                <Route path="/join" element={<join />} />
+                <Route path="/join" element={<Join />} />
                 
                 <Route path="/Profile" element={<Profile />} />
                 

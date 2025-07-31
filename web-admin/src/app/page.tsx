@@ -17,7 +17,8 @@ import {
   MapPin,
   Calendar,
   Clock,
-  Copy
+  Copy,
+  Flag
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { useAuth } from '@/contexts/AuthContext';
@@ -28,6 +29,7 @@ const EventCard = dynamic(() => import('@/components/EventCard'), { ssr: false }
 const AnalyticsModal = dynamic(() => import('@/components/AnalyticsModal'), { ssr: false });
 const EventForm = dynamic(() => import('@/components/EventForm'), { ssr: false });
 const LoginForm = dynamic(() => import('@/components/LoginForm'), { ssr: false });
+const ReportsModal = dynamic(() => import('@/components/ReportsModal'), { ssr: false });
 
 // Inline QR Code Component
 function QRCodeGenerator({ joinLink, eventCode }: { joinLink: string; eventCode: string }) {
@@ -91,6 +93,8 @@ export default function AdminDashboard() {
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [analyticsEvent, setAnalyticsEvent] = useState<{ id: string; name: string } | null>(null);
+  const [showReports, setShowReports] = useState(false);
+  const [reportsEvent, setReportsEvent] = useState<{ id: string; name: string } | null>(null);
 
   // Load events when user is authenticated
   useEffect(() => {
@@ -166,6 +170,11 @@ export default function AdminDashboard() {
       setAnalyticsEvent({ id: eventId, name: event.name });
       setShowAnalytics(true);
     }
+  };
+
+  const handleReports = (eventId: string, eventName: string) => {
+    setReportsEvent({ id: eventId, name: eventName });
+    setShowReports(true);
   };
 
   const handleDownloadData = async (eventId: string) => {
@@ -394,6 +403,14 @@ export default function AdminDashboard() {
                   </button>
                   
                   <button
+                    onClick={() => handleReports(event.id, event.name)}
+                    className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm"
+                  >
+                    <Flag size={16} />
+                    Reports
+                  </button>
+                  
+                  <button
                     onClick={() => handleEditEvent(event)}
                     className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm"
                   >
@@ -580,6 +597,13 @@ export default function AdminDashboard() {
         eventName={analyticsEvent?.name || ''}
         isOpen={showAnalytics}
         onClose={() => setShowAnalytics(false)}
+      />
+
+      <ReportsModal
+        eventId={reportsEvent?.id || ''}
+        eventName={reportsEvent?.name || ''}
+        isOpen={showReports}
+        onClose={() => setShowReports(false)}
       />
     </div>
   );

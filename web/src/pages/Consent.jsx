@@ -296,6 +296,29 @@ export default function Consent() {
                         'Join Event'
                       )}
                     </Button>
+                    
+                    {/* Legal Links */}
+                    <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-4">
+                      By creating a profile, you agree to our{' '}
+                      <a 
+                        href="https://hooked-app.com/terms" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-purple-600 dark:text-purple-400 underline hover:opacity-80 transition-opacity"
+                      >
+                        Terms
+                      </a>
+                      {' '}and{' '}
+                      <a 
+                        href="https://hooked-app.com/privacy" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-purple-600 dark:text-purple-400 underline hover:opacity-80 transition-opacity"
+                      >
+                        Privacy Policy
+                      </a>
+                      .
+                    </p>
                   </form>
                 </CardContent>
               </Card>

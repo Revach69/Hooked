@@ -35,9 +35,26 @@ export default function Home() {
   };
 
   const handleEventAccess = (eventCode) => {
+    console.log("🔍 handleEventAccess called with code:", eventCode);
+    console.log("🔍 Creating URL with:", `join?code=${eventCode.toUpperCase()}`);
+    const url = createPageUrl(`join?code=${eventCode.toUpperCase()}`);
+    console.log("🔍 Final URL:", url);
+    
+    // Test the URL construction
+    console.log("🔍 Testing URL construction:");
+    console.log("🔍 - Input:", `join?code=${eventCode.toUpperCase()}`);
+    console.log("🔍 - Output:", url);
+    console.log("🔍 - Expected:", `/join?code=${eventCode.toUpperCase()}`);
+    
     // The join page will handle all validation logic.
     closeModal();
-    navigate(createPageUrl(`join?code=${eventCode.toUpperCase()}`));
+    
+    try {
+      navigate(url);
+      console.log("🔍 Navigation successful to:", url);
+    } catch (error) {
+      console.error("🔍 Navigation failed:", error);
+    }
   };
 
   const openModal = (modalName) => {

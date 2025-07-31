@@ -14,6 +14,7 @@ import {
   Modal,
   useColorScheme,
   Switch,
+  Linking,
 } from 'react-native';
 import { router } from 'expo-router';
 import { User as UserAPI, EventProfile, Event } from '../lib/firebaseApi';
@@ -127,7 +128,7 @@ export default function Consent() {
       }
 
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: 'Images',
+        mediaTypes: 'images',
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -155,7 +156,7 @@ export default function Consent() {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: 'Images',
+        mediaTypes: 'images',
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -584,6 +585,21 @@ export default function Consent() {
       marginLeft: 44,
       lineHeight: 20,
     },
+    legalSection: {
+      marginTop: 16,
+      marginBottom: 8,
+      width: '100%',
+    },
+    legalText: {
+      fontSize: 14,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      textAlign: 'center',
+      lineHeight: 20,
+    },
+    legalLink: {
+      color: '#8b5cf6',
+      textDecorationLine: 'underline',
+    },
   });
 
   if (step === 'processing') {
@@ -804,13 +820,27 @@ export default function Consent() {
             </Text>
           </View>
 
+          {/* Legal Links */}
+          <View style={styles.legalSection}>
+            <Text style={styles.legalText}>
+              By creating a profile, you agree to our{' '}
+              <Text style={styles.legalLink} onPress={() => Linking.openURL('https://hooked-app.com/terms')}>
+                Terms
+              </Text>
+              {' '}and{' '}
+              <Text style={styles.legalLink} onPress={() => Linking.openURL('https://hooked-app.com/privacy')}>
+                Privacy Policy
+              </Text>
+              .
+            </Text>
+          </View>
+
           {/* Submit Button */}
           <TouchableOpacity
             style={styles.submitButton}
             onPress={handleSubmit}
             accessibilityLabel="Create Profile"
             accessibilityHint="Tap to create your event profile"
-          >
             disabled={isSubmitting}
           >
             <Text style={styles.submitButtonText}>Join Event</Text>

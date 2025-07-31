@@ -36,6 +36,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { logFirebaseError } from './errorMonitoring';
 import { Platform } from 'react-native';
+import { withErrorHandling } from './mobileErrorHandler';
 
 // Enhanced retry operation with better error handling and recovery
 async function retryOperation<T>(
@@ -44,67 +45,11 @@ async function retryOperation<T>(
   delay: number = 1000,
   operationName: string = 'Firebase operation'
 ): Promise<T> {
-  let lastError: any;
-  
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      return await operation();
-    } catch (error: any) {
-      lastError = error;
-      
-      // Enhanced error logging with context
-      console.error(`❌ ${operationName} failed (attempt ${attempt}/${maxRetries}):`, {
-        operation: operationName,
-        attempt,
-        maxRetries,
-        timestamp: new Date().toISOString(),
-        error: error.message,
-        code: error.code,
-        isNetworkError: !error.code || error.code === 'unavailable',
-        isPermissionError: error.code === 'permission-denied',
-        isNotFoundError: error.code === 'not-found',
-        isInternalError: error.message?.includes('INTERNAL ASSERTION FAILED')
-      });
-
-      // Log error to monitoring system
-      await logFirebaseError(error, operationName, {
-        retryCount: attempt,
-        networkStatus: (await NetInfo.fetch()).isConnected ? 'connected' : 'disconnected'
-      });
-      
-      // Don't retry on certain errors
-      if (error.code === 'permission-denied' || error.code === 'not-found') {
-        throw error;
-      }
-      
-      // Don't retry if no network connectivity
-      if (error.message === 'No network connectivity') {
-        throw error;
-      }
-      
-      // Special handling for internal assertion errors
-      if (error.message?.includes('INTERNAL ASSERTION FAILED')) {
-        if (attempt === maxRetries) {
-          console.error('🚨 Max retries reached for internal assertion error - this may require app restart');
-          throw error;
-        }
-        // Use longer delay for internal assertion errors
-        const backoffDelay = delay * Math.pow(3, attempt - 1) + Math.random() * 3000;
-        console.log(`⏳ Retrying ${operationName} after internal assertion error in ${Math.round(backoffDelay)}ms...`);
-        await new Promise(resolve => setTimeout(resolve, backoffDelay));
-        continue;
-      }
-      
-      if (attempt < maxRetries) {
-        // Exponential backoff with jitter
-        const backoffDelay = delay * Math.pow(2, attempt - 1) + Math.random() * 1000;
-        console.log(`⏳ Retrying ${operationName} in ${Math.round(backoffDelay)}ms...`);
-        await new Promise(resolve => setTimeout(resolve, backoffDelay));
-      }
-    }
-  }
-  
-  throw lastError;
+  return withErrorHandling(operation, {
+    maxRetries,
+    baseDelay: delay,
+    operationName
+  });
 }
 
 // Offline queue for operations that fail due to network issues
@@ -304,6 +249,19 @@ export interface EventFeedback {
   rating: number;
   feedback: string;
   created_at: string;
+}
+
+export interface Report {
+  id: string;
+  event_id: string;
+  reporter_session_id: string;
+  reported_session_id: string;
+  reason: string;
+  details?: string;
+  status: 'pending' | 'reviewed' | 'resolved' | 'dismissed';
+  admin_notes?: string;
+  created_at: string;
+  updated_at?: string;
 }
 
 // Event API
@@ -673,6 +631,96 @@ export const EventFeedbackAPI = {
         created_at: new Date().toISOString()
       };
     }, 'Create Event Feedback');
+  }
+};
+
+// Report API
+export const ReportAPI = {
+  async create(data: Omit<Report, 'id' | 'created_at'>): Promise<Report> {
+    return executeWithOfflineSupport(async () => {
+      const docRef = await addDoc(collection(db, 'reports'), {
+        ...data,
+        status: 'pending',
+        created_at: serverTimestamp()
+      });
+      
+      return {
+        id: docRef.id,
+        ...data,
+        status: 'pending',
+        created_at: new Date().toISOString()
+      };
+    }, 'Create Report');
+  },
+
+  async filter(filters: Partial<Report> = {}): Promise<Report[]> {
+    try {
+      return await executeWithOfflineSupport(async () => {
+        let q: any = collection(db, 'reports');
+        
+        if (filters.event_id) {
+          q = query(q, where('event_id', '==', filters.event_id));
+        }
+        if (filters.reporter_session_id) {
+          q = query(q, where('reporter_session_id', '==', filters.reporter_session_id));
+        }
+        if (filters.reported_session_id) {
+          q = query(q, where('reported_session_id', '==', filters.reported_session_id));
+        }
+        if (filters.status) {
+          q = query(q, where('status', '==', filters.status));
+        }
+        
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...(doc.data() as any)
+        })) as Report[];
+      }, 'Filter Reports');
+    } catch (error: any) {
+      if (error.message?.includes('INTERNAL ASSERTION FAILED') || 
+          error.message?.includes('Target ID already exists') ||
+          error.code === 'unavailable') {
+        console.warn('⚠️ Firestore internal error suppressed:', {
+          error: error.message,
+          code: error.code,
+          operation: 'Filter Reports',
+          timestamp: new Date().toISOString(),
+          isDev: __DEV__,
+          platform: Platform.OS
+        });
+        return [];
+      }
+      console.error('Error filtering reports:', error);
+      throw error;
+    }
+  },
+
+  async get(id: string): Promise<Report | null> {
+    return executeWithOfflineSupport(async () => {
+      const docRef = doc(db, 'reports', id);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        return { id: docSnap.id, ...docSnap.data() } as Report;
+      }
+      return null;
+    }, 'Get Report');
+  },
+
+  async update(id: string, data: Partial<Report>): Promise<void> {
+    return executeWithOfflineSupport(async () => {
+      await updateDoc(doc(db, 'reports', id), {
+        ...data,
+        updated_at: serverTimestamp()
+      });
+    }, 'Update Report');
+  },
+
+  async delete(id: string): Promise<void> {
+    return executeWithOfflineSupport(async () => {
+      await deleteDoc(doc(db, 'reports', id));
+    }, 'Delete Report');
   }
 };
 

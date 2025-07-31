@@ -20,6 +20,8 @@ import { Event } from '../lib/firebaseApi';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useMobileAsyncOperation } from '../lib/hooks/useMobileErrorHandling';
+import MobileOfflineStatusBar from '../lib/components/MobileOfflineStatusBar';
 
 const { width } = Dimensions.get('window');
 
@@ -30,6 +32,7 @@ export default function Home() {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [manualCode, setManualCode] = useState('');
+  const { executeOperationWithOfflineFallback, showErrorAlert } = useMobileAsyncOperation();
 
   useEffect(() => {
     checkActiveEventSession();
@@ -42,10 +45,22 @@ export default function Home() {
       
       if (!eventId || !sessionId) return;
 
-      // Verify the event still exists and is currently active
-      const events = await Event.filter({ id: eventId });
-      if (events.length > 0) {
-        const event = events[0];
+      // Use enhanced error handling for event verification
+      const result = await executeOperationWithOfflineFallback(
+        async () => {
+          const events = await Event.filter({ id: eventId });
+          return events;
+        },
+        { operation: 'Check active event session' }
+      );
+
+      if (result.queued) {
+        console.log('📝 Event session check queued for offline execution');
+        return;
+      }
+
+      if (result.success && result.result.length > 0) {
+        const event = result.result[0];
         const nowISO = new Date().toISOString();
         
         // If event is currently active, auto-resume to Discovery
@@ -77,6 +92,8 @@ export default function Home() {
       ]);
     } catch (error: any) {
       console.error("Error checking active session:", error);
+      showErrorAlert(error, () => checkActiveEventSession());
+      
       // Only clear session data on specific errors, not all errors
       if (error.message?.includes('Target ID already exists') || 
           error.message?.includes('INTERNAL ASSERTION FAILED')) {
@@ -419,6 +436,7 @@ export default function Home() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <MobileOfflineStatusBar />
       <LinearGradient
         colors={['#FBA7D5', '#C187FD']}
         start={{ x: 0, y: 0 }}
@@ -489,12 +507,12 @@ export default function Home() {
         <View style={styles.legalDisclaimer}>
           <Text style={styles.legalText}>
             By creating a temporary profile, you agree to our{' '}
-            <Text style={styles.legalLink} onPress={() => Linking.openURL('https://www.hooked-app.com/terms')}>
+            <Text style={styles.legalLink} onPress={() => Linking.openURL('https://hooked-app.com/terms')}>
               Terms
             </Text>
             .{'\n'}
             See how we use your data in our{' '}
-            <Text style={styles.legalLink} onPress={() => Linking.openURL('https://www.hooked-app.com/privacy')}>
+            <Text style={styles.legalLink} onPress={() => Linking.openURL('https://hooked-app.com/privacy')}>
               Privacy Policy
             </Text>
             .

@@ -13,11 +13,12 @@ import {
   Modal,
 } from 'react-native';
 import { router } from 'expo-router';
-import { BarChart3, Users, Heart, MessageCircle, Plus, LogOut, AlertTriangle, Calendar, MapPin, Home, ChevronDown, ChevronUp, QrCode, Edit, Trash2, Download } from 'lucide-react-native';
+import { BarChart3, Users, Heart, MessageCircle, Plus, LogOut, AlertTriangle, Calendar, MapPin, Home, ChevronDown, ChevronUp, QrCode, Edit, Trash2, Download, Flag } from 'lucide-react-native';
 import { Event, EventProfile, Like, Message, User } from '../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import QRCodeGenerator from '../lib/QRCodeGenerator';
 import { AdminUtils } from '../lib/adminUtils';
+import ReportsModal from './admin/ReportsModal';
 
 export default function Admin() {
   const colorScheme = useColorScheme();
@@ -38,6 +39,8 @@ export default function Admin() {
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
   const [showQRCodeModal, setShowQRCodeModal] = useState(false);
   const [selectedEventForQR, setSelectedEventForQR] = useState<Event | null>(null);
+  const [showReportsModal, setShowReportsModal] = useState(false);
+  const [selectedEventForReports, setSelectedEventForReports] = useState<Event | null>(null);
 
   useEffect(() => {
     initializeSession();
@@ -146,6 +149,16 @@ export default function Admin() {
   const handleCloseQRModal = () => {
     setShowQRCodeModal(false);
     setSelectedEventForQR(null);
+  };
+
+  const handleReportsPress = (event: Event) => {
+    setSelectedEventForReports(event);
+    setShowReportsModal(true);
+  };
+
+  const handleCloseReportsModal = () => {
+    setShowReportsModal(false);
+    setSelectedEventForReports(null);
   };
 
   const toggleEventExpansion = (eventId: string) => {
@@ -321,6 +334,14 @@ export default function Admin() {
                 >
                   <BarChart3 size={16} color="#3b82f6" />
                   <Text style={styles.actionButtonText}>Analytics</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.actionButton}
+                  onPress={() => handleReportsPress(event)}
+                >
+                  <Flag size={16} color="#f97316" />
+                  <Text style={styles.actionButtonText}>Reports</Text>
                 </TouchableOpacity>
                 
                 <TouchableOpacity 
@@ -754,6 +775,16 @@ export default function Admin() {
           )}
         </View>
       </Modal>
+
+      {/* Reports Modal */}
+      {selectedEventForReports && (
+        <ReportsModal
+          visible={showReportsModal}
+          onClose={handleCloseReportsModal}
+          eventId={selectedEventForReports.id}
+          eventName={selectedEventForReports.name}
+        />
+      )}
     </SafeAreaView>
   );
 } 

@@ -13,7 +13,12 @@ export default function JoinPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  console.log("🚀 JoinPage component rendered");
+  console.log("🚀 Current URL:", window.location.href);
+  console.log("🚀 URL search params:", window.location.search);
+
   useEffect(() => {
+    console.log("🚀 JoinPage useEffect triggered");
     handleEventJoin();
   }, []);
 

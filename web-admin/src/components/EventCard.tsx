@@ -15,7 +15,8 @@ import {
   Calendar,
   Clock,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Flag
 } from 'lucide-react';
 import QRCode from 'qrcode';
 
@@ -27,6 +28,7 @@ interface EventCardProps {
   onDownloadData: (eventId: string) => void;
   onDownloadQR: (eventId: string) => void;
   onDownloadQRSign: (eventId: string) => void;
+  onReports?: (eventId: string, eventName: string) => void;
   isCollapsible?: boolean;
   isExpanded?: boolean;
   onToggleExpansion?: (eventId: string) => void;
@@ -55,6 +57,7 @@ export default function EventCard({
   onDownloadData,
   onDownloadQR,
   onDownloadQRSign,
+  onReports,
   isCollapsible = false,
   isExpanded = false,
   onToggleExpansion
@@ -252,6 +255,16 @@ export default function EventCard({
               <BarChart3 size={16} />
               Analytics
             </button>
+            
+            {onReports && (
+              <button
+                onClick={() => onReports(event.id, event.name)}
+                className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+              >
+                <Flag size={16} />
+                Reports
+              </button>
+            )}
             
             <button
               className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"

@@ -9,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Send, X, Clock, Share, Phone, User } from "lucide-react";
+import { Send, X, Clock, Share, Phone, User, Flag } from "lucide-react";
 import { Message, ContactShare } from "@/api/entities";
 import { format } from "date-fns";
 import ContactShareModal from "./ContactShareModal";
@@ -218,6 +218,62 @@ export default function ChatModal({ match, onClose }) {
                 </div>
               </div>
               <div className="flex gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    // Open report modal for this specific user
+                    const reportModal = document.createElement('div');
+                    reportModal.innerHTML = `
+                      <div class="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+                        <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
+                          <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Report ${match.first_name}</h3>
+                            <button onclick="this.closest('.fixed').remove()" class="text-gray-400 hover:text-gray-600">
+                              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                              </svg>
+                            </button>
+                          </div>
+                          <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                            Report ${match.first_name} for inappropriate behavior.
+                          </p>
+                          <div class="space-y-3">
+                            <div>
+                              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Reason</label>
+                              <select class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                                <option value="">Select a reason...</option>
+                                <option value="inappropriate_behavior">Inappropriate Behavior</option>
+                                <option value="harassment">Harassment</option>
+                                <option value="spam">Spam or Unwanted Messages</option>
+                                <option value="fake_profile">Fake Profile</option>
+                                <option value="inappropriate_content">Inappropriate Content</option>
+                                <option value="other">Other</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Details</label>
+                              <textarea class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[100px]" placeholder="Please provide details..."></textarea>
+                            </div>
+                            <div class="flex gap-3 pt-4">
+                              <button onclick="this.closest('.fixed').remove()" class="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
+                                Cancel
+                              </button>
+                              <button onclick="alert('Report submitted for ${match.first_name}. Thank you for helping keep our community safe.'); this.closest('.fixed').remove()" class="flex-1 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-md">
+                                Submit Report
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    `;
+                    document.body.appendChild(reportModal);
+                  }}
+                  className="rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                  title="Report user"
+                >
+                  <Flag className="w-4 h-4" />
+                </Button>
                 {!hasSharedContact && (
                   <Button
                     variant="ghost"

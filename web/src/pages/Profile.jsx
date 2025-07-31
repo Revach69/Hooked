@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { UploadFile } from "@/api/integrations";
 import { User as UserIcon, Edit, Save, Trash2, Eye, EyeOff, X, Camera, Sparkles, LogOut, AlertCircle, Clock, Mail, CheckCircle2, Users, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
+import ReportModal from "@/components/ReportModal";
 
 const ALL_INTERESTS = [
   "music", "tech", "food", "books", "travel", "art", "fitness", "nature",
@@ -37,6 +38,7 @@ export default function Profile() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -376,9 +378,7 @@ export default function Profile() {
             <Button
               variant="outline"
               className="w-full border-orange-200 dark:border-orange-700 text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 bg-white dark:bg-gray-800"
-              onClick={() => {
-                alert("Report functionality will be implemented soon.");
-              }}
+              onClick={() => setShowReportModal(true)}
             >
               Report a User
             </Button>
@@ -471,6 +471,14 @@ export default function Profile() {
           </div>
         </div>
       </div>
+
+      {/* Report Modal */}
+      <ReportModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        currentEventId={localStorage.getItem('currentEventId')}
+        currentSessionId={localStorage.getItem('currentSessionId')}
+      />
     </div>
   );
 }

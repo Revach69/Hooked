@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { User, LogOut, Edit, Camera, Users, MessageCircle, Flag, AlertTriangle, Shield, Clock, Mail, AlertCircle } from 'lucide-react-native';
-import { EventProfile, Event, User as UserAPI } from '../lib/firebaseApi';
+import { EventProfile, Event, User as UserAPI, ReportAPI } from '../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -140,7 +140,7 @@ export default function Profile() {
 
       // Try with standard settings first
       let result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: 'Images',
+        mediaTypes: 'images',
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -253,8 +253,24 @@ export default function Profile() {
 
     setSubmittingReport(true);
     try {
-      // In a real app, you would create a Report entity in Firestore
-      // For now, we'll just show a success message
+      const eventId = await AsyncStorage.getItem('currentEventId');
+      const sessionId = await AsyncStorage.getItem('currentSessionId');
+      
+      if (!eventId || !sessionId) {
+        Alert.alert("Error", "Session information not found. Please try again.");
+        return;
+      }
+
+      // Create the report in Firestore
+      await ReportAPI.create({
+        event_id: eventId,
+        reporter_session_id: sessionId,
+        reported_session_id: selectedUserToReport.session_id,
+        reason: 'Inappropriate behavior',
+        details: reportExplanation.trim(),
+        status: 'pending'
+      });
+
       Alert.alert(
         "Report Submitted",
         `Thank you for your report. We will review the information about ${selectedUserToReport.first_name}.`,

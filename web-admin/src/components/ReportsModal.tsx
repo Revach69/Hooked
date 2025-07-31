@@ -1,0 +1,335 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { ReportAPI, EventProfile, type Report } from '@/lib/firebaseApi';
+import { 
+  X, 
+  CheckCircle, 
+  XCircle, 
+  User, 
+  Flag, 
+  AlertTriangle,
+  Clock,
+  Check,
+  Ban
+} from 'lucide-react';
+
+interface ReportsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  eventId: string;
+  eventName: string;
+}
+
+interface ReportWithProfiles extends Report {
+  reporterProfile?: any;
+  reportedProfile?: any;
+}
+
+export default function ReportsModal({ isOpen, onClose, eventId, eventName }: ReportsModalProps) {
+  const [reports, setReports] = useState<ReportWithProfiles[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [processingReport, setProcessingReport] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      loadReports();
+    }
+  }, [isOpen, eventId]);
+
+  const loadReports = async () => {
+    setIsLoading(true);
+    try {
+      const eventReports = await ReportAPI.filter({ event_id: eventId });
+      
+      // Load profiles for each report
+      const reportsWithProfiles = await Promise.all(
+        eventReports.map(async (report) => {
+          const [reporterProfiles, reportedProfiles] = await Promise.all([
+            EventProfile.filter({ 
+              event_id: eventId, 
+              session_id: report.reporter_session_id 
+            }),
+            EventProfile.filter({ 
+              event_id: eventId, 
+              session_id: report.reported_session_id 
+            })
+          ]);
+
+          return {
+            ...report,
+            reporterProfile: reporterProfiles[0] || null,
+            reportedProfile: reportedProfiles[0] || null
+          };
+        })
+      );
+
+      setReports(reportsWithProfiles);
+    } catch (error) {
+      console.error('Error loading reports:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAcceptReport = async (report: ReportWithProfiles) => {
+    if (!report.reportedProfile) return;
+    
+    setProcessingReport(report.id);
+    try {
+      // Delete the reported user's profile
+      await EventProfile.delete(report.reportedProfile.id);
+      
+      // Update report status to resolved
+      await ReportAPI.update(report.id, { 
+        status: 'resolved',
+        admin_notes: 'User removed from event due to report'
+      });
+      
+      // Reload reports
+      await loadReports();
+    } catch (error) {
+      console.error('Error accepting report:', error);
+    } finally {
+      setProcessingReport(null);
+    }
+  };
+
+  const handleRejectReport = async (report: ReportWithProfiles) => {
+    setProcessingReport(report.id);
+    try {
+      // Update report status to dismissed
+      await ReportAPI.update(report.id, { 
+        status: 'dismissed',
+        admin_notes: 'Report dismissed - false report or insufficient evidence'
+      });
+      
+      // Reload reports
+      await loadReports();
+    } catch (error) {
+      console.error('Error rejecting report:', error);
+    } finally {
+      setProcessingReport(null);
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending': return 'text-yellow-600 bg-yellow-100';
+      case 'resolved': return 'text-green-600 bg-green-100';
+      case 'dismissed': return 'text-gray-600 bg-gray-100';
+      default: return 'text-gray-600 bg-gray-100';
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-3">
+            <Flag className="w-6 h-6 text-orange-500" />
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                Reports for {eventName}
+              </h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {reports.length} report{reports.length !== 1 ? 's' : ''}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+          ) : reports.length === 0 ? (
+            <div className="text-center py-12">
+              <Flag className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                No Reports
+              </h3>
+              <p className="text-gray-500 dark:text-gray-400">
+                No reports have been submitted for this event.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {reports.map((report) => (
+                <div
+                  key={report.id}
+                  className="border border-gray-200 dark:border-gray-700 rounded-lg p-6"
+                >
+                  {/* Report Header */}
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(report.status)}`}>
+                        {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
+                      </span>
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                        {formatDate(report.created_at)}
+                      </span>
+                    </div>
+                    {report.status === 'pending' && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleAcceptReport(report)}
+                          disabled={processingReport === report.id}
+                          className="flex items-center gap-2 px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white rounded-md text-sm font-medium transition-colors"
+                        >
+                          {processingReport === report.id ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          ) : (
+                            <Ban className="w-4 h-4" />
+                          )}
+                          Remove User
+                        </button>
+                        <button
+                          onClick={() => handleRejectReport(report)}
+                          disabled={processingReport === report.id}
+                          className="flex items-center gap-2 px-3 py-1.5 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 text-white rounded-md text-sm font-medium transition-colors"
+                        >
+                          {processingReport === report.id ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          ) : (
+                            <XCircle className="w-4 h-4" />
+                          )}
+                          Dismiss Report
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Users Section */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+                    {/* Reporter */}
+                    <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+                      <div className="flex items-center gap-3 mb-3">
+                        <User className="w-5 h-5 text-blue-600" />
+                        <h4 className="font-medium text-blue-900 dark:text-blue-100">Reporter</h4>
+                      </div>
+                      {report.reporterProfile ? (
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
+                            {report.reporterProfile.profile_photo_url ? (
+                              <img 
+                                src={report.reporterProfile.profile_photo_url} 
+                                alt={report.reporterProfile.first_name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div 
+                                className="w-full h-full flex items-center justify-center text-white font-semibold"
+                                style={{ backgroundColor: report.reporterProfile.profile_color || '#8b5cf6' }}
+                              >
+                                {report.reporterProfile.first_name[0]}
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-900 dark:text-white">
+                              {report.reporterProfile.first_name}
+                            </p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                              {report.reporterProfile.age} years old
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          Profile not found
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Reported User */}
+                    <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-4">
+                      <div className="flex items-center gap-3 mb-3">
+                        <AlertTriangle className="w-5 h-5 text-red-600" />
+                        <h4 className="font-medium text-red-900 dark:text-red-100">Reported User</h4>
+                      </div>
+                      {report.reportedProfile ? (
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
+                            {report.reportedProfile.profile_photo_url ? (
+                              <img 
+                                src={report.reportedProfile.profile_photo_url} 
+                                alt={report.reportedProfile.first_name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div 
+                                className="w-full h-full flex items-center justify-center text-white font-semibold"
+                                style={{ backgroundColor: report.reportedProfile.profile_color || '#8b5cf6' }}
+                              >
+                                {report.reportedProfile.first_name[0]}
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-900 dark:text-white">
+                              {report.reportedProfile.first_name}
+                            </p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                              {report.reportedProfile.age} years old
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          Profile not found
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Report Details */}
+                  <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                    <h4 className="font-medium text-gray-900 dark:text-white mb-2">Report Details</h4>
+                    <div className="space-y-2">
+                      <div>
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Reason: </span>
+                        <span className="text-sm text-gray-900 dark:text-white capitalize">
+                          {report.reason.replace('_', ' ')}
+                        </span>
+                      </div>
+                      {report.details && (
+                        <div>
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Details: </span>
+                          <p className="text-sm text-gray-900 dark:text-white mt-1">
+                            {report.details}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+} 

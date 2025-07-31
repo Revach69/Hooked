@@ -13,6 +13,8 @@ import { AlertCircle } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Event } from '../lib/firebaseApi';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useMobileAsyncOperation } from '../lib/hooks/useMobileErrorHandling';
+import MobileOfflineStatusBar from '../lib/components/MobileOfflineStatusBar';
 
 export default function JoinPage() {
   const { code } = useLocalSearchParams<{ code: string }>();
@@ -20,6 +22,7 @@ export default function JoinPage() {
   const [error, setError] = useState<string | null>(null);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { executeOperationWithOfflineFallback, showErrorAlert } = useMobileAsyncOperation();
 
   useEffect(() => {
     handleEventJoin();
@@ -40,14 +43,28 @@ export default function JoinPage() {
         return;
       }
 
-      // Validate the event code
-      const events = await Event.filter({ event_code: code.toUpperCase() });
-      
-      if (events.length === 0) {
+      // Use enhanced error handling for event validation
+      const result = await executeOperationWithOfflineFallback(
+        async () => {
+          const events = await Event.filter({ event_code: code.toUpperCase() });
+          return events;
+        },
+        { operation: 'Validate event code' }
+      );
+
+      if (result.queued) {
+        setError("Event validation will be completed when you're back online.");
+        setIsLoading(false);
+        return;
+      }
+
+      if (!result.success || result.result.length === 0) {
         setError("Invalid event code.");
         setIsLoading(false);
         return;
       }
+
+      const events = result.result;
 
       const foundEvent = events[0];
       const nowUTC = new Date().toISOString(); // Current UTC time as ISO string
@@ -84,12 +101,18 @@ export default function JoinPage() {
         // User might be returning - verify their profile still exists
         try {
           const { EventProfile } = await import('../lib/firebaseApi');
-          const existingProfiles = await EventProfile.filter({
-            session_id: existingSessionId,
-            event_id: foundEvent.id
-          });
-          
-          if (existingProfiles.length > 0) {
+          const profileResult = await executeOperationWithOfflineFallback(
+            async () => {
+              const existingProfiles = await EventProfile.filter({
+                session_id: existingSessionId,
+                event_id: foundEvent.id
+              });
+              return existingProfiles;
+            },
+            { operation: 'Check existing profile' }
+          );
+
+          if (profileResult.success && profileResult.result.length > 0) {
             // User has an existing profile, redirect to Discovery
             router.replace('/discovery');
             return;
@@ -105,6 +128,7 @@ export default function JoinPage() {
 
     } catch (error) {
       console.error("Error processing event join:", error);
+      showErrorAlert(error, () => handleEventJoin());
       setError("Unable to process event access. Please try again.");
       setIsLoading(false);
     }
@@ -216,6 +240,7 @@ export default function JoinPage() {
   // This should not be reached due to redirects, but just in case
   return (
     <SafeAreaView style={styles.container}>
+      <MobileOfflineStatusBar />
       <View style={styles.card}>
         <Text style={styles.title}>Processing...</Text>
         <Text style={styles.subtitle}>
