@@ -141,7 +141,7 @@ export const Event = {
     }, 3, 1000, 'Event.delete');
   },
 
-  // Alias for filter to match base44 API
+  // Alias for filter to match original API
   async list() {
     return await this.filter();
   }
@@ -222,7 +222,7 @@ export const EventProfile = {
     }, 3, 1000, 'EventProfile.toggleVisibility');
   },
 
-  // Alias for filter to match base44 API
+  // Alias for filter to match original API
   async list() {
     return await this.filter();
   }
@@ -289,7 +289,7 @@ export const Like = {
     }, 3, 1000, 'Like.delete');
   },
 
-  // Alias for filter to match base44 API
+  // Alias for filter to match original API
   async list() {
     return await this.filter();
   }
@@ -337,7 +337,7 @@ export const Message = {
     }, 3, 1000, 'Message.delete');
   },
 
-  // Alias for filter to match base44 API
+  // Alias for filter to match original API
   async list() {
     return await this.filter();
   }
@@ -354,7 +354,7 @@ export const ContactShare = {
     }, 3, 1000, 'ContactShare.create');
   },
 
-  // Alias for filter to match base44 API
+  // Alias for filter to match original API
   async list() {
     return await this.filter();
   }
@@ -371,13 +371,13 @@ export const EventFeedback = {
     }, 3, 1000, 'EventFeedback.create');
   },
 
-  // Alias for filter to match base44 API
+  // Alias for filter to match original API
   async list() {
     return await this.filter();
   }
 };
 
-// Auth API (matching base44 User API)
+// Auth API (matching original User API)
 export const User = {
   async signUp(email, password) {
     return await retryOperation(async () => {
@@ -411,7 +411,7 @@ export const User = {
     return auth.currentUser;
   },
 
-  // Alias to match base44 API
+  // Alias to match original API
   async me() {
     return auth.currentUser;
   },
