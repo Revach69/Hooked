@@ -29,7 +29,7 @@ export default function QRCodeGenerator({ eventCode, eventName, onClose }: QRCod
 
   const handleDownload = async () => {
     try {
-      if (viewShotRef.current) {
+      if (viewShotRef.current?.capture) {
         const uri = await viewShotRef.current.capture();
         
         if (Platform.OS === 'ios') {

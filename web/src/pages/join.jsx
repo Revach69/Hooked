@@ -26,11 +26,11 @@ export default function JoinPage() {
 
   const handleEventJoin = async () => {
     try {
-      console.log("Starting event join process...");
+      console.log("🚀 Starting event join process...");
       
       // First, test Firebase connection
       const connectionTest = await testFirebaseConnection();
-      console.log("Firebase connection test result:", connectionTest);
+      console.log("🚀 Firebase connection test result:", connectionTest);
       
       if (!connectionTest.success) {
         setError(`Firebase connection failed: ${connectionTest.error}`);
@@ -42,7 +42,9 @@ export default function JoinPage() {
       const urlParams = new URLSearchParams(window.location.search);
       const eventCode = urlParams.get('code');
       
-      console.log("Event code from URL:", eventCode);
+      console.log("🚀 Event code from URL:", eventCode);
+      console.log("🚀 Full URL search params:", window.location.search);
+      console.log("🚀 All URL params:", Object.fromEntries(urlParams.entries()));
 
       if (!eventCode) {
         setError("No event code provided in the URL.");

@@ -32,9 +32,9 @@ export const useMobileErrorHandling = () => {
     };
 
     // Listen for online/offline events
-    if (global.eventEmitter) {
-      global.eventEmitter.on('appOnline', handleAppOnline);
-      global.eventEmitter.on('appOffline', handleOffline);
+    if ((global as any).eventEmitter) {
+      (global as any).eventEmitter.on('appOnline', handleAppOnline);
+      (global as any).eventEmitter.on('appOffline', handleOffline);
     }
 
     // Initial check
@@ -42,9 +42,9 @@ export const useMobileErrorHandling = () => {
     setOfflineQueueLength(getOfflineQueueLength());
 
     return () => {
-      if (global.eventEmitter) {
-        global.eventEmitter.off('appOnline', handleAppOnline);
-        global.eventEmitter.off('appOffline', handleOffline);
+      if ((global as any).eventEmitter) {
+        (global as any).eventEmitter.off('appOnline', handleAppOnline);
+        (global as any).eventEmitter.off('appOffline', handleOffline);
       }
     };
   }, []);
@@ -55,7 +55,7 @@ export const useMobileErrorHandling = () => {
       return await withErrorHandling(operation, options);
     } catch (error) {
       const userMessage = getErrorMessage(error);
-      throw { ...error, userMessage };
+      throw { ...(error as any), userMessage };
     }
   }, []);
 
@@ -117,7 +117,7 @@ export const useMobileAsyncOperation = () => {
       return { success: true, result };
     } catch (err) {
       // If it's a network error and we're offline, queue it
-      if (err.message?.includes('No internet connection') || err.code === 'unavailable') {
+      if ((err as any).message?.includes('No internet connection') || (err as any).code === 'unavailable') {
         const actionId = queueForOffline(operation, metadata);
         return { queued: true, actionId, error: err };
       }

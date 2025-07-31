@@ -36,7 +36,7 @@ A modern, responsive admin dashboard for managing Hooked events with analytics a
 ## Structure
 
 ```
-web-admin/
+web-admin-hooked/
 ├── src/
 │   ├── app/
 │   │   ├── page.tsx              # Main dashboard page

@@ -16,11 +16,22 @@ export default function EventCodeEntry({ onSubmit, onClose }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!code.trim()) return;
+    console.log("🔍 EventCodeEntry - Form submitted with code:", code);
+    if (!code.trim()) {
+      console.log("🔍 EventCodeEntry - Code is empty, returning");
+      return;
+    }
     
+    console.log("🔍 EventCodeEntry - Calling onSubmit with:", code.trim().toUpperCase());
     setIsLoading(true);
-    await onSubmit(code.trim().toUpperCase());
-    setIsLoading(false);
+    try {
+      await onSubmit(code.trim().toUpperCase());
+      console.log("🔍 EventCodeEntry - onSubmit completed successfully");
+    } catch (error) {
+      console.error("🔍 EventCodeEntry - onSubmit failed:", error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

@@ -189,6 +189,24 @@ class ErrorMonitor {
 
 export const errorMonitor = new ErrorMonitor();
 
+export async function getErrorInsights() {
+  const logs = await errorMonitor.getLogs();
+  const stats = await errorMonitor.getStats(24);
+  const patterns = await errorMonitor.getErrorPatterns();
+  
+  return {
+    logs,
+    stats,
+    patterns,
+    summary: {
+      totalErrors: stats.totalErrors,
+      recentErrors: stats.recentErrors.length,
+      mostCommonError: patterns.mostCommonErrors[0]?.error || 'None',
+      operationsWithIssues: patterns.operationsWithMostErrors.slice(0, 3)
+    }
+  };
+}
+
 // Global error handler setup to prevent recursive error logging
 let isGlobalErrorHandlerSetup = false;
 let errorLogCount = 0;

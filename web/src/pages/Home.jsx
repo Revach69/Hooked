@@ -36,24 +36,22 @@ export default function Home() {
 
   const handleEventAccess = (eventCode) => {
     console.log("🔍 handleEventAccess called with code:", eventCode);
-    console.log("🔍 Creating URL with:", `join?code=${eventCode.toUpperCase()}`);
-    const url = createPageUrl(`join?code=${eventCode.toUpperCase()}`);
-    console.log("🔍 Final URL:", url);
     
-    // Test the URL construction
-    console.log("🔍 Testing URL construction:");
-    console.log("🔍 - Input:", `join?code=${eventCode.toUpperCase()}`);
-    console.log("🔍 - Output:", url);
-    console.log("🔍 - Expected:", `/join?code=${eventCode.toUpperCase()}`);
+    // Use direct URL construction to avoid any issues with createPageUrl
+    const url = `/join?code=${eventCode.toUpperCase()}`;
+    console.log("🔍 Direct URL:", url);
     
-    // The join page will handle all validation logic.
-    closeModal();
-    
+    // Navigate first, then close modal to prevent interference
     try {
+      console.log("🔍 Attempting navigation to:", url);
       navigate(url);
       console.log("🔍 Navigation successful to:", url);
+      // Close modal after successful navigation
+      closeModal();
     } catch (error) {
       console.error("🔍 Navigation failed:", error);
+      // Only close modal if navigation failed
+      closeModal();
     }
   };
 
@@ -122,6 +120,17 @@ export default function Home() {
           >
             <Hash className="w-5 h-5 mr-3" />
             Enter Code Manually
+          </Button>
+          
+          {/* Test button for debugging */}
+          <Button
+            onClick={() => {
+              console.log("🔍 Test navigation button clicked");
+              navigate('/join?code=TEST');
+            }}
+            className="w-full bg-red-500 hover:bg-red-600 text-white font-medium py-2 rounded-full shadow-lg transition-all"
+          >
+            Test Navigation
           </Button>
         </div>
       </div>

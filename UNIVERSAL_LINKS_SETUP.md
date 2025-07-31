@@ -21,7 +21,7 @@ The `app.json` already includes:
 ```
 
 ### 2. **Deploy Apple App Site Association**
-The file `web-admin/public/.well-known/apple-app-site-association` needs to be deployed to `https://www.hooked-app.com/.well-known/apple-app-site-association`
+The file `web-admin-hooked/public/.well-known/apple-app-site-association` needs to be deployed to `https://www.hooked-app.com/.well-known/apple-app-site-association`
 
 **Update the file with your actual Team ID:**
 ```json
@@ -51,7 +51,7 @@ The file `web-admin/public/.well-known/apple-app-site-association` needs to be d
 The `app.json` already includes the intent filters for Android.
 
 ### 2. **Deploy Digital Asset Links**
-The file `web-admin/public/.well-known/assetlinks.json` needs to be deployed to `https://www.hooked-app.com/.well-known/assetlinks.json`
+The file `web-admin-hooked/public/.well-known/assetlinks.json` needs to be deployed to `https://www.hooked-app.com/.well-known/assetlinks.json`
 
 **Update the file with your actual signing certificate fingerprint:**
 ```json
@@ -85,7 +85,7 @@ keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -sto
 ## 🌐 **Web Handler Setup**
 
 ### 1. **Deploy the Web Handler**
-The file `web-admin/public/join.html` needs to be deployed to `https://www.hooked-app.com/join.html`
+The file `web-admin-hooked/public/join.html` needs to be deployed to `https://www.hooked-app.com/join.html`
 
 ### 2. **Update App Store URLs**
 In `join.html`, replace the placeholder URLs:
@@ -102,13 +102,13 @@ const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.hooked
 ## 🚀 **Deployment Steps**
 
 ### 1. **Deploy to Vercel**
-The web handler files are in `web-admin/public/` and will be deployed automatically with your Vercel deployment.
+The web handler files are in `web-admin-hooked/public/` and will be deployed automatically with your Vercel deployment.
 
 ### 2. **Update Configuration Files**
 Before deploying, update these files with your actual values:
-- `web-admin/public/.well-known/apple-app-site-association`
-- `web-admin/public/.well-known/assetlinks.json`
-- `web-admin/public/join.html`
+- `web-admin-hooked/public/.well-known/apple-app-site-association`
+- `web-admin-hooked/public/.well-known/assetlinks.json`
+- `web-admin-hooked/public/join.html`
 
 ### 3. **Test the Setup**
 

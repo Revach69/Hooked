@@ -91,8 +91,8 @@ class MobileErrorHandler {
 
   private dispatchEvent(eventName: string) {
     // For React Native, we'll use a simple event emitter pattern
-    if (global.eventEmitter) {
-      global.eventEmitter.emit(eventName);
+    if ((global as any).eventEmitter) {
+      (global as any).eventEmitter.emit(eventName);
     }
   }
 

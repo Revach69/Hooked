@@ -42,15 +42,15 @@ export const storage = getStorage(app);
 if (__DEV__) {
   try {
     // Only connect to emulators if they're not already connected
-    if (!auth.config.emulator) {
+    if (!auth.config?.emulator) {
       connectAuthEmulator(auth, 'http://localhost:9099');
       console.log('✅ Connected to Auth emulator');
     }
-    if (!db._delegate._databaseId.projectId.includes('demo-')) {
+    if (!db._delegate?._databaseId?.projectId?.includes('demo-')) {
       connectFirestoreEmulator(db, 'localhost', 8080);
       console.log('✅ Connected to Firestore emulator');
     }
-    if (!storage.app.options.storageBucket.includes('demo-')) {
+    if (!storage.app.options?.storageBucket?.includes('demo-')) {
       connectStorageEmulator(storage, 'localhost', 9199);
       console.log('✅ Connected to Storage emulator');
     }
