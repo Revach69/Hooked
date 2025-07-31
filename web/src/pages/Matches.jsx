@@ -1,12 +1,12 @@
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Heart, MessageCircle, Users, Sparkles, User } from "lucide-react";
-import { EventProfile, Like, Message } from "@/api/entities";
+import { EventProfile, Like, Message, cleanupListeners, getListenerStats } from "@/api/entities";
 import ChatModal from "../components/ChatModal";
 import ProfileDetailModal from "../components/ProfileDetailModal";
 
@@ -19,6 +19,12 @@ export default function Matches() {
   const [isTabActive, setIsTabActive] = useState(true);
   const currentSessionId = localStorage.getItem('currentSessionId');
   const eventId = localStorage.getItem('currentEventId');
+  
+  // Refs to store unsubscribe functions
+  const listenersRef = useRef({
+    matches: null,
+    messages: null
+  });
 
   const markMatchesAsNotified = useCallback(async (mutualMatchProfiles) => {
     if (!currentSessionId || !eventId || mutualMatchProfiles.length === 0) return;
@@ -112,6 +118,72 @@ export default function Matches() {
     setIsLoading(false);
   }, [currentSessionId, eventId, markMatchesAsNotified]);
 
+  // Cleanup all listeners
+  const cleanupAllListeners = () => {
+    Object.values(listenersRef.current).forEach(unsubscribe => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    });
+    listenersRef.current = { matches: null, messages: null };
+    console.log('🧹 All Matches listeners cleaned up');
+  };
+
+  // Setup real-time listeners
+  const setupRealtimeListeners = useCallback(() => {
+    if (!currentSessionId || !eventId) {
+      cleanupAllListeners();
+      return;
+    }
+
+    // Cleanup existing listeners
+    cleanupAllListeners();
+
+    try {
+      // Setup matches listener (mutual likes)
+      listenersRef.current.matches = Like.onLikesChange(
+        eventId,
+        currentSessionId,
+        async (likesData) => {
+          // Filter for mutual matches
+          const mutualLikes = likesData.filter(like => like.is_mutual);
+          
+          if (mutualLikes.length > 0) {
+            // Reload matches when mutual likes change
+            await loadMatches();
+          }
+        }
+      );
+
+      // Setup messages listener for unread counts
+      listenersRef.current.messages = Message.onMessagesChange(
+        eventId,
+        currentSessionId,
+        async (messagesData) => {
+          // Update unread counts when messages change
+          await loadMatches();
+        }
+      );
+
+      console.log('📡 Matches real-time listeners setup complete');
+    } catch (error) {
+      console.error('❌ Error setting up Matches real-time listeners:', error);
+    }
+  }, [currentSessionId, eventId, loadMatches]);
+
+  useEffect(() => {
+    // Initial load
+    loadMatches();
+    
+    // Setup real-time listeners
+    setupRealtimeListeners();
+    
+    // Cleanup on unmount
+    return () => {
+      cleanupAllListeners();
+    };
+  }, [loadMatches, setupRealtimeListeners]);
+
   // Tab visibility detection
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -121,19 +193,6 @@ export default function Matches() {
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
-
-  // Real-time polling for match updates
-  useEffect(() => {
-    loadMatches();
-
-    const pollInterval = setInterval(() => {
-      if (isTabActive) {
-        loadMatches();
-      }
-    }, 45000); // Changed from 30 seconds to 45 seconds to reduce API calls
-
-    return () => clearInterval(pollInterval);
-  }, [loadMatches, isTabActive]);
 
   // Check for URL parameter to auto-open specific chat
   useEffect(() => {
@@ -149,6 +208,18 @@ export default function Matches() {
       }
     }
   }, [matches]); // Rerun when matches data is loaded/updated
+
+  // Debug listener stats (remove in production)
+  useEffect(() => {
+    const debugInterval = setInterval(() => {
+      if (process.env.NODE_ENV === 'development') {
+        const stats = getListenerStats();
+        console.log('📊 Matches Listener Stats:', stats);
+      }
+    }, 30000); // Log every 30 seconds in development
+
+    return () => clearInterval(debugInterval);
+  }, []);
 
   if (isLoading) {
     return (

@@ -900,6 +900,8 @@ export default function Profile() {
               style={styles.photoEditButton}
               onPress={handlePhotoUpload}
               disabled={isUploadingPhoto}
+              accessibilityLabel="Edit Profile Photo"
+              accessibilityHint="Tap to change your profile photo"
             >
               <Camera size={16} color="white" />
             </TouchableOpacity>
@@ -913,7 +915,11 @@ export default function Profile() {
         <View style={styles.card}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <Text style={{ fontWeight: 'bold', fontSize: 16, color: isDark ? '#ffffff' : '#1f2937' }}>Basic Profile</Text>
-            <TouchableOpacity onPress={() => setEditingBasicProfile(!editingBasicProfile)}>
+            <TouchableOpacity 
+              onPress={() => setEditingBasicProfile(!editingBasicProfile)}
+              accessibilityLabel="Edit Basic Profile"
+              accessibilityHint="Tap to edit your basic profile information"
+            >
               <Edit size={18} color={isDark ? '#9ca3af' : '#6b7280'} />
             </TouchableOpacity>
           </View>

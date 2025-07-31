@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { User } from "@/api/entities";
+
 import { EventProfile } from "@/api/entities";
 import { Event } from "@/api/entities";
 import { UploadFile } from "@/api/integrations";
@@ -118,25 +118,8 @@ export default function Consent() {
       const sessionId = generateUUID();
       const profileColor = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
 
-      // Get authenticated user's email and convert to lowercase
-      let userEmail = 'anonymous@hooked-app.com'; // fallback
-      try {
-        const currentUser = await User.me();
-        if (currentUser && currentUser.email) {
-          userEmail = currentUser.email.toLowerCase();
-        }
-      } catch (error) {
-        console.warn("Could not get user email, using anonymous fallback:", error);
-      }
-
-      // Update user data with profile photo
-      await User.updateMyUserData({
-        profile_photo_url: formData.profile_photo_url,
-        age: parseInt(formData.age),
-        gender_identity: formData.gender_identity,
-        interested_in: formData.interested_in,
-        profile_color: profileColor
-      });
+      // Generate anonymous email for web version (no Gmail auth)
+      const userEmail = `user_${sessionId}@hooked-app.com`;
 
       // Create event profile with lowercased authenticated user's email
       await EventProfile.create({

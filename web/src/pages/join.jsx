@@ -6,7 +6,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, Calendar, MapPin, Clock } from "lucide-react";
 import { Event, EventProfile } from "@/api/entities"; // Changed import path
-import { User } from "@/api/entities";
 
 export default function JoinPage() {
   const navigate = useNavigate();
@@ -17,19 +16,7 @@ export default function JoinPage() {
     handleEventJoin();
   }, []);
 
-  const awaitUserAuthentication = async (retries = 10, delay = 500) => {
-    for (let i = 0; i < retries; i++) {
-      try {
-        const user = await User.me();
-        if (user && user.email) return user;
-      } catch (error) {
-        // This error is expected if the user isn't logged in yet.
-        // console.log(`Attempt ${i + 1}: User not authenticated yet.`, error.message);
-      }
-      await new Promise(res => setTimeout(res, delay));
-    }
-    return null;
-  };
+
 
   const handleEventJoin = async () => {
     try {
@@ -80,32 +67,7 @@ export default function JoinPage() {
       localStorage.setItem('currentEventId', foundEvent.id);
       localStorage.setItem('currentEventCode', foundEvent.event_code);
 
-      // Check if authenticated user already has a profile for this specific event
-      const currentUser = await awaitUserAuthentication();
-      
-      if (currentUser && currentUser.email) {
-        // Use lowercase email for case-insensitive matching
-        const userEmailLower = currentUser.email.toLowerCase();
-        const allProfiles = await EventProfile.list();
-        const existingProfiles = allProfiles.filter(
-          (p) => p.event_id === foundEvent.id && p.email === userEmailLower
-        );
-        
-        if (existingProfiles.length > 0) {
-          // User already has a profile for this event - restore it
-          const existingProfile = existingProfiles[0];
-          localStorage.setItem('currentSessionId', existingProfile.session_id);
-          localStorage.setItem('currentProfileId', existingProfile.id);
-          localStorage.setItem('currentProfileColor', existingProfile.profile_color || '#cccccc');
-          if (existingProfile.profile_photo_url) {
-            localStorage.setItem('currentProfilePhotoUrl', existingProfile.profile_photo_url);
-          }
-          
-          console.log(`Found existing profile for ${currentUser.email} in event ${foundEvent.name}`);
-          navigate(createPageUrl("Discovery"));
-          return;
-        }
-      }
+
 
       // Check if user has an existing session_id (fallback method)
       const existingSessionId = localStorage.getItem('currentSessionId');

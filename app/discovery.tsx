@@ -919,6 +919,8 @@ export default function Discovery() {
             <TouchableOpacity
               style={styles.makeVisibleButton}
               onPress={() => router.push('/profile')}
+              accessibilityLabel="Go to Profile"
+              accessibilityHint="Navigate to profile settings to make your profile visible"
             >
               <Text style={styles.makeVisibleButtonText}>Go to Profile</Text>
             </TouchableOpacity>
@@ -930,6 +932,8 @@ export default function Discovery() {
           <TouchableOpacity
             style={[styles.navButton, styles.navButtonActive]}
             onPress={() => router.push('/profile')}
+            accessibilityLabel="Profile Tab"
+            accessibilityHint="Navigate to your profile settings"
           >
             <User size={24} color="#8b5cf6" />
             <Text style={[styles.navButtonText, styles.navButtonTextActive]}>Profile</Text>
@@ -946,6 +950,8 @@ export default function Discovery() {
           <TouchableOpacity
             style={styles.navButton}
             onPress={() => router.push('/matches')}
+            accessibilityLabel="Matches Tab"
+            accessibilityHint="Navigate to your matches"
           >
             <MessageCircle size={24} color="#9ca3af" />
             <Text style={styles.navButtonText}>Matches</Text>
@@ -977,6 +983,8 @@ export default function Discovery() {
         <TouchableOpacity
           style={styles.filterButton}
           onPress={() => setShowFilters(true)}
+          accessibilityLabel="Filter Profiles"
+          accessibilityHint="Open filters to customize your discovery preferences"
         >
           <Filter size={20} color="#6b7280" />
         </TouchableOpacity>
@@ -996,6 +1004,8 @@ export default function Discovery() {
                       key={profile.id}
                       style={styles.profileCard}
                       onPress={() => handleProfileTap(profile)}
+                      accessibilityLabel={`View ${profile.first_name}'s Profile`}
+                      accessibilityHint={`Tap to view ${profile.first_name}'s full profile details`}
                     >
                       <View style={styles.profileImageContainer}>
                         {profile.profile_photo_url ? (

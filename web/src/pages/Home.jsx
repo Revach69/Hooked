@@ -4,16 +4,22 @@ import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { Button } from "@/components/ui/button";
 import { QrCode, Hash, Heart, X } from "lucide-react";
-import { Event, EventProfile } from "@/api/entities";
-import { User } from "@/api/entities";
 import QRScanner from "../components/QRScanner";
 import EventCodeEntry from "../components/EventCodeEntry";
+import { useAsyncOperation } from "../hooks/useErrorHandling";
+import OfflineStatusBar from "../components/OfflineStatusBar";
+import ErrorToast from "../components/ErrorToast";
+import { Event, EventProfile } from "@/api/entities";
+import { User } from "@/api/entities";
 
 export default function Home() {
   const navigate = useNavigate();
   const [activeModal, setActiveModal] = useState(null);
   const [showHowItWorks, setShowHowItWorks] = useState(false);
   const [isCheckingProfile, setIsCheckingProfile] = useState(true);
+  const [error, setError] = useState(null);
+  
+  const { executeOperationWithOfflineFallback } = useAsyncOperation();
 
   useEffect(() => {
     checkForExistingProfile();
@@ -39,9 +45,16 @@ export default function Home() {
       const sessionId = localStorage.getItem('currentSessionId');
       
       if (eventId && sessionId) {
-        const events = await Event.filter({ id: eventId });
-        if (events.length > 0) {
-          const event = events[0];
+        const result = await executeOperationWithOfflineFallback(
+          async () => {
+            const events = await Event.filter({ id: eventId });
+            return events;
+          },
+          { operation: 'Check existing event session' }
+        );
+
+        if (result.success && result.result.length > 0) {
+          const event = result.result[0];
           const nowISO = new Date().toISOString();
           
           if (event.starts_at && event.expires_at && nowISO >= event.starts_at && nowISO <= event.expires_at) {
@@ -57,42 +70,63 @@ export default function Home() {
       if (currentUser) {
         // Find the single active event
         const nowISO = new Date().toISOString();
-        const allEvents = await Event.list();
-        const activeEvent = allEvents.find(e => e.starts_at && e.expires_at && nowISO >= e.starts_at && nowISO <= e.expires_at);
+        const allEventsResult = await executeOperationWithOfflineFallback(
+          async () => {
+            const allEvents = await Event.list();
+            return allEvents;
+          },
+          { operation: 'Fetch active events' }
+        );
 
-        if (activeEvent) {
-          // Check if a profile exists for this user in the active event
-          const userEmailLower = currentUser.email.toLowerCase();
-          const allProfiles = await EventProfile.list();
-          const existingProfiles = allProfiles.filter(
-            (p) => p.event_id === activeEvent.id && p.email === userEmailLower
-          );
+        if (allEventsResult.success) {
+          const allEvents = allEventsResult.result;
+          const activeEvent = allEvents.find(e => e.starts_at && e.expires_at && nowISO >= e.starts_at && nowISO <= e.expires_at);
 
-          if (existingProfiles.length > 0) {
-            const profileToRestore = existingProfiles[0];
-            
-            // Restore session with the found profile
-            localStorage.setItem('currentEventId', activeEvent.id);
-            localStorage.setItem('currentSessionId', profileToRestore.session_id);
-            localStorage.setItem('currentEventCode', activeEvent.event_code);
-            localStorage.setItem('currentProfileId', profileToRestore.id);
-            localStorage.setItem('currentProfileColor', profileToRestore.profile_color || '#cccccc');
-            if (profileToRestore.profile_photo_url) {
-              localStorage.setItem('currentProfilePhotoUrl', profileToRestore.profile_photo_url);
+          if (activeEvent) {
+            // Check if a profile exists for this user in the active event
+            const userEmailLower = currentUser.email.toLowerCase();
+            const profilesResult = await executeOperationWithOfflineFallback(
+              async () => {
+                const allProfiles = await EventProfile.list();
+                return allProfiles;
+              },
+              { operation: 'Fetch user profiles' }
+            );
+
+            if (profilesResult.success) {
+              const allProfiles = profilesResult.result;
+              const existingProfiles = allProfiles.filter(
+                (p) => p.event_id === activeEvent.id && p.email === userEmailLower
+              );
+
+              if (existingProfiles.length > 0) {
+                const profileToRestore = existingProfiles[0];
+                
+                // Restore session with the found profile
+                localStorage.setItem('currentEventId', activeEvent.id);
+                localStorage.setItem('currentSessionId', profileToRestore.session_id);
+                localStorage.setItem('currentEventCode', activeEvent.event_code);
+                localStorage.setItem('currentProfileId', profileToRestore.id);
+                localStorage.setItem('currentProfileColor', profileToRestore.profile_color || '#cccccc');
+                if (profileToRestore.profile_photo_url) {
+                  localStorage.setItem('currentProfilePhotoUrl', profileToRestore.profile_photo_url);
+                }
+                
+                console.log(`Restored profile for ${currentUser.email} in active event ${activeEvent.name}`);
+
+                // Navigate after a short delay to ensure localStorage is set
+                setTimeout(() => {
+                  navigate(createPageUrl("Discovery"));
+                }, 300);
+                return; // Exit after successful recovery
+              }
             }
-            
-            console.log(`Restored profile for ${currentUser.email} in active event ${activeEvent.name}`);
-
-            // Navigate after a short delay to ensure localStorage is set
-            setTimeout(() => {
-              navigate(createPageUrl("Discovery"));
-            }, 300);
-            return; // Exit after successful recovery
           }
         }
       }
     } catch (error) {
       console.error("Error during profile recovery check:", error);
+      setError(error);
     }
     
     // If no profile is found, show the homepage
@@ -166,6 +200,22 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex flex-col justify-between items-center px-6 py-8 relative overflow-hidden bg-white dark:bg-gray-900">
+      {/* Offline Status Bar */}
+      <OfflineStatusBar />
+      
+      {/* Error Toast */}
+      {error && (
+        <ErrorToast
+          error={error}
+          onRetry={() => {
+            setError(null);
+            setIsCheckingProfile(true);
+            checkForExistingProfile();
+          }}
+          onDismiss={() => setError(null)}
+        />
+      )}
+      
       {/* Gradient Background */}
       <div 
         className="absolute inset-0 z-0"

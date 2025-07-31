@@ -460,6 +460,8 @@ export default function Home() {
               style={styles.button}
               onPress={handleCameraAccess}
               disabled={isProcessing}
+              accessibilityLabel="Scan QR Code"
+              accessibilityHint="Opens camera to scan event QR code"
             >
               {isProcessing ? (
                 <ActivityIndicator size="small" color="black" />
@@ -474,6 +476,8 @@ export default function Home() {
             <TouchableOpacity
               style={styles.button}
               onPress={() => openModal('manualCodeEntry')}
+              accessibilityLabel="Enter Code Manually"
+              accessibilityHint="Opens form to manually enter event code"
             >
               <Hash size={24} color="black" />
               <Text style={styles.buttonText}>Enter Code Manually</Text>
@@ -547,6 +551,8 @@ export default function Home() {
                 onChangeText={setManualCode}
                 autoCapitalize="none"
                 autoCorrect={false}
+                accessibilityLabel="Event Code Input"
+                accessibilityHint="Enter the event code to join"
                 autoFocus={true}
                 keyboardType="default"
               />

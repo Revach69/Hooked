@@ -73,7 +73,6 @@ export default function Matches() {
           setCurrentUserProfile(userProfile);
 
           if (!userProfile) {
-            console.warn("Current user profile not found for session, clearing session data and redirecting.");
             AsyncStorage.multiRemove([
               'currentEventId',
               'currentSessionId',
@@ -474,6 +473,8 @@ export default function Matches() {
             <TouchableOpacity
               style={styles.makeVisibleButton}
               onPress={() => router.push('/profile')}
+              accessibilityLabel="Go to Profile"
+              accessibilityHint="Navigate to profile settings to make your profile visible"
             >
               <Text style={styles.makeVisibleButtonText}>Go to Profile</Text>
             </TouchableOpacity>
@@ -536,6 +537,8 @@ export default function Matches() {
                 key={match.id}
                 style={styles.matchCard}
                 onPress={() => handleProfileTap(match)}
+                accessibilityLabel={`View ${match.first_name}'s Profile`}
+                accessibilityHint={`Tap to view ${match.first_name}'s full profile details`}
               >
                 <View style={styles.matchImageContainer}>
                   {match.profile_photo_url ? (
@@ -564,6 +567,8 @@ export default function Matches() {
                           matchName: match.first_name
                         }
                       })}
+                      accessibilityLabel={`Message ${match.first_name}`}
+                      accessibilityHint={`Open chat with ${match.first_name}`}
                     >
                       <MessageCircle size={16} color="#6b7280" />
                       <Text style={styles.actionText}>Message</Text>

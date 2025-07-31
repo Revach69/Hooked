@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { User } from "@/api/entities";
+
 import { EventProfile } from "@/api/entities";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { UploadFile } from "@/api/integrations";
 import { User as UserIcon, Edit, Save, Trash2, Eye, EyeOff, X, Camera, Sparkles, LogOut, AlertCircle, Clock, Mail, CheckCircle2, Users, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
+import ReportModal from "../components/ReportModal";
 
 const ALL_INTERESTS = [
   "music", "tech", "food", "books", "travel", "art", "fitness", "nature",
@@ -37,31 +38,29 @@ export default function Profile() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [allUsers, setAllUsers] = useState([]);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const currentUser = await User.me();
-      if (!currentUser) {
-          navigate(createPageUrl("Home"));
-          return;
-      }
-      setUser(currentUser);
-      setFormData({
-        bio: currentUser.bio || "",
-        interests: currentUser.interests || [],
-        height: currentUser.height || "",
-      });
-
       const eventId = localStorage.getItem('currentEventId');
       const sessionId = localStorage.getItem('currentSessionId');
+      
       if (eventId && sessionId) {
         const profiles = await EventProfile.filter({
           event_id: eventId,
           session_id: sessionId,
         });
         if (profiles.length > 0) {
-          setEventProfile(profiles[0]);
+          const profile = profiles[0];
+          setEventProfile(profile);
+          setUser(profile); // Use event profile as user data
+          setFormData({
+            bio: profile.about_me || "",
+            interests: profile.interests || [],
+            height: profile.height_cm ? profile.height_cm.toString() : "",
+          });
         }
       }
     } catch (error) {
@@ -96,7 +95,18 @@ export default function Profile() {
 
   const handleSave = async (field) => {
     try {
-      await User.updateMyUserData({ [field]: formData[field] });
+      if (!eventProfile) return;
+      
+      // Map form fields to EventProfile fields
+      const fieldMapping = {
+        bio: 'about_me',
+        height: 'height_cm'
+      };
+      
+      const profileField = fieldMapping[field] || field;
+      const value = field === 'height' ? parseInt(formData[field]) : formData[field];
+      
+      await EventProfile.update(eventProfile.id, { [profileField]: value });
       toast.success(`${field.charAt(0).toUpperCase() + field.slice(1)} updated!`);
       handleEditToggle(field);
       await loadData();
@@ -108,11 +118,11 @@ export default function Profile() {
 
   const handleProfilePhotoChange = async (e) => {
     const file = e.target.files[0];
-    if (file) {
+    if (file && eventProfile) {
       setIsUploading(true);
       try {
         const { file_url } = await UploadFile({ file });
-        await User.updateMyUserData({ profile_photo_url: file_url });
+        await EventProfile.update(eventProfile.id, { profile_photo_url: file_url });
         toast.success("Profile photo updated!");
         await loadData();
       } catch (error) {
@@ -135,6 +145,28 @@ export default function Profile() {
       console.error("Error updating visibility:", error);
       toast.error("Failed to update visibility.");
     }
+  };
+
+  const loadAllUsers = async () => {
+    try {
+      const eventId = localStorage.getItem('currentEventId');
+      if (eventId) {
+        const profiles = await EventProfile.filter({ event_id: eventId });
+        setAllUsers(profiles);
+      }
+    } catch (error) {
+      console.error("Error loading users for report:", error);
+    }
+  };
+
+  const handleReportUser = () => {
+    setShowReportModal(true);
+    loadAllUsers();
+  };
+
+  const handleReportSubmitted = (reportData) => {
+    console.log('Report submitted:', reportData);
+    // In a real implementation, this would trigger admin notifications
   };
 
   const leaveEvent = async () => {
@@ -376,9 +408,7 @@ export default function Profile() {
             <Button
               variant="outline"
               className="w-full border-orange-200 dark:border-orange-700 text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 bg-white dark:bg-gray-800"
-              onClick={() => {
-                alert("Report functionality will be implemented soon.");
-              }}
+              onClick={handleReportUser}
             >
               Report a User
             </Button>
@@ -471,6 +501,15 @@ export default function Profile() {
           </div>
         </div>
       </div>
+
+      {/* Report Modal */}
+      <ReportModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        reportedUser={allUsers[0]} // This would be selected user in a real implementation
+        eventId={localStorage.getItem('currentEventId')}
+        onReportSubmitted={handleReportSubmitted}
+      />
     </div>
   );
 }

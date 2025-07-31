@@ -1,12 +1,12 @@
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Heart, Filter, Users, Sparkles, Image as ImageIcon, User, MessageCircle } from "lucide-react";
-import { EventProfile, Like, Event } from "@/api/entities";
+import { EventProfile, Like, Event, cleanupListeners, getListenerStats } from "@/api/entities";
 import ProfileFilters from "../components/ProfileFilters";
 import ProfileDetailModal from "../components/ProfileDetailModal";
 
@@ -25,12 +25,23 @@ export default function Discovery() {
   });
   const [showFilters, setShowFilters] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [likedProfiles, setLikedProfiles] = new useState(new Set());
+  const [likedProfiles, setLikedProfiles] = useState(new Set());
   const [selectedProfileForDetail, setSelectedProfileForDetail] = useState(null);
-  const [isTabActive, setIsTabActive] = useState(false); // Initialize to false, will be set by visibilitychange
+  const [isTabActive, setIsTabActive] = useState(true);
+  
+  // Refs to store unsubscribe functions
+  const listenersRef = useRef({
+    profiles: null,
+    likes: null
+  });
 
   useEffect(() => {
     initializeSession();
+    
+    // Cleanup on unmount
+    return () => {
+      cleanupAllListeners();
+    };
   }, []);
 
   useEffect(() => {
@@ -52,19 +63,64 @@ export default function Discovery() {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
-  // Real-time polling for updates
+  // Setup real-time listeners when event and session are available
   useEffect(() => {
-    if (!currentSessionId || !currentEvent) return;
+    if (!currentEvent?.id || !currentSessionId) {
+      cleanupAllListeners();
+      return;
+    }
 
-    const pollInterval = setInterval(() => {
-      if (isTabActive) {
-        loadProfiles(currentEvent.id, currentSessionId);
-        loadLikes(currentEvent.id, currentSessionId);
+    setupRealtimeListeners();
+  }, [currentEvent?.id, currentSessionId]);
+
+  const cleanupAllListeners = () => {
+    Object.values(listenersRef.current).forEach(unsubscribe => {
+      if (unsubscribe) {
+        unsubscribe();
       }
-    }, 60000); // Changed from 45 seconds to 60 seconds to reduce API calls
+    });
+    listenersRef.current = { profiles: null, likes: null };
+    console.log('🧹 All Discovery listeners cleaned up');
+  };
 
-    return () => clearInterval(pollInterval);
-  }, [currentSessionId, currentEvent, isTabActive]);
+  const setupRealtimeListeners = () => {
+    // Cleanup existing listeners
+    cleanupAllListeners();
+
+    try {
+      // Setup profiles listener
+      listenersRef.current.profiles = EventProfile.onProfilesChange(
+        currentEvent.id,
+        (profilesData) => {
+          const allVisibleProfiles = profilesData.filter(p => p.is_visible);
+          const userProfile = allVisibleProfiles.find(p => p.session_id === currentSessionId);
+          const otherUsersProfiles = allVisibleProfiles.filter(p => p.session_id !== currentSessionId);
+          
+          setCurrentUserProfile(userProfile);
+          setProfiles(otherUsersProfiles);
+          
+          if (!userProfile) {
+            console.warn("Current user profile not found for session, redirecting.");
+            navigate(createPageUrl("Home"));
+          }
+        },
+        { is_visible: true }
+      );
+
+      // Setup likes listener
+      listenersRef.current.likes = Like.onLikesChange(
+        currentEvent.id,
+        currentSessionId,
+        (likesData) => {
+          setLikedProfiles(new Set(likesData.map(like => like.liked_session_id)));
+        }
+      );
+
+      console.log('📡 Real-time listeners setup complete');
+    } catch (error) {
+      console.error('❌ Error setting up real-time listeners:', error);
+    }
+  };
 
   const initializeSession = async () => {
     const eventId = localStorage.getItem('currentEventId');
@@ -85,47 +141,10 @@ export default function Discovery() {
         navigate(createPageUrl("Home"));
         return;
       }
-
-      await Promise.all([loadProfiles(eventId, sessionId), loadLikes(eventId, sessionId)]);
     } catch (error) {
       console.error("Error initializing session:", error);
     }
     setIsLoading(false);
-  };
-
-  const loadProfiles = async (eventId, sessionId) => {
-    try {
-      const allVisibleProfiles = await EventProfile.filter({ 
-        event_id: eventId,
-        is_visible: true 
-      });
-      
-      const userProfile = allVisibleProfiles.find(p => p.session_id === sessionId);
-      setCurrentUserProfile(userProfile);
-
-      const otherUsersProfiles = allVisibleProfiles.filter(p => p.session_id !== sessionId);
-      setProfiles(otherUsersProfiles);
-      
-      if (!userProfile) {
-        console.warn("Current user profile not found for session, redirecting.");
-        navigate(createPageUrl("Home"));
-      }
-
-    } catch (error) {
-      console.error("Error loading profiles:", error);
-    }
-  };
-
-  const loadLikes = async (eventId, sessionId) => {
-    try {
-      const likes = await Like.filter({ 
-        liker_session_id: sessionId,
-        event_id: eventId 
-      });
-      setLikedProfiles(new Set(likes.map(like => like.liked_session_id)));
-    } catch (error) {
-      console.error("Error loading likes:", error);
-    }
   };
 
   const applyFilters = () => {
@@ -231,6 +250,18 @@ export default function Discovery() {
   const handleProfileTap = (profile) => {
     setSelectedProfileForDetail(profile);
   };
+
+  // Debug listener stats (remove in production)
+  useEffect(() => {
+    const debugInterval = setInterval(() => {
+      if (process.env.NODE_ENV === 'development') {
+        const stats = getListenerStats();
+        console.log('📊 Listener Stats:', stats);
+      }
+    }, 30000); // Log every 30 seconds in development
+
+    return () => clearInterval(debugInterval);
+  }, []);
 
   if (isLoading) {
     return (

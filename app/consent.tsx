@@ -180,15 +180,7 @@ export default function Consent() {
       return;
     }
 
-    // Validate image properties('Processing image asset:', {
-      uri: asset.uri,
-      width: asset.width,
-      height: asset.height,
-      fileSize: asset.fileSize,
-      type: asset.type,
-      fileName: asset.fileName,
-      aspectRatio: asset.width && asset.height ? asset.width / asset.height : 'unknown'
-    });
+    // Validate image properties
 
     setIsUploadingPhoto(true);
     try {
@@ -648,6 +640,8 @@ export default function Consent() {
                 style={styles.photoUploadArea}
                 onPress={handlePhotoUpload}
                 disabled={isUploadingPhoto}
+                accessibilityLabel="Upload Profile Photo"
+                accessibilityHint="Tap to upload a profile photo from camera or gallery"
               >
                 {formData.profile_photo_url ? (
                   <Image
@@ -676,12 +670,16 @@ export default function Consent() {
                 value={formData.first_name}
                 onChangeText={(text) => setFormData(prev => ({ ...prev, first_name: text }))}
                 returnKeyType="next"
+                accessibilityLabel="First Name Input"
+                accessibilityHint="Enter your first name"
               />
               
               {/* Age Selection */}
               <TouchableOpacity
                 style={styles.input}
                 onPress={() => setShowAgePicker(true)}
+                accessibilityLabel="Age Selection"
+                accessibilityHint="Tap to select your age"
               >
                 <Text style={formData.age ? styles.inputText : styles.placeholderText}>
                   {formData.age ? `Age: ${formData.age}` : 'Age *'}
@@ -699,6 +697,8 @@ export default function Consent() {
                   formData.gender_identity === 'man' && styles.selectionButtonActive
                 ]}
                 onPress={() => setFormData(prev => ({ ...prev, gender_identity: 'man' }))}
+                accessibilityLabel="Select Man"
+                accessibilityHint="Select if you identify as a man"
               >
                 <Text style={[
                   styles.selectionButtonText,
@@ -714,6 +714,8 @@ export default function Consent() {
                   formData.gender_identity === 'woman' && styles.selectionButtonActive
                 ]}
                 onPress={() => setFormData(prev => ({ ...prev, gender_identity: 'woman' }))}
+                accessibilityLabel="Select Woman"
+                accessibilityHint="Select if you identify as a woman"
               >
                 <Text style={[
                   styles.selectionButtonText,
@@ -735,6 +737,8 @@ export default function Consent() {
                   formData.interested_in === 'men' && styles.selectionButtonActive
                 ]}
                 onPress={() => setFormData(prev => ({ ...prev, interested_in: 'men' }))}
+                accessibilityLabel="Interested in Men"
+                accessibilityHint="Select if you're interested in men"
               >
                 <Text style={[
                   styles.selectionButtonText,
@@ -750,6 +754,8 @@ export default function Consent() {
                   formData.interested_in === 'women' && styles.selectionButtonActive
                 ]}
                 onPress={() => setFormData(prev => ({ ...prev, interested_in: 'women' }))}
+                accessibilityLabel="Interested in Women"
+                accessibilityHint="Select if you're interested in women"
               >
                 <Text style={[
                   styles.selectionButtonText,
@@ -765,6 +771,8 @@ export default function Consent() {
                   formData.interested_in === 'everyone' && styles.selectionButtonActive
                 ]}
                 onPress={() => setFormData(prev => ({ ...prev, interested_in: 'everyone' }))}
+                accessibilityLabel="Interested in Everyone"
+                accessibilityHint="Select if you're interested in everyone"
               >
                 <Text style={[
                   styles.selectionButtonText,
@@ -784,6 +792,8 @@ export default function Consent() {
                 onValueChange={setRememberProfile}
                 trackColor={{ false: '#d1d5db', true: '#8b5cf6' }}
                 thumbColor={rememberProfile ? '#ffffff' : '#ffffff'}
+                accessibilityLabel="Remember Profile Toggle"
+                accessibilityHint="Toggle to remember your profile for future events"
               />
               <Text style={styles.checkboxText}>
                 Remember my profile for future events
@@ -798,6 +808,9 @@ export default function Consent() {
           <TouchableOpacity
             style={styles.submitButton}
             onPress={handleSubmit}
+            accessibilityLabel="Create Profile"
+            accessibilityHint="Tap to create your event profile"
+          >
             disabled={isSubmitting}
           >
             <Text style={styles.submitButtonText}>Join Event</Text>

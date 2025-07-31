@@ -1,4 +1,4 @@
-import { db, auth, storage } from './firebaseConfig';
+import { db, auth, storage, firebaseMemoryManager } from './firebaseConfig';
 import {
   collection,
   doc,
@@ -30,6 +30,8 @@ import {
   getDownloadURL
 } from 'firebase/storage';
 
+import { withErrorHandling, queueOfflineAction } from './errorHandler';
+
 // Enhanced retry operation with better error handling and recovery
 async function retryOperation(
   operation,
@@ -37,43 +39,140 @@ async function retryOperation(
   delay = 1000,
   operationName = 'Firebase operation'
 ) {
-  let lastError;
+  return withErrorHandling(operation, {
+    maxRetries,
+    baseDelay: delay,
+    operationName
+  });
+}
+
+// Image optimization utilities
+const imageOptimizer = {
+  // Compress image before upload
+  async compressImage(file, maxWidth = 800, quality = 0.8) {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      
+      img.onload = () => {
+        // Calculate new dimensions
+        let { width, height } = img;
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        // Draw and compress
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(resolve, 'image/jpeg', quality);
+      };
+      
+      img.src = URL.createObjectURL(file);
+    });
+  },
   
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      return await operation();
-    } catch (error) {
-      lastError = error;
-      
-      // Enhanced error logging with context
-      console.error(`❌ ${operationName} failed (attempt ${attempt}/${maxRetries}):`, {
-        operation: operationName,
-        attempt,
-        maxRetries,
-        timestamp: new Date().toISOString(),
-        error: error.message,
-        code: error.code,
-        isNetworkError: !error.code || error.code === 'unavailable',
-        isPermissionError: error.code === 'permission-denied',
-        isNotFoundError: error.code === 'not-found'
-      });
-      
-      // Don't retry on certain errors
-      if (error.code === 'permission-denied' || error.code === 'not-found') {
-        throw error;
+  // Generate optimized filename
+  generateOptimizedFilename(originalName) {
+    const timestamp = Date.now();
+    const extension = originalName.split('.').pop() || 'jpg';
+    return `optimized_${timestamp}.${extension}`;
+  },
+  
+  // Validate file type and size
+  validateFile(file, maxSizeMB = 5) {
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    const maxSizeBytes = maxSizeMB * 1024 * 1024;
+    
+    if (!validTypes.includes(file.type)) {
+      throw new Error('Invalid file type. Please upload a JPEG, PNG, or WebP image.');
+    }
+    
+    if (file.size > maxSizeBytes) {
+      throw new Error(`File too large. Maximum size is ${maxSizeMB}MB.`);
+    }
+    
+    return true;
+  }
+};
+
+// Real-time listener manager
+class ListenerManager {
+  constructor() {
+    this.listeners = new Map();
+    this.listenerCounts = new Map();
+  }
+  
+  // Create a real-time listener with automatic cleanup
+  createListener(id, query, callback, options = {}) {
+    // Cleanup existing listener if it exists
+    this.cleanupListener(id);
+    
+    const unsubscribe = onSnapshot(
+      query,
+      (snapshot) => {
+        const data = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        callback(data);
+      },
+      (error) => {
+        console.error(`❌ Listener error for ${id}:`, error);
+        if (options.onError) {
+          options.onError(error);
+        }
       }
-      
-      if (attempt < maxRetries) {
-        // Exponential backoff with jitter
-        const backoffDelay = delay * Math.pow(2, attempt - 1) + Math.random() * 1000;
-        console.log(`⏳ Retrying ${operationName} in ${Math.round(backoffDelay)}ms...`);
-        await new Promise(resolve => setTimeout(resolve, backoffDelay));
-      }
+    );
+    
+    // Register with memory manager
+    firebaseMemoryManager.registerListener(id, unsubscribe);
+    this.listeners.set(id, unsubscribe);
+    
+    // Track listener count
+    const currentCount = this.listenerCounts.get(id) || 0;
+    this.listenerCounts.set(id, currentCount + 1);
+    
+    console.log(`📡 Created listener: ${id} (count: ${currentCount + 1})`);
+    return unsubscribe;
+  }
+  
+  // Cleanup specific listener
+  cleanupListener(id) {
+    const unsubscribe = this.listeners.get(id);
+    if (unsubscribe) {
+      unsubscribe();
+      this.listeners.delete(id);
+      firebaseMemoryManager.unregisterListener(id);
+      console.log(`🧹 Cleaned up listener: ${id}`);
     }
   }
   
-  throw lastError;
+  // Cleanup all listeners
+  cleanupAll() {
+    this.listeners.forEach((unsubscribe, id) => {
+      unsubscribe();
+      firebaseMemoryManager.unregisterListener(id);
+    });
+    this.listeners.clear();
+    this.listenerCounts.clear();
+    console.log('🧹 All listeners cleaned up');
+  }
+  
+  // Get listener statistics
+  getStats() {
+    return {
+      activeListeners: this.listeners.size,
+      listenerCounts: Object.fromEntries(this.listenerCounts)
+    };
+  }
 }
+
+// Global listener manager instance
+const listenerManager = new ListenerManager();
 
 // Data Models (matching mobile app)
 export const Event = {
@@ -225,6 +324,21 @@ export const EventProfile = {
   // Alias for filter to match original API
   async list() {
     return await this.filter();
+  },
+
+  // Real-time listener for profiles
+  onProfilesChange(eventId, callback, filters = {}) {
+    let q = query(
+      collection(db, 'event_profiles'),
+      where('event_id', '==', eventId)
+    );
+    
+    if (filters.is_visible !== undefined) {
+      q = query(q, where('is_visible', '==', filters.is_visible));
+    }
+    
+    const listenerId = `profiles_${eventId}_${JSON.stringify(filters)}`;
+    return listenerManager.createListener(listenerId, q, callback);
   }
 };
 
@@ -292,6 +406,18 @@ export const Like = {
   // Alias for filter to match original API
   async list() {
     return await this.filter();
+  },
+
+  // Real-time listener for likes
+  onLikesChange(eventId, sessionId, callback) {
+    const q = query(
+      collection(db, 'likes'),
+      where('event_id', '==', eventId),
+      where('liker_session_id', '==', sessionId)
+    );
+    
+    const listenerId = `likes_${eventId}_${sessionId}`;
+    return listenerManager.createListener(listenerId, q, callback);
   }
 };
 
@@ -340,6 +466,19 @@ export const Message = {
   // Alias for filter to match original API
   async list() {
     return await this.filter();
+  },
+
+  // Real-time listener for messages
+  onMessagesChange(eventId, profileId, callback) {
+    const q = query(
+      collection(db, 'messages'),
+      where('event_id', '==', eventId),
+      where('from_profile_id', '==', profileId),
+      orderBy('created_at', 'asc')
+    );
+    
+    const listenerId = `messages_${eventId}_${profileId}`;
+    return listenerManager.createListener(listenerId, q, callback);
   }
 };
 
@@ -422,17 +561,44 @@ export const User = {
   }
 };
 
-// File upload functionality
-export const uploadFile = async (file) => {
+// Optimized file upload functionality with image compression
+export const uploadFile = async (file, options = {}) => {
   return await retryOperation(async () => {
-    const storageRef = ref(storage, `uploads/${Date.now()}_${file.name}`);
-    const snapshot = await uploadBytes(storageRef, file);
+    // Validate file
+    imageOptimizer.validateFile(file, options.maxSizeMB || 5);
+    
+    // Compress image if it's an image file
+    let uploadFile = file;
+    if (file.type.startsWith('image/')) {
+      try {
+        const compressedBlob = await imageOptimizer.compressImage(
+          file, 
+          options.maxWidth || 800, 
+          options.quality || 0.8
+        );
+        uploadFile = new File([compressedBlob], file.name, { type: 'image/jpeg' });
+        console.log('✅ Image compressed successfully');
+      } catch (error) {
+        console.warn('⚠️ Image compression failed, uploading original:', error);
+      }
+    }
+    
+    const fileName = imageOptimizer.generateOptimizedFilename(file.name);
+    const storageRef = ref(storage, `uploads/${Date.now()}_${fileName}`);
+    const snapshot = await uploadBytes(storageRef, uploadFile);
     const downloadURL = await getDownloadURL(snapshot.ref);
+    
+    console.log('✅ File uploaded successfully:', {
+      originalSize: file.size,
+      uploadedSize: uploadFile.size,
+      compressionRatio: ((file.size - uploadFile.size) / file.size * 100).toFixed(1) + '%'
+    });
+    
     return { file_url: downloadURL };
   }, 3, 1000, 'uploadFile');
 };
 
-// Real-time listeners
+// Real-time listeners with proper cleanup
 export const createRealtimeListener = (collectionName, callback, filters = {}) => {
   let q = collection(db, collectionName);
   
@@ -443,11 +609,19 @@ export const createRealtimeListener = (collectionName, callback, filters = {}) =
     q = query(q, where('is_visible', '==', filters.is_visible));
   }
   
-  return onSnapshot(q, (snapshot) => {
-    const data = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-    callback(data);
-  });
+  const listenerId = `${collectionName}_${JSON.stringify(filters)}`;
+  return listenerManager.createListener(listenerId, q, callback);
+};
+
+// Export listener manager for manual cleanup
+export const cleanupListeners = () => {
+  listenerManager.cleanupAll();
+};
+
+// Export listener statistics for debugging
+export const getListenerStats = () => {
+  return {
+    ...listenerManager.getStats(),
+    memoryManager: firebaseMemoryManager.getListenerCount()
+  };
 }; 
