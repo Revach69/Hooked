@@ -1,137 +1,17 @@
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { Button } from "@/components/ui/button";
 import { QrCode, Hash, Heart, X } from "lucide-react";
 import QRScanner from "../components/QRScanner";
 import EventCodeEntry from "../components/EventCodeEntry";
-import { useAsyncOperation } from "../hooks/useErrorHandling";
-import OfflineStatusBar from "../components/OfflineStatusBar";
-import ErrorToast from "../components/ErrorToast";
-import { Event, EventProfile } from "@/api/entities";
-import { User } from "@/api/entities";
 
 export default function Home() {
   const navigate = useNavigate();
   const [activeModal, setActiveModal] = useState(null);
   const [showHowItWorks, setShowHowItWorks] = useState(false);
-  const [isCheckingProfile, setIsCheckingProfile] = useState(true);
-  const [error, setError] = useState(null);
-  
-  const { executeOperationWithOfflineFallback } = useAsyncOperation();
 
-  useEffect(() => {
-    checkForExistingProfile();
-  }, []);
-
-  const awaitUserAuthentication = async (retries = 10, delay = 500) => {
-    for (let i = 0; i < retries; i++) {
-      try {
-        const user = await User.me();
-        if (user && user.email) return user;
-      } catch (error) {
-        // This error is expected if the user isn't logged in yet.
-      }
-      await new Promise(res => setTimeout(res, delay));
-    }
-    return null;
-  };
-
-  const checkForExistingProfile = async () => {
-    try {
-      // 1. Check for an existing session in localStorage (fastest recovery)
-      const eventId = localStorage.getItem('currentEventId');
-      const sessionId = localStorage.getItem('currentSessionId');
-      
-      if (eventId && sessionId) {
-        const result = await executeOperationWithOfflineFallback(
-          async () => {
-            const events = await Event.filter({ id: eventId });
-            return events;
-          },
-          { operation: 'Check existing event session' }
-        );
-
-        if (result.success && result.result.length > 0) {
-          const event = result.result[0];
-          const nowISO = new Date().toISOString();
-          
-          if (event.starts_at && event.expires_at && nowISO >= event.starts_at && nowISO <= event.expires_at) {
-            navigate(createPageUrl("Discovery"));
-            return;
-          }
-        }
-      }
-
-      // 2. If no session, attempt robust Gmail-based recovery
-      const currentUser = await awaitUserAuthentication();
-
-      if (currentUser) {
-        // Find the single active event
-        const nowISO = new Date().toISOString();
-        const allEventsResult = await executeOperationWithOfflineFallback(
-          async () => {
-            const allEvents = await Event.list();
-            return allEvents;
-          },
-          { operation: 'Fetch active events' }
-        );
-
-        if (allEventsResult.success) {
-          const allEvents = allEventsResult.result;
-          const activeEvent = allEvents.find(e => e.starts_at && e.expires_at && nowISO >= e.starts_at && nowISO <= e.expires_at);
-
-          if (activeEvent) {
-            // Check if a profile exists for this user in the active event
-            const userEmailLower = currentUser.email.toLowerCase();
-            const profilesResult = await executeOperationWithOfflineFallback(
-              async () => {
-                const allProfiles = await EventProfile.list();
-                return allProfiles;
-              },
-              { operation: 'Fetch user profiles' }
-            );
-
-            if (profilesResult.success) {
-              const allProfiles = profilesResult.result;
-              const existingProfiles = allProfiles.filter(
-                (p) => p.event_id === activeEvent.id && p.email === userEmailLower
-              );
-
-              if (existingProfiles.length > 0) {
-                const profileToRestore = existingProfiles[0];
-                
-                // Restore session with the found profile
-                localStorage.setItem('currentEventId', activeEvent.id);
-                localStorage.setItem('currentSessionId', profileToRestore.session_id);
-                localStorage.setItem('currentEventCode', activeEvent.event_code);
-                localStorage.setItem('currentProfileId', profileToRestore.id);
-                localStorage.setItem('currentProfileColor', profileToRestore.profile_color || '#cccccc');
-                if (profileToRestore.profile_photo_url) {
-                  localStorage.setItem('currentProfilePhotoUrl', profileToRestore.profile_photo_url);
-                }
-                
-                console.log(`Restored profile for ${currentUser.email} in active event ${activeEvent.name}`);
-
-                // Navigate after a short delay to ensure localStorage is set
-                setTimeout(() => {
-                  navigate(createPageUrl("Discovery"));
-                }, 300);
-                return; // Exit after successful recovery
-              }
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Error during profile recovery check:", error);
-      setError(error);
-    }
-    
-    // If no profile is found, show the homepage
-    setIsCheckingProfile(false);
-  };
 
   const handleScanSuccess = (scannedUrl) => {
     try {
@@ -172,49 +52,8 @@ export default function Home() {
     setActiveModal('manualCodeEntry');
   };
 
-  // Show loading state while checking for existing profiles
-  if (isCheckingProfile) {
-    return (
-      <div className="min-h-screen flex flex-col justify-center items-center px-6 py-8 relative overflow-hidden bg-white dark:bg-gray-900">
-        {/* Gradient Background */}
-        <div 
-          className="absolute inset-0 z-0"
-          style={{
-            background: 'linear-gradient(135deg, rgba(251, 167, 213, 0.8) 0%, rgba(193, 135, 253, 0.8) 100%)'
-          }}
-        />
-        
-        <div className="relative z-10 text-center">
-          <div className="w-20 h-20 bg-gradient-to-r from-pink-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
-            <Heart className="w-10 h-10 text-white" />
-          </div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-pink-500 to-purple-600 bg-clip-text text-transparent mb-4">
-            Hooked
-          </h1>
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-4"></div>
-          <p className="text-white text-sm">Checking for your event profile...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen flex flex-col justify-between items-center px-6 py-8 relative overflow-hidden bg-white dark:bg-gray-900">
-      {/* Offline Status Bar */}
-      <OfflineStatusBar />
-      
-      {/* Error Toast */}
-      {error && (
-        <ErrorToast
-          error={error}
-          onRetry={() => {
-            setError(null);
-            setIsCheckingProfile(true);
-            checkForExistingProfile();
-          }}
-          onDismiss={() => setError(null)}
-        />
-      )}
       
       {/* Gradient Background */}
       <div 
