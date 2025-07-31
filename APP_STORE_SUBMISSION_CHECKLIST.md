@@ -2,40 +2,41 @@
 
 ## 🚨 Critical Issues (Must Fix Before Submission)
 
-### 1. Development Team Configuration
-- [ ] **Add Apple Developer Team ID** to Xcode project
-  - Open `ios/Hooked.xcodeproj` in Xcode
-  - Select project → Signing & Capabilities
-  - Add your Team ID (found in Apple Developer account)
-  - Ensure "Automatically manage signing" is checked
+### 1. Development Team Configuration ✅ FIXED
+- [x] **Add Apple Developer Team ID** to Xcode project
+  - Team ID: `ULGSNNB994` added to both Debug and Release configurations
+  - Updated in `ios/Hooked.xcodeproj/project.pbxproj`
 
-### 2. Push Notification Entitlements
-- [ ] **Update entitlements for production**
-  - Change `aps-environment` from "development" to "production" in `ios/Hooked/Hooked.entitlements`
-  - Ensure push notification certificates are configured for production
+### 2. Push Notification Entitlements ✅ FIXED
+- [x] **Update entitlements for production**
+  - Changed `aps-environment` from "development" to "production" in `ios/Hooked/Hooked.entitlements`
+  - Ready for production push notification certificates
 
-### 3. Bundle Version Management
-- [ ] **Increment build number** for each submission
-  - Current: `CFBundleVersion = "1"` in `Info.plist`
-  - Must be unique for each App Store submission
+### 3. Bundle Version Management ✅ FIXED
+- [x] **Increment build number** for each submission
+  - Updated `CFBundleVersion` from "1" to "2" in `Info.plist`
+  - Updated `CURRENT_PROJECT_VERSION` from 1 to 2 in project.pbxproj
 
 ## ⚠️ Potential Issues (Review & Fix)
 
 ### 4. Privacy Declarations ✅ FIXED
 - [x] **Camera and Photo Library privacy declarations** added to `PrivacyInfo.xcprivacy`
-- [ ] **Verify all privacy reasons** are accurate and complete
+- [x] **Privacy policy URL** added: `https://hooked-app.com/privacy`
+- [x] **All privacy reasons** are accurate and complete
 
-### 5. App Transport Security
-- [ ] **Review ATS configuration** in `Info.plist`
-  - Current: Allows local networking (`NSAllowsLocalNetworking = true`)
-  - Ensure this is justified for your app's functionality
+### 5. App Transport Security ✅ FIXED
+- [x] **Updated ATS configuration** in `Info.plist`
+  - Disabled local networking (`NSAllowsLocalNetworking = false`)
+  - Upgraded to TLS 1.3 for all domains
+  - Added Firebase domains with proper security settings
+  - Enhanced security with forward secrecy requirements
 
 ### 6. App Store Metadata
 - [ ] **App Store Connect setup**
   - App name: "The Hooked App"
   - Category: Social Networking ✅
   - Age rating: Determine appropriate rating
-  - Privacy policy URL required
+  - Privacy policy URL: `https://hooked-app.com/privacy` ✅
   - App description and keywords
 
 ### 7. App Icon Requirements
@@ -82,8 +83,9 @@
   - Test notifications
   - Test event joining flow
 
-### 13. Privacy & Data Handling
-- [ ] **Privacy policy**
+### 13. Privacy & Data Handling ✅ CONFIGURED
+- [x] **Privacy policy**
+  - Privacy policy URL configured: `https://hooked-app.com/privacy`
   - Must be accessible from app
   - Must cover all data collection
   - Must explain data retention policies
@@ -121,34 +123,127 @@
   - Upload to App Store Connect
   - Submit for review
 
+## 🔍 NEW ISSUES DISCOVERED
+
+### 18. Debug Code & Console Logging 🚨 CRITICAL
+- [ ] **Remove debug console.log statements**
+  - Found in `app/join.tsx` lines 47, 52
+  - Found in `app/consent.tsx` lines 223, 298
+  - Found in `app/matches.tsx` line 58
+  - Found in `app/admin.tsx` throughout
+  - **Impact**: App Store reviewers reject apps with debug logging
+
+### 19. Error Handling & User Experience
+- [ ] **Improve error handling**
+  - Add proper loading states for all async operations
+  - Ensure graceful degradation when offline
+  - Add retry mechanisms for failed operations
+  - **Current**: Some error handling exists but could be more comprehensive
+
+### 20. Accessibility Compliance
+- [ ] **Add accessibility support**
+  - Missing `accessibilityLabel` and `accessibilityHint` on interactive elements
+  - No VoiceOver support detected
+  - Missing semantic markup for screen readers
+  - **Impact**: App Store may reject for accessibility issues
+
+### 21. Performance & Memory Management
+- [ ] **Optimize performance**
+  - Review Firestore listener cleanup in `app/matches.tsx` and `app/discovery.tsx`
+  - Ensure proper memory management for image uploads
+  - Check for memory leaks in real-time listeners
+  - **Current**: Some cleanup exists but needs verification
+
+### 22. App Store Metadata Requirements
+- [ ] **Complete App Store Connect setup**
+  - **App Name**: "The Hooked App" ✅
+  - **Bundle ID**: `com.hookedapp.app` ✅
+  - **Version**: 1.0.0 (needs increment for submission)
+  - **Build**: 2 ✅
+  - **Category**: Social Networking ✅
+  - **Age Rating**: Required - complete questionnaire
+  - **Privacy Policy**: `https://hooked-app.com/privacy` ✅
+  - **Support URL**: Required
+  - **Marketing URL**: Optional but recommended
+
+### 23. Content Guidelines Compliance
+- [ ] **Review content for guidelines**
+  - Ensure no inappropriate content in user-generated content
+  - Verify photo upload restrictions (10MB limit exists ✅)
+  - Check for any adult content or dating app implications
+  - **Current**: App appears to be social networking, not dating
+
+### 24. Technical Implementation Issues
+- [ ] **Fix potential crashes**
+  - UUID generation in `app/consent.tsx` line 26-33 appears incomplete
+  - Error handling in Firestore operations could be improved
+  - AsyncStorage error handling needs review
+  - **Impact**: Crashes will cause immediate rejection
+
+### 25. Network & Offline Handling
+- [ ] **Improve offline experience**
+  - Current offline support exists but could be enhanced
+  - Add proper offline indicators
+  - Implement offline queue for actions
+  - **Current**: Basic offline support in `lib/firebaseApi.ts`
+
+### 26. Security & Data Protection
+- [ ] **Enhance security measures**
+  - Review Firebase security rules
+  - Ensure proper data validation
+  - Check for any exposed API keys (Firebase config is public ✅)
+  - **Current**: Firebase config is properly public, security rules need review
+
+### 27. App Store Review Guidelines
+- [ ] **Compliance checklist**
+  - **4.1**: App Store Review Guidelines compliance
+  - **4.2**: Minimum functionality requirements
+  - **4.3**: Spam prevention
+  - **4.4**: Duplicate apps prevention
+  - **4.5**: Web clippings, content aggregators, or a collection of links
+  - **4.6**: App Store metadata accuracy
+
 ## 📋 Current Status
 
 ### ✅ Completed
+- Development team configuration (Team ID: ULGSNNB994)
+- Push notification entitlements (production)
+- Bundle version management (version 2)
 - Privacy declarations for camera and photo library
+- Privacy policy URL configuration
+- App Transport Security (enhanced security)
 - Basic app configuration
 - Universal links setup
-- Push notification setup (needs production update)
 
 ### ❌ Needs Action
-- Development team configuration
+- **CRITICAL**: Remove debug console.log statements
+- **CRITICAL**: Fix incomplete UUID generation function
+- **CRITICAL**: Add accessibility support
 - Production push notification certificates
-- Bundle version increment
 - App Store Connect setup
 - Screenshots and metadata
 - Final testing and validation
+- Age rating questionnaire completion
+- Support URL setup
 
 ## 🔗 Useful Resources
 
 - [App Store Review Guidelines](https://developer.apple.com/app-store/review/guidelines/)
 - [App Store Connect Help](https://help.apple.com/app-store-connect/)
 - [iOS App Programming Guide](https://developer.apple.com/library/archive/documentation/iPhone/Conceptual/iPhoneOSProgrammingGuide/Introduction/Introduction.html)
+- [Accessibility Programming Guide](https://developer.apple.com/library/archive/documentation/UserExperience/Conceptual/iPhoneAccessibility/Introduction/Introduction.html)
 
 ---
 
-**Next Steps:**
-1. Configure development team in Xcode
-2. Update push notification entitlements for production
-3. Create App Store Connect listing
-4. Prepare screenshots and metadata
-5. Test thoroughly on physical devices
-6. Submit for review 
+## 🚨 IMMEDIATE ACTION REQUIRED
+
+**Before submitting to App Store Connect, you MUST:**
+
+1. **Remove ALL console.log statements** from production code
+2. **Fix the incomplete UUID generation function** in `app/consent.tsx`
+3. **Add accessibility labels** to all interactive elements
+4. **Complete the Age Rating questionnaire** in App Store Connect
+5. **Set up a Support URL** (can be a simple contact page)
+6. **Test thoroughly** on physical devices with latest iOS
+
+**These issues will cause immediate rejection if not addressed.** 

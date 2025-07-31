@@ -53,27 +53,16 @@ export default function Consent() {
   useEffect(() => {
     const fetchEvent = async () => {
       const eventId = await AsyncStorage.getItem('currentEventId');
-      console.log('🔍 Fetching event with ID:', eventId);
       if (!eventId) {
-        console.log('❌ No event ID found, redirecting to home');
         router.replace('/home');
         return;
       }
       try {
         const events = await Event.filter({ id: eventId });
-        console.log('🔍 Found events:', events.length, 'events');
         if (events.length > 0) {
           const foundEvent = events[0];
-          console.log('🔍 Event details:', {
-            id: foundEvent.id,
-            name: foundEvent.name,
-            starts_at: foundEvent.starts_at,
-            expires_at: foundEvent.expires_at,
-            event_code: foundEvent.event_code
-          });
           setEvent(foundEvent);
         } else {
-          console.log('❌ No events found, redirecting to home');
           router.replace('/home');
         }
       } catch (err) {
@@ -191,8 +180,7 @@ export default function Consent() {
       return;
     }
 
-    // Debug logging for image properties
-    console.log('Processing image asset:', {
+    // Validate image properties('Processing image asset:', {
       uri: asset.uri,
       width: asset.width,
       height: asset.height,
@@ -244,10 +232,7 @@ export default function Consent() {
       // Ensure the color is a valid 6-digit hex
       const validColor = profileColor.length === 7 ? profileColor : '#000000';
       
-      console.log('🔍 Generated session ID:', sessionId);
-      console.log('🔍 Generated profile color:', validColor);
-      console.log('🔍 Event ID:', event.id);
-      console.log('🔍 Event expires_at:', event.expires_at);
+
 
       // Save profile data locally if "remember profile" is checked
       if (rememberProfile) {
@@ -279,7 +264,7 @@ export default function Consent() {
         expires_at: event.expires_at,
       };
       
-      console.log('🔍 Creating profile with data:', JSON.stringify(profileData, null, 2));
+
       
       await EventProfile.create(profileData);
 

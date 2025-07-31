@@ -43,7 +43,7 @@
       </dict>
     </array>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>2</string>
     <key>LSMinimumSystemVersion</key>
     <string>15.0</string>
     <key>MinimumOSVersion</key>
@@ -55,7 +55,7 @@
       <key>NSAllowsArbitraryLoads</key>
       <false/>
       <key>NSAllowsLocalNetworking</key>
-      <true/>
+      <false/>
       <key>NSExceptionDomains</key>
       <dict>
         <key>hooked-app.com</key>
@@ -63,7 +63,27 @@
           <key>NSExceptionAllowsInsecureHTTPLoads</key>
           <false/>
           <key>NSExceptionMinimumTLSVersion</key>
-          <string>TLSv1.2</string>
+          <string>TLSv1.3</string>
+          <key>NSExceptionRequiresForwardSecrecy</key>
+          <true/>
+        </dict>
+        <key>firebaseapp.com</key>
+        <dict>
+          <key>NSExceptionAllowsInsecureHTTPLoads</key>
+          <false/>
+          <key>NSExceptionMinimumTLSVersion</key>
+          <string>TLSv1.3</string>
+          <key>NSExceptionRequiresForwardSecrecy</key>
+          <true/>
+        </dict>
+        <key>firebasestorage.app</key>
+        <dict>
+          <key>NSExceptionAllowsInsecureHTTPLoads</key>
+          <false/>
+          <key>NSExceptionMinimumTLSVersion</key>
+          <string>TLSv1.3</string>
+          <key>NSExceptionRequiresForwardSecrecy</key>
+          <true/>
         </dict>
       </dict>
     </dict>

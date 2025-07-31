@@ -85,5 +85,7 @@
 	</array>
 	<key>NSPrivacyTracking</key>
 	<false/>
+	<key>NSPrivacyPolicyURL</key>
+	<string>https://hooked-app.com/privacy</string>
 </dict>
 </plist>
