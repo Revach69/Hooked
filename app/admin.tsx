@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { BarChart3, Users, Heart, MessageCircle, Plus, LogOut, AlertTriangle, Calendar, MapPin, Home, ChevronDown, ChevronUp, QrCode, Edit, Trash2, Download, Flag } from 'lucide-react-native';
-import { Event, EventProfile, Like, Message, User } from '../lib/firebaseApi';
+import { EventAPI, EventProfileAPI, LikeAPI, MessageAPI, AuthAPI, type Event } from '../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import QRCodeGenerator from '../lib/QRCodeGenerator';
 import { AdminUtils } from '../lib/adminUtils';
@@ -48,7 +48,7 @@ export default function Admin() {
 
   const initializeSession = async () => {
     // Check if user is authenticated with Firebase
-    const currentUser = User.getCurrentUser();
+    const currentUser = AuthAPI.getCurrentUser();
     
     if (!currentUser) {
       // No authenticated user, redirect to home
@@ -61,7 +61,7 @@ export default function Admin() {
     
     if (!isAdmin) {
       // User is not admin, sign out and redirect
-      await User.signOut();
+      await AuthAPI.signOut();
       await AdminUtils.clearAdminSession();
       router.replace('/home');
       return;
@@ -78,10 +78,10 @@ export default function Admin() {
 
   const loadEvents = async () => {
     try {
-      const allEvents = await Event.filter({});
+      const allEvents = await EventAPI.filter({});
       setEvents(allEvents);
     } catch (error) {
-      console.error("Error loading events:", error);
+      // Handle error silently
     }
   };
 
@@ -89,9 +89,9 @@ export default function Admin() {
     try {
       // Load overall stats across all events
       const [allProfiles, allLikes, allMessages] = await Promise.all([
-        EventProfile.filter({}),
-        Like.filter({}),
-        Message.filter({})
+        EventProfileAPI.filter({}),
+        LikeAPI.filter({}),
+        MessageAPI.filter({})
       ]);
 
       const mutualLikes = allLikes.filter((like: any) => like.is_mutual);
@@ -124,7 +124,7 @@ export default function Admin() {
         totalMessages: allMessages.length,
       });
     } catch (error) {
-      console.error("Error loading admin stats:", error);
+      // Handle error silently
     }
   };
 
@@ -133,7 +133,7 @@ export default function Admin() {
     router.push('/admin/create-event');
   };
 
-  const handleEventPress = (event: Event) => {
+  const handleEventPress = (event: EventAPI) => {
     // Navigate to specific event details page
     router.push({
       pathname: '/admin/event-details',
@@ -141,7 +141,7 @@ export default function Admin() {
     });
   };
 
-  const handleQRCodePress = (event: Event) => {
+  const handleQRCodePress = (event: EventAPI) => {
     setSelectedEventForQR(event);
     setShowQRCodeModal(true);
   };
@@ -151,7 +151,7 @@ export default function Admin() {
     setSelectedEventForQR(null);
   };
 
-  const handleReportsPress = (event: Event) => {
+  const handleReportsPress = (event: EventAPI) => {
     setSelectedEventForReports(event);
     setShowReportsModal(true);
   };
@@ -192,7 +192,7 @@ export default function Admin() {
           onPress: async () => {
             try {
               // Sign out from Firebase
-              await User.signOut();
+              await AuthAPI.signOut();
               
               // Clear all admin-related storage
               await AsyncStorage.multiRemove([
@@ -211,7 +211,7 @@ export default function Admin() {
               
               router.replace('/home');
             } catch (error) {
-              console.error('Error during logout:', error);
+              // Handle error silently
               Alert.alert('Error', 'Failed to logout. Please try again.');
             }
           }
@@ -229,7 +229,7 @@ export default function Admin() {
     });
   };
 
-  const getEventStatus = (event: Event) => {
+  const getEventStatus = (event: EventAPI) => {
     const now = new Date();
     const startDate = new Date(event.starts_at);
     const endDate = new Date(event.expires_at);
@@ -242,9 +242,9 @@ export default function Admin() {
   const categorizeEvents = () => {
     const now = new Date();
     const categorized = {
-      active: [] as Event[],
-      future: [] as Event[],
-      past: [] as Event[]
+      active: [] as EventAPI[],
+      future: [] as EventAPI[],
+      past: [] as EventAPI[]
     };
 
     events.forEach(event => {
@@ -263,7 +263,7 @@ export default function Admin() {
     return categorized;
   };
 
-  const renderEventCard = (event: Event) => {
+  const renderEventCard = (event: EventAPI) => {
     const status = getEventStatus(event);
     const isExpanded = expandedEvents.has(event.id);
     const joinLink = `https://www.hooked-app.com/join-instant?code=${event.event_code}`;
@@ -375,7 +375,7 @@ export default function Admin() {
     );
   };
 
-  const renderEventCategory = (title: string, events: Event[], color: string) => {
+  const renderEventCategory = (title: string, events: EventAPI[], color: string) => {
     if (events.length === 0) return null;
 
     return (

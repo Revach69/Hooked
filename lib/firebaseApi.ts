@@ -33,138 +33,28 @@ import {
 } from 'firebase/storage';
 import { notifyNewMessage } from './messageNotificationHelper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import NetInfo from '@react-native-community/netinfo';
-import { logFirebaseError } from './errorMonitoring';
-import { Platform } from 'react-native';
-import { withErrorHandling } from './mobileErrorHandler';
 
-// Enhanced retry operation with better error handling and recovery
-async function retryOperation<T>(
+// Simple retry function for basic operations
+async function simpleRetry<T>(
   operation: () => Promise<T>,
-  maxRetries: number = 3,
-  delay: number = 1000,
-  operationName: string = 'Firebase operation'
+  maxRetries: number = 2,
+  delay: number = 1000
 ): Promise<T> {
-  return withErrorHandling(operation, {
-    maxRetries,
-    baseDelay: delay,
-    operationName
-  });
-}
-
-// Offline queue for operations that fail due to network issues
-class OfflineQueue {
-  private queue: Array<{
-    id: string;
-    operation: () => Promise<any>;
-    timestamp: number;
-    retries: number;
-  }> = [];
-  private isProcessing = false;
-  private readonly maxRetries = 3;
-  private readonly maxQueueSize = 100;
-
-  async add(operation: () => Promise<any>): Promise<void> {
-    if (this.queue.length >= this.maxQueueSize) {
-      console.warn('⚠️ Offline queue is full, dropping oldest operation');
-      this.queue.shift();
-    }
-
-    const queueItem = {
-      id: Math.random().toString(36).substr(2, 9),
-      operation,
-      timestamp: Date.now(),
-      retries: 0
-    };
-
-    this.queue.push(queueItem);
-    await this.saveQueueToStorage();
-    
-    // Try to process queue if network is available
-    this.processQueue();
-  }
-
-  private async saveQueueToStorage(): Promise<void> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      await AsyncStorage.setItem('firebase_offline_queue', JSON.stringify(this.queue));
-    } catch (error) {
-      console.error('❌ Error saving offline queue to storage:', error);
-    }
-  }
-
-  private async loadQueueFromStorage(): Promise<void> {
-    try {
-      const savedQueue = await AsyncStorage.getItem('firebase_offline_queue');
-      if (savedQueue) {
-        this.queue = JSON.parse(savedQueue);
+      return await operation();
+    } catch (error: any) {
+      console.warn(`⚠️ Operation failed (attempt ${attempt}/${maxRetries}):`, error.message);
+      
+      if (attempt === maxRetries) {
+        throw error;
       }
-    } catch (error) {
-      console.error('❌ Error loading offline queue from storage:', error);
+      
+      // Wait before retrying
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
-
-  async processQueue(): Promise<void> {
-    if (this.isProcessing || this.queue.length === 0) return;
-
-    const netInfo = await NetInfo.fetch();
-    if (!netInfo.isConnected) {
-      return;
-    }
-
-    this.isProcessing = true;
-
-    const itemsToProcess = [...this.queue];
-    this.queue = [];
-
-    for (const item of itemsToProcess) {
-      try {
-        await item.operation();
-      } catch (error) {
-        item.retries++;
-        if (item.retries < this.maxRetries) {
-          this.queue.push(item);
-        } else {
-          console.error(`❌ Failed to process offline operation ${item.id} after ${this.maxRetries} attempts`);
-        }
-      }
-    }
-
-    await this.saveQueueToStorage();
-    this.isProcessing = false;
-  }
-
-  async initialize(): Promise<void> {
-    await this.loadQueueFromStorage();
-    
-    // Set up network listener to process queue when connectivity is restored
-    NetInfo.addEventListener(state => {
-      if (state.isConnected) {
-        setTimeout(() => this.processQueue(), 1000);
-      }
-    });
-  }
-}
-
-// Initialize offline queue
-const offlineQueue = new OfflineQueue();
-offlineQueue.initialize();
-
-// Enhanced operation wrapper with offline support
-async function executeWithOfflineSupport<T>(
-  operation: () => Promise<T>,
-  operationName: string = 'Firebase operation',
-  enableOfflineQueue: boolean = true
-): Promise<T> {
-  try {
-    return await retryOperation(operation, 3, 1000, operationName);
-  } catch (error: any) {
-    // If it's a network error and offline queue is enabled, queue the operation
-    if (enableOfflineQueue && (!error.code || error.code === 'unavailable' || error.message === 'No network connectivity')) {
-      await offlineQueue.add(operation);
-      throw new Error(`Operation queued for offline processing: ${operationName}`);
-    }
-    throw error;
-  }
+  throw new Error('Operation failed after all retries');
 }
 
 // Types
@@ -174,9 +64,9 @@ export interface Event {
   description?: string;
   starts_at: string;
   expires_at: string;
-  event_code: string; // Single field for event code
-  location?: string; // Added for your event
-  organizer_email?: string; // Added for your event
+  event_code: string;
+  location?: string;
+  organizer_email?: string;
   created_at: string;
   updated_at: string;
 }
@@ -188,7 +78,7 @@ export interface EventProfile {
   first_name: string;
   age: number;
   gender_identity: string;
-  interested_in?: string; // Gender preference: 'men', 'women', 'everyone'
+  interested_in?: string;
   profile_color: string;
   profile_photo_url?: string;
   is_visible: boolean;
@@ -204,11 +94,11 @@ export interface Like {
   event_id: string;
   from_profile_id: string;
   to_profile_id: string;
-  liker_session_id: string; // For backward compatibility
-  liked_session_id: string; // For backward compatibility
-  is_mutual: boolean; // For backward compatibility
-  liker_notified_of_match?: boolean; // For backward compatibility
-  liked_notified_of_match?: boolean; // For backward compatibility
+  liker_session_id: string;
+  liked_session_id: string;
+  is_mutual: boolean;
+  liker_notified_of_match?: boolean;
+  liked_notified_of_match?: boolean;
   created_at: string;
 }
 
@@ -255,7 +145,7 @@ export interface Report {
 // Event API
 export const EventAPI = {
   async create(data: Omit<Event, 'id' | 'created_at' | 'updated_at'>): Promise<Event> {
-    return executeWithOfflineSupport(async () => {
+    return simpleRetry(async () => {
       const docRef = await addDoc(collection(db, 'events'), {
         ...data,
         created_at: serverTimestamp(),
@@ -268,49 +158,30 @@ export const EventAPI = {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
-    }, 'Create Event');
+    });
   },
 
   async filter(filters: Partial<Event> = {}): Promise<Event[]> {
-    try {
-      return await executeWithOfflineSupport(async () => {
-        let q: any = collection(db, 'events');
-        
-        if (filters.event_code) {
-          q = query(q, where('event_code', '==', filters.event_code));
-        }
-        if (filters.id) {
-          q = query(q, where('__name__', '==', filters.id));
-        }
-        
-        const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...(doc.data() as any)
-        })) as Event[];
-      }, 'Filter Events');
-    } catch (error: any) {
-      // Enhanced error suppression with better logging
-      if (error.message?.includes('INTERNAL ASSERTION FAILED') || 
-          error.message?.includes('Target ID already exists') ||
-          error.code === 'unavailable') {
-        console.warn('⚠️ Firestore internal error suppressed:', {
-          error: error.message,
-          code: error.code,
-          operation: 'Filter Events',
-          timestamp: new Date().toISOString(),
-          isDev: __DEV__,
-          platform: Platform.OS
-        });
-        return []; // Return empty array instead of throwing
+    return simpleRetry(async () => {
+      let q: any = collection(db, 'events');
+      
+      if (filters.event_code) {
+        q = query(q, where('event_code', '==', filters.event_code));
       }
-      console.error('Error filtering events:', error);
-      throw error;
-    }
+      if (filters.id) {
+        q = query(q, where('__name__', '==', filters.id));
+      }
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...(doc.data() as any)
+      })) as Event[];
+    });
   },
 
   async get(id: string): Promise<Event | null> {
-    return executeWithOfflineSupport(async () => {
+    return simpleRetry(async () => {
       const docRef = doc(db, 'events', id);
       const docSnap = await getDoc(docRef);
       
@@ -318,29 +189,28 @@ export const EventAPI = {
         return { id: docSnap.id, ...docSnap.data() } as Event;
       }
       return null;
-    }, 'Get Event');
+    });
   },
 
   async update(id: string, data: Partial<Event>): Promise<void> {
-    return executeWithOfflineSupport(async () => {
-      await updateDoc(doc(db, 'events', id), {
-        ...data,
-        updated_at: serverTimestamp()
-      });
-    }, 'Update Event');
+    return simpleRetry(async () => {
+      const docRef = doc(db, 'events', id);
+      await updateDoc(docRef, { ...data, updated_at: serverTimestamp() });
+    });
   },
 
   async delete(id: string): Promise<void> {
-    return executeWithOfflineSupport(async () => {
-      await deleteDoc(doc(db, 'events', id));
-    }, 'Delete Event');
+    return simpleRetry(async () => {
+      const docRef = doc(db, 'events', id);
+      await deleteDoc(docRef);
+    });
   }
 };
 
-// EventProfile API
+// Event Profile API
 export const EventProfileAPI = {
   async create(data: Omit<EventProfile, 'id' | 'created_at' | 'updated_at'>): Promise<EventProfile> {
-    return executeWithOfflineSupport(async () => {
+    return simpleRetry(async () => {
       const docRef = await addDoc(collection(db, 'event_profiles'), {
         ...data,
         created_at: serverTimestamp(),
@@ -353,52 +223,33 @@ export const EventProfileAPI = {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
-    }, 'Create Event Profile');
+    });
   },
 
   async filter(filters: Partial<EventProfile> = {}): Promise<EventProfile[]> {
-    try {
-      return await executeWithOfflineSupport(async () => {
-        let q: any = collection(db, 'event_profiles');
-        
-        if (filters.event_id) {
-          q = query(q, where('event_id', '==', filters.event_id));
-        }
-        if (filters.session_id) {
-          q = query(q, where('session_id', '==', filters.session_id));
-        }
-        if (filters.is_visible !== undefined) {
-          q = query(q, where('is_visible', '==', filters.is_visible));
-        }
-        
-        const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...(doc.data() as any)
-        })) as EventProfile[];
-      }, 'Filter Event Profiles');
-    } catch (error: any) {
-      // Enhanced error suppression with better logging
-      if (error.message?.includes('INTERNAL ASSERTION FAILED') || 
-          error.message?.includes('Target ID already exists') ||
-          error.code === 'unavailable') {
-        console.warn('⚠️ Firestore internal error suppressed:', {
-          error: error.message,
-          code: error.code,
-          operation: 'Filter Event Profiles',
-          timestamp: new Date().toISOString(),
-          isDev: __DEV__,
-          platform: Platform.OS
-        });
-        return []; // Return empty array instead of throwing
+    return simpleRetry(async () => {
+      let q: any = collection(db, 'event_profiles');
+      
+      if (filters.event_id) {
+        q = query(q, where('event_id', '==', filters.event_id));
       }
-      console.error('Error filtering event profiles:', error);
-      throw error;
-    }
+      if (filters.session_id) {
+        q = query(q, where('session_id', '==', filters.session_id));
+      }
+      if (filters.is_visible !== undefined) {
+        q = query(q, where('is_visible', '==', filters.is_visible));
+      }
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...(doc.data() as any)
+      })) as EventProfile[];
+    });
   },
 
   async get(id: string): Promise<EventProfile | null> {
-    return executeWithOfflineSupport(async () => {
+    return simpleRetry(async () => {
       const docRef = doc(db, 'event_profiles', id);
       const docSnap = await getDoc(docRef);
       
@@ -406,38 +257,38 @@ export const EventProfileAPI = {
         return { id: docSnap.id, ...docSnap.data() } as EventProfile;
       }
       return null;
-    }, 'Get Event Profile');
+    });
   },
 
   async update(id: string, data: Partial<EventProfile>): Promise<void> {
-    return executeWithOfflineSupport(async () => {
-      await updateDoc(doc(db, 'event_profiles', id), {
-        ...data,
-        updated_at: serverTimestamp()
-      });
-    }, 'Update Event Profile');
+    return simpleRetry(async () => {
+      const docRef = doc(db, 'event_profiles', id);
+      await updateDoc(docRef, { ...data, updated_at: serverTimestamp() });
+    });
   },
 
   async delete(id: string): Promise<void> {
-    return executeWithOfflineSupport(async () => {
-      await deleteDoc(doc(db, 'event_profiles', id));
-    }, 'Delete Event Profile');
+    return simpleRetry(async () => {
+      const docRef = doc(db, 'event_profiles', id);
+      await deleteDoc(docRef);
+    });
   },
 
   async toggleVisibility(id: string, isVisible: boolean): Promise<void> {
-    return executeWithOfflineSupport(async () => {
-      await updateDoc(doc(db, 'event_profiles', id), {
-        is_visible: isVisible,
-        updated_at: serverTimestamp()
+    return simpleRetry(async () => {
+      const docRef = doc(db, 'event_profiles', id);
+      await updateDoc(docRef, { 
+        is_visible: isVisible, 
+        updated_at: serverTimestamp() 
       });
-    }, 'Toggle Profile Visibility');
+    });
   }
 };
 
 // Like API
 export const LikeAPI = {
   async create(data: Omit<Like, 'id' | 'created_at'>): Promise<Like> {
-    return executeWithOfflineSupport(async () => {
+    return simpleRetry(async () => {
       const docRef = await addDoc(collection(db, 'likes'), {
         ...data,
         created_at: serverTimestamp()
@@ -448,52 +299,39 @@ export const LikeAPI = {
         ...data,
         created_at: new Date().toISOString()
       };
-    }, 'Create Like');
+    });
   },
 
   async filter(filters: Partial<Like> = {}): Promise<Like[]> {
-    try {
-      return await executeWithOfflineSupport(async () => {
-        let q: any = collection(db, 'likes');
-        
-        if (filters.event_id) {
-          q = query(q, where('event_id', '==', filters.event_id));
-        }
-        if (filters.from_profile_id) {
-          q = query(q, where('from_profile_id', '==', filters.from_profile_id));
-        }
-        if (filters.to_profile_id) {
-          q = query(q, where('to_profile_id', '==', filters.to_profile_id));
-        }
-        
-        const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...(doc.data() as any)
-        })) as Like[];
-      }, 'Filter Likes');
-    } catch (error: any) {
-      // Enhanced error suppression with better logging
-      if (error.message?.includes('INTERNAL ASSERTION FAILED') || 
-          error.message?.includes('Target ID already exists') ||
-          error.code === 'unavailable') {
-        console.warn('⚠️ Firestore internal error suppressed:', {
-          error: error.message,
-          code: error.code,
-          operation: 'Filter Likes',
-          timestamp: new Date().toISOString(),
-          isDev: __DEV__,
-          platform: Platform.OS
-        });
-        return []; // Return empty array instead of throwing
+    return simpleRetry(async () => {
+      let q: any = collection(db, 'likes');
+      
+      if (filters.event_id) {
+        q = query(q, where('event_id', '==', filters.event_id));
       }
-      console.error('Error filtering likes:', error);
-      throw error;
-    }
+      if (filters.from_profile_id) {
+        q = query(q, where('from_profile_id', '==', filters.from_profile_id));
+      }
+      if (filters.to_profile_id) {
+        q = query(q, where('to_profile_id', '==', filters.to_profile_id));
+      }
+      if (filters.liker_session_id) {
+        q = query(q, where('liker_session_id', '==', filters.liker_session_id));
+      }
+      if (filters.liked_session_id) {
+        q = query(q, where('liked_session_id', '==', filters.liked_session_id));
+      }
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...(doc.data() as any)
+      })) as Like[];
+    });
   },
 
   async get(id: string): Promise<Like | null> {
-    return executeWithOfflineSupport(async () => {
+    return simpleRetry(async () => {
       const docRef = doc(db, 'likes', id);
       const docSnap = await getDoc(docRef);
       
@@ -501,93 +339,84 @@ export const LikeAPI = {
         return { id: docSnap.id, ...docSnap.data() } as Like;
       }
       return null;
-    }, 'Get Like');
+    });
   },
 
   async update(id: string, data: Partial<Like>): Promise<void> {
-    return executeWithOfflineSupport(async () => {
-      await updateDoc(doc(db, 'likes', id), data);
-    }, 'Update Like');
+    return simpleRetry(async () => {
+      const docRef = doc(db, 'likes', id);
+      await updateDoc(docRef, data);
+    });
   },
 
   async delete(id: string): Promise<void> {
-    return executeWithOfflineSupport(async () => {
-      await deleteDoc(doc(db, 'likes', id));
-    }, 'Delete Like');
+    return simpleRetry(async () => {
+      const docRef = doc(db, 'likes', id);
+      await deleteDoc(docRef);
+    });
   }
 };
 
 // Message API
 export const MessageAPI = {
   async create(data: Omit<Message, 'id' | 'created_at'>): Promise<Message> {
-    return executeWithOfflineSupport(async () => {
+    return simpleRetry(async () => {
       const docRef = await addDoc(collection(db, 'messages'), {
         ...data,
         created_at: serverTimestamp()
       });
+      
+      // Notify recipient of new message
+      try {
+        await notifyNewMessage(data.to_profile_id, data.content);
+      } catch (error) {
+        console.warn('Failed to send notification:', error);
+      }
       
       return {
         id: docRef.id,
         ...data,
         created_at: new Date().toISOString()
       };
-    }, 'Create Message');
+    });
   },
 
   async filter(filters: Partial<Message> = {}): Promise<Message[]> {
-    try {
-      return await executeWithOfflineSupport(async () => {
-        let q: any = collection(db, 'messages');
-        
-        if (filters.event_id) {
-          q = query(q, where('event_id', '==', filters.event_id));
-        }
-        if (filters.from_profile_id) {
-          q = query(q, where('from_profile_id', '==', filters.from_profile_id));
-        }
-        if (filters.to_profile_id) {
-          q = query(q, where('to_profile_id', '==', filters.to_profile_id));
-        }
-        
-        q = query(q, orderBy('created_at', 'asc'));
-        
-        const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...(doc.data() as any)
-        })) as Message[];
-      }, 'Filter Messages');
-    } catch (error: any) {
-      // Enhanced error suppression with better logging
-      if (error.message?.includes('INTERNAL ASSERTION FAILED') || 
-          error.message?.includes('Target ID already exists') ||
-          error.code === 'unavailable') {
-        console.warn('⚠️ Firestore internal error suppressed:', {
-          error: error.message,
-          code: error.code,
-          operation: 'Filter Messages',
-          timestamp: new Date().toISOString(),
-          isDev: __DEV__,
-          platform: Platform.OS
-        });
-        return []; // Return empty array instead of throwing
+    return simpleRetry(async () => {
+      let q: any = collection(db, 'messages');
+      
+      if (filters.event_id) {
+        q = query(q, where('event_id', '==', filters.event_id));
       }
-      console.error('Error filtering messages:', error);
-      throw error;
-    }
+      if (filters.from_profile_id) {
+        q = query(q, where('from_profile_id', '==', filters.from_profile_id));
+      }
+      if (filters.to_profile_id) {
+        q = query(q, where('to_profile_id', '==', filters.to_profile_id));
+      }
+      
+      q = query(q, orderBy('created_at', 'asc'));
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...(doc.data() as any)
+      })) as Message[];
+    });
   },
 
   async delete(id: string): Promise<void> {
-    return executeWithOfflineSupport(async () => {
-      await deleteDoc(doc(db, 'messages', id));
-    }, 'Delete Message');
+    return simpleRetry(async () => {
+      const docRef = doc(db, 'messages', id);
+      await deleteDoc(docRef);
+    });
   }
 };
 
-// ContactShare API
+// Contact Share API
 export const ContactShareAPI = {
   async create(data: Omit<ContactShare, 'id' | 'created_at'>): Promise<ContactShare> {
-    return executeWithOfflineSupport(async () => {
+    return simpleRetry(async () => {
       const docRef = await addDoc(collection(db, 'contact_shares'), {
         ...data,
         created_at: serverTimestamp()
@@ -598,14 +427,14 @@ export const ContactShareAPI = {
         ...data,
         created_at: new Date().toISOString()
       };
-    }, 'Create Contact Share');
+    });
   }
 };
 
-// EventFeedback API
+// Event Feedback API
 export const EventFeedbackAPI = {
   async create(data: Omit<EventFeedback, 'id' | 'created_at'>): Promise<EventFeedback> {
-    return executeWithOfflineSupport(async () => {
+    return simpleRetry(async () => {
       const docRef = await addDoc(collection(db, 'event_feedback'), {
         ...data,
         created_at: serverTimestamp()
@@ -616,74 +445,48 @@ export const EventFeedbackAPI = {
         ...data,
         created_at: new Date().toISOString()
       };
-    }, 'Create Event Feedback');
+    });
   }
 };
 
 // Report API
 export const ReportAPI = {
   async create(data: Omit<Report, 'id' | 'created_at'>): Promise<Report> {
-    return executeWithOfflineSupport(async () => {
+    return simpleRetry(async () => {
       const docRef = await addDoc(collection(db, 'reports'), {
         ...data,
-        status: 'pending',
         created_at: serverTimestamp()
       });
       
       return {
         id: docRef.id,
         ...data,
-        status: 'pending',
         created_at: new Date().toISOString()
       };
-    }, 'Create Report');
+    });
   },
 
   async filter(filters: Partial<Report> = {}): Promise<Report[]> {
-    try {
-      return await executeWithOfflineSupport(async () => {
-        let q: any = collection(db, 'reports');
-        
-        if (filters.event_id) {
-          q = query(q, where('event_id', '==', filters.event_id));
-        }
-        if (filters.reporter_session_id) {
-          q = query(q, where('reporter_session_id', '==', filters.reporter_session_id));
-        }
-        if (filters.reported_session_id) {
-          q = query(q, where('reported_session_id', '==', filters.reported_session_id));
-        }
-        if (filters.status) {
-          q = query(q, where('status', '==', filters.status));
-        }
-        
-        const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...(doc.data() as any)
-        })) as Report[];
-      }, 'Filter Reports');
-    } catch (error: any) {
-      if (error.message?.includes('INTERNAL ASSERTION FAILED') || 
-          error.message?.includes('Target ID already exists') ||
-          error.code === 'unavailable') {
-        console.warn('⚠️ Firestore internal error suppressed:', {
-          error: error.message,
-          code: error.code,
-          operation: 'Filter Reports',
-          timestamp: new Date().toISOString(),
-          isDev: __DEV__,
-          platform: Platform.OS
-        });
-        return [];
+    return simpleRetry(async () => {
+      let q: any = collection(db, 'reports');
+      
+      if (filters.event_id) {
+        q = query(q, where('event_id', '==', filters.event_id));
       }
-      console.error('Error filtering reports:', error);
-      throw error;
-    }
+      if (filters.status) {
+        q = query(q, where('status', '==', filters.status));
+      }
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...(doc.data() as any)
+      })) as Report[];
+    });
   },
 
   async get(id: string): Promise<Report | null> {
-    return executeWithOfflineSupport(async () => {
+    return simpleRetry(async () => {
       const docRef = doc(db, 'reports', id);
       const docSnap = await getDoc(docRef);
       
@@ -691,127 +494,86 @@ export const ReportAPI = {
         return { id: docSnap.id, ...docSnap.data() } as Report;
       }
       return null;
-    }, 'Get Report');
+    });
   },
 
   async update(id: string, data: Partial<Report>): Promise<void> {
-    return executeWithOfflineSupport(async () => {
-      await updateDoc(doc(db, 'reports', id), {
-        ...data,
-        updated_at: serverTimestamp()
-      });
-    }, 'Update Report');
+    return simpleRetry(async () => {
+      const docRef = doc(db, 'reports', id);
+      await updateDoc(docRef, { ...data, updated_at: serverTimestamp() });
+    });
   },
 
   async delete(id: string): Promise<void> {
-    return executeWithOfflineSupport(async () => {
-      await deleteDoc(doc(db, 'reports', id));
-    }, 'Delete Report');
+    return simpleRetry(async () => {
+      const docRef = doc(db, 'reports', id);
+      await deleteDoc(docRef);
+    });
   }
 };
 
-// User API
-export const User = {
+// Auth API
+export const AuthAPI = {
   async signUp(email: string, password: string): Promise<FirebaseUser> {
-    return executeWithOfflineSupport(async () => {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      return userCredential.user;
-    }, 'User Sign Up');
+    return simpleRetry(async () => {
+      return await createUserWithEmailAndPassword(auth, email, password);
+    });
   },
 
   async signIn(email: string, password: string): Promise<FirebaseUser> {
-    return executeWithOfflineSupport(async () => {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      return userCredential.user;
-    }, 'User Sign In');
+    return simpleRetry(async () => {
+      return await signInWithEmailAndPassword(auth, email, password);
+    });
   },
 
   async signOut(): Promise<void> {
-    return executeWithOfflineSupport(async () => {
+    return simpleRetry(async () => {
       await signOut(auth);
-    }, 'User Sign Out');
+    });
   },
 
   async updateProfile(data: { displayName?: string; photoURL?: string }): Promise<void> {
-    return executeWithOfflineSupport(async () => {
-      const user = auth.currentUser;
-      if (!user) throw new Error('No user signed in');
-      await updateProfile(user, data);
-    }, 'Update User Profile');
+    return simpleRetry(async () => {
+      if (auth.currentUser) {
+        await updateProfile(auth.currentUser, data);
+      }
+    });
   },
 
   getCurrentUser(): FirebaseUser | null {
     return auth.currentUser;
-  },
-
-  async uploadFile(file: File | { uri: string; name: string; type: string }): Promise<{ file_url: string }> {
-    return executeWithOfflineSupport(async () => {
-      const fileName = file.name || `upload_${Date.now()}.jpg`;
-      const storageRef = ref(storage, `uploads/${Date.now()}_${fileName}`);
-      
-      if ('uri' in file) {
-        // React Native file object - use fetch directly with the URI
-        const response = await fetch(file.uri);
-        const blob = await response.blob();
-        
-        // Upload the blob directly to Firebase Storage
-        await uploadBytes(storageRef, blob, { contentType: file.type || 'image/jpeg' });
-      } else {
-        // Web File object
-        await uploadBytes(storageRef, file, { contentType: file.type || 'image/jpeg' });
-      }
-      
-      const downloadURL = await getDownloadURL(storageRef);
-      return { file_url: downloadURL };
-    }, 'Upload File');
-  },
-
-  // Admin functions - using Firestore instead of Cloud Functions for React Native compatibility
-  async setAdminClaim(targetUserId: string, isAdmin: boolean): Promise<void> {
-    return executeWithOfflineSupport(async () => {
-      // For React Native, we'll use a different approach
-      // This could be replaced with a REST API call or handled server-side
-      console.warn('setAdminClaim is not available in React Native - use web admin instead');
-      throw new Error('Admin claim setting is not available in React Native app');
-    }, 'Set Admin Claim');
-  },
-
-  async verifyAdminStatus(): Promise<boolean> {
-    return executeWithOfflineSupport(async () => {
-      // Check admin status using Firestore instead of Cloud Functions
-      const user = auth.currentUser;
-      if (!user) {
-        return false;
-      }
-      
-      try {
-        const adminDoc = await getDoc(doc(db, 'admins', user.uid));
-        return adminDoc.exists();
-      } catch (error) {
-        console.error('Error verifying admin status:', error);
-        return false;
-      }
-    }, 'Verify Admin Status');
-  },
-
-  async forceTokenRefresh(): Promise<void> {
-    return executeWithOfflineSupport(async () => {
-      const user = auth.currentUser;
-      if (!user) throw new Error('No user signed in');
-      await user.getIdToken(true); // Force refresh the token
-    }, 'Force Token Refresh');
   }
 };
 
-// Export all APIs
-export const Event = EventAPI;
-export const EventProfile = EventProfileAPI;
-export const Like = LikeAPI;
-export const Message = MessageAPI;
-export const ContactShare = ContactShareAPI;
-export const EventFeedback = EventFeedbackAPI;
+// Storage API
+export const StorageAPI = {
+  async uploadFile(file: { uri: string; name: string; type: string }): Promise<{ file_url: string }> {
+    return simpleRetry(async () => {
+      const fileName = `${Date.now()}_${file.name}`;
+      const storageRef = ref(storage, `uploads/${fileName}`);
+      
+      // Use Firebase Storage uploadBytesResumable for React Native compatibility
+      const { uploadBytesResumable } = await import('firebase/storage');
+      
+      // Create a simple data URL to avoid blob operations
+      const { readAsStringAsync, EncodingType } = await import('expo-file-system');
+      const base64Data = await readAsStringAsync(file.uri, {
+        encoding: EncodingType.Base64,
+      });
+      
+      // Use fetch to get the data as a blob (this works in React Native)
+      const dataUrl = `data:${file.type};base64,${base64Data}`;
+      const response = await fetch(dataUrl);
+      const blob = await response.blob();
+      
+      await uploadBytesResumable(storageRef, blob, { contentType: file.type });
+      const downloadURL = await getDownloadURL(storageRef);
+      return { file_url: downloadURL };
+    });
+  }
+};
 
-// User Saved Profile API for local profile storage
+// Saved Profile API
 export interface SavedProfile {
   id: string;
   user_id: string;
@@ -829,13 +591,12 @@ export interface SavedProfile {
 }
 
 export const SavedProfileAPI = {
-  // Save profile data locally on device
   async saveProfileLocally(profileData: SavedProfile['profile_data']): Promise<void> {
     try {
       const savedProfiles = await this.getLocalProfiles();
       const newProfile: SavedProfile = {
-        id: `local_${Date.now()}`,
-        user_id: 'local_user',
+        id: Date.now().toString(),
+        user_id: 'local',
         profile_data: profileData,
         created_at: new Date().toISOString()
       };
@@ -843,83 +604,66 @@ export const SavedProfileAPI = {
       savedProfiles.push(newProfile);
       await AsyncStorage.setItem('saved_profiles', JSON.stringify(savedProfiles));
     } catch (error) {
-      console.error('❌ Error saving profile locally:', error);
+      console.error('Error saving profile locally:', error);
       throw error;
     }
   },
 
-  // Get all locally saved profiles
   async getLocalProfiles(): Promise<SavedProfile[]> {
     try {
-      const savedProfilesJson = await AsyncStorage.getItem('saved_profiles');
-      return savedProfilesJson ? JSON.parse(savedProfilesJson) : [];
+      const saved = await AsyncStorage.getItem('saved_profiles');
+      return saved ? JSON.parse(saved) : [];
     } catch (error) {
-      console.error('❌ Error getting local profiles:', error);
+      console.error('Error getting local profiles:', error);
       return [];
     }
   },
 
-  // Delete a locally saved profile
   async deleteLocalProfile(profileId: string): Promise<void> {
     try {
       const savedProfiles = await this.getLocalProfiles();
-      const filteredProfiles = savedProfiles.filter(profile => profile.id !== profileId);
-      await AsyncStorage.setItem('saved_profiles', JSON.stringify(filteredProfiles));
+      const filtered = savedProfiles.filter(p => p.id !== profileId);
+      await AsyncStorage.setItem('saved_profiles', JSON.stringify(filtered));
     } catch (error) {
-      console.error('❌ Error deleting local profile:', error);
+      console.error('Error deleting local profile:', error);
       throw error;
     }
   },
 
-  // Save profile to Firebase (requires authentication)
   async saveProfileToCloud(profileData: SavedProfile['profile_data']): Promise<string> {
-    return executeWithOfflineSupport(async () => {
-      const currentUser = auth.currentUser;
-      if (!currentUser) {
-        throw new Error('User must be authenticated to save profile to cloud');
-      }
-
+    return simpleRetry(async () => {
       const docRef = await addDoc(collection(db, 'user_saved_profiles'), {
-        user_id: currentUser.uid,
+        user_id: auth.currentUser?.uid || 'anonymous',
         profile_data: profileData,
         created_at: serverTimestamp()
       });
       
       return docRef.id;
-    }, 'Save Profile to Cloud');
+    });
   },
 
-  // Get user's saved profiles from Firebase
   async getCloudProfiles(): Promise<SavedProfile[]> {
-    return executeWithOfflineSupport(async () => {
-      const currentUser = auth.currentUser;
-      if (!currentUser) {
-        throw new Error('User must be authenticated to get cloud profiles');
-      }
-
+    return simpleRetry(async () => {
+      const userId = auth.currentUser?.uid;
+      if (!userId) return [];
+      
       const q = query(
         collection(db, 'user_saved_profiles'),
-        where('user_id', '==', currentUser.uid),
-        orderBy('created_at', 'desc')
+        where('user_id', '==', userId)
       );
       
       const querySnapshot = await getDocs(q);
       return querySnapshot.docs.map(doc => ({
         id: doc.id,
-        ...doc.data()
+        ...(doc.data() as any)
       })) as SavedProfile[];
-    }, 'Get Cloud Profiles');
+    });
   },
 
-  // Delete a cloud saved profile
   async deleteCloudProfile(profileId: string): Promise<void> {
-    return executeWithOfflineSupport(async () => {
-      const currentUser = auth.currentUser;
-      if (!currentUser) {
-        throw new Error('User must be authenticated to delete cloud profile');
-      }
-
-      await deleteDoc(doc(db, 'user_saved_profiles', profileId));
-    }, 'Delete Cloud Profile');
+    return simpleRetry(async () => {
+      const docRef = doc(db, 'user_saved_profiles', profileId);
+      await deleteDoc(docRef);
+    });
   }
 }; 

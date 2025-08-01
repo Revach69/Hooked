@@ -14,7 +14,7 @@ import {
 import { router } from 'expo-router';
 import { Eye, EyeOff, Lock, Mail, Check } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { User } from '../lib/firebaseApi';
+import { AuthAPI } from '../lib/firebaseApi';
 import { AdminUtils } from '../lib/adminUtils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -49,7 +49,7 @@ export default function AdminLogin() {
         await handleAutoLogin(savedEmail, savedPassword);
       }
     } catch (error) {
-      console.error('Error checking saved credentials:', error);
+      // Handle error silently
     } finally {
       setIsCheckingSavedCredentials(false);
     }
@@ -60,7 +60,7 @@ export default function AdminLogin() {
     setError(null);
 
     try {
-      const user = await User.signIn(savedEmail, savedPassword);
+      const user = await AuthAPI.signIn(savedEmail, savedPassword);
       
       if (user) {
         // Check if user is admin
@@ -75,12 +75,11 @@ export default function AdminLogin() {
           router.replace('/admin');
         } else {
           // User is not admin
-          await User.signOut();
+          await AuthAPI.signOut();
           setError('Access denied. You do not have admin privileges.');
         }
       }
     } catch (error: any) {
-      console.error('Auto-login error:', error);
       // Clear saved credentials if auto-login fails
       await AsyncStorage.multiRemove(['adminSavedEmail', 'adminSavedPassword', 'adminRememberMe']);
       setRememberMe(false);
@@ -100,7 +99,7 @@ export default function AdminLogin() {
     setError(null);
 
     try {
-      const user = await User.signIn(email.trim(), password);
+      const user = await AuthAPI.signIn(email.trim(), password);
       
       if (user) {
         // Check if user is admin
@@ -125,13 +124,11 @@ export default function AdminLogin() {
           router.replace('/admin');
         } else {
           // User is not admin
-          await User.signOut();
+          await AuthAPI.signOut();
           setError('Access denied. You do not have admin privileges.');
         }
       }
     } catch (error: any) {
-      console.error('Admin login error:', error);
-      
       let errorMessage = 'Login failed. Please try again.';
       
       if (error.code === 'auth/user-not-found') {

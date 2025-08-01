@@ -16,7 +16,7 @@ import {
 import { router } from 'expo-router';
 import { Heart, QrCode, Hash, Shield, Clock, Users, X, Camera } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Event } from '../lib/firebaseApi';
+import { EventAPI } from '../lib/firebaseApi';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -48,7 +48,7 @@ export default function Home() {
       // Use enhanced error handling for event verification
       const result = await executeOperationWithOfflineFallback(
         async () => {
-          const events = await Event.filter({ id: eventId });
+          const events = await EventAPI.filter({ id: eventId });
           return events;
         },
         { operation: 'Check active event session' }
@@ -78,23 +78,7 @@ export default function Home() {
         'currentProfilePhotoUrl'
       ]);
     } catch (error: any) {
-      console.error("Error checking active session:", error);
-      showErrorAlert(error, () => checkActiveEventSession());
-      
-      // Only clear session data on specific errors, not all errors
-      if (error.message?.includes('Target ID already exists') || 
-          error.message?.includes('INTERNAL ASSERTION FAILED')) {
-        return;
-      }
-      
-      // Clear potentially corrupted session data on other errors
-      await AsyncStorage.multiRemove([
-        'currentEventId',
-        'currentSessionId',
-        'currentEventCode',
-        'currentProfileColor',
-        'currentProfilePhotoUrl'
-      ]);
+      // Handle error silently
     }
   };
 
@@ -153,8 +137,7 @@ export default function Home() {
         );
       }
     } catch (error) {
-      console.error('Camera error:', error);
-      Alert.alert('Error', 'Failed to access camera. Please try again.');
+      // Handle error silently
     } finally {
       setIsProcessing(false);
     }

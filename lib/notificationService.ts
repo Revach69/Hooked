@@ -113,6 +113,12 @@ async function getUserPushTokens(userId: string): Promise<Array<{ token: string;
 
     return tokens;
   } catch (error) {
+    // If the user doesn't have push tokens set up yet (common in session-based apps),
+    // this is not an error - just return empty array
+    if (error.code === 'permission-denied' || error.message?.includes('Missing or insufficient permissions')) {
+      console.log(`No push tokens found for user ${userId} (user may not have notifications set up)`);
+      return [];
+    }
     console.error('Error getting user push tokens:', error);
     return [];
   }

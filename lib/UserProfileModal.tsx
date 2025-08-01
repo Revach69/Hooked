@@ -18,9 +18,11 @@ interface UserProfileModalProps {
   visible: boolean;
   profile: any;
   onClose: () => void;
+  onLike?: (profile: any) => void;
+  isLiked?: boolean;
 }
 
-export default function UserProfileModal({ visible, profile, onClose }: UserProfileModalProps) {
+export default function UserProfileModal({ visible, profile, onClose, onLike, isLiked = false }: UserProfileModalProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
@@ -108,6 +110,23 @@ export default function UserProfileModal({ visible, profile, onClose }: UserProf
       color: isDark ? '#9ca3af' : '#6b7280',
       marginLeft: 6,
     },
+    likeButton: {
+      backgroundColor: isLiked ? '#10b981' : '#8b5cf6',
+      borderRadius: 25,
+      paddingVertical: 12,
+      paddingHorizontal: 24,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 16,
+      marginBottom: 8,
+    },
+    likeButtonText: {
+      color: 'white',
+      fontSize: 16,
+      fontWeight: '600',
+      marginLeft: 8,
+    },
     section: {
       marginBottom: 24,
     },
@@ -148,6 +167,12 @@ export default function UserProfileModal({ visible, profile, onClose }: UserProf
       fontStyle: 'italic',
     },
   });
+
+  const handleLikePress = () => {
+    if (onLike) {
+      onLike(profile);
+    }
+  };
 
   return (
     <Modal
@@ -191,6 +216,24 @@ export default function UserProfileModal({ visible, profile, onClose }: UserProf
                   <MapPin size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
                   <Text style={styles.locationText}>{profile.location}</Text>
                 </View>
+              )}
+              
+              {/* Like Button */}
+              {onLike && (
+                <TouchableOpacity 
+                  style={styles.likeButton} 
+                  onPress={handleLikePress}
+                  disabled={isLiked}
+                >
+                  <Heart 
+                    size={20} 
+                    color="white" 
+                    fill={isLiked ? "white" : "none"}
+                  />
+                  <Text style={styles.likeButtonText}>
+                    {isLiked ? 'Liked!' : 'Like this person'}
+                  </Text>
+                </TouchableOpacity>
               )}
             </View>
 

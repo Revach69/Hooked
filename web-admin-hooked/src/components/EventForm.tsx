@@ -23,7 +23,8 @@ export default function EventForm({
     location: '',
     start_date: '',
     end_date: '',
-    description: ''
+    description: '',
+    event_type: ''
   });
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -38,7 +39,8 @@ export default function EventForm({
         location: event.location || '',
         start_date: event.starts_at ? new Date(event.starts_at).toISOString().slice(0, 16) : '',
         end_date: event.expires_at ? new Date(event.expires_at).toISOString().slice(0, 16) : '',
-        description: event.description || ''
+        description: event.description || '',
+        event_type: event.event_type || ''
       });
     } else {
       setFormData({
@@ -47,7 +49,8 @@ export default function EventForm({
         location: '',
         start_date: '',
         end_date: '',
-        description: ''
+        description: '',
+        event_type: ''
       });
     }
     setErrors({});
@@ -68,6 +71,10 @@ export default function EventForm({
 
     if (!formData.location.trim()) {
       newErrors.location = 'Location is required';
+    }
+
+    if (!formData.event_type) {
+      newErrors.event_type = 'Event type is required';
     }
 
     if (!formData.start_date) {
@@ -101,6 +108,7 @@ export default function EventForm({
         ...formData,
         starts_at: new Date(formData.start_date).toISOString(),
         expires_at: new Date(formData.end_date).toISOString(),
+        event_type: formData.event_type,
       };
 
       await onSave(eventData);
@@ -205,6 +213,32 @@ export default function EventForm({
             />
             {errors.location && (
               <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.location}</p>
+            )}
+          </div>
+
+          {/* Event Type */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Event Type *
+            </label>
+            <select
+              value={formData.event_type}
+              onChange={(e) => handleInputChange('event_type', e.target.value)}
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                errors.event_type 
+                  ? 'border-red-500 dark:border-red-400' 
+                  : 'border-gray-300 dark:border-gray-600'
+              } bg-white dark:bg-gray-700 text-gray-900 dark:text-white`}
+            >
+              <option value="">Select event type</option>
+              <option value="parties">Parties</option>
+              <option value="conferences">Conferences</option>
+              <option value="weddings">Weddings</option>
+              <option value="private">Private Events</option>
+              <option value="bars">Bars & Lounges</option>
+            </select>
+            {errors.event_type && (
+              <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.event_type}</p>
             )}
           </div>
 

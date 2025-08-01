@@ -2,6 +2,21 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
+    // ===== USERS COLLECTION =====
+    // User data and push tokens for notifications
+    match /users/{userId} {
+      // ✅ Allow reading own user data
+      allow read: if request.auth != null && request.auth.uid == userId;
+      
+      // ✅ Allow writing own user data
+      allow write: if request.auth != null && request.auth.uid == userId;
+      
+      // ✅ Allow reading/writing push tokens for session-based users (no auth required)
+      match /pushTokens/{tokenId} {
+        allow read, write: if true;
+      }
+    }
+    
     // ===== EVENTS COLLECTION =====
     // Events are publicly readable but only authenticated admins can create/modify
     match /events/{eventId} {
@@ -55,7 +70,7 @@ service cloud.firestore {
       
       // ✅ Allow creating likes with validation and visibility check
       allow create: if 
-        // Both profiles must exist and be active
+        // Both profiles must exist and be active (check by session_id)
         exists(/databases/$(database)/documents/event_profiles/$(request.resource.data.from_profile_id)) &&
         exists(/databases/$(database)/documents/event_profiles/$(request.resource.data.to_profile_id)) &&
         // Both profiles must be visible
@@ -64,7 +79,7 @@ service cloud.firestore {
         // Cannot like own profile
         request.resource.data.from_profile_id != request.resource.data.to_profile_id &&
         // Required fields
-        request.resource.data.keys().hasAll(['event_id', 'from_profile_id', 'to_profile_id', 'created_at']) &&
+        request.resource.data.keys().hasAll(['event_id', 'from_profile_id', 'to_profile_id', 'liker_session_id', 'liked_session_id', 'created_at']) &&
         // Created timestamp must be current
         request.resource.data.created_at == request.time;
       

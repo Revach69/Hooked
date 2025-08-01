@@ -16,8 +16,7 @@ import {
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { User, LogOut, Edit, Camera, Users, MessageCircle, Flag, AlertTriangle, Shield, Clock, Mail, AlertCircle } from 'lucide-react-native';
-import { EventProfile, Event, User as UserAPI, ReportAPI } from '../lib/firebaseApi';
-import { VisionApiService } from '../lib/visionApi';
+import { EventProfileAPI, EventAPI, AuthAPI, ReportAPI, StorageAPI } from '../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -73,12 +72,12 @@ export default function Profile() {
     React.useCallback(() => {
       if (profile?.id) {
         // Refresh profile data to ensure toggle state is current
-        EventProfile.get(profile.id).then((updatedProfile) => {
+        EventProfileAPI.get(profile.id).then((updatedProfile) => {
           if (updatedProfile) {
             setProfile(updatedProfile);
           }
         }).catch((error) => {
-          console.error("Error refreshing profile:", error);
+          // Handle error silently
         });
       }
     }, [profile?.id])
@@ -94,7 +93,7 @@ export default function Profile() {
     }
     
     try {
-      const events = await Event.filter({ id: eventId });
+      const events = await EventAPI.filter({ id: eventId });
       if (events.length > 0) {
         setCurrentEvent(events[0]);
       } else {
@@ -102,7 +101,7 @@ export default function Profile() {
         return;
       }
 
-      const profiles = await EventProfile.filter({ 
+      const profiles = await EventProfileAPI.filter({ 
         session_id: sessionId,
         event_id: eventId 
       });
@@ -114,7 +113,6 @@ export default function Profile() {
         return;
       }
     } catch (error) {
-      console.error("Error initializing session:", error);
       router.replace('/home');
     }
     setIsLoading(false);
@@ -144,7 +142,7 @@ export default function Profile() {
       if (result.canceled) {
         // Try without editing first, then we can handle cropping differently
         result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: 'Images',
+          mediaTypes: 'images',
           allowsEditing: false,
           quality: 0.8,
           allowsMultipleSelection: false,
@@ -173,34 +171,20 @@ export default function Profile() {
             fileSize: asset.fileSize
           };
 
-          // Step 1: Content filtering with Google Cloud Vision API
-          const contentResult = await VisionApiService.analyzeImageContent(fileObject);
-          
-          if (!contentResult.isAppropriate) {
-            Alert.alert(
-              "Inappropriate Content Detected",
-              `Your photo contains inappropriate content: ${contentResult.reasons.join(', ')}. Please choose a different photo that complies with our community guidelines.`,
-              [{ text: "OK" }]
-            );
-            return;
-          }
-
-          // Step 2: Upload to Firebase Storage
-          const { file_url } = await UserAPI.uploadFile(fileObject);
+          // Upload directly to Firebase Storage (no Vision API)
+                     const { file_url } = await StorageAPI.uploadFile(fileObject);
           
           // Update profile with new photo
-          await EventProfile.update(profile.id, { profile_photo_url: file_url });
+          await EventProfileAPI.update(profile.id, { profile_photo_url: file_url });
           setProfile((prev: any) => ({ ...prev, profile_photo_url: file_url }));
           await AsyncStorage.setItem('currentProfilePhotoUrl', file_url);
         } catch (err) {
-          console.error("Error uploading photo:", err);
           Alert.alert("Upload Failed", "Failed to upload photo. Please try again.");
         } finally {
           setIsUploadingPhoto(false);
         }
       }
     } catch (error) {
-      console.error("Error picking image:", error);
       Alert.alert("Error", "Failed to pick image. Please try again.");
     }
   };
@@ -211,7 +195,7 @@ export default function Profile() {
       const sessionId = await AsyncStorage.getItem('currentSessionId');
       if (!eventId || !sessionId) return;
 
-      const allVisibleProfiles = await EventProfile.filter({ 
+      const allVisibleProfiles = await EventProfileAPI.filter({ 
         event_id: eventId,
         is_visible: true 
       });
@@ -220,7 +204,7 @@ export default function Profile() {
       const otherUsers = allVisibleProfiles.filter(p => p.session_id !== sessionId);
       setAllUsers(otherUsers);
     } catch (error) {
-      console.error("Error loading users for report:", error);
+      // Handle error silently
     }
   };
 
@@ -279,7 +263,6 @@ export default function Profile() {
         ]
       );
     } catch (error) {
-      console.error("Error submitting report:", error);
       Alert.alert("Error", "Failed to submit report. Please try again.");
     } finally {
       setSubmittingReport(false);
@@ -343,7 +326,7 @@ export default function Profile() {
 
               // Delete profile from backend
               if (profile?.id) {
-                await EventProfile.delete(profile.id);
+                await EventProfileAPI.delete(profile.id);
               }
               
               // Clear all session data
@@ -368,14 +351,14 @@ export default function Profile() {
 
   const handleSaveAboutMe = async () => {
     setSaving(true);
-    await EventProfile.update(profile.id, { about_me: aboutMe });
+    await EventProfileAPI.update(profile.id, { about_me: aboutMe });
     setProfile((prev: any) => ({ ...prev, about_me: aboutMe }));
     setEditingAboutMe(false);
     setSaving(false);
   };
   const handleSaveHeight = async () => {
     setSaving(true);
-    await EventProfile.update(profile.id, { height_cm: parseInt(height) });
+    await EventProfileAPI.update(profile.id, { height_cm: parseInt(height) });
     setProfile((prev: any) => ({ ...prev, height_cm: parseInt(height) }));
     setEditingHeight(false);
     setSaving(false);
@@ -391,7 +374,7 @@ export default function Profile() {
   };
   const handleSaveInterests = async () => {
     setSaving(true);
-    await EventProfile.update(profile.id, { interests });
+    await EventProfileAPI.update(profile.id, { interests });
     setProfile((prev: any) => ({ ...prev, interests }));
     setShowInterests(false);
     setSaving(false);
@@ -399,7 +382,7 @@ export default function Profile() {
   const handleToggleVisibility = async (value: boolean) => {
     try {
       // Use the new toggleVisibility function
-      await EventProfile.toggleVisibility(profile.id, value);
+      await EventProfileAPI.toggleVisibility(profile.id, value);
       setProfile((prev: any) => ({ ...prev, is_visible: value }));
       setEventVisible(value);
       
@@ -412,7 +395,6 @@ export default function Profile() {
       );
       
     } catch (error) {
-      console.error("❌ Error updating visibility:", error);
       Alert.alert("Error", "Failed to update visibility. Please try again.");
       // Revert the toggle if update failed
       setEventVisible(!value);
@@ -421,14 +403,14 @@ export default function Profile() {
 
   const handleUpdateGender = async (gender: string) => {
     setSaving(true);
-    await EventProfile.update(profile.id, { gender_identity: gender });
+    await EventProfileAPI.update(profile.id, { gender_identity: gender });
     setProfile((prev: any) => ({ ...prev, gender_identity: gender }));
     setSaving(false);
   };
 
   const handleUpdateInterestedIn = async (interestedIn: string) => {
     setSaving(true);
-    await EventProfile.update(profile.id, { interested_in: interestedIn });
+    await EventProfileAPI.update(profile.id, { interested_in: interestedIn });
     setProfile((prev: any) => ({ ...prev, interested_in: interestedIn }));
     setSaving(false);
   };

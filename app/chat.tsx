@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Send, User, Flag } from 'lucide-react-native';
-import { Message, EventProfile } from '../lib/firebaseApi';
+import { MessageAPI, EventProfileAPI } from '../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
@@ -106,7 +106,7 @@ export default function Chat() {
             conversationMessages.map(async (msg) => {
               if (msg.senderName) return msg;
               
-              const senderProfiles = await EventProfile.filter({
+              const senderProfiles = await EventProfileAPI.filter({
                 session_id: msg.from_profile_id,
                 event_id: currentEventId
               });
@@ -120,16 +120,16 @@ export default function Chat() {
 
           setMessages(messagesWithNames);
         } catch (error) {
-          console.error('Error processing messages:', error);
+          // Handle error silently
         }
-      }, (error) => {
-        console.error('Error listening to messages:', error);
-      });
+              }, (error) => {
+          // Handle error silently
+        });
 
       listenerRef.current = unsubscribe;
 
     } catch (error) {
-      console.error('Error setting up messages listener:', error);
+      // Handle error silently
     }
 
     return () => {
@@ -155,7 +155,7 @@ export default function Chat() {
       setCurrentEventId(eventId);
 
       // Get match profile - don't filter by visibility for matches
-      const matchProfiles = await EventProfile.filter({
+      const matchProfiles = await EventProfileAPI.filter({
         session_id: matchId as string,
         event_id: eventId
       });
@@ -171,7 +171,6 @@ export default function Chat() {
 
       setIsLoading(false);
     } catch (error) {
-      console.error('Error initializing chat:', error);
       Alert.alert('Error', 'Failed to load chat');
       router.back();
     }
@@ -192,7 +191,6 @@ export default function Chat() {
 
       setNewMessage('');
     } catch (error) {
-      console.error('Error sending message:', error);
       Alert.alert('Error', 'Failed to send message');
     } finally {
       setIsSending(false);

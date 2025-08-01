@@ -17,8 +17,7 @@ import {
   Linking,
 } from 'react-native';
 import { router } from 'expo-router';
-import { User as UserAPI, EventProfile, Event } from '../lib/firebaseApi';
-import { VisionApiService } from '../lib/visionApi';
+import { AuthAPI, EventProfileAPI, EventAPI, StorageAPI } from '../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User as UserIcon, Camera, Upload } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -60,16 +59,13 @@ export default function Consent() {
         return;
       }
       try {
-        const events = await Event.filter({ id: eventId });
+        const events = await EventAPI.filter({ id: eventId });
         if (events.length > 0) {
           const foundEvent = events[0];
           setEvent(foundEvent);
-        } else {
-          router.replace('/home');
         }
       } catch (err) {
-        console.error("Error fetching event details:", err);
-        router.replace('/home');
+        // Handle error silently
       }
     };
     fetchEvent();
@@ -81,12 +77,11 @@ export default function Consent() {
       try {
         const savedProfile = await AsyncStorage.getItem('savedProfileData');
         if (savedProfile) {
-          const profileData = JSON.parse(savedProfile);
-          setFormData(profileData);
-          setRememberProfile(true);
+          const parsedProfile = JSON.parse(savedProfile);
+          setFormData(parsedProfile);
         }
       } catch (error) {
-        console.error("Error loading saved profile:", error);
+        // Handle error silently
       }
     };
     loadSavedProfile();
@@ -114,7 +109,6 @@ export default function Consent() {
         ]
       );
     } catch (error) {
-      console.error("Error in photo upload:", error);
       Alert.alert("Error", "Failed to open photo options. Please try again.");
     }
   };
@@ -142,7 +136,6 @@ export default function Consent() {
         await processImageAsset(result.assets[0]);
       }
     } catch (error) {
-      console.error("Error capturing photo:", error);
       Alert.alert("Error", "Failed to capture photo. Please try again.");
     }
   };
@@ -170,7 +163,6 @@ export default function Consent() {
         await processImageAsset(result.assets[0]);
       }
     } catch (error) {
-      console.error("Error picking image:", error);
       Alert.alert("Error", "Failed to pick image. Please try again.");
     }
   };
@@ -192,24 +184,11 @@ export default function Consent() {
         fileSize: asset.fileSize
       };
 
-      // Step 1: Content filtering with Google Cloud Vision API
-      const contentResult = await VisionApiService.analyzeImageContent(fileObject);
-      
-      if (!contentResult.isAppropriate) {
-        Alert.alert(
-          "Inappropriate Content Detected",
-          `Your photo contains inappropriate content: ${contentResult.reasons.join(', ')}. Please choose a different photo that complies with our community guidelines.`,
-          [{ text: "OK" }]
-        );
-        return;
-      }
-
-      // Step 2: Upload to Firebase Storage
-      const { file_url } = await UserAPI.uploadFile(fileObject);
+      // Upload directly to Firebase Storage (no Vision API)
+      const { file_url } = await StorageAPI.uploadFile(fileObject);
       setFormData(prev => ({ ...prev, profile_photo_url: file_url }));
     } catch (err) {
-      console.error("Error uploading photo:", err);
-      Alert.alert("Upload Failed", "Failed to upload photo. Please try again.");
+      Alert.alert("Error", "Failed to upload photo. Please try again.");
     } finally {
       setIsUploadingPhoto(false);
     }
@@ -244,14 +223,14 @@ export default function Consent() {
         try {
           await AsyncStorage.setItem('savedProfileData', JSON.stringify(formData));
         } catch (error) {
-          console.error("Error saving profile data:", error);
+          // Handle error silently
         }
       } else {
         // Clear saved profile data if not checked
         try {
           await AsyncStorage.removeItem('savedProfileData');
         } catch (error) {
-          console.error("Error clearing saved profile data:", error);
+          // Handle error silently
         }
       }
 
@@ -271,18 +250,12 @@ export default function Consent() {
       
 
       
-      await EventProfile.create(profileData);
+      await EventProfileAPI.create(profileData);
 
       await AsyncStorage.setItem('currentSessionId', sessionId);
-      await AsyncStorage.setItem('currentProfileColor', validColor);
-      await AsyncStorage.setItem('currentProfilePhotoUrl', formData.profile_photo_url);
-      
-      Alert.alert("Success", "Profile created! Welcome to the event.");
       router.replace('/discovery');
     } catch (err) {
-      console.error("Error creating profile:", err);
       setError("Failed to create profile. Please try again.");
-      setStep('error');
       setIsSubmitting(false);
     }
   };
@@ -381,7 +354,7 @@ export default function Consent() {
       justifyContent: 'center',
     },
     uploadText: {
-      fontSize: 14,
+      fontSize: 12,
       color: isDark ? '#9ca3af' : '#6b7280',
       marginTop: 8,
     },
@@ -586,16 +559,17 @@ export default function Consent() {
       marginBottom: 8,
     },
     checkboxText: {
-      fontSize: 17,
+      fontSize: 14,
       color: isDark ? '#e5e7eb' : '#374151',
       marginLeft: 12,
       flex: 1,
     },
     checkboxDescription: {
-      fontSize: 15,
+      fontSize: 12,
       color: isDark ? '#9ca3af' : '#6b7280',
       marginLeft: 44,
-      lineHeight: 20,
+      lineHeight: 16,
+      textAlign: 'center',
     },
     legalSection: {
       marginTop: 16,
@@ -827,9 +801,11 @@ export default function Consent() {
                 Remember my profile for future events
               </Text>
             </View>
-            <Text style={styles.checkboxDescription}>
-              Your form data will be saved locally and auto-filled for future events
-            </Text>
+            {rememberProfile && (
+              <Text style={styles.checkboxDescription}>
+                Your form data will be saved locally and auto-filled for future events
+              </Text>
+            )}
           </View>
 
           {/* Legal Links */}

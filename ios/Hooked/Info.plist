@@ -6,18 +6,32 @@
     <true/>
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
-    <key>CFBundleLocalizations</key>
-    <array>
-        <string>en</string>
-    </array>
     <key>CFBundleDisplayName</key>
     <string>The Hooked App</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleIcons</key>
+    <dict>
+      <key>CFBundlePrimaryIcon</key>
+      <dict>
+        <key>CFBundleIconName</key>
+        <string>AppIcon</string>
+        <key>CFBundleIconFiles</key>
+        <array>
+          <string>AppIcon</string>
+        </array>
+        <key>UIPrerenderedIcon</key>
+        <false/>
+      </dict>
+    </dict>
     <key>CFBundleIdentifier</key>
     <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
+    <key>CFBundleLocalizations</key>
+    <array>
+      <string>en</string>
+    </array>
     <key>CFBundleName</key>
     <string>$(PRODUCT_NAME)</string>
     <key>CFBundlePackageType</key>
@@ -29,22 +43,29 @@
     <key>CFBundleURLTypes</key>
     <array>
       <dict>
-        <key>CFBundleURLName</key>
-        <string>com.hookedapp.app</string>
         <key>CFBundleURLSchemes</key>
         <array>
           <string>hooked</string>
+          <string>com.hookedapp.app</string>
+        </array>
+      </dict>
+      <dict>
+        <key>CFBundleURLSchemes</key>
+        <array>
+          <string>exp+hooked</string>
         </array>
       </dict>
     </array>
     <key>CFBundleVersion</key>
-    <string>2</string>
+    <string>1</string>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.social-networking</string>
     <key>LSMinimumSystemVersion</key>
-    <string>15.0</string>
-    <key>MinimumOSVersion</key>
     <string>15.0</string>
     <key>LSRequiresIPhoneOS</key>
     <true/>
+    <key>MinimumOSVersion</key>
+    <string>15.0</string>
     <key>NSAppTransportSecurity</key>
     <dict>
       <key>NSAllowsArbitraryLoads</key>
@@ -84,11 +105,19 @@
     </dict>
     <key>NSCameraUsageDescription</key>
     <string>The Hooked App uses your camera to scan event QR codes and take a profile photo for your temporary event profile, which is deleted after the event ends.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Allow $(PRODUCT_NAME) to access your microphone</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>The Hooked App allows you to choose an existing photo from your library to create a temporary event profile, which is deleted after the event ends.</string>
     <key>NSUserActivityTypes</key>
     <array>
       <string>com.hookedapp.app.expo.index_route</string>
+      <string>$(PRODUCT_BUNDLE_IDENTIFIER).expo.index_route</string>
+    </array>
+    <key>UIBackgroundModes</key>
+    <array>
+      <string>fetch</string>
+      <string>remote-notification</string>
     </array>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>
@@ -96,21 +125,9 @@
     <array>
       <string>arm64</string>
     </array>
-    <key>CFBundleIcons</key>
-    <dict>
-      <key>CFBundlePrimaryIcon</key>
-      <dict>
-        <key>CFBundleIconName</key>
-        <string>AppIcon</string>
-        <key>CFBundleIconFiles</key>
-        <array>
-          <string>AppIcon</string>
-        </array>
-        <key>UIPrerenderedIcon</key>
-        <false/>
-      </dict>
-    </dict>
     <key>UIRequiresFullScreen</key>
+    <false/>
+    <key>UIStatusBarHidden</key>
     <false/>
     <key>UIStatusBarStyle</key>
     <string>UIStatusBarStyleDefault</string>
@@ -119,21 +136,9 @@
       <string>UIInterfaceOrientationPortrait</string>
       <string>UIInterfaceOrientationPortraitUpsideDown</string>
     </array>
-
     <key>UIUserInterfaceStyle</key>
     <string>Automatic</string>
-    <key>UIStatusBarHidden</key>
-    <false/>
     <key>UIViewControllerBasedStatusBarAppearance</key>
     <false/>
-    <key>LSApplicationCategoryType</key>
-    <string>public.app-category.social-networking</string>
-    <key>ITSAppUsesNonExemptEncryption</key>
-    <false/>
-    <key>UIBackgroundModes</key>
-    <array>
-        <string>fetch</string>
-        <string>remote-notification</string>
-    </array>
   </dict>
 </plist>

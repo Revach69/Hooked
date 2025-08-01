@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { Heart, Filter, Users, User, MessageCircle, X } from 'lucide-react-native';
-import { EventProfile, Like, Event } from '../lib/firebaseApi';
+import { EventProfileAPI, LikeAPI, EventAPI } from '../lib/firebaseApi';
 import { sendMatchNotification, sendLikeNotification } from '../lib/notificationService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -114,7 +114,6 @@ export default function Discovery() {
           setCurrentUserProfile(userProfile);
 
           if (!userProfile) {
-            console.warn("Current user profile not found for session, clearing session data and redirecting.");
             AsyncStorage.multiRemove([
               'currentEventId',
               'currentSessionId',
@@ -147,25 +146,16 @@ export default function Discovery() {
             }
           }
         } catch (error) {
-          console.error("Error processing user profile update:", error);
+          // Handle error silently
         }
       }, (error) => {
-        // Suppress "Target ID already exists" errors as they don't affect functionality
-        if (error.message?.includes('Target ID already exists')) {
-          console.warn('⚠️ Firestore listener error suppressed (Target ID already exists):', {
-            error: error.message,
-            operation: 'User Profile Listener',
-            timestamp: new Date().toISOString()
-          });
-        } else {
-          console.error("Error listening to user profile:", error);
-        }
+        // Handle error silently
       });
 
       listenersRef.current.userProfile = userProfileUnsubscribe;
 
     } catch (error) {
-      console.error("Error setting up listeners:", error);
+      // Handle error silently
     }
 
     return () => {
@@ -198,20 +188,11 @@ export default function Discovery() {
           const otherUsersProfiles = allVisibleProfiles.filter(p => p.session_id !== currentSessionId);
           setProfiles(otherUsersProfiles);
         } catch (error) {
-          console.error("Error processing other profiles update:", error);
+          // Handle error silently
         }
-      }, (error) => {
-        // Suppress "Target ID already exists" errors as they don't affect functionality
-        if (error.message?.includes('Target ID already exists')) {
-          console.warn('⚠️ Firestore listener error suppressed (Target ID already exists):', {
-            error: error.message,
-            operation: 'Other Profiles Listener',
-            timestamp: new Date().toISOString()
-          });
-        } else {
-          console.error("Error listening to other profiles:", error);
-        }
-      });
+              }, (error) => {
+          // Handle error silently
+        });
 
       listenersRef.current.otherProfiles = otherProfilesUnsubscribe;
 
@@ -231,20 +212,11 @@ export default function Discovery() {
           
           setLikedProfiles(new Set(likes.map(like => like.liked_session_id)));
         } catch (error) {
-          console.error("Error processing likes update:", error);
+          // Handle error silently
         }
-      }, (error) => {
-        // Suppress "Target ID already exists" errors as they don't affect functionality
-        if (error.message?.includes('Target ID already exists')) {
-          console.warn('⚠️ Firestore listener error suppressed (Target ID already exists):', {
-            error: error.message,
-            operation: 'Likes Listener',
-            timestamp: new Date().toISOString()
-          });
-        } else {
-          console.error("Error listening to likes:", error);
-        }
-      });
+              }, (error) => {
+          // Handle error silently
+        });
 
       listenersRef.current.likes = likesUnsubscribe;
 
@@ -260,7 +232,7 @@ export default function Discovery() {
         try {
           listenersRef.current.userProfile();
         } catch (error) {
-          console.warn("Error cleaning up user profile listener:", error);
+          // Handle error silently
         }
         listenersRef.current.userProfile = undefined;
       }
@@ -270,7 +242,7 @@ export default function Discovery() {
         try {
           listenersRef.current.otherProfiles();
         } catch (error) {
-          console.warn("Error cleaning up other profiles listener:", error);
+          // Handle error silently
         }
         listenersRef.current.otherProfiles = undefined;
       }
@@ -280,12 +252,12 @@ export default function Discovery() {
         try {
           listenersRef.current.likes();
         } catch (error) {
-          console.warn("Error cleaning up likes listener:", error);
+          // Handle error silently
         }
         listenersRef.current.likes = undefined;
       }
     } catch (error) {
-      console.error("Error cleaning up listeners:", error);
+      // Handle error silently
     }
   };
 
@@ -306,7 +278,7 @@ export default function Discovery() {
     setCurrentSessionId(sessionId);
     
     try {
-      const events = await Event.filter({ id: eventId });
+      const events = await EventAPI.filter({ id: eventId });
       if (events.length > 0) {
         setCurrentEvent(events[0]);
       } else {
@@ -316,7 +288,7 @@ export default function Discovery() {
 
       // Likes are now handled by real-time listener
     } catch (error) {
-      console.error("Error initializing session:", error);
+      // Handle error silently
     }
     setIsLoading(false);
   };
@@ -371,14 +343,24 @@ export default function Discovery() {
 
     if (!eventId) return;
 
+    // Check if both profiles are visible (required by Firestore rules)
+    if (!currentUserProfile.is_visible || !likedProfile.is_visible) {
+      Alert.alert(
+        "Cannot Like", 
+        "Both profiles must be visible to like someone. Please make sure your profile is visible in settings.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+
     try {
       // Optimistically update UI
       setLikedProfiles(prev => new Set([...prev, likedProfile.session_id]));
 
-      const newLike = await Like.create({
+      const newLike = await LikeAPI.create({
         event_id: eventId,
-        from_profile_id: likerSessionId,
-        to_profile_id: likedProfile.session_id,
+        from_profile_id: currentUserProfile.id,
+        to_profile_id: likedProfile.id,
         liker_session_id: likerSessionId,
         liked_session_id: likedProfile.session_id,
         is_mutual: false,
@@ -386,15 +368,17 @@ export default function Discovery() {
         liked_notified_of_match: false
       });
 
+      console.log('Like created successfully:', newLike.id);
+
       // Send notification to the person being liked (they get notified that someone liked them)
       try {
         await sendLikeNotification(likedProfile.session_id, currentUserProfile.first_name);
-      } catch (notificationError) {
-        console.error('Error sending like notification:', notificationError);
-      }
+              } catch (notificationError) {
+          // Handle notification error silently
+        }
 
       // Check for mutual match
-      const theirLikesToMe = await Like.filter({
+      const theirLikesToMe = await LikeAPI.filter({
         event_id: eventId,
         liker_session_id: likedProfile.session_id,
         liked_session_id: likerSessionId,
@@ -405,16 +389,16 @@ export default function Discovery() {
         try {
           await sendLikeNotification(likedProfile.session_id, currentUserProfile.first_name);
         } catch (notificationError) {
-          console.error('Error sending like back notification:', notificationError);
+          // Handle notification error silently
         }
         const theirLikeRecord = theirLikesToMe[0];
 
         // Update both records for mutual match
-        await Like.update(newLike.id, { 
+        await LikeAPI.update(newLike.id, { 
           is_mutual: true,
           liker_notified_of_match: true
         });
-        await Like.update(theirLikeRecord.id, { 
+        await LikeAPI.update(theirLikeRecord.id, { 
           is_mutual: true,
           liked_notified_of_match: true 
         });
@@ -426,7 +410,7 @@ export default function Discovery() {
             sendMatchNotification(likedProfile.session_id, currentUserProfile.first_name)
           ]);
         } catch (notificationError) {
-          console.error('Error sending match notifications:', notificationError);
+          // Handle notification error silently
         }
 
         
@@ -446,13 +430,20 @@ export default function Discovery() {
         );
       }
     } catch (error) {
-      console.error("Error liking profile:", error);
+      console.error('Error creating like:', error);
       // Revert optimistic update on error
       setLikedProfiles(prev => {
         const newSet = new Set(prev);
         newSet.delete(likedProfile.session_id);
         return newSet;
       });
+      
+      // Show user-friendly error message
+      Alert.alert(
+        "Like Failed", 
+        "Unable to like this person. Please try again.",
+        [{ text: "OK" }]
+      );
     }
   };
   
@@ -1224,6 +1215,8 @@ export default function Discovery() {
         visible={selectedProfileForDetail !== null}
         profile={selectedProfileForDetail}
         onClose={() => setSelectedProfileForDetail(null)}
+        onLike={handleLike}
+        isLiked={selectedProfileForDetail ? likedProfiles.has(selectedProfileForDetail.session_id) : false}
       />
 
     </SafeAreaView>

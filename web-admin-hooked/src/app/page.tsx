@@ -179,6 +179,16 @@ export default function AdminDashboard() {
 
   const handleDownloadData = async (eventId: string) => {
     try {
+      // Get the event to access its name
+      const event = events.find(e => e.id === eventId);
+      if (!event) {
+        alert('Event not found. Please try again.');
+        return;
+      }
+
+      // Sanitize the event name for use in filename (remove special characters)
+      const sanitizedName = event.name.replace(/[^a-zA-Z0-9\s-]/g, '').replace(/\s+/g, '-').toLowerCase();
+
       const [profiles, likes, messages] = await Promise.all([
         EventProfile.filter({ event_id: eventId }),
         Like.filter({ event_id: eventId }),
@@ -190,10 +200,10 @@ export default function AdminDashboard() {
       const likesCsv = convertToCSV(likes, 'likes');
       const messagesCsv = convertToCSV(messages, 'messages');
 
-      // Download files
-      downloadCSV(profilesCsv, `event-${eventId}-profiles.csv`);
-      downloadCSV(likesCsv, `event-${eventId}-likes.csv`);
-      downloadCSV(messagesCsv, `event-${eventId}-messages.csv`);
+      // Download files with event name instead of ID
+      downloadCSV(profilesCsv, `event-${sanitizedName}-profiles.csv`);
+      downloadCSV(likesCsv, `event-${sanitizedName}-likes.csv`);
+      downloadCSV(messagesCsv, `event-${sanitizedName}-messages.csv`);
     } catch (error) {
       console.error('Error downloading data:', error);
       alert('Failed to download data. Please try again.');
@@ -215,9 +225,12 @@ export default function AdminDashboard() {
         }
       });
       
+      // Sanitize the event name for use in filename
+      const sanitizedName = event.name.replace(/[^a-zA-Z0-9\s-]/g, '').replace(/\s+/g, '-').toLowerCase();
+      
       const link = document.createElement('a');
       link.href = qrDataUrl;
-      link.download = `qr-${event.event_code}.png`;
+      link.download = `qr-${sanitizedName}.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -319,6 +332,13 @@ export default function AdminDashboard() {
                     <span>{event.location}</span>
                   </div>
                 )}
+                {event.event_type && (
+                  <div className="flex items-center gap-1">
+                    <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-medium">
+                      {event.event_type}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
             
@@ -367,6 +387,14 @@ export default function AdminDashboard() {
                     <span className="font-medium">Expires:</span>
                     <span>{formatDate(event.expires_at)}</span>
                   </div>
+                  {event.event_type && (
+                    <div className="flex items-center gap-3 text-gray-700 dark:text-gray-300">
+                      <span className="font-medium">Type:</span>
+                      <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-medium">
+                        {event.event_type}
+                      </span>
+                    </div>
+                  )}
                 </div>
                 
                 {/* Join Link */}

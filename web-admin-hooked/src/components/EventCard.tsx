@@ -102,9 +102,12 @@ export default function EventCard({
   const downloadQR = async () => {
     const qrUrl = await generateQRCode();
     if (qrUrl) {
+      // Sanitize the event name for use in filename
+      const sanitizedName = event.name.replace(/[^a-zA-Z0-9\s-]/g, '').replace(/\s+/g, '-').toLowerCase();
+      
       const link = document.createElement('a');
       link.href = qrUrl;
-      link.download = `qr-${event.event_code}.png`;
+      link.download = `qr-${sanitizedName}.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
