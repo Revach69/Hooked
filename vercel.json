@@ -1,0 +1,22 @@
+{
+  "projects": [
+    {
+      "name": "hooked-admin-dashboard",
+      "rootDirectory": "web-admin-hooked",
+      "buildCommand": "npm run build",
+      "outputDirectory": ".next",
+      "framework": "nextjs",
+      "installCommand": "npm install",
+      "devCommand": "npm run dev"
+    },
+    {
+      "name": "hooked-website",
+      "rootDirectory": "hooked-website",
+      "buildCommand": "npm run build",
+      "outputDirectory": ".next",
+      "framework": "nextjs",
+      "installCommand": "npm install",
+      "devCommand": "npm run dev"
+    }
+  ]
+} 
