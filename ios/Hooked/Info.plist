@@ -29,16 +29,11 @@
     <key>CFBundleURLTypes</key>
     <array>
       <dict>
+        <key>CFBundleURLName</key>
+        <string>com.hookedapp.app</string>
         <key>CFBundleURLSchemes</key>
         <array>
           <string>hooked</string>
-          <string>com.hookedapp.app</string>
-        </array>
-      </dict>
-      <dict>
-        <key>CFBundleURLSchemes</key>
-        <array>
-          <string>exp+hooked</string>
         </array>
       </dict>
     </array>

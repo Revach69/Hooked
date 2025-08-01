@@ -20,13 +20,11 @@ const firebaseConfig = {
 let app;
 try {
   app = initializeApp(firebaseConfig);
-  console.log('✅ Firebase app initialized successfully');
 } catch (error: any) {
   console.error('❌ Failed to initialize Firebase app:', error);
   // Create a fallback app with a different name if initialization fails
   try {
     app = initializeApp(firebaseConfig, 'fallback-app');
-    console.log('✅ Firebase app initialized with fallback name');
   } catch (fallbackError: any) {
     console.error('❌ Failed to initialize Firebase app with fallback:', fallbackError);
     throw new Error('Firebase initialization failed completely');

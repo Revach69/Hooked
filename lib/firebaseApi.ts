@@ -80,8 +80,6 @@ class OfflineQueue {
     this.queue.push(queueItem);
     await this.saveQueueToStorage();
     
-    console.log(`📝 Added operation to offline queue (${this.queue.length} items)`);
-    
     // Try to process queue if network is available
     this.processQueue();
   }
@@ -99,7 +97,6 @@ class OfflineQueue {
       const savedQueue = await AsyncStorage.getItem('firebase_offline_queue');
       if (savedQueue) {
         this.queue = JSON.parse(savedQueue);
-        console.log(`📝 Loaded ${this.queue.length} operations from offline queue`);
       }
     } catch (error) {
       console.error('❌ Error loading offline queue from storage:', error);
@@ -111,12 +108,10 @@ class OfflineQueue {
 
     const netInfo = await NetInfo.fetch();
     if (!netInfo.isConnected) {
-      console.log('🌐 Network not available, skipping queue processing');
       return;
     }
 
     this.isProcessing = true;
-    console.log(`🔄 Processing offline queue (${this.queue.length} items)`);
 
     const itemsToProcess = [...this.queue];
     this.queue = [];
@@ -124,12 +119,10 @@ class OfflineQueue {
     for (const item of itemsToProcess) {
       try {
         await item.operation();
-        console.log(`✅ Processed offline operation ${item.id}`);
       } catch (error) {
         item.retries++;
         if (item.retries < this.maxRetries) {
           this.queue.push(item);
-          console.log(`⚠️ Failed to process offline operation ${item.id}, will retry (${item.retries}/${this.maxRetries})`);
         } else {
           console.error(`❌ Failed to process offline operation ${item.id} after ${this.maxRetries} attempts`);
         }
@@ -138,10 +131,6 @@ class OfflineQueue {
 
     await this.saveQueueToStorage();
     this.isProcessing = false;
-    
-    if (this.queue.length > 0) {
-      console.log(`📝 ${this.queue.length} operations remaining in offline queue`);
-    }
   }
 
   async initialize(): Promise<void> {
@@ -171,7 +160,6 @@ async function executeWithOfflineSupport<T>(
   } catch (error: any) {
     // If it's a network error and offline queue is enabled, queue the operation
     if (enableOfflineQueue && (!error.code || error.code === 'unavailable' || error.message === 'No network connectivity')) {
-      console.log(`📝 Queuing ${operationName} for offline processing`);
       await offlineQueue.add(operation);
       throw new Error(`Operation queued for offline processing: ${operationName}`);
     }
@@ -438,12 +426,10 @@ export const EventProfileAPI = {
 
   async toggleVisibility(id: string, isVisible: boolean): Promise<void> {
     return executeWithOfflineSupport(async () => {
-      console.log('🔄 Toggling visibility to', isVisible, 'for profile:', id);
       await updateDoc(doc(db, 'event_profiles', id), {
         is_visible: isVisible,
         updated_at: serverTimestamp()
       });
-      console.log('✅ Visibility toggled successfully to', isVisible);
     }, 'Toggle Profile Visibility');
   }
 };
@@ -856,7 +842,6 @@ export const SavedProfileAPI = {
       
       savedProfiles.push(newProfile);
       await AsyncStorage.setItem('saved_profiles', JSON.stringify(savedProfiles));
-      console.log('✅ Profile saved locally');
     } catch (error) {
       console.error('❌ Error saving profile locally:', error);
       throw error;
@@ -880,7 +865,6 @@ export const SavedProfileAPI = {
       const savedProfiles = await this.getLocalProfiles();
       const filteredProfiles = savedProfiles.filter(profile => profile.id !== profileId);
       await AsyncStorage.setItem('saved_profiles', JSON.stringify(filteredProfiles));
-      console.log('✅ Profile deleted locally');
     } catch (error) {
       console.error('❌ Error deleting local profile:', error);
       throw error;
@@ -901,7 +885,6 @@ export const SavedProfileAPI = {
         created_at: serverTimestamp()
       });
       
-      console.log('✅ Profile saved to cloud');
       return docRef.id;
     }, 'Save Profile to Cloud');
   },
@@ -937,7 +920,6 @@ export const SavedProfileAPI = {
       }
 
       await deleteDoc(doc(db, 'user_saved_profiles', profileId));
-      console.log('✅ Profile deleted from cloud');
     }, 'Delete Cloud Profile');
   }
 }; 

@@ -17,6 +17,7 @@ import {
 import { router, useFocusEffect } from 'expo-router';
 import { User, LogOut, Edit, Camera, Users, MessageCircle, Flag, AlertTriangle, Shield, Clock, Mail, AlertCircle } from 'lucide-react-native';
 import { EventProfile, Event, User as UserAPI, ReportAPI } from '../lib/firebaseApi';
+import { VisionApiService } from '../lib/visionApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -63,11 +64,6 @@ export default function Profile() {
   useEffect(() => {
     if (profile) {
       const newVisibility = profile.is_visible ?? true;
-      console.log('🔄 Syncing visibility state:', { 
-        profileVisibility: profile.is_visible, 
-        currentEventVisible: eventVisible, 
-        newVisibility 
-      });
       setEventVisible(newVisibility);
     }
   }, [profile]);
@@ -76,14 +72,9 @@ export default function Profile() {
   useFocusEffect(
     React.useCallback(() => {
       if (profile?.id) {
-        console.log('🔄 Refreshing profile data on focus for profile:', profile.id);
         // Refresh profile data to ensure toggle state is current
         EventProfile.get(profile.id).then((updatedProfile) => {
           if (updatedProfile) {
-            console.log('✅ Profile refreshed:', { 
-              oldVisibility: profile.is_visible, 
-              newVisibility: updatedProfile.is_visible 
-            });
             setProfile(updatedProfile);
           }
         }).catch((error) => {
@@ -151,8 +142,6 @@ export default function Profile() {
 
       // If the first attempt fails or is canceled, try with different settings
       if (result.canceled) {
-        console.log('First image picker attempt was canceled, trying alternative approach...');
-        
         // Try without editing first, then we can handle cropping differently
         result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: 'Images',
@@ -167,16 +156,7 @@ export default function Profile() {
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
         
-        // Debug logging for image properties
-        console.log('Selected image asset:', {
-          uri: asset.uri,
-          width: asset.width,
-          height: asset.height,
-          fileSize: asset.fileSize,
-          type: asset.type,
-          fileName: asset.fileName,
-          aspectRatio: asset.width && asset.height ? asset.width / asset.height : 'unknown'
-        });
+
         
         if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
           Alert.alert("File Too Large", "Image must be smaller than 10MB.");
@@ -185,21 +165,33 @@ export default function Profile() {
 
         setIsUploadingPhoto(true);
         try {
-          // Use the asset directly instead of creating a File object
+          // Create file object for processing
           const fileObject = {
             uri: asset.uri,
             name: asset.fileName || `profile-photo-${Date.now()}.jpg`,
-            type: asset.type || 'image/jpeg'
+            type: asset.type || 'image/jpeg',
+            fileSize: asset.fileSize
           };
+
+          // Step 1: Content filtering with Google Cloud Vision API
+          const contentResult = await VisionApiService.analyzeImageContent(fileObject);
           
+          if (!contentResult.isAppropriate) {
+            Alert.alert(
+              "Inappropriate Content Detected",
+              `Your photo contains inappropriate content: ${contentResult.reasons.join(', ')}. Please choose a different photo that complies with our community guidelines.`,
+              [{ text: "OK" }]
+            );
+            return;
+          }
+
+          // Step 2: Upload to Firebase Storage
           const { file_url } = await UserAPI.uploadFile(fileObject);
           
           // Update profile with new photo
           await EventProfile.update(profile.id, { profile_photo_url: file_url });
           setProfile((prev: any) => ({ ...prev, profile_photo_url: file_url }));
           await AsyncStorage.setItem('currentProfilePhotoUrl', file_url);
-          
-          // Removed the success alert - photo upload is now silent
         } catch (err) {
           console.error("Error uploading photo:", err);
           Alert.alert("Upload Failed", "Failed to upload photo. Please try again.");
@@ -406,17 +398,8 @@ export default function Profile() {
   };
   const handleToggleVisibility = async (value: boolean) => {
     try {
-      console.log('🔄 Attempting to update visibility to', value, 'for profile:', profile.id);
-      console.log('📊 Current state:', { 
-        profileVisibility: profile?.is_visible, 
-        eventVisible: eventVisible, 
-        targetValue: value 
-      });
-      
       // Use the new toggleVisibility function
       await EventProfile.toggleVisibility(profile.id, value);
-      
-      console.log('✅ Visibility updated successfully to', value);
       setProfile((prev: any) => ({ ...prev, is_visible: value }));
       setEventVisible(value);
       

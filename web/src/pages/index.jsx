@@ -16,6 +16,26 @@ import Profile from "./Profile";
 
 import { BrowserRouter as Router, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 
+// Test component for debugging
+const TestComponent = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  console.log("🔍 TestComponent rendered");
+  console.log("🔍 TestComponent location:", location.pathname);
+  console.log("🔍 TestComponent navigate function:", typeof navigate);
+  
+  return (
+    <div style={{padding: '20px', textAlign: 'center'}}>
+      <h2>Test Component</h2>
+      <p>Router is working!</p>
+      <p>Current path: {location.pathname}</p>
+      <p>Navigate function: {typeof navigate}</p>
+      <button onClick={() => navigate('/')}>Go Home</button>
+    </div>
+  );
+};
+
 const PAGES = {
     
     Home: Home,
@@ -56,6 +76,7 @@ function PagesContent() {
     console.log("🔍 PagesContent - Current location:", location.pathname);
     console.log("🔍 PagesContent - Current search:", location.search);
     console.log("🔍 PagesContent - Current page:", currentPage);
+    console.log("🔍 PagesContent - navigate function type:", typeof navigate);
     
     return (
         <Layout currentPageName={currentPage}>
@@ -65,18 +86,30 @@ function PagesContent() {
                 <Route path="/Consent" element={<Consent />} />
                 <Route path="/Discovery" element={<Discovery />} />
                 <Route path="/Matches" element={<Matches />} />
-                <Route path="/join" element={<Join />} />
+                <Route path="/join" element={
+                  (() => {
+                    console.log("🔍 Join route matched - rendering Join component");
+                    return <Join />;
+                  })()
+                } />
                 <Route path="/Profile" element={<Profile />} />
+                <Route path="/test" element={<TestComponent />} />
                 
                 {/* Catch-all route for debugging */}
                 <Route path="*" element={
-                  <div style={{padding: '20px', textAlign: 'center'}}>
-                    <h2>404 - Page Not Found</h2>
-                    <p>Current path: {location.pathname}</p>
-                    <p>Current search: {location.search}</p>
-                    <p>Current hash: {location.hash}</p>
-                    <button onClick={() => navigate('/')}>Go Home</button>
-                  </div>
+                  (() => {
+                    console.log("🔍 Catch-all route matched - path:", location.pathname);
+                    return (
+                      <div style={{padding: '20px', textAlign: 'center'}}>
+                        <h2>404 - Page Not Found</h2>
+                        <p>Current path: {location.pathname}</p>
+                        <p>Current search: {location.search}</p>
+                        <p>Current hash: {location.hash}</p>
+                        <p>Navigate function: {typeof navigate}</p>
+                        <button onClick={() => navigate('/')}>Go Home</button>
+                      </div>
+                    );
+                  })()
                 } />
             </Routes>
         </Layout>

@@ -126,11 +126,29 @@ export default function Home() {
           <Button
             onClick={() => {
               console.log("🔍 Test navigation button clicked");
-              navigate('/join?code=TEST');
+              console.log("🔍 navigate function:", typeof navigate);
+              console.log("🔍 Current location:", window.location.href);
+              try {
+                navigate('/join?code=TEST');
+                console.log("🔍 Navigation call completed");
+              } catch (error) {
+                console.error("🔍 Navigation error:", error);
+              }
             }}
             className="w-full bg-red-500 hover:bg-red-600 text-white font-medium py-2 rounded-full shadow-lg transition-all"
           >
             Test Navigation
+          </Button>
+          
+          {/* Simple test button */}
+          <Button
+            onClick={() => {
+              console.log("🔍 Simple test button clicked");
+              navigate('/test');
+            }}
+            className="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 rounded-full shadow-lg transition-all"
+          >
+            Simple Test Route
           </Button>
         </div>
       </div>

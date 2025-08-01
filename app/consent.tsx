@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { User as UserAPI, EventProfile, Event } from '../lib/firebaseApi';
+import { VisionApiService } from '../lib/visionApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User as UserIcon, Camera, Upload } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -181,20 +182,31 @@ export default function Consent() {
       return;
     }
 
-    // Validate image properties
-
     setIsUploadingPhoto(true);
     try {
-      // Use the asset directly instead of creating a File object
+      // Create file object for processing
       const fileObject = {
         uri: asset.uri,
         name: asset.fileName || `profile-photo-${Date.now()}.jpg`,
-        type: asset.type || 'image/jpeg'
+        type: asset.type || 'image/jpeg',
+        fileSize: asset.fileSize
       };
+
+      // Step 1: Content filtering with Google Cloud Vision API
+      const contentResult = await VisionApiService.analyzeImageContent(fileObject);
       
+      if (!contentResult.isAppropriate) {
+        Alert.alert(
+          "Inappropriate Content Detected",
+          `Your photo contains inappropriate content: ${contentResult.reasons.join(', ')}. Please choose a different photo that complies with our community guidelines.`,
+          [{ text: "OK" }]
+        );
+        return;
+      }
+
+      // Step 2: Upload to Firebase Storage
       const { file_url } = await UserAPI.uploadFile(fileObject);
       setFormData(prev => ({ ...prev, profile_photo_url: file_url }));
-      // Removed the success alert - photo upload is now silent
     } catch (err) {
       console.error("Error uploading photo:", err);
       Alert.alert("Upload Failed", "Failed to upload photo. Please try again.");

@@ -133,7 +133,6 @@ export class FirebaseErrorBoundary extends Component<Props, State> {
         );
 
         if (success) {
-          console.log('✅ Firebase error recovered by boundary');
           // Reset error count on successful recovery
           this.errorCount = 0;
           this.setState({

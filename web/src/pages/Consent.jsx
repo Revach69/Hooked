@@ -47,20 +47,30 @@ export default function Consent() {
 
   useEffect(() => {
     const fetchEvent = async () => {
+      console.log("🔍 Consent page - fetchEvent called");
       const eventId = localStorage.getItem('currentEventId');
+      console.log("🔍 Consent page - eventId from localStorage:", eventId);
+      
       if (!eventId) {
+        console.log("🔍 Consent page - No eventId found, redirecting to Home");
         navigate(createPageUrl("Home"));
         return;
       }
+      
       try {
+        console.log("🔍 Consent page - Fetching event with ID:", eventId);
         const events = await Event.filter({ id: eventId });
+        console.log("🔍 Consent page - Found events:", events);
+        
         if (events.length > 0) {
+          console.log("🔍 Consent page - Setting event:", events[0]);
           setEvent(events[0]);
         } else {
+          console.log("🔍 Consent page - No events found, redirecting to Home");
           navigate(createPageUrl("Home"));
         }
       } catch (err) {
-        console.error("Error fetching event details:", err);
+        console.error("🔍 Consent page - Error fetching event details:", err);
         navigate(createPageUrl("Home"));
       }
     };

@@ -9,6 +9,8 @@ import { Event, EventProfile } from "@/api/entities"; // Changed import path
 import { testFirebaseConnection } from "@/lib/firebaseConfig";
 
 export default function JoinPage() {
+  console.log("🚀 JoinPage component - STARTING TO RENDER");
+  
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -96,32 +98,40 @@ export default function JoinPage() {
       // Store event data in localStorage for the session
       localStorage.setItem('currentEventId', foundEvent.id);
       localStorage.setItem('currentEventCode', foundEvent.event_code);
-
-
+      
+      console.log("🚀 Stored event data in localStorage:");
+      console.log("🚀 - currentEventId:", foundEvent.id);
+      console.log("🚀 - currentEventCode:", foundEvent.event_code);
 
       // Check if user has an existing session_id (fallback method)
       const existingSessionId = localStorage.getItem('currentSessionId');
+      console.log("🚀 Existing session ID:", existingSessionId);
       
       if (existingSessionId) {
         // User might be returning - verify their profile still exists
         try {
+          console.log("🚀 Checking for existing profile...");
           const existingProfiles = await EventProfile.filter({
             session_id: existingSessionId,
             event_id: foundEvent.id
           });
           
+          console.log("🚀 Found existing profiles:", existingProfiles);
+          
           if (existingProfiles.length > 0) {
             // User has an existing profile, redirect to Discovery
+            console.log("🚀 Redirecting to Discovery (existing profile found)");
             navigate(createPageUrl("Discovery"));
             return;
           }
         } catch (profileError) {
-          console.warn("Error checking existing profile:", profileError);
+          console.warn("🚀 Error checking existing profile:", profileError);
           // Continue to consent page if profile check fails
         }
       }
 
       // New user or no existing profile - redirect to consent/profile creation
+      console.log("🚀 Redirecting to Consent (new user or no existing profile)");
       navigate(createPageUrl("Consent"));
 
     } catch (error) {

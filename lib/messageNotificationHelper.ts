@@ -29,8 +29,6 @@ export async function notifyNewMessage(
       messagePreview,
       false // You can detect if device is locked here
     );
-    
-    console.log('Message notification sent successfully!');
   } catch (error) {
     console.error('Error sending message notification:', error);
   }

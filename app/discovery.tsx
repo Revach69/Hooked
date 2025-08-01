@@ -178,7 +178,6 @@ export default function Discovery() {
 
     // Prevent multiple listener creation
     if (listenersRef.current.otherProfiles || listenersRef.current.likes) {
-      console.log("Listeners already exist, skipping setup");
       return;
     }
 
@@ -390,7 +389,6 @@ export default function Discovery() {
       // Send notification to the person being liked (they get notified that someone liked them)
       try {
         await sendLikeNotification(likedProfile.session_id, currentUserProfile.first_name);
-        console.log('Like notification sent successfully!');
       } catch (notificationError) {
         console.error('Error sending like notification:', notificationError);
       }
@@ -406,7 +404,6 @@ export default function Discovery() {
         // They already liked us! Send them a notification that we liked them back
         try {
           await sendLikeNotification(likedProfile.session_id, currentUserProfile.first_name);
-          console.log('Like back notification sent successfully!');
         } catch (notificationError) {
           console.error('Error sending like back notification:', notificationError);
         }
@@ -428,7 +425,6 @@ export default function Discovery() {
             sendMatchNotification(likerSessionId, likedProfile.first_name),
             sendMatchNotification(likedProfile.session_id, currentUserProfile.first_name)
           ]);
-          console.log('Match notifications sent successfully!');
         } catch (notificationError) {
           console.error('Error sending match notifications:', notificationError);
         }

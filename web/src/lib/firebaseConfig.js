@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore, enableIndexedDbPersistence, CACHE_SIZE_UNLIMITED, getDocs, collection } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
+import { getAuth, connectAuthEmulator } from 'firebase/auth';
+import { getFirestore, enableIndexedDbPersistence, CACHE_SIZE_UNLIMITED, getDocs, collection, connectFirestoreEmulator } from 'firebase/firestore';
+import { getStorage, connectStorageEmulator } from 'firebase/storage';
 import { getAnalytics } from 'firebase/analytics';
 
 // Your Firebase configuration (same as mobile app)
@@ -36,6 +36,27 @@ try {
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+
+// Connect to emulators in development (matching mobile app behavior)
+if (import.meta.env.DEV) {
+  try {
+    // Only connect to emulators if they're not already connected
+    if (!auth.config?.emulator) {
+      connectAuthEmulator(auth, 'http://localhost:9099');
+      console.log('✅ Connected to Auth emulator');
+    }
+    if (!db._delegate?._databaseId?.projectId?.includes('demo-')) {
+      connectFirestoreEmulator(db, 'localhost', 8080);
+      console.log('✅ Connected to Firestore emulator');
+    }
+    if (!storage.app.options?.storageBucket?.includes('demo-')) {
+      connectStorageEmulator(storage, 'localhost', 9199);
+      console.log('✅ Connected to Storage emulator');
+    }
+  } catch (emulatorError) {
+    console.warn('⚠️ Failed to connect to emulators (this is normal if emulators are not running):', emulatorError.message);
+  }
+}
 
 // Initialize Analytics (only in browser environment)
 let analytics = null;
