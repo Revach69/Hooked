@@ -93,36 +93,13 @@ async function sendPushNotification(
 
 /**
  * Get all push tokens for a user from Firestore
+ * NOTE: This is disabled for the session-based app since it requires Firebase Auth
  */
 async function getUserPushTokens(userId: string): Promise<Array<{ token: string; platform: string }>> {
-  try {
-    const tokensRef = collection(db, 'users', userId, 'pushTokens');
-    const tokensQuery = query(tokensRef, where('deleted', '==', false));
-    const tokensSnapshot = await getDocs(tokensQuery);
-    
-    const tokens: Array<{ token: string; platform: string }> = [];
-    tokensSnapshot.forEach((doc) => {
-      const data = doc.data();
-      if (!data.deleted) {
-        tokens.push({
-          token: data.token,
-          platform: data.platform,
-        });
-      }
-    });
-
-    return tokens;
-  } catch (error: any) {
-    console.error('Error getting user push tokens:', error);
-    
-    // Handle specific Firebase errors
-    if (error.code === 'permission-denied' || error.message?.includes('Missing or insufficient permissions')) {
-      console.warn('Permission denied accessing push tokens');
-      return [];
-    }
-    
-    return [];
-  }
+  // Push tokens are not supported in the session-based version
+  // since they require Firebase Auth and the app doesn't use authentication
+  console.log('Push tokens not supported in session-based app');
+  return [];
 }
 
 /**

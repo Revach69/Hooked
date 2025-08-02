@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { Platform } from 'react-native';
 import { logFirebaseError } from './errorMonitoring';
+import { attemptFirebaseRecovery, shouldAttemptFirebaseRecovery } from './firebaseRecovery';
 
 export interface OfflineAction {
   id: string;
@@ -42,7 +43,8 @@ class MobileErrorHandler {
       'ECONNREFUSED',
       'ENOTFOUND',
       'ETIMEDOUT',
-      'ENETUNREACH'
+      'ENETUNREACH',
+      'WebChannelConnection'
     ],
     nonRetryableErrors: [
       'permission-denied',
@@ -96,7 +98,7 @@ class MobileErrorHandler {
     }
   }
 
-  // Enhanced retry operation with exponential backoff and jitter
+  // Enhanced retry operation with Firebase recovery integration
   async retryOperation<T>(
     operation: () => Promise<T>,
     options: {
@@ -137,6 +139,27 @@ class MobileErrorHandler {
           isOnline: this.isOnline
         });
 
+        // Check if this is a Firebase-specific error that might need recovery
+        if (this.isFirebaseConnectionError(error) && shouldAttemptFirebaseRecovery()) {
+          console.log('🔄 Attempting Firebase recovery due to connection error...');
+          try {
+            const recoverySuccess = await attemptFirebaseRecovery(operationName);
+            if (recoverySuccess) {
+              console.log('✅ Firebase recovery successful, retrying operation...');
+              // Try the operation again after successful recovery
+              try {
+                const result = await operation();
+                return result;
+              } catch (retryError) {
+                console.warn('⚠️ Operation still failed after Firebase recovery:', retryError);
+                lastError = retryError;
+              }
+            }
+          } catch (recoveryError) {
+            console.error('❌ Firebase recovery failed:', recoveryError);
+          }
+        }
+
         // Check if we should retry this error
         if (!shouldRetry(error, attempt)) {
           throw error;
@@ -159,6 +182,29 @@ class MobileErrorHandler {
     }
 
     throw lastError;
+  }
+
+  // Check if error is a Firebase connection error
+  private isFirebaseConnectionError(error: any): boolean {
+    const connectionErrorPatterns = [
+      'WebChannelConnection',
+      'unavailable',
+      'deadline-exceeded',
+      'network',
+      'timeout',
+      'connection',
+      'ECONNRESET',
+      'ECONNREFUSED',
+      'ENOTFOUND',
+      'ETIMEDOUT',
+      'ENETUNREACH'
+    ];
+
+    return connectionErrorPatterns.some(pattern => 
+      error.code === pattern || 
+      error.message?.includes(pattern) ||
+      error.message?.includes('WebChannelConnection')
+    );
   }
 
   // Determine if an error should be retried
@@ -308,6 +354,11 @@ class MobileErrorHandler {
         error.code === 'unavailable' ||
         !this.isOnline) {
       return 'No internet connection. Please check your network and try again.';
+    }
+
+    // Firebase connection errors
+    if (this.isFirebaseConnectionError(error)) {
+      return 'Connection to the server was lost. Please check your internet connection and try again.';
     }
 
     // Firebase specific errors

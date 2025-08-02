@@ -3,13 +3,43 @@
     "java.compile.nullAnalysis.mode": "automatic",
     "java.project.sourcePaths": [],
     "java.project.explorer.showNonJavaResources": false,
+    "java.import.gradle.enabled": false,
+    "java.import.maven.enabled": false,
+    "java.autobuild.enabled": false,
+    "java.configuration.checkProjectSettingsExclusions": false,
     "files.exclude": {
         "**/node_modules/**/android": true,
         "**/node_modules/**/build.gradle": true,
         "**/node_modules/**/build.gradle.kts": true,
-        "**/node_modules/**/.settings": true
+        "**/node_modules/**/.settings": true,
+        "**/node_modules/**/gradle": true,
+        "**/node_modules/**/gradlew": true,
+        "**/node_modules/**/gradlew.bat": true,
+        "**/node_modules/**/gradle.properties": true,
+        "**/node_modules/**/settings.gradle": true,
+        "**/node_modules/**/settings.gradle.kts": true,
+        "**/node_modules/**/src/main/java": true,
+        "**/node_modules/**/src/main/kotlin": true,
+        "**/node_modules/**/src/test/java": true,
+        "**/node_modules/**/src/test/kotlin": true,
+        "**/node_modules/**/expo-gradle-plugin": true,
+        "**/node_modules/**/expo-module-gradle-plugin": true,
+        "**/node_modules/**/expo-dev-launcher-gradle-plugin": true,
+        "**/node_modules/**/react-native-gradle-plugin": true,
+        "**/node_modules/**/shared": true
     },
     "search.exclude": {
-        "**/node_modules/**/android": true
-    }
+        "**/node_modules/**/android": true,
+        "**/node_modules/**/build.gradle": true,
+        "**/node_modules/**/build.gradle.kts": true,
+        "**/node_modules/**/gradle": true,
+        "**/node_modules/**/src/main/java": true,
+        "**/node_modules/**/src/main/kotlin": true,
+        "**/node_modules/**/src/test/java": true,
+        "**/node_modules/**/src/test/kotlin": true
+    },
+    "typescript.preferences.includePackageJsonAutoImports": "off",
+    "typescript.suggest.autoImports": false,
+    "javascript.suggest.autoImports": false,
+    "problems.decorations.enabled": false
 }

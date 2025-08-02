@@ -368,9 +368,17 @@ export default function Discovery() {
   const initializeSession = async () => {
     const eventId = await AsyncStorage.getItem('currentEventId');
     const sessionId = await AsyncStorage.getItem('currentSessionId');
+    const profilePhotoUrl = await AsyncStorage.getItem('currentProfilePhotoUrl');
     
     if (!eventId || !sessionId) {
       router.replace('/home');
+      return;
+    }
+
+    // Check if user has completed profile creation (has profile photo)
+    if (!profilePhotoUrl) {
+      console.log('⚠️ User hasn\'t completed profile creation, redirecting to consent');
+      router.replace('/consent');
       return;
     }
 

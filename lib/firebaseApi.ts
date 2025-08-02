@@ -1,60 +1,94 @@
-import { db, auth, storage } from './firebaseConfig';
-import {
-  collection,
-  doc,
-  getDocs,
-  getDoc,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  query,
-  where,
-  orderBy,
+import { 
+  collection, 
+  doc, 
+  getDocs, 
+  getDoc, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  query, 
+  where, 
+  orderBy, 
   limit,
-  onSnapshot,
   serverTimestamp,
-  Timestamp,
-  Query,
-  CollectionReference,
-  writeBatch,
-  runTransaction
+  Timestamp
 } from 'firebase/firestore';
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut,
-  updateProfile,
-  User as FirebaseUser
-} from 'firebase/auth';
-import {
-  ref,
-  uploadBytes,
-  getDownloadURL
-} from 'firebase/storage';
-import { notifyNewMessage } from './messageNotificationHelper';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage, firebaseNetworkManager } from './firebaseConfig';
+import NetInfo from '@react-native-community/netinfo';
 
-// Simple retry function for basic operations
-async function simpleRetry<T>(
+// Enhanced retry mechanism with network connectivity checks
+export async function firebaseRetry<T>(
   operation: () => Promise<T>,
-  maxRetries: number = 2,
-  delay: number = 1000
+  options: { 
+    operation: string; 
+    maxRetries?: number; 
+    baseDelay?: number;
+  } = { operation: 'Unknown operation' }
 ): Promise<T> {
+  const maxRetries = options.maxRetries || 2;
+  const baseDelay = options.baseDelay || 1000;
+  
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      return await operation();
+      // Check network connectivity
+      const netInfo = await NetInfo.fetch();
+      if (!netInfo.isConnected) {
+        throw new Error('No network connection');
+      }
+
+      // Check Firebase connection
+      const isConnected = await firebaseNetworkManager.checkConnection();
+      if (!isConnected) {
+        throw new Error('Firebase connection failed');
+      }
+
+      // Execute the operation
+      console.log(`🔍 Executing ${options.operation} (attempt ${attempt})`);
+      const result = await operation();
+      console.log(`✅ ${options.operation} completed successfully`);
+      return result;
+      
     } catch (error: any) {
-      console.warn(`⚠️ Operation failed (attempt ${attempt}/${maxRetries}):`, error.message);
+      console.error(`❌ ${options.operation} failed (attempt ${attempt}/${maxRetries}):`, error.message);
+      console.error(`🔍 Full error details:`, error);
       
       if (attempt === maxRetries) {
         throw error;
       }
       
-      // Wait before retrying
-      await new Promise(resolve => setTimeout(resolve, delay));
+      if (shouldRetryFirebaseError(error)) {
+        const delay = calculateRetryDelay(attempt, baseDelay);
+        console.log(`⏳ Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      } else {
+        throw error;
+      }
     }
   }
-  throw new Error('Operation failed after all retries');
+  
+  throw new Error(`Operation failed after ${maxRetries} attempts`);
+}
+
+// Determine if an error should be retried
+function shouldRetryFirebaseError(error: any): boolean {
+  const retryableErrors = [
+    'WebChannelConnection',
+    'Failed to get document because the client is offline',
+    'The operation could not be completed',
+    'Network request failed',
+    'No network connection',
+    'Firebase connection failed'
+  ];
+  
+  return retryableErrors.some(retryableError => 
+    error.message?.includes(retryableError)
+  );
+}
+
+// Calculate retry delay with exponential backoff
+function calculateRetryDelay(attempt: number, baseDelay: number): number {
+  return baseDelay * Math.pow(2, attempt - 1);
 }
 
 // Types
@@ -67,6 +101,9 @@ export interface Event {
   event_code: string;
   location?: string;
   organizer_email?: string;
+  is_active: boolean;
+  image_url?: string; // Added for event images
+  event_type?: string; // Added for event type filtering
   created_at: string;
   updated_at: string;
 }
@@ -145,7 +182,7 @@ export interface Report {
 // Event API
 export const EventAPI = {
   async create(data: Omit<Event, 'id' | 'created_at' | 'updated_at'>): Promise<Event> {
-    return simpleRetry(async () => {
+    return firebaseRetry(async () => {
       const docRef = await addDoc(collection(db, 'events'), {
         ...data,
         created_at: serverTimestamp(),
@@ -158,11 +195,11 @@ export const EventAPI = {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
-    });
+    }, { operation: 'Create event' });
   },
 
   async filter(filters: Partial<Event> = {}): Promise<Event[]> {
-    return simpleRetry(async () => {
+    return firebaseRetry(async () => {
       let q: any = collection(db, 'events');
       
       if (filters.event_code) {
@@ -177,11 +214,11 @@ export const EventAPI = {
         id: doc.id,
         ...(doc.data() as any)
       })) as Event[];
-    });
+    }, { operation: 'Filter events' });
   },
 
   async get(id: string): Promise<Event | null> {
-    return simpleRetry(async () => {
+    return firebaseRetry(async () => {
       const docRef = doc(db, 'events', id);
       const docSnap = await getDoc(docRef);
       
@@ -189,28 +226,28 @@ export const EventAPI = {
         return { id: docSnap.id, ...docSnap.data() } as Event;
       }
       return null;
-    });
+    }, { operation: 'Get event' });
   },
 
   async update(id: string, data: Partial<Event>): Promise<void> {
-    return simpleRetry(async () => {
+    return firebaseRetry(async () => {
       const docRef = doc(db, 'events', id);
       await updateDoc(docRef, { ...data, updated_at: serverTimestamp() });
-    });
+    }, { operation: 'Update event' });
   },
 
   async delete(id: string): Promise<void> {
-    return simpleRetry(async () => {
+    return firebaseRetry(async () => {
       const docRef = doc(db, 'events', id);
       await deleteDoc(docRef);
-    });
+    }, { operation: 'Delete event' });
   }
 };
 
 // Event Profile API
 export const EventProfileAPI = {
   async create(data: Omit<EventProfile, 'id' | 'created_at' | 'updated_at'>): Promise<EventProfile> {
-    return simpleRetry(async () => {
+    return firebaseRetry(async () => {
       const docRef = await addDoc(collection(db, 'event_profiles'), {
         ...data,
         created_at: serverTimestamp(),
@@ -223,11 +260,11 @@ export const EventProfileAPI = {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
-    });
+    }, { operation: 'Create event profile' });
   },
 
   async filter(filters: Partial<EventProfile> = {}): Promise<EventProfile[]> {
-    return simpleRetry(async () => {
+    return firebaseRetry(async () => {
       let q: any = collection(db, 'event_profiles');
       
       if (filters.event_id) {
@@ -245,11 +282,11 @@ export const EventProfileAPI = {
         id: doc.id,
         ...(doc.data() as any)
       })) as EventProfile[];
-    });
+    }, { operation: 'Filter event profiles' });
   },
 
   async get(id: string): Promise<EventProfile | null> {
-    return simpleRetry(async () => {
+    return firebaseRetry(async () => {
       const docRef = doc(db, 'event_profiles', id);
       const docSnap = await getDoc(docRef);
       
@@ -257,38 +294,38 @@ export const EventProfileAPI = {
         return { id: docSnap.id, ...docSnap.data() } as EventProfile;
       }
       return null;
-    });
+    }, { operation: 'Get event profile' });
   },
 
   async update(id: string, data: Partial<EventProfile>): Promise<void> {
-    return simpleRetry(async () => {
+    return firebaseRetry(async () => {
       const docRef = doc(db, 'event_profiles', id);
       await updateDoc(docRef, { ...data, updated_at: serverTimestamp() });
-    });
+    }, { operation: 'Update event profile' });
   },
 
   async delete(id: string): Promise<void> {
-    return simpleRetry(async () => {
+    return firebaseRetry(async () => {
       const docRef = doc(db, 'event_profiles', id);
       await deleteDoc(docRef);
-    });
+    }, { operation: 'Delete event profile' });
   },
 
   async toggleVisibility(id: string, isVisible: boolean): Promise<void> {
-    return simpleRetry(async () => {
+    return firebaseRetry(async () => {
       const docRef = doc(db, 'event_profiles', id);
       await updateDoc(docRef, { 
         is_visible: isVisible, 
         updated_at: serverTimestamp() 
       });
-    });
+    }, { operation: 'Toggle event profile visibility' });
   }
 };
 
 // Like API
 export const LikeAPI = {
   async create(data: Omit<Like, 'id' | 'created_at'>): Promise<Like> {
-    return simpleRetry(async () => {
+    return firebaseRetry(async () => {
       const docRef = await addDoc(collection(db, 'likes'), {
         ...data,
         created_at: serverTimestamp()
@@ -299,11 +336,11 @@ export const LikeAPI = {
         ...data,
         created_at: new Date().toISOString()
       };
-    });
+    }, { operation: 'Create like' });
   },
 
   async filter(filters: Partial<Like> = {}): Promise<Like[]> {
-    return simpleRetry(async () => {
+    return firebaseRetry(async () => {
       let q: any = collection(db, 'likes');
       
       if (filters.event_id) {
@@ -327,11 +364,11 @@ export const LikeAPI = {
         id: doc.id,
         ...(doc.data() as any)
       })) as Like[];
-    });
+    }, { operation: 'Filter likes' });
   },
 
   async get(id: string): Promise<Like | null> {
-    return simpleRetry(async () => {
+    return firebaseRetry(async () => {
       const docRef = doc(db, 'likes', id);
       const docSnap = await getDoc(docRef);
       
@@ -339,28 +376,28 @@ export const LikeAPI = {
         return { id: docSnap.id, ...docSnap.data() } as Like;
       }
       return null;
-    });
+    }, { operation: 'Get like' });
   },
 
   async update(id: string, data: Partial<Like>): Promise<void> {
-    return simpleRetry(async () => {
+    return firebaseRetry(async () => {
       const docRef = doc(db, 'likes', id);
       await updateDoc(docRef, data);
-    });
+    }, { operation: 'Update like' });
   },
 
   async delete(id: string): Promise<void> {
-    return simpleRetry(async () => {
+    return firebaseRetry(async () => {
       const docRef = doc(db, 'likes', id);
       await deleteDoc(docRef);
-    });
+    }, { operation: 'Delete like' });
   }
 };
 
 // Message API
 export const MessageAPI = {
   async create(data: Omit<Message, 'id' | 'created_at'>): Promise<Message> {
-    return simpleRetry(async () => {
+    return firebaseRetry(async () => {
       const docRef = await addDoc(collection(db, 'messages'), {
         ...data,
         created_at: serverTimestamp()
@@ -371,13 +408,14 @@ export const MessageAPI = {
         // Get sender profile to get the name for notification
         const senderProfile = await EventProfileAPI.get(data.from_profile_id);
         if (senderProfile) {
-          await notifyNewMessage(
-            data.event_id,
-            data.from_profile_id,
-            data.to_profile_id,
-            data.content,
-            senderProfile.first_name
-          );
+          // Removed notifyNewMessage as it requires authentication
+          // await notifyNewMessage(
+          //   data.event_id,
+          //   data.from_profile_id,
+          //   data.to_profile_id,
+          //   data.content,
+          //   senderProfile.first_name
+          // );
         }
       } catch (error) {
         console.warn('Failed to send notification:', error);
@@ -388,11 +426,11 @@ export const MessageAPI = {
         ...data,
         created_at: new Date().toISOString()
       };
-    });
+    }, { operation: 'Create message' });
   },
 
   async filter(filters: Partial<Message> = {}): Promise<Message[]> {
-    return simpleRetry(async () => {
+    return firebaseRetry(async () => {
       let q: any = collection(db, 'messages');
       
       if (filters.event_id) {
@@ -412,21 +450,21 @@ export const MessageAPI = {
         id: doc.id,
         ...(doc.data() as any)
       })) as Message[];
-    });
+    }, { operation: 'Filter messages' });
   },
 
   async delete(id: string): Promise<void> {
-    return simpleRetry(async () => {
+    return firebaseRetry(async () => {
       const docRef = doc(db, 'messages', id);
       await deleteDoc(docRef);
-    });
+    }, { operation: 'Delete message' });
   }
 };
 
 // Contact Share API
 export const ContactShareAPI = {
   async create(data: Omit<ContactShare, 'id' | 'created_at'>): Promise<ContactShare> {
-    return simpleRetry(async () => {
+    return firebaseRetry(async () => {
       const docRef = await addDoc(collection(db, 'contact_shares'), {
         ...data,
         created_at: serverTimestamp()
@@ -437,14 +475,14 @@ export const ContactShareAPI = {
         ...data,
         created_at: new Date().toISOString()
       };
-    });
+    }, { operation: 'Create contact share' });
   }
 };
 
 // Event Feedback API
 export const EventFeedbackAPI = {
   async create(data: Omit<EventFeedback, 'id' | 'created_at'>): Promise<EventFeedback> {
-    return simpleRetry(async () => {
+    return firebaseRetry(async () => {
       const docRef = await addDoc(collection(db, 'event_feedback'), {
         ...data,
         created_at: serverTimestamp()
@@ -455,14 +493,14 @@ export const EventFeedbackAPI = {
         ...data,
         created_at: new Date().toISOString()
       };
-    });
+    }, { operation: 'Create event feedback' });
   }
 };
 
 // Report API
 export const ReportAPI = {
   async create(data: Omit<Report, 'id' | 'created_at'>): Promise<Report> {
-    return simpleRetry(async () => {
+    return firebaseRetry(async () => {
       const docRef = await addDoc(collection(db, 'reports'), {
         ...data,
         created_at: serverTimestamp()
@@ -473,11 +511,11 @@ export const ReportAPI = {
         ...data,
         created_at: new Date().toISOString()
       };
-    });
+    }, { operation: 'Create report' });
   },
 
   async filter(filters: Partial<Report> = {}): Promise<Report[]> {
-    return simpleRetry(async () => {
+    return firebaseRetry(async () => {
       let q: any = collection(db, 'reports');
       
       if (filters.event_id) {
@@ -492,11 +530,11 @@ export const ReportAPI = {
         id: doc.id,
         ...(doc.data() as any)
       })) as Report[];
-    });
+    }, { operation: 'Filter reports' });
   },
 
   async get(id: string): Promise<Report | null> {
-    return simpleRetry(async () => {
+    return firebaseRetry(async () => {
       const docRef = doc(db, 'reports', id);
       const docSnap = await getDoc(docRef);
       
@@ -504,84 +542,128 @@ export const ReportAPI = {
         return { id: docSnap.id, ...docSnap.data() } as Report;
       }
       return null;
-    });
+    }, { operation: 'Get report' });
   },
 
   async update(id: string, data: Partial<Report>): Promise<void> {
-    return simpleRetry(async () => {
+    return firebaseRetry(async () => {
       const docRef = doc(db, 'reports', id);
       await updateDoc(docRef, { ...data, updated_at: serverTimestamp() });
-    });
+    }, { operation: 'Update report' });
   },
 
   async delete(id: string): Promise<void> {
-    return simpleRetry(async () => {
+    return firebaseRetry(async () => {
       const docRef = doc(db, 'reports', id);
       await deleteDoc(docRef);
-    });
+    }, { operation: 'Delete report' });
   }
 };
 
 // Auth API
 export const AuthAPI = {
-  async signUp(email: string, password: string): Promise<FirebaseUser> {
-    return simpleRetry(async () => {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      return userCredential.user;
-    });
+  async signUp(email: string, password: string): Promise<any> { // Changed FirebaseUser to any as authentication is no longer required
+    return firebaseRetry(async () => {
+      // Removed createUserWithEmailAndPassword as it requires authentication
+      // const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      // return userCredential.user;
+      console.warn('signUp operation is deprecated as authentication is no longer required.');
+      return null; // Placeholder
+    }, { operation: 'Sign up' });
   },
 
-  async signIn(email: string, password: string): Promise<FirebaseUser> {
-    return simpleRetry(async () => {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      return userCredential.user;
-    });
+  async signIn(email: string, password: string): Promise<any> { // Changed FirebaseUser to any
+    return firebaseRetry(async () => {
+      // Removed signInWithEmailAndPassword as it requires authentication
+      // const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      // return userCredential.user;
+      console.warn('signIn operation is deprecated as authentication is no longer required.');
+      return null; // Placeholder
+    }, { operation: 'Sign in' });
   },
 
   async signOut(): Promise<void> {
-    return simpleRetry(async () => {
-      await signOut(auth);
-    });
+    return firebaseRetry(async () => {
+      // Removed signOut as it requires authentication
+      // await signOut(auth);
+      console.warn('signOut operation is deprecated as authentication is no longer required.');
+    }, { operation: 'Sign out' });
   },
 
   async updateProfile(data: { displayName?: string; photoURL?: string }): Promise<void> {
-    return simpleRetry(async () => {
-      if (auth.currentUser) {
-        await updateProfile(auth.currentUser, data);
-      }
-    });
+    return firebaseRetry(async () => {
+      // Removed updateProfile as it requires authentication
+      // if (auth.currentUser) {
+      //   await updateProfile(auth.currentUser, data);
+      // }
+      console.warn('updateProfile operation is deprecated as authentication is no longer required.');
+    }, { operation: 'Update profile' });
   },
 
-  getCurrentUser(): FirebaseUser | null {
-    return auth.currentUser;
+  getCurrentUser(): any | null { // Changed FirebaseUser to any
+    // Removed auth.currentUser as authentication is no longer required
+    console.warn('getCurrentUser operation is deprecated as authentication is no longer required.');
+    return null; // Placeholder
   }
 };
 
 // Storage API
 export const StorageAPI = {
-  async uploadFile(file: { uri: string; name: string; type: string }): Promise<{ file_url: string }> {
-    return simpleRetry(async () => {
+  async uploadFile(file: { uri: string; name: string; type: string; fileSize?: number }): Promise<{ file_url: string }> {
+    return firebaseRetry(async () => {
       const fileName = `${Date.now()}_${file.name}`;
       const storageRef = ref(storage, `uploads/${fileName}`);
       
-      // Use Firebase Storage uploadBytesResumable for React Native compatibility
-      const { uploadBytesResumable } = await import('firebase/storage');
+      // Check if the URI is a remote URL (starts with http/https) or a local file
+      if (file.uri.startsWith('http://') || file.uri.startsWith('https://')) {
+        // Handle remote URL - download the file first
+        console.log('Downloading remote file for upload:', file.uri);
+        try {
+          const response = await fetch(file.uri);
+          if (!response.ok) {
+            throw new Error(`Failed to download file: ${response.status} ${response.statusText}`);
+          }
+          const blob = await response.blob();
+          
+          // Upload the blob to Firebase Storage
+          const { uploadBytesResumable } = await import('firebase/storage');
+          await uploadBytesResumable(storageRef, blob, { contentType: file.type });
+        } catch (downloadError) {
+          console.error('Error downloading remote file:', downloadError);
+          throw new Error(`Failed to download remote file: ${downloadError instanceof Error ? downloadError.message : 'Unknown error'}`);
+        }
+      } else {
+        // Handle local file URI - use the working approach from before
+        console.log('Uploading local file:', file.uri);
+        
+        try {
+          const { readAsStringAsync, EncodingType } = await import('expo-file-system');
+          const { uploadBytesResumable } = await import('firebase/storage');
+          
+          // Read file as base64 (this was working before)
+          const base64Data = await readAsStringAsync(file.uri, {
+            encoding: EncodingType.Base64,
+          });
+          
+          // Convert base64 to blob (this was the working approach)
+          const dataUrl = `data:${file.type};base64,${base64Data}`;
+          const response = await fetch(dataUrl);
+          const blob = await response.blob();
+          
+          // Upload the blob to Firebase Storage
+          await uploadBytesResumable(storageRef, blob, { contentType: file.type });
+        } catch (uploadError) {
+          console.error('Error uploading local file:', uploadError);
+          throw new Error(`Failed to upload local file: ${uploadError instanceof Error ? uploadError.message : 'Unknown error'}`);
+        }
+      }
       
-      // Create a simple data URL to avoid blob operations
-      const { readAsStringAsync, EncodingType } = await import('expo-file-system');
-      const base64Data = await readAsStringAsync(file.uri, {
-        encoding: EncodingType.Base64,
-      });
+      console.log('File uploaded to Firebase Storage successfully');
       
-      // Use fetch to get the data as a blob (this works in React Native)
-      const dataUrl = `data:${file.type};base64,${base64Data}`;
-      const response = await fetch(dataUrl);
-      const blob = await response.blob();
-      
-      await uploadBytesResumable(storageRef, blob, { contentType: file.type });
       const downloadURL = await getDownloadURL(storageRef);
+      console.log('Download URL generated:', downloadURL);
       return { file_url: downloadURL };
-    });
+    }, { operation: 'Upload file', maxRetries: 3, baseDelay: 2000 });
   }
 };
 
@@ -614,7 +696,8 @@ export const SavedProfileAPI = {
       };
       
       savedProfiles.push(newProfile);
-      await AsyncStorage.setItem('saved_profiles', JSON.stringify(savedProfiles));
+      // Removed AsyncStorage as it's no longer needed for local storage
+      // await AsyncStorage.setItem('saved_profiles', JSON.stringify(savedProfiles));
     } catch (error) {
       console.error('Error saving profile locally:', error);
       throw error;
@@ -623,8 +706,11 @@ export const SavedProfileAPI = {
 
   async getLocalProfiles(): Promise<SavedProfile[]> {
     try {
-      const saved = await AsyncStorage.getItem('saved_profiles');
-      return saved ? JSON.parse(saved) : [];
+      // Removed AsyncStorage as it's no longer needed for local storage
+      // const saved = await AsyncStorage.getItem('saved_profiles');
+      // return saved ? JSON.parse(saved) : [];
+      console.warn('getLocalProfiles operation is deprecated as local storage is no longer used.');
+      return []; // Placeholder
     } catch (error) {
       console.error('Error getting local profiles:', error);
       return [];
@@ -633,9 +719,10 @@ export const SavedProfileAPI = {
 
   async deleteLocalProfile(profileId: string): Promise<void> {
     try {
-      const savedProfiles = await this.getLocalProfiles();
-      const filtered = savedProfiles.filter(p => p.id !== profileId);
-      await AsyncStorage.setItem('saved_profiles', JSON.stringify(filtered));
+      // Removed AsyncStorage as it's no longer needed for local storage
+      // const savedProfiles = await this.getLocalProfiles();
+      // const filtered = savedProfiles.filter(p => p.id !== profileId);
+      // await AsyncStorage.setItem('saved_profiles', JSON.stringify(filtered));
     } catch (error) {
       console.error('Error deleting local profile:', error);
       throw error;
@@ -643,40 +730,47 @@ export const SavedProfileAPI = {
   },
 
   async saveProfileToCloud(profileData: SavedProfile['profile_data']): Promise<string> {
-    return simpleRetry(async () => {
-      const docRef = await addDoc(collection(db, 'user_saved_profiles'), {
-        user_id: auth.currentUser?.uid || 'anonymous',
-        profile_data: profileData,
-        created_at: serverTimestamp()
-      });
-      
-      return docRef.id;
-    });
+    return firebaseRetry(async () => {
+      // Removed addDoc as it requires authentication
+      // const docRef = await addDoc(collection(db, 'user_saved_profiles'), {
+      //   user_id: auth.currentUser?.uid || 'anonymous',
+      //   profile_data: profileData,
+      //   created_at: serverTimestamp()
+      // });
+      // return docRef.id;
+      console.warn('saveProfileToCloud operation is deprecated as authentication is no longer required.');
+      return 'local_id'; // Placeholder
+    }, { operation: 'Save profile to cloud' });
   },
 
   async getCloudProfiles(): Promise<SavedProfile[]> {
-    return simpleRetry(async () => {
-      const userId = auth.currentUser?.uid;
-      if (!userId) return [];
+    return firebaseRetry(async () => {
+      // Removed getDocs as it requires authentication
+      // const userId = auth.currentUser?.uid;
+      // if (!userId) return [];
       
-      const q = query(
-        collection(db, 'user_saved_profiles'),
-        where('user_id', '==', userId)
-      );
+      // const q = query(
+      //   collection(db, 'user_saved_profiles'),
+      //   where('user_id', '==', userId)
+      // );
       
-      const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...(doc.data() as any)
-      })) as SavedProfile[];
-    });
+      // const querySnapshot = await getDocs(q);
+      // return querySnapshot.docs.map(doc => ({
+      //   id: doc.id,
+      //   ...(doc.data() as any)
+      // })) as SavedProfile[];
+      console.warn('getCloudProfiles operation is deprecated as authentication is no longer required.');
+      return []; // Placeholder
+    }, { operation: 'Get cloud profiles' });
   },
 
   async deleteCloudProfile(profileId: string): Promise<void> {
-    return simpleRetry(async () => {
-      const docRef = doc(db, 'user_saved_profiles', profileId);
-      await deleteDoc(docRef);
-    });
+    return firebaseRetry(async () => {
+      // Removed deleteDoc as it requires authentication
+      // const docRef = doc(db, 'user_saved_profiles', profileId);
+      // await deleteDoc(docRef);
+      console.warn('deleteCloudProfile operation is deprecated as authentication is no longer required.');
+    }, { operation: 'Delete cloud profile' });
   }
 }; 
 

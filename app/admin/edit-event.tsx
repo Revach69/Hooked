@@ -10,6 +10,7 @@ import {
   useColorScheme,
   SafeAreaView,
   TextInput,
+  Image,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { 
@@ -17,11 +18,16 @@ import {
   Save,
   Calendar,
   MapPin,
-  Hash
+  Hash,
+  Camera,
+  X
 } from 'lucide-react-native';
 import { EventAPI, AuthAPI } from '../../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as ImagePicker from 'expo-image-picker';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '../../lib/firebaseConfig';
 
 export default function EditEvent() {
   const colorScheme = useColorScheme();
@@ -41,6 +47,9 @@ export default function EditEvent() {
   const [isSaving, setIsSaving] = useState(false);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   useEffect(() => {
     if (eventId) {
@@ -65,6 +74,11 @@ export default function EditEvent() {
         starts_at: new Date(eventData.starts_at),
         expires_at: new Date(eventData.expires_at),
       });
+
+      // Load existing image if available
+      if (eventData.image_url) {
+        setExistingImageUrl(eventData.image_url);
+      }
     } catch (error) {
       console.error('Error loading event:', error);
       Alert.alert('Error', 'Failed to load event');
@@ -72,6 +86,56 @@ export default function EditEvent() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const pickImage = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [16, 9],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setSelectedImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image. Please try again.');
+    }
+  };
+
+  const uploadImage = async (imageUri: string): Promise<string | null> => {
+    try {
+      setUploadingImage(true);
+      
+      // Convert image URI to blob
+      const response = await fetch(imageUri);
+      const blob = await response.blob();
+      
+      // Create unique filename
+      const filename = `events/${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+      const storageRef = ref(storage, filename);
+      
+      // Upload to Firebase Storage
+      await uploadBytes(storageRef, blob);
+      
+      // Get download URL
+      const downloadURL = await getDownloadURL(storageRef);
+      return downloadURL;
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      Alert.alert('Error', 'Failed to upload image. Please try again.');
+      return null;
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const removeImage = () => {
+    setSelectedImage(null);
+    setExistingImageUrl(null);
   };
 
   const handleSave = async () => {
@@ -102,6 +166,20 @@ export default function EditEvent() {
         return;
       }
 
+      // Handle image upload if new image selected
+      let imageUrl: string | undefined = undefined;
+      if (selectedImage) {
+        const uploadedUrl = await uploadImage(selectedImage);
+        if (!uploadedUrl) {
+          Alert.alert('Error', 'Failed to upload image. Please try again.');
+          return;
+        }
+        imageUrl = uploadedUrl;
+      } else if (existingImageUrl) {
+        // Keep existing image if no new image selected
+        imageUrl = existingImageUrl;
+      }
+
       // Update the event
       await EventAPI.update(eventId, {
         name: formData.name.trim(),
@@ -110,6 +188,7 @@ export default function EditEvent() {
         event_code: formData.event_code.trim(),
         starts_at: formData.starts_at.toISOString(),
         expires_at: formData.expires_at.toISOString(),
+        image_url: imageUrl, // Add image URL if uploaded or existing
       });
 
       Alert.alert('Success', 'Event updated successfully!', [
@@ -283,6 +362,56 @@ export default function EditEvent() {
     required: {
       color: '#ef4444',
     },
+    imageContainer: {
+      position: 'relative',
+      width: '100%',
+      height: 150,
+      borderRadius: 8,
+      overflow: 'hidden',
+      backgroundColor: isDark ? '#404040' : '#e0e0e0',
+    },
+    selectedImage: {
+      width: '100%',
+      height: '100%',
+      borderRadius: 8,
+    },
+    removeImageButton: {
+      position: 'absolute',
+      top: 5,
+      right: 5,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      borderRadius: 10,
+      width: 20,
+      height: 20,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    imageUploadButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: isDark ? '#404040' : '#d1d5db',
+      borderRadius: 8,
+      padding: 12,
+      backgroundColor: isDark ? '#404040' : 'white',
+    },
+    imageUploadText: {
+      fontSize: 14,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      marginLeft: 8,
+    },
+    uploadingContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 10,
+    },
+    uploadingText: {
+      fontSize: 14,
+      color: '#8b5cf6',
+      marginLeft: 5,
+    },
   });
 
   if (isLoading) {
@@ -350,6 +479,33 @@ export default function EditEvent() {
               placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
               multiline
             />
+          </View>
+
+          {/* Event Image */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Event Image (Optional)</Text>
+            {selectedImage || existingImageUrl ? (
+              <View style={styles.imageContainer}>
+                <Image 
+                  source={{ uri: selectedImage || existingImageUrl || '' }} 
+                  style={styles.selectedImage} 
+                />
+                <TouchableOpacity style={styles.removeImageButton} onPress={removeImage}>
+                  <X size={16} color="white" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.imageUploadButton} onPress={pickImage}>
+                <Camera size={24} color={isDark ? '#9ca3af' : '#6b7280'} />
+                <Text style={styles.imageUploadText}>Select Event Image</Text>
+              </TouchableOpacity>
+            )}
+            {uploadingImage && (
+              <View style={styles.uploadingContainer}>
+                <ActivityIndicator size="small" color="#8b5cf6" />
+                <Text style={styles.uploadingText}>Uploading image...</Text>
+              </View>
+            )}
           </View>
 
           {/* Location */}

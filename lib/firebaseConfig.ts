@@ -1,9 +1,10 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
+import { getFirestore, connectFirestoreEmulator, collection, query, limit, getDocs } from 'firebase/firestore';
+import { getAuth, connectAuthEmulator } from 'firebase/auth';
+import { getStorage, connectStorageEmulator } from 'firebase/storage';
+import NetInfo from '@react-native-community/netinfo';
 
-// Firebase configuration from environment variables
+// Firebase configuration
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -11,55 +12,99 @@ const firebaseConfig = {
   storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
-  measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
 
-// Validate required environment variables
-const requiredEnvVars = [
-  'EXPO_PUBLIC_FIREBASE_API_KEY',
-  'EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN',
-  'EXPO_PUBLIC_FIREBASE_PROJECT_ID',
-  'EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET',
-  'EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID',
-  'EXPO_PUBLIC_FIREBASE_APP_ID'
-];
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
 
-const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+// Initialize Firestore
+const db = getFirestore(app);
 
-if (missingVars.length > 0) {
-  console.error('❌ Missing required Firebase environment variables:', missingVars);
-  throw new Error(`Missing required Firebase environment variables: ${missingVars.join(', ')}`);
-}
+// Initialize Auth (for admin operations only)
+const auth = getAuth(app);
 
-// Initialize Firebase app with error handling
-let app;
-try {
-  app = initializeApp(firebaseConfig);
-  console.log('✅ Firebase app initialized successfully');
-} catch (error: any) {
-  console.error('❌ Failed to initialize Firebase app:', error);
-  // Create a fallback app with a different name if initialization fails
-  try {
-    app = initializeApp(firebaseConfig, 'fallback-app');
-    console.log('✅ Firebase app initialized with fallback name');
-  } catch (fallbackError: any) {
-    console.error('❌ Failed to initialize Firebase app with fallback:', fallbackError);
-    throw new Error('Firebase initialization failed completely');
+// Initialize Storage
+const storage = getStorage(app);
+
+// Network connectivity manager
+class FirebaseNetworkManager {
+  private isConnected = true;
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 5;
+
+  constructor() {
+    this.setupNetworkListener();
+  }
+
+  private setupNetworkListener() {
+    NetInfo.addEventListener((state: any) => {
+      const wasConnected = this.isConnected;
+      this.isConnected = state.isConnected ?? false;
+      
+      if (!wasConnected && this.isConnected) {
+        console.log('🌐 Network reconnected, attempting Firebase reconnection...');
+        this.attemptReconnection();
+      } else if (wasConnected && !this.isConnected) {
+        console.log('🌐 Network disconnected');
+      }
+    });
+  }
+
+  public async checkConnection(): Promise<boolean> {
+    if (!this.isConnected) {
+      console.log('❌ No network connection');
+      return false;
+    }
+
+    try {
+      // Simple connection test - try to read events collection
+      const eventsRef = collection(db, 'events');
+      const q = query(eventsRef, limit(1));
+      await getDocs(q);
+      console.log('✅ Firebase connection verified');
+      return true;
+    } catch (error: any) {
+      console.warn('⚠️ Firebase connection test failed:', error.message);
+      return false;
+    }
+  }
+
+  private async attemptReconnection() {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.log('❌ Max reconnection attempts reached');
+      return;
+    }
+
+    this.reconnectAttempts++;
+    console.log(`🔄 Attempting Firebase reconnection (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+
+    try {
+      await this.checkConnection();
+      this.reconnectAttempts = 0;
+      console.log('✅ Firebase reconnection successful');
+    } catch (error) {
+      console.log('❌ Firebase reconnection failed, will retry...');
+      setTimeout(() => this.attemptReconnection(), 2000);
+    }
+  }
+
+  public getConnectionStatus(): boolean {
+    return this.isConnected;
   }
 }
 
-// Initialize Firebase services
-export const auth = getAuth(app);
-export const db = getFirestore(app, { 
-  region: process.env.EXPO_PUBLIC_FIREBASE_REGION || 'me-west1' 
-});
-export const storage = getStorage(app);
+// Create network manager instance
+export const firebaseNetworkManager = new FirebaseNetworkManager();
 
-console.log('✅ Firebase services initialized:', {
-  auth: !!auth,
-  db: !!db,
-  storage: !!storage,
-  projectId: firebaseConfig.projectId
-});
+// Export Firebase services
+export { app, db, auth, storage };
 
-export default app;
+// Check Firebase status (for debugging)
+export const checkFirebaseStatus = () => {
+  console.log('🔍 Firebase Status Check:');
+  console.log('- API Key:', process.env.EXPO_PUBLIC_FIREBASE_API_KEY ? '✅ Set' : '❌ Missing');
+  console.log('- Project ID:', process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID ? '✅ Set' : '❌ Missing');
+  console.log('- Auth Domain:', process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN ? '✅ Set' : '❌ Missing');
+  console.log('- Storage Bucket:', process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET ? '✅ Set' : '❌ Missing');
+  console.log('- Network Status:', firebaseNetworkManager.getConnectionStatus() ? '✅ Connected' : '❌ Disconnected');
+};

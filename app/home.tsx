@@ -22,6 +22,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useMobileAsyncOperation } from '../lib/hooks/useMobileErrorHandling';
 import MobileOfflineStatusBar from '../lib/components/MobileOfflineStatusBar';
+import { SurveyNotificationService } from '../lib/surveyNotificationService';
 
 const { width } = Dimensions.get('window');
 
@@ -36,14 +37,45 @@ export default function Home() {
 
   useEffect(() => {
     checkActiveEventSession();
+    checkForSurvey();
   }, []);
+
+  const checkForSurvey = async () => {
+    try {
+      const surveyData = await SurveyNotificationService.shouldShowSurvey();
+      if (surveyData) {
+        // Add delay to avoid interrupting immediate user actions
+        setTimeout(() => {
+          router.push({
+            pathname: '/survey',
+            params: {
+              eventId: surveyData.eventId,
+              eventName: surveyData.eventName,
+              sessionId: surveyData.sessionId,
+              source: 'manual'
+            }
+          });
+        }, 3000); // 3 second delay
+      }
+    } catch (error) {
+      console.error('Error checking for survey:', error);
+    }
+  };
 
   const checkActiveEventSession = async () => {
     try {
       const eventId = await AsyncStorage.getItem('currentEventId');
       const sessionId = await AsyncStorage.getItem('currentSessionId');
+      const profilePhotoUrl = await AsyncStorage.getItem('currentProfilePhotoUrl');
       
       if (!eventId || !sessionId) return;
+
+      // Check if user has completed profile creation (has profile photo)
+      if (!profilePhotoUrl) {
+        // User hasn't completed consent/profile creation, don't auto-redirect
+        console.log('⚠️ User hasn\'t completed profile creation, staying on home page');
+        return;
+      }
 
       // Use enhanced error handling for event verification
       const result = await executeOperationWithOfflineFallback(
@@ -62,8 +94,9 @@ export default function Home() {
         const event = result.result[0];
         const nowISO = new Date().toISOString();
         
-        // If event is currently active, auto-resume to Discovery
+        // If event is currently active and user has completed profile, auto-resume to Discovery
         if (event.starts_at && event.expires_at && nowISO >= event.starts_at && nowISO <= event.expires_at) {
+          console.log('✅ Auto-redirecting to discovery - user has completed profile and event is active');
           router.replace('/discovery');
           return;
         }
@@ -147,6 +180,61 @@ export default function Home() {
     // The join page will handle all validation logic.
     closeModal();
     router.push(`/join?code=${eventCode.toUpperCase()}`);
+  };
+
+  // Debug function to clear session data (for testing)
+  const clearSessionData = async () => {
+    try {
+      await AsyncStorage.multiRemove([
+        'currentEventId',
+        'currentSessionId',
+        'currentEventCode',
+        'currentProfileColor',
+        'currentProfilePhotoUrl',
+        'savedProfileData'
+      ]);
+      console.log('✅ Session data cleared');
+      Alert.alert('Session Cleared', 'All session data has been cleared. You can now test the full flow.');
+    } catch (error) {
+      console.error('❌ Failed to clear session data:', error);
+    }
+  };
+
+  // Debug function to test survey (for testing)
+  const testSurvey = async () => {
+    try {
+      // Clear any existing survey data
+      await SurveyNotificationService.clearAllSurveyData();
+      
+      // Add a test event to history (within 26-hour window)
+      const testEvent = {
+        eventId: 'test-event-123',
+        eventName: 'Test Event',
+        sessionId: 'test-session-456',
+        expiresAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString() // 3 hours ago
+      };
+      
+      // Manually add event to history
+      const eventHistory = [testEvent];
+      await AsyncStorage.setItem('eventHistory', JSON.stringify(eventHistory));
+      
+      // Manually trigger survey
+      setTimeout(() => {
+        router.push({
+          pathname: '/survey',
+          params: {
+            eventId: testEvent.eventId,
+            eventName: testEvent.eventName,
+            sessionId: testEvent.sessionId,
+            source: 'test'
+          }
+        });
+      }, 1000);
+      
+      console.log('✅ Survey test triggered');
+    } catch (error) {
+      console.error('❌ Failed to test survey:', error);
+    }
   };
 
   const openModal = (modalName: string) => {
@@ -485,6 +573,22 @@ export default function Home() {
             </Text>
             .
           </Text>
+          
+          {/* Debug buttons - remove in production */}
+          <View style={{ flexDirection: 'row', marginTop: 10, gap: 10 }}>
+            <TouchableOpacity
+              style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 8 }}
+              onPress={clearSessionData}
+            >
+              <Text style={{ color: 'white', fontSize: 12 }}>Clear Session</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 8 }}
+              onPress={testSurvey}
+            >
+              <Text style={{ color: 'white', fontSize: 12 }}>Test Survey</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* How it works Modal */}

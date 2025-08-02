@@ -21,6 +21,7 @@ import { AuthAPI, EventProfileAPI, EventAPI, StorageAPI } from '../lib/firebaseA
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User as UserIcon, Camera, Upload } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { SurveyNotificationService } from '../lib/surveyNotificationService';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Simple UUID v4 generator function
@@ -48,8 +49,43 @@ export default function Consent() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [isReuploadingPhoto, setIsReuploadingPhoto] = useState(false);
   const [showAgePicker, setShowAgePicker] = useState(false);
   const [rememberProfile, setRememberProfile] = useState(false);
+
+
+
+  // Helper function to re-upload saved photo for new event
+  const reuploadSavedPhoto = async (photoUrl: string): Promise<string> => {
+    try {
+      // Create a file object for the remote URL
+      const fileObject = {
+        uri: photoUrl,
+        name: `saved-profile-photo-${Date.now()}.jpg`,
+        type: 'image/jpeg'
+      };
+
+      // Upload to Firebase Storage for the new event
+      const { file_url } = await StorageAPI.uploadFile(fileObject);
+      return file_url;
+    } catch (error) {
+      console.error('Error re-uploading photo:', error);
+      throw error;
+    }
+  };
+
+
+
+  // Handle remember profile toggle change
+  const handleRememberProfileChange = (value: boolean) => {
+    setRememberProfile(value);
+    
+    // If turning off, just update the toggle state
+    // Don't clear the current form - only affects future events
+    if (!value) {
+      // No additional action needed
+    }
+  };
 
   useEffect(() => {
     const fetchEvent = async () => {
@@ -76,12 +112,42 @@ export default function Consent() {
     const loadSavedProfile = async () => {
       try {
         const savedProfile = await AsyncStorage.getItem('savedProfileData');
+        const savedPhotoUrl = await AsyncStorage.getItem('savedProfilePhotoUrl');
+        
         if (savedProfile) {
           const parsedProfile = JSON.parse(savedProfile);
-          setFormData(parsedProfile);
+          
+          // If we have a saved photo URL, re-upload it for the new event
+          if (savedPhotoUrl) {
+            setIsReuploadingPhoto(true);
+            try {
+              const newPhotoUrl = await reuploadSavedPhoto(savedPhotoUrl);
+              setFormData({
+                ...parsedProfile,
+                profile_photo_url: newPhotoUrl
+              });
+            } catch (photoError) {
+              // If photo re-upload fails, load data without photo
+              setFormData({
+                ...parsedProfile,
+                profile_photo_url: ''
+              });
+            } finally {
+              setIsReuploadingPhoto(false);
+            }
+          } else {
+            // No saved photo, just load the other data
+            setFormData({
+              ...parsedProfile,
+              profile_photo_url: ''
+            });
+          }
+          
+          // Set the remember profile toggle to true if we have saved data
+          setRememberProfile(true);
         }
       } catch (error) {
-        // Handle error silently
+        console.error('Error loading saved profile:', error);
       }
     };
     loadSavedProfile();
@@ -126,7 +192,7 @@ export default function Consent() {
         mediaTypes: 'images',
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.8,
+        quality: 0.6, // Reduced quality for faster upload
         allowsMultipleSelection: false,
         base64: false,
         exif: false,
@@ -153,7 +219,7 @@ export default function Consent() {
         mediaTypes: 'images',
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.8,
+        quality: 0.6, // Reduced quality for faster upload
         allowsMultipleSelection: false,
         base64: false,
         exif: false,
@@ -175,8 +241,9 @@ export default function Consent() {
     }
 
     setIsUploadingPhoto(true);
+    
     try {
-      // Create file object for processing
+      // Upload directly to Firebase Storage
       const fileObject = {
         uri: asset.uri,
         name: asset.fileName || `profile-photo-${Date.now()}.jpg`,
@@ -184,10 +251,17 @@ export default function Consent() {
         fileSize: asset.fileSize
       };
 
-      // Upload directly to Firebase Storage (no Vision API)
       const { file_url } = await StorageAPI.uploadFile(fileObject);
+      
+      // Update formData with Firebase URL
       setFormData(prev => ({ ...prev, profile_photo_url: file_url }));
+      
+      // Save photo URL locally only if "remember profile" is enabled
+      if (rememberProfile) {
+        await AsyncStorage.setItem('savedProfilePhotoUrl', file_url);
+      }
     } catch (err) {
+      console.error('Upload error:', err);
       Alert.alert("Error", "Failed to upload photo. Please try again.");
     } finally {
       setIsUploadingPhoto(false);
@@ -221,16 +295,29 @@ export default function Consent() {
       // Save profile data locally if "remember profile" is checked
       if (rememberProfile) {
         try {
-          await AsyncStorage.setItem('savedProfileData', JSON.stringify(formData));
+          // Save profile data (without photo URL)
+          const profileDataToSave = {
+            first_name: formData.first_name,
+            age: formData.age,
+            gender_identity: formData.gender_identity,
+            interested_in: formData.interested_in
+          };
+          
+          // Validate that we have the required data before saving
+          if (profileDataToSave.first_name && profileDataToSave.age && 
+              profileDataToSave.gender_identity && profileDataToSave.interested_in) {
+            await AsyncStorage.setItem('savedProfileData', JSON.stringify(profileDataToSave));
+          }
         } catch (error) {
-          // Handle error silently
+          console.error('Error saving profile data:', error);
         }
       } else {
         // Clear saved profile data if not checked
         try {
           await AsyncStorage.removeItem('savedProfileData');
+          await AsyncStorage.removeItem('savedProfilePhotoUrl');
         } catch (error) {
-          // Handle error silently
+          console.error('Error clearing profile data:', error);
         }
       }
 
@@ -248,11 +335,22 @@ export default function Consent() {
         expires_at: event.expires_at,
       };
       
-
-      
       await EventProfileAPI.create(profileData);
 
+      // Save session and profile data to AsyncStorage
       await AsyncStorage.setItem('currentSessionId', sessionId);
+      await AsyncStorage.setItem('currentProfilePhotoUrl', formData.profile_photo_url);
+      await AsyncStorage.setItem('currentProfileColor', validColor);
+      
+      // Schedule survey notification for after event ends
+      await SurveyNotificationService.scheduleSurveyNotification(
+        event.id,
+        event.name,
+        event.expires_at,
+        sessionId,
+        2 // 2 hours after event ends
+      );
+      
       router.replace('/discovery');
     } catch (err) {
       setError("Failed to create profile. Please try again.");
@@ -332,10 +430,10 @@ export default function Consent() {
       textAlign: 'left',
       width: '100%',
     },
-    photoUploadArea: {
-      width: 100,
-      height: 100,
-      borderRadius: 50,
+    photoContainer: {
+      width: 120,
+      height: 120,
+      borderRadius: 60,
       borderWidth: 2,
       borderColor: isDark ? '#404040' : '#d1d5db',
       borderStyle: 'dashed',
@@ -343,15 +441,18 @@ export default function Consent() {
       alignItems: 'center',
       justifyContent: 'center',
       marginBottom: 8,
+      position: 'relative',
+      overflow: 'hidden',
     },
-    uploadedPhoto: {
+    profilePhoto: {
       width: '100%',
       height: '100%',
-      borderRadius: 60,
     },
+
     uploadPlaceholder: {
       alignItems: 'center',
-      justifyContent: 'center',
+      justifyContent: 'flex-end',
+      paddingBottom: 8,
     },
     uploadText: {
       fontSize: 12,
@@ -571,6 +672,8 @@ export default function Consent() {
       lineHeight: 16,
       textAlign: 'center',
     },
+
+
     legalSection: {
       marginTop: 16,
       marginBottom: 8,
@@ -639,22 +742,28 @@ export default function Consent() {
             <View style={styles.photoSection}>
               <Text style={styles.sectionTitle}>Profile Photo *</Text>
               <TouchableOpacity
-                style={styles.photoUploadArea}
+                style={styles.photoContainer}
                 onPress={handlePhotoUpload}
-                disabled={isUploadingPhoto}
+                disabled={isUploadingPhoto || isReuploadingPhoto}
                 accessibilityLabel="Upload Profile Photo"
                 accessibilityHint="Tap to upload a profile photo from camera or gallery"
               >
                 {formData.profile_photo_url ? (
                   <Image
                     source={{ uri: formData.profile_photo_url }}
-                    style={styles.uploadedPhoto}
+                    style={styles.profilePhoto}
                     resizeMode="cover"
                   />
                 ) : (
                   <View style={styles.uploadPlaceholder}>
-                    <Upload size={32} color="#9ca3af" />
-                    <Text style={styles.uploadText}>Upload Photo</Text>
+                    {isReuploadingPhoto ? (
+                      <ActivityIndicator size="small" color="#9ca3af" />
+                    ) : (
+                      <Upload size={32} color="#9ca3af" />
+                    )}
+                    <Text style={styles.uploadText}>
+                      {isReuploadingPhoto ? 'Loading saved photo...' : 'Upload Photo'}
+                    </Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -791,7 +900,7 @@ export default function Consent() {
             <View style={styles.checkboxContainer}>
               <Switch
                 value={rememberProfile}
-                onValueChange={setRememberProfile}
+                onValueChange={handleRememberProfileChange}
                 trackColor={{ false: '#d1d5db', true: '#8b5cf6' }}
                 thumbColor={rememberProfile ? '#ffffff' : '#ffffff'}
                 accessibilityLabel="Remember Profile Toggle"
@@ -803,7 +912,7 @@ export default function Consent() {
             </View>
             {rememberProfile && (
               <Text style={styles.checkboxDescription}>
-                Your form data will be saved locally and auto-filled for future events
+                Your form data and photo will be saved locally and auto-filled for future events
               </Text>
             )}
           </View>
@@ -833,6 +942,16 @@ export default function Consent() {
           >
             <Text style={styles.submitButtonText}>Join Event</Text>
           </TouchableOpacity>
+
+          {/* Debug Button (hidden, for development testing) */}
+          {__DEV__ && (
+            <TouchableOpacity
+              style={[styles.submitButton, { marginTop: 8, backgroundColor: '#6b7280' }]}
+                              onPress={() => {}}
+            >
+              <Text style={styles.submitButtonText}>Test Saved Profile Data</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
     </TouchableWithoutFeedback>

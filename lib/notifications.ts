@@ -192,26 +192,11 @@ export async function requestAndInitializeNotifications(): Promise<{
 
 /**
  * Get all push tokens for a user
+ * NOTE: This is disabled for the session-based app since it requires Firebase Auth
  */
 export async function getUserPushTokens(userId: string): Promise<PushTokenData[]> {
-  try {
-    const tokensRef = doc(db, 'users', userId, 'pushTokens');
-    const tokensDoc = await getDoc(tokensRef);
-    
-    if (!tokensDoc.exists()) {
-      return [];
-    }
-
-    const tokens: PushTokenData[] = [];
-    tokensDoc.data().forEach((tokenData: any) => {
-      if (!tokenData.deleted) {
-        tokens.push(tokenData);
-      }
-    });
-
-    return tokens;
-  } catch (error) {
-    console.error('Error getting user push tokens:', error);
-    return [];
-  }
+  // Push tokens are not supported in the session-based version
+  // since they require Firebase Auth and the app doesn't use authentication
+  console.log('Push tokens not supported in session-based app');
+  return [];
 } 

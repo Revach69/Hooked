@@ -195,15 +195,50 @@ export default function Profile() {
       const sessionId = await AsyncStorage.getItem('currentSessionId');
       if (!eventId || !sessionId) return;
 
+      // Get current user's profile first
+      const currentUserProfiles = await EventProfileAPI.filter({ 
+        event_id: eventId,
+        session_id: sessionId
+      });
+      
+      if (currentUserProfiles.length === 0) {
+        console.log('Current user profile not found');
+        return;
+      }
+      
+      const currentUserProfile = currentUserProfiles[0];
+
+      // Get all visible profiles
       const allVisibleProfiles = await EventProfileAPI.filter({ 
         event_id: eventId,
         is_visible: true 
       });
       
-      // Filter out current user
-      const otherUsers = allVisibleProfiles.filter(p => p.session_id !== sessionId);
-      setAllUsers(otherUsers);
+      // Filter users based on discovery page logic
+      const filteredUsers = allVisibleProfiles.filter(otherUser => {
+        // Exclude current user
+        if (otherUser.session_id === sessionId) {
+          return false;
+        }
+
+        // Mutual Gender Interest Check - based on user's profile preferences
+        const iAmInterestedInOther =
+          (currentUserProfile.interested_in === 'everybody') ||
+          (currentUserProfile.interested_in === 'men' && otherUser.gender_identity === 'man') ||
+          (currentUserProfile.interested_in === 'women' && otherUser.gender_identity === 'woman');
+
+        const otherIsInterestedInMe =
+          (otherUser.interested_in === 'everybody') ||
+          (otherUser.interested_in === 'men' && currentUserProfile.gender_identity === 'man') ||
+          (otherUser.interested_in === 'women' && currentUserProfile.gender_identity === 'woman');
+        
+        // Only show users that match mutual interest criteria
+        return iAmInterestedInOther && otherIsInterestedInMe;
+      });
+
+      setAllUsers(filteredUsers);
     } catch (error) {
+      console.error('Error loading users for report:', error);
       // Handle error silently
     }
   };

@@ -1,18 +1,22 @@
-import { db, auth, storage } from './firebaseConfig';
-import { enableNetwork, disableNetwork } from 'firebase/firestore';
-import { logFirebaseError, ErrorRecovery, NetworkAwareErrorHandler } from './errorMonitoring';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { db, firebaseNetworkManager } from './firebaseConfig';
+import { enableNetwork, disableNetwork, doc, getDoc } from 'firebase/firestore';
 import NetInfo from '@react-native-community/netinfo';
-import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Firebase Recovery Manager
-export class FirebaseRecoveryManager {
+export interface RecoveryAction {
+  id: string;
+  type: 'reconnect' | 'retry_operation' | 'clear_cache';
+  timestamp: string;
+  success: boolean;
+  error?: string;
+}
+
+class FirebaseRecoveryManager {
   private static instance: FirebaseRecoveryManager;
+  private recoveryHistory: RecoveryAction[] = [];
   private isRecovering = false;
-  private recoveryAttempts = 0;
-  private readonly maxRecoveryAttempts = 3;
-  private lastRecoveryTime = 0;
-  private readonly recoveryCooldown = 30000; // 30 seconds
+  private maxRecoveryAttempts = 3;
+  private recoveryDelay = 2000;
 
   static getInstance(): FirebaseRecoveryManager {
     if (!FirebaseRecoveryManager.instance) {
@@ -21,286 +25,213 @@ export class FirebaseRecoveryManager {
     return FirebaseRecoveryManager.instance;
   }
 
-  async handleFirebaseError(error: any, operation: string): Promise<boolean> {
-    // Check if we're already in recovery mode
+  private constructor() {
+    this.loadRecoveryHistory();
+  }
+
+  // Attempt to recover from Firebase connection issues
+  async attemptRecovery(operationName: string = 'Unknown operation'): Promise<boolean> {
     if (this.isRecovering) {
       console.log('🔄 Recovery already in progress, skipping...');
       return false;
     }
 
-    // Check cooldown period
-    const now = Date.now();
-    if (now - this.lastRecoveryTime < this.recoveryCooldown) {
-      console.log('⏳ Recovery cooldown active, skipping...');
-      return false;
-    }
-
-    // Check if this is a recoverable error
-    if (!this.isRecoverableError(error)) {
-      console.log('❌ Error is not recoverable:', error.message);
-      return false;
-    }
-
-    // Check max recovery attempts
-    if (this.recoveryAttempts >= this.maxRecoveryAttempts) {
-      console.error('🚨 Max recovery attempts reached, manual intervention required');
-      await this.triggerManualRecovery();
-      return false;
-    }
-
     this.isRecovering = true;
-    this.recoveryAttempts++;
-    this.lastRecoveryTime = now;
+    const recoveryId = Date.now().toString();
 
     try {
-      console.log(`🔄 Starting Firebase recovery (attempt ${this.recoveryAttempts}/${this.maxRecoveryAttempts})`);
+      console.log('🔄 Starting Firebase recovery process...');
       
-      const success = await this.performRecovery(error, operation);
-      
-      if (success) {
-        console.log('✅ Firebase recovery successful');
-        this.recoveryAttempts = 0; // Reset on success
-        return true;
-      } else {
-        console.warn('⚠️ Firebase recovery failed');
-        return false;
+      // Step 1: Check network connectivity
+      const netInfo = await NetInfo.fetch();
+      if (!netInfo.isConnected) {
+        throw new Error('No internet connection available');
       }
-    } catch (recoveryError) {
-      console.error('❌ Error during Firebase recovery:', recoveryError);
+
+      // Step 2: Disable and re-enable Firebase network
+      console.log('🔄 Resetting Firebase network connection...');
+      await disableNetwork(db);
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+      await enableNetwork(db);
+
+      // Step 3: Test connection
+      console.log('🔄 Testing Firebase connection...');
+      const isConnected = await this.testConnection();
+      
+      if (!isConnected) {
+        throw new Error('Firebase connection test failed after network reset');
+      }
+
+      // Step 4: Clear any cached data that might be causing issues
+      await this.clearProblematicCache();
+
+      console.log('✅ Firebase recovery successful');
+      this.recordRecoveryAction(recoveryId, 'reconnect', true);
+      return true;
+
+    } catch (error: any) {
+      console.error('❌ Firebase recovery failed:', error);
+      this.recordRecoveryAction(recoveryId, 'reconnect', false, error.message);
       return false;
     } finally {
       this.isRecovering = false;
     }
   }
 
-  private isRecoverableError(error: any): boolean {
-    // Internal assertion errors are recoverable
-    if (error.message?.includes('INTERNAL ASSERTION FAILED')) {
+  // Test Firebase connection with a simple operation
+  private async testConnection(): Promise<boolean> {
+    try {
+      const testDoc = doc(db, '_connection_test', 'test');
+      await getDoc(testDoc);
       return true;
+    } catch (error) {
+      console.warn('⚠️ Firebase connection test failed:', error);
+      return false;
     }
-
-    // Network-related errors are recoverable
-    if (error.code === 'unavailable' || 
-        error.code === 'deadline-exceeded' ||
-        error.message?.includes('network') ||
-        error.message?.includes('timeout')) {
-      return true;
-    }
-
-    // Connection errors are recoverable
-    if (error.message?.includes('connection') ||
-        error.message?.includes('disconnected')) {
-      return true;
-    }
-
-    return false;
   }
 
-  private async performRecovery(error: any, operation: string): Promise<boolean> {
-    const recoverySteps = [
-      () => this.checkNetworkConnectivity(),
-      () => this.resetFirestoreConnection(),
-      () => this.clearCachedData(),
-      () => this.reinitializeFirebase()
-    ];
+  // Clear potentially problematic cached data
+  private async clearProblematicCache(): Promise<void> {
+    try {
+      // Clear any stored connection state
+      await AsyncStorage.removeItem('firebase_connection_state');
+      await AsyncStorage.removeItem('firebase_last_error');
+      
+      console.log('🧹 Cleared problematic cache data');
+    } catch (error) {
+      console.warn('⚠️ Failed to clear cache:', error);
+    }
+  }
 
-    for (const step of recoverySteps) {
-      try {
-        const success = await step();
-        if (success) {
-          console.log('✅ Recovery step successful');
-          return true;
-        }
-      } catch (stepError) {
-        console.warn('⚠️ Recovery step failed:', stepError);
+  // Record recovery action for monitoring
+  private async recordRecoveryAction(
+    id: string, 
+    type: RecoveryAction['type'], 
+    success: boolean, 
+    error?: string
+  ): Promise<void> {
+    const action: RecoveryAction = {
+      id,
+      type,
+      timestamp: new Date().toISOString(),
+      success,
+      error
+    };
+
+    this.recoveryHistory.push(action);
+
+    // Keep only last 50 recovery actions
+    if (this.recoveryHistory.length > 50) {
+      this.recoveryHistory = this.recoveryHistory.slice(-50);
+    }
+
+    await this.saveRecoveryHistory();
+  }
+
+  // Save recovery history to AsyncStorage
+  private async saveRecoveryHistory(): Promise<void> {
+    try {
+      await AsyncStorage.setItem('firebase_recovery_history', JSON.stringify(this.recoveryHistory));
+    } catch (error) {
+      console.warn('⚠️ Failed to save recovery history:', error);
+    }
+  }
+
+  // Load recovery history from AsyncStorage
+  private async loadRecoveryHistory(): Promise<void> {
+    try {
+      const saved = await AsyncStorage.getItem('firebase_recovery_history');
+      if (saved) {
+        this.recoveryHistory = JSON.parse(saved);
       }
-    }
-
-    return false;
-  }
-
-  private async checkNetworkConnectivity(): Promise<boolean> {
-    try {
-      const netInfo = await NetInfo.fetch();
-      if (!netInfo.isConnected) {
-        console.log('🌐 Network not connected, waiting for connection...');
-        return false;
-      }
-      console.log('✅ Network connectivity confirmed');
-      return true;
     } catch (error) {
-      console.error('❌ Error checking network connectivity:', error);
-      return false;
+      console.warn('⚠️ Failed to load recovery history:', error);
+      this.recoveryHistory = [];
     }
   }
 
-  private async resetFirestoreConnection(): Promise<boolean> {
-    try {
-      console.log('🔄 Resetting Firestore connection...');
-      
-      // Disable network first
-      await disableNetwork(db);
-      console.log('📡 Firestore network disabled');
-      
-      // Wait a moment
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Re-enable network
-      await enableNetwork(db);
-      console.log('📡 Firestore network re-enabled');
-      
-      return true;
-    } catch (error) {
-      console.error('❌ Error resetting Firestore connection:', error);
-      return false;
-    }
-  }
-
-  private async clearCachedData(): Promise<boolean> {
-    try {
-      console.log('🧹 Clearing cached Firebase data...');
-      
-      // Clear offline queue
-      await AsyncStorage.removeItem('firebase_offline_queue');
-      
-      // Clear critical error logs
-      await AsyncStorage.removeItem('firebase_critical_errors');
-      
-      // Clear any other Firebase-related cache
-      const keys = await AsyncStorage.getAllKeys();
-      const firebaseKeys = keys.filter(key => key.includes('firebase'));
-      if (firebaseKeys.length > 0) {
-        await AsyncStorage.multiRemove(firebaseKeys);
-      }
-      
-      console.log('✅ Cached data cleared');
-      return true;
-    } catch (error) {
-      console.error('❌ Error clearing cached data:', error);
-      return false;
-    }
-  }
-
-  private async reinitializeFirebase(): Promise<boolean> {
-    try {
-      console.log('🔄 Reinitializing Firebase...');
-      
-      // This is a more aggressive recovery step
-      // In a real app, you might want to reinitialize the Firebase app
-      // For now, we'll just reset the connection
-      
-      await this.resetFirestoreConnection();
-      
-      // Wait for the connection to stabilize
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      console.log('✅ Firebase reinitialized');
-      return true;
-    } catch (error) {
-      console.error('❌ Error reinitializing Firebase:', error);
-      return false;
-    }
-  }
-
-  private async triggerManualRecovery(): Promise<void> {
-    console.error('🚨 Manual recovery required - please restart the app');
-    
-    // Store recovery flag for next app launch
-    await AsyncStorage.setItem('firebase_manual_recovery_needed', 'true');
-    
-    // Log the critical error
-    await logFirebaseError(
-      new Error('Max recovery attempts reached - manual intervention required'),
-      'manual_recovery_triggered'
-    );
-  }
-
-  async resetRecoveryState(): Promise<void> {
-    this.recoveryAttempts = 0;
-    this.isRecovering = false;
-    this.lastRecoveryTime = 0;
-    
-    // Clear recovery flags
-    await AsyncStorage.removeItem('firebase_manual_recovery_needed');
-    
-    console.log('🔄 Firebase recovery state reset');
-  }
-
-  getRecoveryStatus(): {
-    isRecovering: boolean;
-    attempts: number;
-    maxAttempts: number;
-    lastRecoveryTime: number;
+  // Get recovery statistics
+  getRecoveryStats(): {
+    totalAttempts: number;
+    successfulRecoveries: number;
+    failedRecoveries: number;
+    successRate: number;
+    lastRecoveryAttempt?: string;
   } {
+    const totalAttempts = this.recoveryHistory.length;
+    const successfulRecoveries = this.recoveryHistory.filter(action => action.success).length;
+    const failedRecoveries = totalAttempts - successfulRecoveries;
+    const successRate = totalAttempts > 0 ? (successfulRecoveries / totalAttempts) * 100 : 0;
+    const lastRecoveryAttempt = this.recoveryHistory.length > 0 
+      ? this.recoveryHistory[this.recoveryHistory.length - 1].timestamp 
+      : undefined;
+
     return {
-      isRecovering: this.isRecovering,
-      attempts: this.recoveryAttempts,
-      maxAttempts: this.maxRecoveryAttempts,
-      lastRecoveryTime: this.lastRecoveryTime
+      totalAttempts,
+      successfulRecoveries,
+      failedRecoveries,
+      successRate,
+      lastRecoveryAttempt
     };
   }
-}
 
-// Enhanced error handler with automatic recovery
-export class EnhancedFirebaseErrorHandler {
-  private static recoveryManager = FirebaseRecoveryManager.getInstance();
+  // Check if recovery is needed based on recent failures
+  shouldAttemptRecovery(): boolean {
+    const recentFailures = this.recoveryHistory
+      .filter(action => !action.success)
+      .filter(action => {
+        const actionTime = new Date(action.timestamp).getTime();
+        const oneHourAgo = Date.now() - (60 * 60 * 1000);
+        return actionTime > oneHourAgo;
+      });
 
-  static async handleError(error: any, operation: string): Promise<void> {
-    // Log the error first
-    await logFirebaseError(error, operation);
-    
-    // Record error for analytics
-    const { ErrorAnalytics } = await import('./errorMonitoring');
-    ErrorAnalytics.recordError(error, operation);
-    
-    // Handle network-aware errors
-    await NetworkAwareErrorHandler.handleError(error, operation);
-    
-    // Attempt automatic recovery
-    const recoverySuccess = await this.recoveryManager.handleFirebaseError(error, operation);
-    
-    if (recoverySuccess) {
-      console.log('✅ Error handled successfully with recovery');
-    } else {
-      console.warn('⚠️ Error handled but recovery failed');
-    }
+    return recentFailures.length >= 3;
   }
 
-  static async handleCriticalError(error: any, operation: string): Promise<void> {
-    console.error('🚨 CRITICAL FIREBASE ERROR:', {
-      operation,
-      error: error.message,
-      code: error.code,
-      timestamp: new Date().toISOString()
-    });
+  // Get recovery status
+  getRecoveryStatus(): {
+    isRecovering: boolean;
+    canAttemptRecovery: boolean;
+    lastRecoverySuccess: boolean | null;
+  } {
+    const lastRecovery = this.recoveryHistory[this.recoveryHistory.length - 1];
+    
+    return {
+      isRecovering: this.isRecovering,
+      canAttemptRecovery: !this.isRecovering && this.shouldAttemptRecovery(),
+      lastRecoverySuccess: lastRecovery ? lastRecovery.success : null
+    };
+  }
 
-    // For critical errors, we might want to show a user-friendly message
-    // or trigger a more aggressive recovery
-    await this.handleError(error, operation);
+  // Clear recovery history
+  clearRecoveryHistory(): void {
+    this.recoveryHistory = [];
+    this.saveRecoveryHistory();
   }
 }
 
-// App startup recovery check
-export async function checkForRecoveryOnStartup(): Promise<void> {
-  try {
-    const needsRecovery = await AsyncStorage.getItem('firebase_manual_recovery_needed');
-    
-    if (needsRecovery === 'true') {
-      console.log('🔄 App startup recovery check - manual recovery was needed');
-      
-      // Clear the flag
-      await AsyncStorage.removeItem('firebase_manual_recovery_needed');
-      
-      // Reset recovery state
-      const recoveryManager = FirebaseRecoveryManager.getInstance();
-      await recoveryManager.resetRecoveryState();
-      
-      console.log('✅ Recovery state reset on app startup');
-    }
-  } catch (error) {
-    console.error('❌ Error during startup recovery check:', error);
-  }
-}
+// Create singleton instance
+const firebaseRecoveryManager = FirebaseRecoveryManager.getInstance();
 
-// Export the recovery manager instance
-export const firebaseRecovery = FirebaseRecoveryManager.getInstance(); 
+// Export utility functions
+export const attemptFirebaseRecovery = (operationName?: string): Promise<boolean> => {
+  return firebaseRecoveryManager.attemptRecovery(operationName);
+};
+
+export const getFirebaseRecoveryStats = () => {
+  return firebaseRecoveryManager.getRecoveryStats();
+};
+
+export const shouldAttemptFirebaseRecovery = (): boolean => {
+  return firebaseRecoveryManager.shouldAttemptRecovery();
+};
+
+export const getFirebaseRecoveryStatus = () => {
+  return firebaseRecoveryManager.getRecoveryStatus();
+};
+
+export const clearFirebaseRecoveryHistory = (): void => {
+  firebaseRecoveryManager.clearRecoveryHistory();
+};
+
+export default firebaseRecoveryManager; 

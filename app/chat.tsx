@@ -44,6 +44,7 @@ export default function Chat() {
   const [isSending, setIsSending] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [currentEventId, setCurrentEventId] = useState<string | null>(null);
+  const [currentUserProfileId, setCurrentUserProfileId] = useState<string | null>(null);
   const [matchProfile, setMatchProfile] = useState<any>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
   
@@ -113,6 +114,9 @@ export default function Chat() {
           
           const currentUserProfileId = currentUserProfiles[0].id;
           const matchProfileId = matchProfiles[0].id;
+          
+          // Update current user profile ID for message rendering
+          setCurrentUserProfileId(currentUserProfileId);
 
           // Filter messages to only include conversation between these two users (using profile IDs)
           const conversationMessages = allMessages.filter(msg => 
@@ -248,7 +252,7 @@ export default function Chat() {
   };
 
   const renderMessage = ({ item }: { item: ChatMessage }) => {
-    const isMyMessage = item.from_profile_id === currentSessionId;
+    const isMyMessage = item.from_profile_id === currentUserProfileId;
     
     return (
       <View style={[

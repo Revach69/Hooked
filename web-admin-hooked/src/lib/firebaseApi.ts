@@ -23,6 +23,7 @@ export interface Event {
   location?: string;
   organizer_email?: string;
   event_type?: string;
+  image_url?: string; // Added for event images
   created_at: string;
   updated_at: string;
 }

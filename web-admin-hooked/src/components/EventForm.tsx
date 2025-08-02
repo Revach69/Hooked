@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Event } from '@/lib/firebaseApi';
-import { X, Save, Plus } from 'lucide-react';
+import { X, Save, Plus, Camera, Upload } from 'lucide-react';
 
 interface EventFormProps {
   event?: Event | null;
@@ -28,6 +28,10 @@ export default function EventForm({
   });
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const isEditing = !!event;
 
@@ -42,6 +46,12 @@ export default function EventForm({
         description: event.description || '',
         event_type: event.event_type || ''
       });
+      
+      // Load existing image if available
+      if (event.image_url) {
+        setExistingImageUrl(event.image_url);
+        setImagePreview(event.image_url);
+      }
     } else {
       setFormData({
         name: '',
@@ -52,9 +62,56 @@ export default function EventForm({
         description: '',
         event_type: ''
       });
+      setSelectedImage(null);
+      setExistingImageUrl(null);
+      setImagePreview(null);
     }
     setErrors({});
   }, [event, isOpen]);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedImage(file);
+      
+      // Create preview URL
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeImage = () => {
+    setSelectedImage(null);
+    setExistingImageUrl(null);
+    setImagePreview(null);
+  };
+
+  const uploadImage = async (file: File): Promise<string | null> => {
+    try {
+      setUploadingImage(true);
+      
+      // Create FormData for file upload
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      // For now, we'll use a placeholder upload service
+      // In a real implementation, you'd upload to your storage service
+      // This is a mock implementation - replace with actual upload logic
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate upload
+      
+      // Return a mock URL - replace with actual upload URL
+      const mockUrl = `https://example.com/uploads/${Date.now()}_${file.name}`;
+      return mockUrl;
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      return null;
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -104,11 +161,27 @@ export default function EventForm({
 
     setIsLoading(true);
     try {
+      // Handle image upload if new image selected
+      let imageUrl: string | undefined = undefined;
+      if (selectedImage) {
+        const uploadedUrl = await uploadImage(selectedImage);
+        if (!uploadedUrl) {
+          setErrors({ submit: 'Failed to upload image. Please try again.' });
+          setIsLoading(false);
+          return;
+        }
+        imageUrl = uploadedUrl;
+      } else if (existingImageUrl) {
+        // Keep existing image if no new image selected
+        imageUrl = existingImageUrl;
+      }
+
       const eventData = {
         ...formData,
         starts_at: new Date(formData.start_date).toISOString(),
         expires_at: new Date(formData.end_date).toISOString(),
         event_type: formData.event_type,
+        image_url: imageUrl, // Add image URL if uploaded or existing
       };
 
       await onSave(eventData);
@@ -295,6 +368,65 @@ export default function EventForm({
               className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               placeholder="Enter event description (optional)"
             />
+          </div>
+
+          {/* Image Upload */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Event Image
+            </label>
+            <div className="space-y-3">
+              {/* Image Preview */}
+              {imagePreview && (
+                <div className="relative">
+                  <img
+                    src={imagePreview}
+                    alt="Event Preview"
+                    className="w-full h-48 object-cover rounded-lg border border-gray-300 dark:border-gray-600"
+                  />
+                  <button
+                    type="button"
+                    onClick={removeImage}
+                    className="absolute top-2 right-2 bg-red-600 text-white rounded-full p-1 hover:bg-red-700 transition-colors"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              )}
+              
+              {/* Upload Button */}
+              {!imagePreview && (
+                <div className="flex items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg hover:border-gray-400 dark:hover:border-gray-500 transition-colors">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="hidden"
+                    id="image-upload"
+                  />
+                  <label
+                    htmlFor="image-upload"
+                    className="flex flex-col items-center cursor-pointer"
+                  >
+                    <Upload size={24} className="text-gray-400 mb-2" />
+                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                      Click to upload event image
+                    </span>
+                  </label>
+                </div>
+              )}
+              
+              {/* Upload Progress */}
+              {uploadingImage && (
+                <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                  <span>Uploading image...</span>
+                </div>
+              )}
+            </div>
+            {errors.image_url && (
+              <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.image_url}</p>
+            )}
           </div>
 
           {/* Submit Error */}
