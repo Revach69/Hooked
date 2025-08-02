@@ -348,7 +348,7 @@ export default function ChatModal({ match, onClose }) {
               </div>
             ) : messages.length === 0 ? (
               <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                <p className="text-sm">🎉 You matched! Say hello to {match.first_name}</p>
+                <p className="text-sm">You matched! Say hello to {match.first_name}</p>
               </div>
             ) : (
               messages.map((message) => (

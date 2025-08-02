@@ -12,7 +12,7 @@ import {
   Image,
 } from 'react-native';
 import { X, User, Flag, AlertTriangle, CheckCircle, XCircle, Ban } from 'lucide-react-native';
-import { ReportAPI, EventProfile, type Report } from '../../lib/firebaseApi';
+import { ReportAPI, EventProfileAPI, type Report } from '../../lib/firebaseApi';
 
 interface ReportsModalProps {
   visible: boolean;
@@ -48,11 +48,11 @@ export default function ReportsModal({ visible, onClose, eventId, eventName }: R
       const reportsWithProfiles = await Promise.all(
         eventReports.map(async (report) => {
           const [reporterProfiles, reportedProfiles] = await Promise.all([
-            EventProfile.filter({ 
+            EventProfileAPI.filter({ 
               event_id: eventId, 
               session_id: report.reporter_session_id 
             }),
-            EventProfile.filter({ 
+            EventProfileAPI.filter({ 
               event_id: eventId, 
               session_id: report.reported_session_id 
             })
@@ -89,7 +89,7 @@ export default function ReportsModal({ visible, onClose, eventId, eventName }: R
             setProcessingReport(report.id);
             try {
               // Delete the reported user's profile
-              await EventProfile.delete(report.reportedProfile.id);
+              await EventProfileAPI.delete(report.reportedProfile.id);
               
               // Update report status to resolved
               await ReportAPI.update(report.id, { 

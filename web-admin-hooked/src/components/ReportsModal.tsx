@@ -22,8 +22,8 @@ interface ReportsModalProps {
 }
 
 interface ReportWithProfiles extends Report {
-  reporterProfile?: any;
-  reportedProfile?: any;
+  reporterProfile?: EventProfile;
+  reportedProfile?: EventProfile;
 }
 
 export default function ReportsModal({ isOpen, onClose, eventId, eventName }: ReportsModalProps) {

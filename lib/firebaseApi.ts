@@ -368,7 +368,17 @@ export const MessageAPI = {
       
       // Notify recipient of new message
       try {
-        await notifyNewMessage(data.to_profile_id, data.content);
+        // Get sender profile to get the name for notification
+        const senderProfile = await EventProfileAPI.get(data.from_profile_id);
+        if (senderProfile) {
+          await notifyNewMessage(
+            data.event_id,
+            data.from_profile_id,
+            data.to_profile_id,
+            data.content,
+            senderProfile.first_name
+          );
+        }
       } catch (error) {
         console.warn('Failed to send notification:', error);
       }
@@ -516,13 +526,15 @@ export const ReportAPI = {
 export const AuthAPI = {
   async signUp(email: string, password: string): Promise<FirebaseUser> {
     return simpleRetry(async () => {
-      return await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      return userCredential.user;
     });
   },
 
   async signIn(email: string, password: string): Promise<FirebaseUser> {
     return simpleRetry(async () => {
-      return await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      return userCredential.user;
     });
   },
 
@@ -667,3 +679,6 @@ export const SavedProfileAPI = {
     });
   }
 }; 
+
+// Add User export
+export { User as FirebaseUser } from 'firebase/auth'; 

@@ -1,28 +1,19 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { User } from './firebaseApi';
-
-// Simple admin verification system
-// In production, this should be replaced with proper Firebase custom claims
-
-const ADMIN_EMAILS = [
-  'admin@hooked-app.com',
-  'roi@hooked-app.com',
-  // Add more admin emails as needed
-];
+import { AuthAPI } from './firebaseApi';
 
 export const AdminUtils = {
-  // Check if current user is admin
+  // Check if current user is admin (any authenticated user from Firebase Auth)
   async isAdmin(): Promise<boolean> {
     try {
-      const currentUser = User.getCurrentUser();
-      if (!currentUser || !currentUser.email) {
+      const currentUser = AuthAPI.getCurrentUser();
+      if (!currentUser || !currentUser.uid) {
         return false;
       }
 
-      // Check if email is in admin list
-      const isAdminEmail = ADMIN_EMAILS.includes(currentUser.email.toLowerCase());
+      // Any authenticated user from Firebase Authentication is considered an admin
+      const isAdmin = !!currentUser.email;
       
-      // Also check local storage for admin session
+      // Cache admin session for performance
       const adminSession = await AsyncStorage.getItem('isAdmin');
       const adminAccessTime = await AsyncStorage.getItem('adminAccessTime');
       
@@ -37,7 +28,12 @@ export const AdminUtils = {
         }
       }
       
-      return isAdminEmail;
+      // If user is authenticated, update local session
+      if (isAdmin) {
+        await this.setAdminSession(currentUser.email || '');
+      }
+      
+      return isAdmin;
     } catch (error) {
       console.error('Error checking admin status:', error);
       return false;

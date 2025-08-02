@@ -95,10 +95,29 @@ export default function Chat() {
             ...doc.data()
           })) as ChatMessage[];
 
-          // Filter messages to only include conversation between these two users
+          // Get current user's profile ID and match's profile ID for filtering
+          const currentUserProfiles = await EventProfileAPI.filter({
+            session_id: currentSessionId,
+            event_id: currentEventId
+          });
+          
+          const matchProfiles = await EventProfileAPI.filter({
+            session_id: matchId as string,
+            event_id: currentEventId
+          });
+          
+          if (currentUserProfiles.length === 0 || matchProfiles.length === 0) {
+            console.error('Profile not found for filtering messages');
+            return;
+          }
+          
+          const currentUserProfileId = currentUserProfiles[0].id;
+          const matchProfileId = matchProfiles[0].id;
+
+          // Filter messages to only include conversation between these two users (using profile IDs)
           const conversationMessages = allMessages.filter(msg => 
-            (msg.from_profile_id === currentSessionId && msg.to_profile_id === matchId) ||
-            (msg.from_profile_id === matchId && msg.to_profile_id === currentSessionId)
+            (msg.from_profile_id === currentUserProfileId && msg.to_profile_id === matchProfileId) ||
+            (msg.from_profile_id === matchProfileId && msg.to_profile_id === currentUserProfileId)
           );
 
           // Get sender names for messages
@@ -106,14 +125,12 @@ export default function Chat() {
             conversationMessages.map(async (msg) => {
               if (msg.senderName) return msg;
               
-              const senderProfiles = await EventProfileAPI.filter({
-                session_id: msg.from_profile_id,
-                event_id: currentEventId
-              });
+              // Get sender profile by profile ID using get method
+              const senderProfile = await EventProfileAPI.get(msg.from_profile_id);
               
               return {
                 ...msg,
-                senderName: senderProfiles.length > 0 ? senderProfiles[0].first_name : 'Unknown'
+                senderName: senderProfile ? senderProfile.first_name : 'Unknown'
               };
             })
           );
@@ -181,16 +198,49 @@ export default function Chat() {
 
     setIsSending(true);
     try {
-      await addDoc(collection(db, 'messages'), {
+      // Get current user's profile to get the profile ID
+      const currentUserProfiles = await EventProfileAPI.filter({
+        session_id: currentSessionId,
+        event_id: currentEventId
+      });
+      
+      if (currentUserProfiles.length === 0) {
+        Alert.alert('Error', 'User profile not found');
+        return;
+      }
+      
+      const currentUserProfile = currentUserProfiles[0];
+      
+      // Get match's profile to get the profile ID
+      const matchProfiles = await EventProfileAPI.filter({
+        session_id: matchId as string,
+        event_id: currentEventId
+      });
+      
+      if (matchProfiles.length === 0) {
+        Alert.alert('Error', 'Match profile not found');
+        return;
+      }
+      
+      const matchProfile = matchProfiles[0];
+
+      // Use MessageAPI to create the message with correct profile IDs
+      await MessageAPI.create({
         event_id: currentEventId,
-        from_profile_id: currentSessionId,
-        to_profile_id: matchId as string,
-        content: newMessage.trim(),
-        created_at: serverTimestamp()
+        from_profile_id: currentUserProfile.id,
+        to_profile_id: matchProfile.id,
+        content: newMessage.trim()
       });
 
       setNewMessage('');
     } catch (error) {
+      console.error('Error sending message:', error);
+      console.error('Error details:', {
+        currentEventId,
+        currentSessionId,
+        matchId,
+        messageLength: newMessage.trim().length
+      });
       Alert.alert('Error', 'Failed to send message');
     } finally {
       setIsSending(false);

@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { Platform } from 'react-native';
+import { onSnapshot } from 'firebase/firestore';
 
 export interface ErrorLog {
   id: string;
@@ -253,9 +254,9 @@ export function setupGlobalErrorHandler() {
         }
       }
       
-      // Call original handler if it exists
+      // Call the original handler if it exists
       if (originalUnhandledRejectionHandler) {
-        originalUnhandledRejectionHandler(event);
+        originalUnhandledRejectionHandler.call(window, event);
       }
     };
   }
@@ -411,21 +412,21 @@ export function createSafeListener<T>(
   try {
     const unsubscribe = onSnapshot(
       query,
-      (snapshot) => {
+      (snapshot: any) => {
         try {
-          const data = snapshot.docs.map(doc => ({
+          const data = snapshot.docs.map((doc: any) => ({
             id: doc.id,
             ...doc.data()
           })) as T;
           onNext(data);
-        } catch (error) {
-          logFirebaseError(error, `listener_callback_${id}`);
-          onError?.(error);
+        } catch (error: any) {
+          console.error('Error processing snapshot data:', error);
+          if (onError) onError(error);
         }
       },
-      (error) => {
-        logFirebaseError(error, `listener_error_${id}`, { listenerType: id });
-        onError?.(error);
+      (error: any) => {
+        console.error('Firestore listener error:', error);
+        if (onError) onError(error);
       }
     );
 

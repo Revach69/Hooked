@@ -35,6 +35,7 @@ export default function Matches() {
     userProfile?: () => void;
     matches?: () => void;
     likes?: () => void;
+    mutualMatches?: () => void;
   }>({});
 
   useEffect(() => {
@@ -151,10 +152,17 @@ export default function Matches() {
 
           setMatches(matchedProfiles);
         } catch (error) {
-          // Handle error silently
+          console.error("Error in matches listener:", error);
         }
               }, (error) => {
-          // Handle error silently
+          // Handle Firestore listener errors gracefully
+          if (error.code === 'permission-denied') {
+            console.warn("Permission denied for matches listener - this is normal if user is not authenticated");
+          } else if (error.code === 'unavailable') {
+            console.warn("Firestore temporarily unavailable - listener will retry automatically");
+          } else {
+            console.error("Error in matches listener:", error);
+          }
         });
 
       listenersRef.current.matches = matchesUnsubscribe;
@@ -175,13 +183,90 @@ export default function Matches() {
           
           setLikedProfiles(new Set(likes.map(like => like.liked_session_id)));
         } catch (error) {
-          // Handle error silently
+          console.error("Error in likes listener:", error);
         }
       }, (error) => {
-        // Handle error silently
+        // Handle Firestore listener errors gracefully
+        if (error.code === 'permission-denied') {
+          console.warn("Permission denied for likes listener - this is normal if user is not authenticated");
+        } else if (error.code === 'unavailable') {
+          console.warn("Firestore temporarily unavailable - listener will retry automatically");
+        } else {
+          console.error("Error in likes listener:", error);
+        }
       });
 
       listenersRef.current.likes = likesUnsubscribe;
+
+      // Add mutual matches listener for real-time match notifications
+      const mutualMatchesQuery = query(
+        collection(db, 'likes'),
+        where('event_id', '==', currentEvent.id),
+        where('is_mutual', '==', true)
+      );
+
+      const mutualMatchesUnsubscribe = onSnapshot(mutualMatchesQuery, async (snapshot) => {
+        try {
+          const mutualLikes = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as any[];
+
+          // Filter to only include matches where this user is involved
+          const userMatches = mutualLikes.filter(like => 
+            like.liker_session_id === currentSessionId || like.liked_session_id === currentSessionId
+          );
+
+          // Check for new matches that haven't been notified yet
+          for (const match of userMatches) {
+            const isLiker = match.liker_session_id === currentSessionId;
+            const shouldNotify = isLiker ? !match.liker_notified_of_match : !match.liked_notified_of_match;
+            
+            if (shouldNotify) {
+              // Get the other person's profile
+              const otherSessionId = isLiker ? match.liked_session_id : match.liker_session_id;
+              const otherProfiles = await EventProfileAPI.filter({
+                session_id: otherSessionId,
+                event_id: currentEvent.id
+              });
+              
+              if (otherProfiles.length > 0) {
+                const otherProfile = otherProfiles[0];
+                
+                // Show native popup for user in the app
+                Alert.alert(
+                  "It's a Match!", 
+                  `You and ${otherProfile.first_name} liked each other.`,
+                  [
+                    {
+                      text: "Continue Browsing",
+                      style: "cancel"
+                    }
+                  ]
+                );
+
+                // Mark as notified
+                await LikeAPI.update(match.id, {
+                  [isLiker ? 'liker_notified_of_match' : 'liked_notified_of_match']: true
+                });
+              }
+            }
+          }
+        } catch (error) {
+          console.error("Error in mutual matches listener:", error);
+        }
+      }, (error) => {
+        // Handle Firestore listener errors gracefully
+        if (error.code === 'permission-denied') {
+          console.warn("Permission denied for mutual matches listener - this is normal if user is not authenticated");
+        } else if (error.code === 'unavailable') {
+          console.warn("Firestore temporarily unavailable - listener will retry automatically");
+        } else {
+          console.error("Error in mutual matches listener:", error);
+        }
+      });
+
+      listenersRef.current.mutualMatches = mutualMatchesUnsubscribe;
 
     } catch (error) {
       console.error("Error setting up matches listener:", error);
@@ -201,6 +286,10 @@ export default function Matches() {
       if (listenersRef.current.likes) {
         listenersRef.current.likes();
         listenersRef.current.likes = undefined;
+      }
+      if (listenersRef.current.mutualMatches) {
+        listenersRef.current.mutualMatches();
+        listenersRef.current.mutualMatches = undefined;
       }
     } catch (error) {
       // Handle error silently
@@ -290,12 +379,7 @@ export default function Matches() {
       });
 
       if (theirLikesToMe.length > 0) {
-        // They already liked us! Send them a notification that we liked them back
-        try {
-          await sendLikeNotification(likedProfile.session_id, currentUserProfile.first_name);
-        } catch (notificationError) {
-          // Handle notification error silently
-        }
+        // They already liked us! This creates a mutual match
         const theirLikeRecord = theirLikesToMe[0];
 
         // Update both records for mutual match
@@ -308,7 +392,7 @@ export default function Matches() {
           liked_notified_of_match: true 
         });
         
-        // 🎉 SEND MATCH NOTIFICATIONS TO BOTH USERS
+        // 🎉 SEND PUSH NOTIFICATIONS TO BOTH USERS (for users not in the app)
         try {
           await Promise.all([
             sendMatchNotification(likerSessionId, likedProfile.first_name),
@@ -318,16 +402,8 @@ export default function Matches() {
           // Handle notification error silently
         }
 
-        Alert.alert(
-          "🎉 It's a Match!", 
-          `You and ${likedProfile.first_name} liked each other.`,
-          [
-            {
-              text: "Continue Browsing",
-              style: "cancel"
-            }
-          ]
-        );
+        // Note: Native popup will be shown by the real-time mutual matches listener
+        console.log('Match created! Native popup will be shown by real-time listener.');
       }
     } catch (error) {
       console.error('Error creating like:', error);

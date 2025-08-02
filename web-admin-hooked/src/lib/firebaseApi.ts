@@ -68,6 +68,19 @@ export interface Message {
   created_at: string;
 }
 
+export interface Report {
+  id: string;
+  event_id: string;
+  reporter_session_id: string;
+  reported_session_id: string;
+  reason: string;
+  details?: string;
+  status: 'pending' | 'reviewed' | 'resolved' | 'dismissed';
+  admin_notes?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
 // Event API - renamed to avoid conflict with browser Event
 export const EventAPI = {
   async create(data: Omit<Event, 'id' | 'created_at' | 'updated_at'>): Promise<Event> {
@@ -96,9 +109,9 @@ export const EventAPI = {
   },
 
   async get(id: string): Promise<Event | null> {
-    const doc = await getDoc(doc(db, 'events', id));
-    if (!doc.exists()) return null;
-    return { id: doc.id, ...doc.data() } as Event;
+    const docSnap = await getDoc(doc(db, 'events', id));
+    if (!docSnap.exists()) return null;
+    return { id: docSnap.id, ...docSnap.data() } as Event;
   },
 
   async update(id: string, data: Partial<Event>): Promise<void> {
@@ -144,9 +157,9 @@ export const EventProfile = {
   },
 
   async get(id: string): Promise<EventProfile | null> {
-    const doc = await getDoc(doc(db, 'event_profiles', id));
-    if (!doc.exists()) return null;
-    return { id: doc.id, ...doc.data() } as EventProfile;
+    const docSnap = await getDoc(doc(db, 'event_profiles', id));
+    if (!docSnap.exists()) return null;
+    return { id: docSnap.id, ...docSnap.data() } as EventProfile;
   },
 
   async update(id: string, data: Partial<EventProfile>): Promise<void> {
@@ -197,9 +210,9 @@ export const Like = {
   },
 
   async get(id: string): Promise<Like | null> {
-    const doc = await getDoc(doc(db, 'likes', id));
-    if (!doc.exists()) return null;
-    return { id: doc.id, ...doc.data() } as Like;
+    const docSnap = await getDoc(doc(db, 'likes', id));
+    if (!docSnap.exists()) return null;
+    return { id: docSnap.id, ...docSnap.data() } as Like;
   },
 
   async update(id: string, data: Partial<Like>): Promise<void> {
@@ -244,12 +257,65 @@ export const Message = {
   },
 
   async get(id: string): Promise<Message | null> {
-    const doc = await getDoc(doc(db, 'messages', id));
-    if (!doc.exists()) return null;
-    return { id: doc.id, ...doc.data() } as Message;
+    const docSnap = await getDoc(doc(db, 'messages', id));
+    if (!docSnap.exists()) return null;
+    return { id: docSnap.id, ...docSnap.data() } as Message;
   },
 
   async delete(id: string): Promise<void> {
     await deleteDoc(doc(db, 'messages', id));
+  },
+};
+
+// Report API
+export const ReportAPI = {
+  async create(data: Omit<Report, 'id' | 'created_at'>): Promise<Report> {
+    const docRef = await addDoc(collection(db, 'reports'), {
+      ...data,
+      created_at: serverTimestamp(),
+    });
+    
+    const docSnap = await getDoc(docRef);
+    return { id: docRef.id, ...docSnap.data() } as Report;
+  },
+
+  async filter(filters: Partial<Report> = {}): Promise<Report[]> {
+    let q = query(collection(db, 'reports'));
+    
+    if (filters.event_id) {
+      q = query(q, where('event_id', '==', filters.event_id));
+    }
+    if (filters.reporter_session_id) {
+      q = query(q, where('reporter_session_id', '==', filters.reporter_session_id));
+    }
+    if (filters.reported_session_id) {
+      q = query(q, where('reported_session_id', '==', filters.reported_session_id));
+    }
+    if (filters.status) {
+      q = query(q, where('status', '==', filters.status));
+    }
+    if (filters.id) {
+      q = query(q, where('__name__', '==', filters.id));
+    }
+    
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Report);
+  },
+
+  async get(id: string): Promise<Report | null> {
+    const docSnap = await getDoc(doc(db, 'reports', id));
+    if (!docSnap.exists()) return null;
+    return { id: docSnap.id, ...docSnap.data() } as Report;
+  },
+
+  async update(id: string, data: Partial<Report>): Promise<void> {
+    await updateDoc(doc(db, 'reports', id), {
+      ...data,
+      updated_at: serverTimestamp(),
+    });
+  },
+
+  async delete(id: string): Promise<void> {
+    await deleteDoc(doc(db, 'reports', id));
   },
 }; 

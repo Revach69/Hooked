@@ -133,15 +133,12 @@ export default function Admin() {
     router.push('/admin/create-event');
   };
 
-  const handleEventPress = (event: EventAPI) => {
+  const handleEventPress = (event: Event) => {
     // Navigate to specific event details page
-    router.push({
-      pathname: '/admin/event-details',
-      params: { eventId: event.id }
-    });
+    router.push(`/admin/event-details?eventId=${event.id}`);
   };
 
-  const handleQRCodePress = (event: EventAPI) => {
+  const handleQRCodePress = (event: Event) => {
     setSelectedEventForQR(event);
     setShowQRCodeModal(true);
   };
@@ -151,7 +148,7 @@ export default function Admin() {
     setSelectedEventForQR(null);
   };
 
-  const handleReportsPress = (event: EventAPI) => {
+  const handleReportsPress = (event: Event) => {
     setSelectedEventForReports(event);
     setShowReportsModal(true);
   };
@@ -229,29 +226,29 @@ export default function Admin() {
     });
   };
 
-  const getEventStatus = (event: EventAPI) => {
+  const getEventStatus = (event: Event) => {
     const now = new Date();
-    const startDate = new Date(event.starts_at);
-    const endDate = new Date(event.expires_at);
+    const startTime = new Date(event.starts_at);
+    const endTime = new Date(event.expires_at);
     
-    if (now < startDate) return { text: 'Upcoming', color: '#3b82f6' };
-    if (now >= startDate && now <= endDate) return { text: 'Active', color: '#10b981' };
+    if (now < startTime) return { text: 'Upcoming', color: '#3b82f6' };
+    if (now >= startTime && now < endTime) return { text: 'Active', color: '#10b981' };
     return { text: 'Ended', color: '#6b7280' };
   };
 
   const categorizeEvents = () => {
     const now = new Date();
     const categorized = {
-      active: [] as EventAPI[],
-      future: [] as EventAPI[],
-      past: [] as EventAPI[]
+      active: [] as Event[],
+      future: [] as Event[],
+      past: [] as Event[]
     };
 
     events.forEach(event => {
       const startDate = new Date(event.starts_at);
       const endDate = new Date(event.expires_at);
       
-      if (now >= startDate && now <= endDate) {
+      if (now >= startDate && now < endDate) {
         categorized.active.push(event);
       } else if (now < startDate) {
         categorized.future.push(event);
@@ -263,7 +260,7 @@ export default function Admin() {
     return categorized;
   };
 
-  const renderEventCard = (event: EventAPI) => {
+  const renderEventCard = (event: Event) => {
     const status = getEventStatus(event);
     const isExpanded = expandedEvents.has(event.id);
     const joinLink = `https://www.hooked-app.com/join-instant?code=${event.event_code}`;
@@ -375,7 +372,7 @@ export default function Admin() {
     );
   };
 
-  const renderEventCategory = (title: string, events: EventAPI[], color: string) => {
+  const renderEventCategory = (title: string, events: Event[], color: string) => {
     if (events.length === 0) return null;
 
     return (

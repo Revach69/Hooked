@@ -1172,7 +1172,7 @@ export default function Profile() {
             </View>
             <View style={styles.bulletPoint}>
               <Text style={styles.bullet}>•</Text>
-              <Text style={styles.bulletText}>Messages deleted at midnight</Text>
+              <Text style={styles.bulletText}>Matches and messages are deleted</Text>
             </View>
             <View style={styles.bulletPoint}>
               <Text style={styles.bullet}>•</Text>
@@ -1181,29 +1181,7 @@ export default function Profile() {
           </View>
         </View>
 
-        <View style={styles.card}>
-          <View style={styles.infoCardHeader}>
-            <Mail size={20} color="#8b5cf6" />
-            <Text style={styles.infoCardTitle}>Email Data Usage</Text>
-          </View>
-          <Text style={styles.infoCardText}>
-            Your email address is only used for post-event feedback surveys and is never visible to other users at this event.
-          </Text>
-          <View style={styles.infoCardBullets}>
-            <View style={styles.bulletPoint}>
-              <Text style={styles.bullet}>•</Text>
-              <Text style={styles.bulletText}>Only used for feedback requests</Text>
-            </View>
-            <View style={styles.bulletPoint}>
-              <Text style={styles.bullet}>•</Text>
-              <Text style={styles.bulletText}>Never shared with other users</Text>
-            </View>
-            <View style={styles.bulletPoint}>
-              <Text style={styles.bullet}>•</Text>
-              <Text style={styles.bulletText}>Not used for marketing purposes</Text>
-            </View>
-          </View>
-        </View>
+
         {/* Actions */}
         <View style={styles.actionsSection}>
           <TouchableOpacity 

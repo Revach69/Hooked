@@ -6,8 +6,13 @@ admin.initializeApp();
 
 const db = admin.firestore();
 
+// Get region from environment or default to us-central1
+const FUNCTION_REGION = process.env.FUNCTION_REGION || 'us-central1';
+
 // Cloud Function to clean up expired profiles and anonymize data for analytics
-export const cleanupExpiredProfiles = functions.pubsub
+export const cleanupExpiredProfiles = functions
+  .region(FUNCTION_REGION)
+  .pubsub
   .schedule('every 1 hours')
   .onRun(async (context) => {
     const now = admin.firestore.Timestamp.now();
@@ -220,7 +225,9 @@ function countMutualMatches(likesData: any[]): number {
 }
 
 // Cloud Function to handle profile expiration notifications
-export const sendProfileExpirationNotifications = functions.pubsub
+export const sendProfileExpirationNotifications = functions
+  .region(FUNCTION_REGION)
+  .pubsub
   .schedule('every 6 hours')
   .onRun(async (context) => {
     const now = admin.firestore.Timestamp.now();
@@ -268,7 +275,9 @@ export const sendProfileExpirationNotifications = functions.pubsub
   });
 
 // Cloud Function to handle user profile saving
-export const saveUserProfile = functions.https.onCall(async (data, context) => {
+export const saveUserProfile = functions
+  .region(FUNCTION_REGION)
+  .https.onCall(async (data, context) => {
   // Verify authentication
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
@@ -300,7 +309,9 @@ export const saveUserProfile = functions.https.onCall(async (data, context) => {
 });
 
 // Cloud Function to get user's saved profiles
-export const getUserSavedProfiles = functions.https.onCall(async (data, context) => {
+export const getUserSavedProfiles = functions
+  .region(FUNCTION_REGION)
+  .https.onCall(async (data, context) => {
   // Verify authentication
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
@@ -329,7 +340,9 @@ export const getUserSavedProfiles = functions.https.onCall(async (data, context)
 });
 
 // Cloud Function to set admin claims for a user
-export const setAdminClaim = functions.https.onCall(async (data, context) => {
+export const setAdminClaim = functions
+  .region(FUNCTION_REGION)
+  .https.onCall(async (data, context) => {
   // Verify authentication
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
@@ -356,20 +369,22 @@ export const setAdminClaim = functions.https.onCall(async (data, context) => {
 });
 
 // Cloud Function to verify admin status
-export const verifyAdminStatus = functions.https.onCall(async (data, context) => {
+export const verifyAdminStatus = functions
+  .region(FUNCTION_REGION)
+  .https.onCall(async (data, context) => {
   // Verify authentication
   if (!context.auth) {
     throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
   }
   
   const userId = context.auth.uid;
+  const userEmail = context.auth.token.email;
   
   try {
-    // Get user record to check custom claims
-    const userRecord = await admin.auth().getUser(userId);
-    const isAdmin = userRecord.customClaims?.admin === true;
+    // Any authenticated user from Firebase Authentication is considered an admin
+    const isAdmin = !!userEmail;
     
-    console.log(`Verified admin status for user ${userId}: ${isAdmin}`);
+    console.log(`Verified admin status for user ${userId} (${userEmail}): ${isAdmin}`);
     
     return { success: true, isAdmin };
     

@@ -1,13 +1,17 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getUserSavedProfiles = exports.saveUserProfile = exports.sendProfileExpirationNotifications = exports.cleanupExpiredProfiles = void 0;
+exports.listAdminUsers = exports.removeAdminUser = exports.addAdminUser = exports.verifyAdminStatus = exports.setAdminClaim = exports.getUserSavedProfiles = exports.saveUserProfile = exports.sendProfileExpirationNotifications = exports.cleanupExpiredProfiles = void 0;
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 // Initialize Firebase Admin
 admin.initializeApp();
 const db = admin.firestore();
+// Get region from environment or default to us-central1
+const FUNCTION_REGION = process.env.FUNCTION_REGION || 'us-central1';
 // Cloud Function to clean up expired profiles and anonymize data for analytics
-exports.cleanupExpiredProfiles = functions.pubsub
+exports.cleanupExpiredProfiles = functions
+    .region(FUNCTION_REGION)
+    .pubsub
     .schedule('every 1 hours')
     .onRun(async (context) => {
     const now = admin.firestore.Timestamp.now();
@@ -183,7 +187,9 @@ function countMutualMatches(likesData) {
     return Math.floor(mutualMatches / 2);
 }
 // Cloud Function to handle profile expiration notifications
-exports.sendProfileExpirationNotifications = functions.pubsub
+exports.sendProfileExpirationNotifications = functions
+    .region(FUNCTION_REGION)
+    .pubsub
     .schedule('every 6 hours')
     .onRun(async (context) => {
     const now = admin.firestore.Timestamp.now();
@@ -222,7 +228,9 @@ exports.sendProfileExpirationNotifications = functions.pubsub
     }
 });
 // Cloud Function to handle user profile saving
-exports.saveUserProfile = functions.https.onCall(async (data, context) => {
+exports.saveUserProfile = functions
+    .region(FUNCTION_REGION)
+    .https.onCall(async (data, context) => {
     // Verify authentication
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
@@ -248,7 +256,9 @@ exports.saveUserProfile = functions.https.onCall(async (data, context) => {
     }
 });
 // Cloud Function to get user's saved profiles
-exports.getUserSavedProfiles = functions.https.onCall(async (data, context) => {
+exports.getUserSavedProfiles = functions
+    .region(FUNCTION_REGION)
+    .https.onCall(async (data, context) => {
     // Verify authentication
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
@@ -266,6 +276,139 @@ exports.getUserSavedProfiles = functions.https.onCall(async (data, context) => {
     catch (error) {
         console.error('Error getting user saved profiles:', error);
         throw new functions.https.HttpsError('internal', 'Failed to get saved profiles');
+    }
+});
+// Cloud Function to set admin claims for a user
+exports.setAdminClaim = functions
+    .region(FUNCTION_REGION)
+    .https.onCall(async (data, context) => {
+    // Verify authentication
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+    }
+    const { targetUserId, isAdmin } = data;
+    if (!targetUserId || typeof isAdmin !== 'boolean') {
+        throw new functions.https.HttpsError('invalid-argument', 'targetUserId and isAdmin are required');
+    }
+    try {
+        // Set custom claims for the target user
+        await admin.auth().setCustomUserClaims(targetUserId, { admin: isAdmin });
+        console.log(`Set admin claim for user ${targetUserId}: ${isAdmin}`);
+        return { success: true, message: `Admin claim set to ${isAdmin} for user ${targetUserId}` };
+    }
+    catch (error) {
+        console.error('Error setting admin claim:', error);
+        throw new functions.https.HttpsError('internal', 'Failed to set admin claim');
+    }
+});
+// Cloud Function to verify admin status
+exports.verifyAdminStatus = functions
+    .region(FUNCTION_REGION)
+    .https.onCall(async (data, context) => {
+    // Verify authentication
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+    }
+    const userId = context.auth.uid;
+    try {
+        // Check if user exists in admins collection
+        const adminDoc = await db.collection('admins').doc(userId).get();
+        const isAdmin = adminDoc.exists;
+        console.log(`Verified admin status for user ${userId}: ${isAdmin}`);
+        return { success: true, isAdmin };
+    }
+    catch (error) {
+        console.error('Error verifying admin status:', error);
+        throw new functions.https.HttpsError('internal', 'Failed to verify admin status');
+    }
+});
+// Cloud Function to add admin user
+exports.addAdminUser = functions
+    .region(FUNCTION_REGION)
+    .https.onCall(async (data, context) => {
+    // Verify authentication
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+    }
+    const { targetUserId, adminEmail } = data;
+    if (!targetUserId || !adminEmail) {
+        throw new functions.https.HttpsError('invalid-argument', 'targetUserId and adminEmail are required');
+    }
+    try {
+        // Check if current user is admin
+        const currentUserAdminDoc = await db.collection('admins').doc(context.auth.uid).get();
+        if (!currentUserAdminDoc.exists) {
+            throw new functions.https.HttpsError('permission-denied', 'Only admins can add other admins');
+        }
+        // Add user to admins collection
+        await db.collection('admins').doc(targetUserId).set({
+            email: adminEmail,
+            added_by: context.auth.uid,
+            added_at: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        console.log(`Added admin user ${targetUserId} (${adminEmail})`);
+        return { success: true, message: `Admin user ${adminEmail} added successfully` };
+    }
+    catch (error) {
+        console.error('Error adding admin user:', error);
+        throw new functions.https.HttpsError('internal', 'Failed to add admin user');
+    }
+});
+// Cloud Function to remove admin user
+exports.removeAdminUser = functions
+    .region(FUNCTION_REGION)
+    .https.onCall(async (data, context) => {
+    // Verify authentication
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+    }
+    const { targetUserId } = data;
+    if (!targetUserId) {
+        throw new functions.https.HttpsError('invalid-argument', 'targetUserId is required');
+    }
+    try {
+        // Check if current user is admin
+        const currentUserAdminDoc = await db.collection('admins').doc(context.auth.uid).get();
+        if (!currentUserAdminDoc.exists) {
+            throw new functions.https.HttpsError('permission-denied', 'Only admins can remove other admins');
+        }
+        // Prevent removing yourself
+        if (targetUserId === context.auth.uid) {
+            throw new functions.https.HttpsError('invalid-argument', 'Cannot remove yourself as admin');
+        }
+        // Remove user from admins collection
+        await db.collection('admins').doc(targetUserId).delete();
+        console.log(`Removed admin user ${targetUserId}`);
+        return { success: true, message: 'Admin user removed successfully' };
+    }
+    catch (error) {
+        console.error('Error removing admin user:', error);
+        throw new functions.https.HttpsError('internal', 'Failed to remove admin user');
+    }
+});
+// Cloud Function to list admin users
+exports.listAdminUsers = functions
+    .region(FUNCTION_REGION)
+    .https.onCall(async (data, context) => {
+    // Verify authentication
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+    }
+    try {
+        // Check if current user is admin
+        const currentUserAdminDoc = await db.collection('admins').doc(context.auth.uid).get();
+        if (!currentUserAdminDoc.exists) {
+            throw new functions.https.HttpsError('permission-denied', 'Only admins can list admin users');
+        }
+        // Get all admin users
+        const adminUsersSnapshot = await db.collection('admins').get();
+        const adminUsers = adminUsersSnapshot.docs.map(doc => (Object.assign({ uid: doc.id }, doc.data())));
+        console.log(`Listed ${adminUsers.length} admin users`);
+        return { success: true, adminUsers };
+    }
+    catch (error) {
+        console.error('Error listing admin users:', error);
+        throw new functions.https.HttpsError('internal', 'Failed to list admin users');
     }
 });
 //# sourceMappingURL=index.js.map

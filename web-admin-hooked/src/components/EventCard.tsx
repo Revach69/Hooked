@@ -18,7 +18,7 @@ import {
   ChevronUp,
   Flag
 } from 'lucide-react';
-import QRCode from 'qrcode';
+import * as QRCode from 'qrcode';
 
 interface EventCardProps {
   event: Event;

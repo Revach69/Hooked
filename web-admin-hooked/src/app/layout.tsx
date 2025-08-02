@@ -11,6 +11,9 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Hooked Admin Dashboard",
   description: "Admin dashboard for Hooked event management and analytics",
+  icons: {
+    icon: '/favicon.ico',
+  },
 };
 
 export default function RootLayout({

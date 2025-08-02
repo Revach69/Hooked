@@ -22,7 +22,7 @@ import {
   TrendingDown,
   Activity
 } from 'lucide-react-native';
-import { Event, EventProfile, Like, Message, User } from '../../lib/firebaseApi';
+import { EventAPI, EventProfileAPI, LikeAPI, MessageAPI, type Event } from '../../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface AnalyticsData {
@@ -69,7 +69,7 @@ export default function EventAnalytics() {
       setIsLoading(true);
       
       // Load event details
-      const eventData = await Event.get(eventId);
+      const eventData = await EventAPI.get(eventId);
       if (!eventData) {
         Alert.alert('Error', 'Event not found');
         router.back();
@@ -79,32 +79,32 @@ export default function EventAnalytics() {
       
       // Load all data for this event
       const [profiles, likes, messages] = await Promise.all([
-        EventProfile.filter({ event_id: eventId }),
-        Like.filter({ event_id: eventId }),
-        Message.filter({ event_id: eventId })
+        EventProfileAPI.filter({ event_id: eventId }),
+        LikeAPI.filter({ event_id: eventId }),
+        MessageAPI.filter({ event_id: eventId })
       ]);
 
       // Calculate analytics
-      const mutualLikes = likes.filter(like => like.is_mutual);
-      const activeUsers = profiles.filter(profile => {
-        const userLikes = likes.filter(like => like.from_profile_id === profile.id || like.to_profile_id === profile.id);
-        const userMessages = messages.filter(msg => msg.from_profile_id === profile.id || msg.to_profile_id === profile.id);
+      const mutualLikes = likes.filter((like: any) => like.is_mutual);
+      const activeUsers = profiles.filter((profile: any) => {
+        const userLikes = likes.filter((like: any) => like.from_profile_id === profile.id || like.to_profile_id === profile.id);
+        const userMessages = messages.filter((msg: any) => msg.from_profile_id === profile.id || msg.to_profile_id === profile.id);
         return userLikes.length > 0 || userMessages.length > 0;
       }).length;
 
       // Gender distribution
       const genderDistribution = {
-        male: profiles.filter(p => p.gender_identity.toLowerCase().includes('male')).length,
-        female: profiles.filter(p => p.gender_identity.toLowerCase().includes('female')).length,
-        other: profiles.filter(p => !p.gender_identity.toLowerCase().includes('male') && !p.gender_identity.toLowerCase().includes('female')).length,
+        male: profiles.filter((p: any) => p.gender_identity.toLowerCase().includes('male')).length,
+        female: profiles.filter((p: any) => p.gender_identity.toLowerCase().includes('female')).length,
+        other: profiles.filter((p: any) => !p.gender_identity.toLowerCase().includes('male') && !p.gender_identity.toLowerCase().includes('female')).length,
       };
 
       // Age distribution
       const ageDistribution = {
-        '18-25': profiles.filter(p => p.age >= 18 && p.age <= 25).length,
-        '26-35': profiles.filter(p => p.age >= 26 && p.age <= 35).length,
-        '36-45': profiles.filter(p => p.age >= 36 && p.age <= 45).length,
-        '45+': profiles.filter(p => p.age > 45).length,
+        '18-25': profiles.filter((p: any) => p.age >= 18 && p.age <= 25).length,
+        '26-35': profiles.filter((p: any) => p.age >= 26 && p.age <= 35).length,
+        '36-45': profiles.filter((p: any) => p.age >= 36 && p.age <= 45).length,
+        '45+': profiles.filter((p: any) => p.age > 45).length,
       };
 
       // Calculate engagement rate

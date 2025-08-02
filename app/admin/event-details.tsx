@@ -30,7 +30,7 @@ import {
   Copy,
   UserMinus
 } from 'lucide-react-native';
-import { Event, EventProfile, Like, Message, User } from '../../lib/firebaseApi';
+import { EventAPI, EventProfileAPI, LikeAPI, MessageAPI, type Event } from '../../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import QRCode from 'react-native-qrcode-svg';
 
@@ -60,7 +60,7 @@ export default function EventDetails() {
       setIsLoading(true);
       
       // Load event details
-      const eventData = await Event.get(eventId);
+      const eventData = await EventAPI.get(eventId);
       if (!eventData) {
         Alert.alert('Error', 'Event not found');
         router.back();
@@ -75,12 +75,12 @@ export default function EventDetails() {
       
       // Load event stats
       const [profiles, likes, messages] = await Promise.all([
-        EventProfile.filter({ event_id: eventId }),
-        Like.filter({ event_id: eventId }),
-        Message.filter({ event_id: eventId })
+        EventProfileAPI.filter({ event_id: eventId }),
+        LikeAPI.filter({ event_id: eventId }),
+        MessageAPI.filter({ event_id: eventId })
       ]);
 
-      const mutualLikes = likes.filter(like => like.is_mutual);
+      const mutualLikes = likes.filter((like: any) => like.is_mutual);
 
       setStats({
         totalProfiles: profiles.length,
@@ -135,7 +135,7 @@ export default function EventDetails() {
           style: "destructive",
           onPress: async () => {
             try {
-              await Event.delete(eventId);
+              await EventAPI.delete(eventId);
               Alert.alert('Success', 'Event deleted successfully');
               router.back();
             } catch (error) {

@@ -112,14 +112,15 @@ async function getUserPushTokens(userId: string): Promise<Array<{ token: string;
     });
 
     return tokens;
-  } catch (error) {
-    // If the user doesn't have push tokens set up yet (common in session-based apps),
-    // this is not an error - just return empty array
+  } catch (error: any) {
+    console.error('Error getting user push tokens:', error);
+    
+    // Handle specific Firebase errors
     if (error.code === 'permission-denied' || error.message?.includes('Missing or insufficient permissions')) {
-      console.log(`No push tokens found for user ${userId} (user may not have notifications set up)`);
+      console.warn('Permission denied accessing push tokens');
       return [];
     }
-    console.error('Error getting user push tokens:', error);
+    
     return [];
   }
 }
@@ -132,7 +133,7 @@ export async function sendMatchNotification(
   matchedUserName: string
 ): Promise<boolean> {
   const notification: NotificationData = {
-    title: "It's a match! 🎉",
+    title: "It's a match!",
     body: `You're hooked up with ${matchedUserName}`,
     data: {
       type: 'match',

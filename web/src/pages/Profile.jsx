@@ -404,7 +404,7 @@ export default function Profile() {
               </div>
               <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
                 <CheckCircle2 className="w-4 h-4" />
-                <span className="text-sm">Messages deleted at midnight</span>
+                <span className="text-sm">Matches and messages are deleted</span>
               </div>
               <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
                 <CheckCircle2 className="w-4 h-4" />
@@ -414,34 +414,7 @@ export default function Profile() {
           </CardContent>
         </Card>
 
-        {/* Email Data Usage */}
-        <Card className="border-0 shadow-lg mb-6 bg-white dark:bg-gray-800">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg text-gray-900 dark:text-white">
-              <Mail className="w-5 h-5 text-purple-500" />
-              Email Data Usage
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-gray-600 dark:text-gray-300 mb-4">
-              Your email address is only used for post-event feedback surveys and is never visible to other users at this event.
-            </p>
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400">
-                <CheckCircle2 className="w-4 h-4" />
-                <span className="text-sm">Only used for feedback requests</span>
-              </div>
-              <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400">
-                <CheckCircle2 className="w-4 h-4" />
-                <span className="text-sm">Never shared with other users</span>
-              </div>
-              <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400">
-                <CheckCircle2 className="w-4 h-4" />
-                <span className="text-sm">Not used for marketing purposes</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+
       </div>
 
       {/* Bottom Navigation */}

@@ -19,7 +19,7 @@ import {
   MapPin,
   Hash
 } from 'lucide-react-native';
-import { Event, User } from '../../lib/firebaseApi';
+import { EventAPI, AuthAPI } from '../../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
@@ -70,21 +70,21 @@ export default function CreateEvent() {
       setIsLoading(true);
       
       // Check if event code already exists
-      const existingEvents = await Event.filter({ event_code: formData.event_code });
+      const existingEvents = await EventAPI.filter({ event_code: formData.event_code });
       if (existingEvents.length > 0) {
         Alert.alert('Error', 'Event code already exists. Please generate a new one.');
         return;
       }
 
       // Create the event
-      await Event.create({
+      await EventAPI.create({
         name: formData.name.trim(),
         description: formData.description.trim(),
         location: formData.location.trim(),
         event_code: formData.event_code.trim(),
         starts_at: formData.starts_at.toISOString(),
         expires_at: formData.expires_at.toISOString(),
-        organizer_email: User.getCurrentUser()?.email || '',
+        organizer_email: AuthAPI.getCurrentUser()?.email || '',
       });
 
       Alert.alert('Success', 'Event created successfully!', [

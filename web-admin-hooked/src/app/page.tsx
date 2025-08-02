@@ -20,7 +20,7 @@ import {
   Copy,
   Flag
 } from 'lucide-react';
-import QRCode from 'qrcode';
+import * as QRCode from 'qrcode';
 import { useAuth } from '@/contexts/AuthContext';
 import dynamic from 'next/dynamic';
 
@@ -108,8 +108,13 @@ export default function AdminDashboard() {
       setIsLoading(true);
       const allEvents = await EventAPI.filter({});
       setEvents(allEvents);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading events:', error);
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        stack: error.stack
+      });
     } finally {
       setIsLoading(false);
     }
@@ -584,6 +589,7 @@ export default function AdminDashboard() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-600"></div>

@@ -233,7 +233,7 @@ export default function Discovery() {
           liked_notified_of_match: true 
         });
         
-        alert(`🎉 It's a Match! You and ${likedProfile.first_name} liked each other.`);
+        alert(`It's a Match! You and ${likedProfile.first_name} liked each other.`);
         navigate(createPageUrl("Matches"));
       }
     } catch (error) {

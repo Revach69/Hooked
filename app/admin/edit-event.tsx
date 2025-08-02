@@ -19,7 +19,7 @@ import {
   MapPin,
   Hash
 } from 'lucide-react-native';
-import { Event, User } from '../../lib/firebaseApi';
+import { EventAPI, AuthAPI } from '../../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
@@ -50,7 +50,7 @@ export default function EditEvent() {
 
   const loadEvent = async () => {
     try {
-      const eventData = await Event.get(eventId);
+      const eventData = await EventAPI.get(eventId);
       if (!eventData) {
         Alert.alert('Error', 'Event not found');
         router.back();
@@ -95,15 +95,15 @@ export default function EditEvent() {
       setIsSaving(true);
       
       // Check if event code already exists (excluding current event)
-      const existingEvents = await Event.filter({ event_code: formData.event_code });
-      const otherEventsWithSameCode = existingEvents.filter(event => event.id !== eventId);
+      const existingEvents = await EventAPI.filter({ event_code: formData.event_code });
+      const otherEventsWithSameCode = existingEvents.filter((event: any) => event.id !== eventId);
       if (otherEventsWithSameCode.length > 0) {
-        Alert.alert('Error', 'Event code already exists. Please use a different code.');
+        Alert.alert('Error', 'Event code already exists. Please generate a new one.');
         return;
       }
 
       // Update the event
-      await Event.update(eventId, {
+      await EventAPI.update(eventId, {
         name: formData.name.trim(),
         description: formData.description.trim(),
         location: formData.location.trim(),

@@ -20,7 +20,7 @@ import {
   Calendar,
   MapPin
 } from 'lucide-react-native';
-import { Event, EventProfile, Like, Message, User } from '../../lib/firebaseApi';
+import { EventAPI, EventProfileAPI, LikeAPI, MessageAPI, type Event, type EventProfile } from '../../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface UserWithStats extends EventProfile {
@@ -51,7 +51,7 @@ export default function ManageUsers() {
       setIsLoading(true);
       
       // Load event details
-      const eventData = await Event.get(eventId);
+      const eventData = await EventAPI.get(eventId);
       if (!eventData) {
         Alert.alert('Error', 'Event not found');
         router.back();
@@ -60,20 +60,20 @@ export default function ManageUsers() {
       setEvent(eventData);
       
       // Load all profiles for this event
-      const profiles = await EventProfile.filter({ event_id: eventId });
+      const profiles = await EventProfileAPI.filter({ event_id: eventId });
       
       // Load likes and messages for stats
       const [likes, messages] = await Promise.all([
-        Like.filter({ event_id: eventId }),
-        Message.filter({ event_id: eventId })
+        LikeAPI.filter({ event_id: eventId }),
+        MessageAPI.filter({ event_id: eventId })
       ]);
 
       // Calculate stats for each user
-      const usersWithStats: UserWithStats[] = profiles.map(profile => {
-        const likesGiven = likes.filter(like => like.from_profile_id === profile.id).length;
-        const likesReceived = likes.filter(like => like.to_profile_id === profile.id).length;
-        const messagesSent = messages.filter(msg => msg.from_profile_id === profile.id).length;
-        const messagesReceived = messages.filter(msg => msg.to_profile_id === profile.id).length;
+      const usersWithStats: UserWithStats[] = profiles.map((profile: any) => {
+        const likesGiven = likes.filter((like: any) => like.from_profile_id === profile.id).length;
+        const likesReceived = likes.filter((like: any) => like.to_profile_id === profile.id).length;
+        const messagesSent = messages.filter((msg: any) => msg.from_profile_id === profile.id).length;
+        const messagesReceived = messages.filter((msg: any) => msg.to_profile_id === profile.id).length;
 
         return {
           ...profile,
@@ -111,25 +111,37 @@ export default function ManageUsers() {
           style: "destructive",
           onPress: async () => {
             try {
-              // Delete user profile
-              await EventProfile.delete(userId);
+              // Delete the user's profile
+              await EventProfileAPI.delete(userId);
               
-              // Delete associated likes
-              const userLikes = await Like.filter({ 
+              // Delete all likes involving this user
+              const userLikes = await LikeAPI.filter({
                 event_id: eventId,
-                from_profile_id: userId 
+                from_profile_id: userId
               });
-              for (const like of userLikes) {
-                await Like.delete(like.id);
+              
+              const receivedLikes = await LikeAPI.filter({
+                event_id: eventId,
+                to_profile_id: userId
+              });
+              
+              for (const like of [...userLikes, ...receivedLikes]) {
+                await LikeAPI.delete(like.id);
               }
               
-              // Delete associated messages
-              const userMessages = await Message.filter({ 
+              // Delete all messages involving this user
+              const userMessages = await MessageAPI.filter({
                 event_id: eventId,
-                from_profile_id: userId 
+                from_profile_id: userId
               });
-              for (const message of userMessages) {
-                await Message.delete(message.id);
+              
+              const receivedMessages = await MessageAPI.filter({
+                event_id: eventId,
+                to_profile_id: userId
+              });
+              
+              for (const message of [...userMessages, ...receivedMessages]) {
+                await MessageAPI.delete(message.id);
               }
               
               Alert.alert('Success', 'User deleted successfully');
