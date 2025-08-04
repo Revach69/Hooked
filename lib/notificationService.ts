@@ -22,7 +22,7 @@ export async function sendPushNotificationToUser(
     const tokens = await getUserPushTokens(userId);
     
     if (tokens.length === 0) {
-      console.log(`No push tokens found for user ${userId}`);
+      // No push tokens found for user
       return false;
     }
 
@@ -35,7 +35,7 @@ export async function sendPushNotificationToUser(
       result => result.status === 'fulfilled' && result.value
     ).length;
 
-    console.log(`Sent notification to ${successCount}/${tokens.length} devices for user ${userId}`);
+          // Sent notification to devices
     return successCount > 0;
   } catch (error) {
     console.error('Error sending push notification to user:', error);
@@ -83,7 +83,7 @@ async function sendPushNotification(
       return false;
     }
 
-    console.log(`Push notification sent successfully to token: ${token.substring(0, 20)}...`);
+          // Push notification sent successfully
     return true;
   } catch (error) {
     console.error('Error sending push notification:', error);
@@ -98,7 +98,7 @@ async function sendPushNotification(
 async function getUserPushTokens(userId: string): Promise<Array<{ token: string; platform: string }>> {
   // Push tokens are not supported in the session-based version
   // since they require Firebase Auth and the app doesn't use authentication
-  console.log('Push tokens not supported in session-based app');
+        // Push tokens not supported in session-based app
   return [];
 }
 
@@ -199,7 +199,7 @@ export async function scheduleLocalNotification(
       trigger,
     });
     
-    console.log(`Local notification scheduled with identifier: ${identifier}`);
+          // Local notification scheduled
     return identifier;
   } catch (error) {
     console.error('Error scheduling local notification:', error);
@@ -213,7 +213,7 @@ export async function scheduleLocalNotification(
 export async function cancelScheduledNotification(identifier: string): Promise<void> {
   try {
     await Notifications.cancelScheduledNotificationAsync(identifier);
-    console.log(`Cancelled scheduled notification: ${identifier}`);
+          // Cancelled scheduled notification
   } catch (error) {
     console.error('Error cancelling scheduled notification:', error);
   }
@@ -225,7 +225,7 @@ export async function cancelScheduledNotification(identifier: string): Promise<v
 export async function cancelAllScheduledNotifications(): Promise<void> {
   try {
     await Notifications.cancelAllScheduledNotificationsAsync();
-    console.log('Cancelled all scheduled notifications');
+          // Cancelled all scheduled notifications
   } catch (error) {
     console.error('Error cancelling all scheduled notifications:', error);
   }

@@ -243,26 +243,44 @@ export default function Consent() {
     setIsUploadingPhoto(true);
     
     try {
-      // Upload directly to Firebase Storage
+      // Create file object for upload
       const fileObject = {
         uri: asset.uri,
-        name: asset.fileName || `profile-photo-${Date.now()}.jpg`,
-        type: asset.type || 'image/jpeg',
-        fileSize: asset.fileSize
+        name: `profile-photo-${Date.now()}.jpg`,
+        type: 'image/jpeg'
       };
 
+      // Upload to Firebase Storage
       const { file_url } = await StorageAPI.uploadFile(fileObject);
       
-      // Update formData with Firebase URL
-      setFormData(prev => ({ ...prev, profile_photo_url: file_url }));
-      
-      // Save photo URL locally only if "remember profile" is enabled
+      // Update form data with the uploaded photo URL
+      setFormData(prev => ({
+        ...prev,
+        profile_photo_url: file_url
+      }));
+
+      // Save photo URL locally if "remember profile" is checked
       if (rememberProfile) {
         await AsyncStorage.setItem('savedProfilePhotoUrl', file_url);
       }
     } catch (err) {
-      console.error('Upload error:', err);
-      Alert.alert("Error", "Failed to upload photo. Please try again.");
+      // Enhanced error logging
+      console.error('Photo upload error details:', {
+        error: err,
+        assetInfo: {
+          uri: asset.uri,
+          fileSize: asset.fileSize,
+          width: asset.width,
+          height: asset.height,
+          type: asset.type
+        },
+        timestamp: new Date().toISOString(),
+        userAgent: 'iOS App'
+      });
+      
+      // Use the existing error handling system
+      const errorMessage = err instanceof Error ? err.message : 'Unknown upload error';
+      Alert.alert("Upload Failed", `Failed to upload photo: ${errorMessage}. Please try again.`);
     } finally {
       setIsUploadingPhoto(false);
     }
@@ -727,7 +745,7 @@ export default function Consent() {
             <View style={styles.header}>
               <View style={styles.logoContainer}>
                 <Image 
-                  source={require('../assets/Home Icon.png')} 
+                  source={require('../assets/Icon.png')} 
                   style={styles.logoImage}
                   resizeMode="contain"
                 />
@@ -943,15 +961,7 @@ export default function Consent() {
             <Text style={styles.submitButtonText}>Join Event</Text>
           </TouchableOpacity>
 
-          {/* Debug Button (hidden, for development testing) */}
-          {__DEV__ && (
-            <TouchableOpacity
-              style={[styles.submitButton, { marginTop: 8, backgroundColor: '#6b7280' }]}
-                              onPress={() => {}}
-            >
-              <Text style={styles.submitButtonText}>Test Saved Profile Data</Text>
-            </TouchableOpacity>
-          )}
+
         </View>
       </ScrollView>
     </TouchableWithoutFeedback>

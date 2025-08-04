@@ -134,7 +134,7 @@ export async function initializeNotifications(): Promise<{
     const permission = await checkNotificationPermission();
     
     if (!permission.granted) {
-      console.log('Notification permission not granted');
+      // Notification permission not granted
       return { permissionGranted: false, tokenSaved: false };
     }
 
@@ -178,7 +178,7 @@ export async function requestAndInitializeNotifications(): Promise<{
     const permission = await requestNotificationPermission();
     
     if (!permission.granted) {
-      console.log('User denied notification permission');
+      // User denied notification permission
       return { permissionGranted: false, tokenSaved: false };
     }
 
@@ -197,6 +197,6 @@ export async function requestAndInitializeNotifications(): Promise<{
 export async function getUserPushTokens(userId: string): Promise<PushTokenData[]> {
   // Push tokens are not supported in the session-based version
   // since they require Firebase Auth and the app doesn't use authentication
-  console.log('Push tokens not supported in session-based app');
+        // Push tokens not supported in session-based app
   return [];
 } 

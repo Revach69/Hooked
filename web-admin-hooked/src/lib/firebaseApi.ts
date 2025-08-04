@@ -281,6 +281,7 @@ export const ReportAPI = {
   },
 
   async filter(filters: Partial<Report> = {}): Promise<Report[]> {
+    console.log('ReportAPI.filter called with filters:', filters);
     let q = query(collection(db, 'reports'));
     
     if (filters.event_id) {
@@ -300,7 +301,9 @@ export const ReportAPI = {
     }
     
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Report);
+    const reports = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Report);
+    console.log('ReportAPI.filter found reports:', reports);
+    return reports;
   },
 
   async get(id: string): Promise<Report | null> {

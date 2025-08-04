@@ -4,15 +4,15 @@ import { getFirestore, enableIndexedDbPersistence, CACHE_SIZE_UNLIMITED, getDocs
 import { getStorage, connectStorageEmulator } from 'firebase/storage';
 import { getAnalytics } from 'firebase/analytics';
 
-// Your Firebase configuration (same as mobile app)
+// Your Firebase configuration (using environment variables)
 const firebaseConfig = {
-  apiKey: "AIzaSyDkVAo_xXbBHy8FYwFtMQA66aju08qK_yE",
-  authDomain: "hooked-69.firebaseapp.com",
-  projectId: "hooked-69",
-  storageBucket: "hooked-69.firebasestorage.app",
-  messagingSenderId: "741889428835",
-  appId: "1:741889428835:web:d5f88b43a503c9e6351756",
-  measurementId: "G-6YHKXLN806"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDkVAo_xXbBHy8FYwFtMQA66aju08qK_yE",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "hooked-69.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "hooked-69",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "hooked-69.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "741889428835",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:741889428835:web:d5f88b43a503c9e6351756",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-6YHKXLN806"
 };
 
 // Initialize Firebase app with error handling

@@ -88,14 +88,14 @@ class FirebaseErrorBoundary extends Component<Props, State> {
   }
 
   private async handleFirebaseError(error: Error) {
-    console.log('🔄 Handling Firebase error in error boundary...');
+          // Handling Firebase error in error boundary
     
     // Check network status
     const netInfo = await NetInfo.fetch();
     this.setState({ networkStatus: netInfo.isConnected ? 'connected' : 'disconnected' });
 
     if (!netInfo.isConnected) {
-      console.log('📴 Network is disconnected, cannot attempt recovery');
+              // Network is disconnected, cannot attempt recovery
       return;
     }
 
@@ -106,10 +106,10 @@ class FirebaseErrorBoundary extends Component<Props, State> {
       const recoverySuccess = await attemptFirebaseRecovery('Error Boundary Recovery');
       
       if (recoverySuccess) {
-        console.log('✅ Firebase recovery successful, resetting error boundary');
+        // Firebase recovery successful, resetting error boundary
         this.resetErrorBoundary();
       } else {
-        console.log('❌ Firebase recovery failed');
+                  // Firebase recovery failed
       }
     } catch (recoveryError) {
       console.error('❌ Error during Firebase recovery:', recoveryError);

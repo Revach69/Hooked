@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -23,6 +23,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useMobileAsyncOperation } from '../lib/hooks/useMobileErrorHandling';
 import MobileOfflineStatusBar from '../lib/components/MobileOfflineStatusBar';
 import { SurveyNotificationService } from '../lib/surveyNotificationService';
+import { MemoryManager } from '../lib/utils';
 
 const { width } = Dimensions.get('window');
 
@@ -33,85 +34,83 @@ export default function Home() {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [manualCode, setManualCode] = useState('');
+  const [isInitialized, setIsInitialized] = useState(false);
   const { executeOperationWithOfflineFallback, showErrorAlert } = useMobileAsyncOperation();
+  const componentId = useRef('Home-' + Date.now()).current;
+  const initializationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    checkActiveEventSession();
-    checkForSurvey();
+    MemoryManager.registerComponent(componentId);
+    
+    // Initialize with a delay to prevent immediate crashes
+    initializationTimeoutRef.current = setTimeout(() => {
+      if (MemoryManager.isComponentMounted(componentId)) {
+        initializeApp();
+      }
+    }, 1000);
+
+    return () => {
+      MemoryManager.unregisterComponent(componentId);
+      if (initializationTimeoutRef.current) {
+        clearTimeout(initializationTimeoutRef.current);
+      }
+    };
   }, []);
 
-  const checkForSurvey = async () => {
+  const initializeApp = async () => {
+    if (!MemoryManager.isComponentMounted(componentId) || isInitialized) {
+      return;
+    }
+
     try {
-      const surveyData = await SurveyNotificationService.shouldShowSurvey();
-      if (surveyData) {
-        // Add delay to avoid interrupting immediate user actions
-        setTimeout(() => {
-          router.push({
-            pathname: '/survey',
-            params: {
-              eventId: surveyData.eventId,
-              eventName: surveyData.eventName,
-              sessionId: surveyData.sessionId,
-              source: 'manual'
-            }
-          });
-        }, 3000); // 3 second delay
+      // Check for existing session first
+      const eventId = await AsyncStorage.getItem('currentEventId');
+      const sessionId = await AsyncStorage.getItem('currentSessionId');
+      
+      if (eventId && sessionId) {
+        // User has an active session, redirect to discovery
+        router.replace('/discovery');
+        return;
       }
+      
+      // Simple initialization without complex async operations
+      setIsInitialized(true);
+      
+      // Check for survey with delay
+      setTimeout(async () => {
+        if (MemoryManager.isComponentMounted(componentId)) {
+          await checkForSurvey();
+        }
+      }, 2000);
+      
     } catch (error) {
-      console.error('Error checking for survey:', error);
+      console.error('Error during app initialization:', error);
     }
   };
 
-  const checkActiveEventSession = async () => {
+  const checkForSurvey = async () => {
+    if (!MemoryManager.isComponentMounted(componentId)) return;
+    
     try {
-      const eventId = await AsyncStorage.getItem('currentEventId');
-      const sessionId = await AsyncStorage.getItem('currentSessionId');
-      const profilePhotoUrl = await AsyncStorage.getItem('currentProfilePhotoUrl');
-      
-      if (!eventId || !sessionId) return;
-
-      // Check if user has completed profile creation (has profile photo)
-      if (!profilePhotoUrl) {
-        // User hasn't completed consent/profile creation, don't auto-redirect
-        console.log('⚠️ User hasn\'t completed profile creation, staying on home page');
-        return;
+      const surveyData = await SurveyNotificationService.shouldShowSurvey();
+      if (surveyData && MemoryManager.isComponentMounted(componentId)) {
+        // Add delay to avoid interrupting immediate user actions
+        setTimeout(() => {
+          if (MemoryManager.isComponentMounted(componentId)) {
+            router.push({
+              pathname: '/survey',
+              params: {
+                eventId: surveyData.eventId,
+                eventName: surveyData.eventName,
+                sessionId: surveyData.sessionId,
+                source: 'manual'
+              }
+            });
+          }
+        }, 3000);
       }
-
-      // Use enhanced error handling for event verification
-      const result = await executeOperationWithOfflineFallback(
-        async () => {
-          const events = await EventAPI.filter({ id: eventId });
-          return events;
-        },
-        { operation: 'Check active event session' }
-      );
-
-      if (result.queued) {
-        return;
-      }
-
-      if (result.success && result.result.length > 0) {
-        const event = result.result[0];
-        const nowISO = new Date().toISOString();
-        
-        // If event is currently active and user has completed profile, auto-resume to Discovery
-        if (event.starts_at && event.expires_at && nowISO >= event.starts_at && nowISO <= event.expires_at) {
-          console.log('✅ Auto-redirecting to discovery - user has completed profile and event is active');
-          router.replace('/discovery');
-          return;
-        }
-      }
-      
-      // If event is expired, not started, or not found, clear session data
-      await AsyncStorage.multiRemove([
-        'currentEventId',
-        'currentSessionId',
-        'currentEventCode',
-        'currentProfileColor',
-        'currentProfilePhotoUrl'
-      ]);
-    } catch (error: any) {
-      // Handle error silently
+    } catch (error) {
+      console.error('Error checking for survey:', error);
     }
   };
 
@@ -137,6 +136,8 @@ export default function Home() {
   };
 
   const handleCameraAccess = async () => {
+    if (!MemoryManager.isComponentMounted(componentId)) return;
+    
     try {
       setIsProcessing(true);
       
@@ -158,8 +159,6 @@ export default function Home() {
       });
 
       if (!result.canceled && result.assets && result.assets[0]) {
-        // For now, we'll show a message that QR scanning is not fully implemented
-        // In a real app, you would process the image to extract QR code data
         Alert.alert(
           'QR Code Detected',
           'Camera functionality is working! For now, please use the manual code entry option.',
@@ -170,9 +169,11 @@ export default function Home() {
         );
       }
     } catch (error) {
-      // Handle error silently
+      console.error('Camera access error:', error);
     } finally {
-      setIsProcessing(false);
+      if (MemoryManager.isComponentMounted(componentId)) {
+        setIsProcessing(false);
+      }
     }
   };
 
@@ -182,60 +183,7 @@ export default function Home() {
     router.push(`/join?code=${eventCode.toUpperCase()}`);
   };
 
-  // Debug function to clear session data (for testing)
-  const clearSessionData = async () => {
-    try {
-      await AsyncStorage.multiRemove([
-        'currentEventId',
-        'currentSessionId',
-        'currentEventCode',
-        'currentProfileColor',
-        'currentProfilePhotoUrl',
-        'savedProfileData'
-      ]);
-      console.log('✅ Session data cleared');
-      Alert.alert('Session Cleared', 'All session data has been cleared. You can now test the full flow.');
-    } catch (error) {
-      console.error('❌ Failed to clear session data:', error);
-    }
-  };
 
-  // Debug function to test survey (for testing)
-  const testSurvey = async () => {
-    try {
-      // Clear any existing survey data
-      await SurveyNotificationService.clearAllSurveyData();
-      
-      // Add a test event to history (within 26-hour window)
-      const testEvent = {
-        eventId: 'test-event-123',
-        eventName: 'Test Event',
-        sessionId: 'test-session-456',
-        expiresAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString() // 3 hours ago
-      };
-      
-      // Manually add event to history
-      const eventHistory = [testEvent];
-      await AsyncStorage.setItem('eventHistory', JSON.stringify(eventHistory));
-      
-      // Manually trigger survey
-      setTimeout(() => {
-        router.push({
-          pathname: '/survey',
-          params: {
-            eventId: testEvent.eventId,
-            eventName: testEvent.eventName,
-            sessionId: testEvent.sessionId,
-            source: 'test'
-          }
-        });
-      }, 1000);
-      
-      console.log('✅ Survey test triggered');
-    } catch (error) {
-      console.error('❌ Failed to test survey:', error);
-    }
-  };
 
   const openModal = (modalName: string) => {
     setActiveModal(modalName);
@@ -503,7 +451,7 @@ export default function Home() {
         <View style={styles.headerSection}>
           <View style={styles.logoContainer}>
             <Image 
-              source={require('../assets/Home Icon.png')} 
+              source={require('../assets/Icon.png')} 
               style={styles.logo}
               resizeMode="contain"
             />
@@ -574,21 +522,7 @@ export default function Home() {
             .
           </Text>
           
-          {/* Debug buttons - remove in production */}
-          <View style={{ flexDirection: 'row', marginTop: 10, gap: 10 }}>
-            <TouchableOpacity
-              style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 8 }}
-              onPress={clearSessionData}
-            >
-              <Text style={{ color: 'white', fontSize: 12 }}>Clear Session</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 8 }}
-              onPress={testSurvey}
-            >
-              <Text style={{ color: 'white', fontSize: 12 }}>Test Survey</Text>
-            </TouchableOpacity>
-          </View>
+
         </View>
 
         {/* How it works Modal */}

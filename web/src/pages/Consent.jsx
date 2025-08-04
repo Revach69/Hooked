@@ -3,15 +3,15 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 
-import { EventProfile } from "@/api/entities";
-import { Event } from "@/api/entities";
-import { UploadFile } from "@/api/integrations";
+import { EventProfile, Event } from "../api/entities";
+import { uploadFile as UploadFile } from "../lib/firebaseApi";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Upload } from "lucide-react";
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from "framer-motion";
+import { SurveyNotificationService } from "../lib/surveyNotificationService";
 
 // Simple UUID v4 generator function
 function generateUUID() {
@@ -59,14 +59,14 @@ export default function Consent() {
       
       try {
         console.log("🔍 Consent page - Fetching event with ID:", eventId);
-        const events = await Event.filter({ id: eventId });
-        console.log("🔍 Consent page - Found events:", events);
+        const event = await Event.get(eventId);
+        console.log("🔍 Consent page - Found event:", event);
         
-        if (events.length > 0) {
-          console.log("🔍 Consent page - Setting event:", events[0]);
-          setEvent(events[0]);
+        if (event) {
+          console.log("🔍 Consent page - Setting event:", event);
+          setEvent(event);
         } else {
-          console.log("🔍 Consent page - No events found, redirecting to Home");
+          console.log("🔍 Consent page - No event found, redirecting to Home");
           navigate(createPageUrl("Home"));
         }
       } catch (err) {
@@ -129,7 +129,7 @@ export default function Consent() {
       const profileColor = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
 
       // Generate anonymous email for web version (no Gmail auth)
-      const userEmail = `user_${sessionId}@hooked-app.com`;
+      const userEmail = `user_${sessionId}@${window.location.hostname}`;
 
       // Create event profile with lowercased authenticated user's email
       await EventProfile.create({
@@ -148,6 +148,20 @@ export default function Consent() {
       localStorage.setItem('currentSessionId', sessionId);
       localStorage.setItem('currentProfileColor', profileColor);
       localStorage.setItem('currentProfilePhotoUrl', formData.profile_photo_url);
+      
+      // Schedule survey notification for after event ends
+      try {
+        await SurveyNotificationService.scheduleSurveyNotification(
+          event.id,
+          event.name,
+          event.expires_at,
+          sessionId,
+          2 // 2 hours after event ends
+        );
+      } catch (error) {
+        console.error('Error scheduling survey notification:', error);
+        // Don't block profile creation if survey scheduling fails
+      }
       
       toast.success("Profile created! Welcome to the event.");
       navigate(createPageUrl("Discovery"));
@@ -311,7 +325,7 @@ export default function Consent() {
                     <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-4">
                       By creating a profile, you agree to our{' '}
                       <a 
-                        href="https://hooked-app.com/terms" 
+                        href={`${window.location.origin}/terms`}
                         target="_blank" 
                         rel="noopener noreferrer"
                         className="text-purple-600 dark:text-purple-400 underline hover:opacity-80 transition-opacity"
@@ -320,7 +334,7 @@ export default function Consent() {
                       </a>
                       {' '}and{' '}
                       <a 
-                        href="https://hooked-app.com/privacy" 
+                        href={`${window.location.origin}/privacy`}
                         target="_blank" 
                         rel="noopener noreferrer"
                         className="text-purple-600 dark:text-purple-400 underline hover:opacity-80 transition-opacity"

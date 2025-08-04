@@ -9,6 +9,9 @@ import { Heart, Filter, Users, Sparkles, Image as ImageIcon, User, MessageCircle
 import { EventProfile, Like, Event, cleanupListeners, getListenerStats } from "@/api/entities";
 import ProfileFilters from "../components/ProfileFilters";
 import ProfileDetailModal from "../components/ProfileDetailModal";
+import { sendMatchNotification, sendLikeNotification } from "../lib/notificationService";
+import { executeOperationWithOfflineFallback } from "../lib/webErrorHandler";
+import { toast } from 'sonner';
 
 export default function Discovery() {
   const navigate = useNavigate();
@@ -233,7 +236,14 @@ export default function Discovery() {
           liked_notified_of_match: true 
         });
         
-        alert(`It's a Match! You and ${likedProfile.first_name} liked each other.`);
+        // Send match notification
+        try {
+          await sendMatchNotification(likedProfile.session_id, currentUserProfile.first_name);
+        } catch (error) {
+          console.error('Error sending match notification:', error);
+        }
+        
+        toast.success(`It's a Match! You and ${likedProfile.first_name} liked each other.`);
         navigate(createPageUrl("Matches"));
       }
     } catch (error) {

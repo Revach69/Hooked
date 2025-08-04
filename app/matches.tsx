@@ -78,15 +78,15 @@ export default function Matches() {
           setCurrentUserProfile(userProfile);
 
           if (!userProfile) {
-            AsyncStorage.multiRemove([
+            console.log('User profile not found in matches, redirecting to home');
+            await AsyncStorage.multiRemove([
               'currentEventId',
               'currentSessionId',
               'currentEventCode',
               'currentProfileColor',
               'currentProfilePhotoUrl'
-            ]).then(() => {
-              router.replace('/home');
-            });
+            ]);
+            router.replace('/home');
             return;
           }
 
@@ -297,30 +297,35 @@ export default function Matches() {
   };
 
   const initializeSession = async () => {
-    const eventId = await AsyncStorage.getItem('currentEventId');
-    const sessionId = await AsyncStorage.getItem('currentSessionId');
-    
-    if (!eventId || !sessionId) {
-      router.replace('/home');
-      return;
-    }
-
-    setCurrentSessionId(sessionId);
-    
     try {
+      setIsLoading(true);
+      const eventId = await AsyncStorage.getItem('currentEventId');
+      const sessionId = await AsyncStorage.getItem('currentSessionId');
+      
+      if (!eventId || !sessionId) {
+        console.log('No event or session found, redirecting to home');
+        router.replace('/home');
+        return;
+      }
+
+      setCurrentSessionId(sessionId);
+      
       const events = await EventAPI.filter({ id: eventId });
       if (events.length > 0) {
         setCurrentEvent(events[0]);
       } else {
+        console.log('Event not found, redirecting to home');
         router.replace('/home');
         return;
       }
 
       // Matches are now handled by real-time listener
     } catch (error) {
-      // Handle error silently
+      console.error('Error initializing matches session:', error);
+      router.replace('/home');
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   // Remove the old loadMatches function since we're using real-time listeners now
@@ -362,7 +367,7 @@ export default function Matches() {
         liked_notified_of_match: false
       });
 
-      console.log('Like created successfully:', newLike.id);
+              // Like created successfully
 
       // Send notification to the person being liked (they get notified that someone liked them)
       try {
@@ -403,7 +408,7 @@ export default function Matches() {
         }
 
         // Note: Native popup will be shown by the real-time mutual matches listener
-        console.log('Match created! Native popup will be shown by real-time listener.');
+        // Match created! Native popup will be shown by real-time listener.
       }
     } catch (error) {
       console.error('Error creating like:', error);

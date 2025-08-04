@@ -146,7 +146,7 @@ class ErrorMonitor {
   async clearLogs(): Promise<void> {
     try {
       await AsyncStorage.removeItem(this.storageKey);
-      console.log('✅ Error logs cleared');
+              // Error logs cleared
     } catch (error) {
       console.error('❌ Failed to clear error logs:', error);
     }
@@ -261,13 +261,13 @@ export function setupGlobalErrorHandler() {
     };
   }
 
-  console.log('✅ Global error handler setup complete');
+          // Global error handler setup complete
 }
 
 // Reset error count (useful for testing or after app restart)
 export function resetErrorCount() {
   errorLogCount = 0;
-  console.log('🔄 Error count reset');
+          // Error count reset
 }
 
 // Get current error count
@@ -316,7 +316,7 @@ export async function logFirebaseError(error: any, operation: string, context: P
       }
       
       await AsyncStorage.setItem('firebase_critical_errors', JSON.stringify(logs));
-      console.log('📝 Internal assertion error logged to storage');
+              // Internal assertion error logged to storage
     } catch (logError) {
       console.error('Failed to log internal assertion error:', logError);
     }
@@ -352,7 +352,7 @@ class ListenerManager {
     this.activeListeners.set(id, unsubscribe);
     this.listenerCounts.set(id, (this.listenerCounts.get(id) || 0) + 1);
     
-    console.log(`📡 Listener registered: ${id} (total: ${this.listenerCounts.get(id)})`);
+            // Listener registered
   }
 
   unregisterListener(id: string) {
@@ -363,7 +363,7 @@ class ListenerManager {
         const count = (this.listenerCounts.get(id) || 1) - 1;
         this.listenerCounts.set(id, Math.max(0, count));
         
-        console.log(`📡 Listener unregistered: ${id} (remaining: ${count})`);
+        // Listener unregistered
       } catch (error) {
         console.warn(`Error unregistering listener ${id}:`, error);
       }
@@ -371,12 +371,12 @@ class ListenerManager {
   }
 
   cleanupAll() {
-    console.log(`🧹 Cleaning up ${this.activeListeners.size} active listeners...`);
+            // Cleaning up active listeners
     
     for (const [id, unsubscribe] of this.activeListeners) {
       try {
         unsubscribe();
-        console.log(`📡 Cleaned up listener: ${id}`);
+        // Cleaned up listener
       } catch (error) {
         console.warn(`Error cleaning up listener ${id}:`, error);
       }
@@ -496,7 +496,7 @@ export class ErrorRecovery {
     try {
       await recoveryFunction();
       this.recoveryAttempts.set(operation, 0); // Reset on success
-      console.log(`✅ Recovery successful for ${operation}`);
+              // Recovery successful
       return true;
     } catch (error) {
       this.recoveryAttempts.set(operation, attempts + 1);

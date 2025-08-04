@@ -34,7 +34,7 @@ export class SurveyNotificationService {
       // Check if user has already filled survey in their lifetime
       const surveyFilled = await AsyncStorage.getItem(this.SURVEY_FILLED_KEY);
       if (surveyFilled === 'true') {
-        console.log('User has already filled survey in their lifetime');
+        // User has already filled survey in their lifetime
         return null;
       }
 
@@ -44,13 +44,13 @@ export class SurveyNotificationService {
       
       // Check if notification time is in the future
       if (notificationTime <= Date.now()) {
-        console.log('Event already ended, not scheduling survey notification');
+        // Event already ended, not scheduling survey notification
         return null;
       }
 
       // Check if event hasn't ended yet (don't schedule for past events)
       if (eventEndTime <= Date.now()) {
-        console.log('Event has already ended, not scheduling survey notification');
+        // Event has already ended, not scheduling survey notification
         return null;
       }
 
@@ -87,7 +87,7 @@ export class SurveyNotificationService {
         expiresAt
       }));
 
-      console.log(`Survey notification scheduled for ${new Date(notificationTime).toLocaleString()}`);
+              // Survey notification scheduled
       return identifier;
     } catch (error) {
       console.error('Error scheduling survey notification:', error);
@@ -150,7 +150,7 @@ export class SurveyNotificationService {
         const { identifier } = JSON.parse(notificationData);
         await Notifications.cancelScheduledNotificationAsync(identifier);
         await AsyncStorage.removeItem(`${this.NOTIFICATION_PREFIX}${eventId}`);
-        console.log(`Cancelled survey notification for event ${eventId}`);
+        // Cancelled survey notification for event
       }
     } catch (error) {
       console.error('Error cancelling survey notification:', error);
@@ -178,7 +178,7 @@ export class SurveyNotificationService {
         await AsyncStorage.multiRemove(surveyKeys);
       }
 
-      console.log('Cancelled all survey notifications');
+              // Cancelled all survey notifications
     } catch (error) {
       console.error('Error cancelling all survey notifications:', error);
     }
@@ -278,7 +278,7 @@ export class SurveyNotificationService {
       }
       
       await this.cancelAllSurveyNotifications();
-      console.log('Cleared all survey data');
+              // Cleared all survey data
     } catch (error) {
       console.error('Error clearing survey data:', error);
     }

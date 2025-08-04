@@ -94,6 +94,21 @@ service cloud.firestore {
       allow delete: if request.auth != null && request.auth.token.admin == true;
     }
     
+    // ===== REPORTS COLLECTION =====
+    match /reports/{reportId} {
+      // ✅ Only admins can read reports
+      allow read: if request.auth != null && request.auth.token.admin == true;
+      
+      // ✅ Anyone can create reports (mobile app)
+      allow create: if true;
+      
+      // ✅ Only admins can update reports
+      allow update: if request.auth != null && request.auth.token.admin == true;
+      
+      // ✅ Only admins can delete reports
+      allow delete: if request.auth != null && request.auth.token.admin == true;
+    }
+
     // ===== USERS COLLECTION =====
     match /users/{userId} {
       // ✅ Only authenticated users can access user data

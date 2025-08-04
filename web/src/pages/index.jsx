@@ -8,11 +8,11 @@ import Discovery from "./Discovery";
 
 import Matches from "./Matches";
 
-
-
-import Join from "./join";
+import Join from "./join.jsx";
 
 import Profile from "./Profile";
+
+import Survey from "./Survey";
 
 import { BrowserRouter as Router, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 
@@ -24,14 +24,18 @@ const TestComponent = () => {
   console.log("🔍 TestComponent rendered");
   console.log("🔍 TestComponent location:", location.pathname);
   console.log("🔍 TestComponent navigate function:", typeof navigate);
+  console.log("🔍 TestComponent full location:", location);
   
   return (
-    <div style={{padding: '20px', textAlign: 'center'}}>
-      <h2>Test Component</h2>
-      <p>Router is working!</p>
+    <div style={{padding: '20px', textAlign: 'center', backgroundColor: 'yellow'}}>
+      <h2>🧪 Test Component - Router Working!</h2>
+      <p>✅ Router is working!</p>
       <p>Current path: {location.pathname}</p>
+      <p>Current search: {location.search}</p>
       <p>Navigate function: {typeof navigate}</p>
       <button onClick={() => navigate('/')}>Go Home</button>
+      <button onClick={() => navigate('/join?code=TEST')}>Go to Join</button>
+      <button onClick={() => window.location.href = '/join?code=TEST'}>Force Reload to Join</button>
     </div>
   );
 };
@@ -46,11 +50,11 @@ const PAGES = {
     
     Matches: Matches,
     
-
-    
     join: Join,
     
     Profile: Profile,
+    
+    Survey: Survey,
     
 }
 
@@ -89,10 +93,13 @@ function PagesContent() {
                 <Route path="/join" element={
                   (() => {
                     console.log("🔍 Join route matched - rendering Join component");
+                    console.log("🔍 Join component type:", typeof Join);
+                    console.log("🔍 Join component:", Join);
                     return <Join />;
                   })()
                 } />
                 <Route path="/Profile" element={<Profile />} />
+                <Route path="/Survey" element={<Survey />} />
                 <Route path="/test" element={<TestComponent />} />
                 
                 {/* Catch-all route for debugging */}

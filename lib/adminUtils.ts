@@ -2,18 +2,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthAPI } from './firebaseApi';
 
 export const AdminUtils = {
-  // Check if current user is admin (any authenticated user from Firebase Auth)
+  // Check if current user is admin
   async isAdmin(): Promise<boolean> {
     try {
-      const currentUser = AuthAPI.getCurrentUser();
-      if (!currentUser || !currentUser.uid) {
-        return false;
-      }
-
-      // Any authenticated user from Firebase Authentication is considered an admin
-      const isAdmin = !!currentUser.email;
-      
-      // Cache admin session for performance
+      // Check admin session from AsyncStorage
       const adminSession = await AsyncStorage.getItem('isAdmin');
       const adminAccessTime = await AsyncStorage.getItem('adminAccessTime');
       
@@ -28,12 +20,7 @@ export const AdminUtils = {
         }
       }
       
-      // If user is authenticated, update local session
-      if (isAdmin) {
-        await this.setAdminSession(currentUser.email || '');
-      }
-      
-      return isAdmin;
+      return false;
     } catch (error) {
       console.error('Error checking admin status:', error);
       return false;

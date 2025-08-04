@@ -11,7 +11,8 @@ import {
   AlertTriangle,
   Clock,
   Check,
-  Ban
+  Ban,
+  ChevronDown
 } from 'lucide-react';
 
 interface ReportsModalProps {
@@ -30,6 +31,7 @@ export default function ReportsModal({ isOpen, onClose, eventId, eventName }: Re
   const [reports, setReports] = useState<ReportWithProfiles[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [processingReport, setProcessingReport] = useState<string | null>(null);
+  const [showOldReports, setShowOldReports] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -40,7 +42,9 @@ export default function ReportsModal({ isOpen, onClose, eventId, eventName }: Re
   const loadReports = async () => {
     setIsLoading(true);
     try {
+      console.log('Loading reports for event:', eventId);
       const eventReports = await ReportAPI.filter({ event_id: eventId });
+      console.log('Found reports:', eventReports);
       
       // Load profiles for each report
       const reportsWithProfiles = await Promise.all(
@@ -64,6 +68,7 @@ export default function ReportsModal({ isOpen, onClose, eventId, eventName }: Re
         })
       );
 
+      console.log('Reports with profiles:', reportsWithProfiles);
       setReports(reportsWithProfiles);
     } catch (error) {
       console.error('Error loading reports:', error);
@@ -132,6 +137,10 @@ export default function ReportsModal({ isOpen, onClose, eventId, eventName }: Re
     });
   };
 
+  // Separate pending and old reports
+  const pendingReports = reports.filter(report => report.status === 'pending');
+  const oldReports = reports.filter(report => report.status !== 'pending');
+
   if (!isOpen) return null;
 
   return (
@@ -176,156 +185,226 @@ export default function ReportsModal({ isOpen, onClose, eventId, eventName }: Re
             </div>
           ) : (
             <div className="space-y-6">
-              {reports.map((report) => (
-                <div
-                  key={report.id}
-                  className="border border-gray-200 dark:border-gray-700 rounded-lg p-6"
-                >
-                  {/* Report Header */}
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(report.status)}`}>
-                        {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
-                      </span>
-                      <span className="text-sm text-gray-500 dark:text-gray-400">
-                        {formatDate(report.created_at)}
-                      </span>
-                    </div>
-                    {report.status === 'pending' && (
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleAcceptReport(report)}
-                          disabled={processingReport === report.id}
-                          className="flex items-center gap-2 px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white rounded-md text-sm font-medium transition-colors"
-                        >
-                          {processingReport === report.id ? (
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                          ) : (
-                            <Ban className="w-4 h-4" />
-                          )}
-                          Remove User
-                        </button>
-                        <button
-                          onClick={() => handleRejectReport(report)}
-                          disabled={processingReport === report.id}
-                          className="flex items-center gap-2 px-3 py-1.5 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 text-white rounded-md text-sm font-medium transition-colors"
-                        >
-                          {processingReport === report.id ? (
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                          ) : (
-                            <XCircle className="w-4 h-4" />
-                          )}
-                          Dismiss Report
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Users Section */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                    {/* Reporter */}
-                    <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
-                      <div className="flex items-center gap-3 mb-3">
-                        <User className="w-5 h-5 text-blue-600" />
-                        <h4 className="font-medium text-blue-900 dark:text-blue-100">Reporter</h4>
-                      </div>
-                      {report.reporterProfile ? (
-                        <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
-                            {report.reporterProfile.profile_photo_url ? (
-                              <img 
-                                src={report.reporterProfile.profile_photo_url} 
-                                alt={report.reporterProfile.first_name}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <div 
-                                className="w-full h-full flex items-center justify-center text-white font-semibold"
-                                style={{ backgroundColor: report.reporterProfile.profile_color || '#8b5cf6' }}
+              {/* Pending Reports Section */}
+              {pendingReports.length > 0 && (
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <div className="w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></div>
+                    Pending Reports ({pendingReports.length})
+                  </h3>
+                  <div className="space-y-4">
+                    {pendingReports.map((report) => (
+                      <div
+                        key={report.id}
+                        className="border border-gray-200 dark:border-gray-700 rounded-lg p-6"
+                      >
+                        {/* Report Header */}
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(report.status)}`}>
+                              {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
+                            </span>
+                            <span className="text-sm text-gray-500 dark:text-gray-400">
+                              {formatDate(report.created_at)}
+                            </span>
+                          </div>
+                          {report.status === 'pending' && (
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleAcceptReport(report)}
+                                disabled={processingReport === report.id}
+                                className="flex items-center gap-2 px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white rounded-md text-sm font-medium transition-colors"
                               >
-                                {report.reporterProfile.first_name[0]}
+                                {processingReport === report.id ? (
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                ) : (
+                                  <Ban className="w-4 h-4" />
+                                )}
+                                Remove User
+                              </button>
+                              <button
+                                onClick={() => handleRejectReport(report)}
+                                disabled={processingReport === report.id}
+                                className="flex items-center gap-2 px-3 py-1.5 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 text-white rounded-md text-sm font-medium transition-colors"
+                              >
+                                {processingReport === report.id ? (
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                ) : (
+                                  <XCircle className="w-4 h-4" />
+                                )}
+                                Dismiss Report
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Users Section */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+                          {/* Reporter */}
+                          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+                            <div className="flex items-center gap-3 mb-3">
+                              <User className="w-5 h-5 text-blue-600" />
+                              <h4 className="font-medium text-blue-900 dark:text-blue-100">Reporter</h4>
+                            </div>
+                            {report.reporterProfile ? (
+                              <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
+                                  {report.reporterProfile.profile_photo_url ? (
+                                    <img 
+                                      src={report.reporterProfile.profile_photo_url} 
+                                      alt={report.reporterProfile.first_name}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <div 
+                                      className="w-full h-full flex items-center justify-center text-white font-semibold"
+                                      style={{ backgroundColor: report.reporterProfile.profile_color || '#8b5cf6' }}
+                                    >
+                                      {report.reporterProfile.first_name[0]}
+                                    </div>
+                                  )}
+                                </div>
+                                <div>
+                                  <p className="font-medium text-gray-900 dark:text-white">
+                                    {report.reporterProfile.first_name}
+                                  </p>
+                                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                                    {report.reporterProfile.age} years old
+                                  </p>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-sm text-gray-500 dark:text-gray-400">
+                                Profile not found
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Reported User */}
+                          <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-4">
+                            <div className="flex items-center gap-3 mb-3">
+                              <AlertTriangle className="w-5 h-5 text-red-600" />
+                              <h4 className="font-medium text-red-900 dark:text-red-100">Reported User</h4>
+                            </div>
+                            {report.reportedProfile ? (
+                              <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
+                                  {report.reportedProfile.profile_photo_url ? (
+                                    <img 
+                                      src={report.reportedProfile.profile_photo_url} 
+                                      alt={report.reportedProfile.first_name}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <div 
+                                      className="w-full h-full flex items-center justify-center text-white font-semibold"
+                                      style={{ backgroundColor: report.reportedProfile.profile_color || '#8b5cf6' }}
+                                    >
+                                      {report.reportedProfile.first_name[0]}
+                                    </div>
+                                  )}
+                                </div>
+                                <div>
+                                  <p className="font-medium text-gray-900 dark:text-white">
+                                    {report.reportedProfile.first_name}
+                                  </p>
+                                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                                    {report.reportedProfile.age} years old
+                                  </p>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-sm text-gray-500 dark:text-gray-400">
+                                Profile not found
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Report Details */}
+                        <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                          <h4 className="font-medium text-gray-900 dark:text-white mb-2">Report Details</h4>
+                          <div className="space-y-2">
+                            <div>
+                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Reason: </span>
+                              <span className="text-sm text-gray-900 dark:text-white capitalize">
+                                {report.reason.replace('_', ' ')}
+                              </span>
+                            </div>
+                            {report.details && (
+                              <div>
+                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Details: </span>
+                                <p className="text-sm text-gray-900 dark:text-white mt-1">
+                                  {report.details}
+                                </p>
                               </div>
                             )}
                           </div>
-                          <div>
-                            <p className="font-medium text-gray-900 dark:text-white">
-                              {report.reporterProfile.first_name}
-                            </p>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                              {report.reporterProfile.age} years old
-                            </p>
-                          </div>
                         </div>
-                      ) : (
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          Profile not found
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Reported User */}
-                    <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-4">
-                      <div className="flex items-center gap-3 mb-3">
-                        <AlertTriangle className="w-5 h-5 text-red-600" />
-                        <h4 className="font-medium text-red-900 dark:text-red-100">Reported User</h4>
                       </div>
-                      {report.reportedProfile ? (
-                        <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
-                            {report.reportedProfile.profile_photo_url ? (
-                              <img 
-                                src={report.reportedProfile.profile_photo_url} 
-                                alt={report.reportedProfile.first_name}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <div 
-                                className="w-full h-full flex items-center justify-center text-white font-semibold"
-                                style={{ backgroundColor: report.reportedProfile.profile_color || '#8b5cf6' }}
-                              >
-                                {report.reportedProfile.first_name[0]}
-                              </div>
-                            )}
-                          </div>
-                          <div>
-                            <p className="font-medium text-gray-900 dark:text-white">
-                              {report.reportedProfile.first_name}
-                            </p>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                              {report.reportedProfile.age} years old
-                            </p>
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          Profile not found
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Report Details */}
-                  <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                    <h4 className="font-medium text-gray-900 dark:text-white mb-2">Report Details</h4>
-                    <div className="space-y-2">
-                      <div>
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Reason: </span>
-                        <span className="text-sm text-gray-900 dark:text-white capitalize">
-                          {report.reason.replace('_', ' ')}
-                        </span>
-                      </div>
-                      {report.details && (
-                        <div>
-                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Details: </span>
-                          <p className="text-sm text-gray-900 dark:text-white mt-1">
-                            {report.details}
-                          </p>
-                        </div>
-                      )}
-                    </div>
+                    ))}
                   </div>
                 </div>
-              ))}
+              )}
+              
+              {/* Old Reports Section */}
+              {oldReports.length > 0 && (
+                <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+                  <button
+                    onClick={() => setShowOldReports(!showOldReports)}
+                    className="flex items-center justify-between w-full text-left mb-4"
+                  >
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      Old Reports ({oldReports.length})
+                    </h3>
+                    <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${showOldReports ? 'rotate-180' : ''}`} />
+                  </button>
+                  
+                  {showOldReports && (
+                    <div className="space-y-4">
+                      {oldReports.map((report) => (
+                        <div
+                          key={report.id}
+                          className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-800"
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(report.status)}`}>
+                                {report.status === 'resolved' ? 'Approved' : 'Rejected'}
+                              </span>
+                              <span className="text-sm text-gray-500 dark:text-gray-400">
+                                {formatDate(report.created_at)}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          <div className="text-sm text-gray-700 dark:text-gray-300">
+                            <div className="mb-1">
+                              <strong>Reporter:</strong> {report.reporterProfile?.first_name || 'Unknown'}
+                            </div>
+                            <div className="mb-1">
+                              <strong>Reported:</strong> {report.reportedProfile?.first_name || 'Unknown'}
+                            </div>
+                            <div className="mb-1">
+                              <strong>Reason:</strong> {report.reason.replace('_', ' ')}
+                            </div>
+                            {report.details && (
+                              <div className="mb-1">
+                                <strong>Details:</strong> {report.details}
+                              </div>
+                            )}
+                            {report.admin_notes && (
+                              <div className="text-xs text-gray-500 dark:text-gray-400">
+                                <strong>Admin Notes:</strong> {report.admin_notes}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

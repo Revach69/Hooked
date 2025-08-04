@@ -24,6 +24,7 @@ import Slider from '@react-native-community/slider';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebaseConfig';
 import UserProfileModal from '../lib/UserProfileModal';
+import Toast from 'react-native-toast-message';
 
 const { width } = Dimensions.get('window');
 const gap = 8;
@@ -270,21 +271,20 @@ export default function Discovery() {
               if (otherProfiles.length > 0) {
                 const otherProfile = otherProfiles[0];
                 
-                // Show native popup for user in the app
-                Alert.alert(
-                  "It's a Match!", 
-                  `You and ${otherProfile.first_name} liked each other.`,
-                  [
-                    {
-                      text: "View Matches",
-                      onPress: () => router.push('/matches')
-                    },
-                    {
-                      text: "Continue Browsing",
-                      style: "cancel"
-                    }
-                  ]
-                );
+                // Show toast notification for in-app users
+                Toast.show({
+                  type: 'success',
+                  text1: "It's a Match! 🎉",
+                  text2: `You and ${otherProfile.first_name} liked each other.`,
+                  position: 'top',
+                  visibilityTime: 4000,
+                  autoHide: true,
+                  topOffset: 50,
+                  onPress: () => {
+                    Toast.hide();
+                    router.push('/matches');
+                  }
+                });
 
                 // Mark as notified
                 await LikeAPI.update(match.id, {
@@ -377,7 +377,7 @@ export default function Discovery() {
 
     // Check if user has completed profile creation (has profile photo)
     if (!profilePhotoUrl) {
-      console.log('⚠️ User hasn\'t completed profile creation, redirecting to consent');
+              // User hasn't completed profile creation, redirecting to consent
       router.replace('/consent');
       return;
     }
@@ -475,7 +475,7 @@ export default function Discovery() {
         liked_notified_of_match: false
       });
 
-      console.log('Like created successfully:', newLike.id);
+              // Like created successfully
 
       // Send notification to the person being liked (they get notified that someone liked them)
       try {
@@ -498,11 +498,11 @@ export default function Discovery() {
         // Update both records for mutual match
         await LikeAPI.update(newLike.id, { 
           is_mutual: true,
-          liker_notified_of_match: true
+          liker_notified_of_match: false // Don't mark as notified yet, let the listener handle it
         });
         await LikeAPI.update(theirLikeRecord.id, { 
           is_mutual: true,
-          liked_notified_of_match: true 
+          liked_notified_of_match: false // Don't mark as notified yet, let the listener handle it
         });
         
         // 🎉 SEND PUSH NOTIFICATIONS TO BOTH USERS (for users not in the app)
@@ -515,8 +515,25 @@ export default function Discovery() {
           // Handle notification error silently
         }
 
-        // Note: Native popup will be shown by the real-time mutual matches listener
-        console.log('Match created! Native popup will be shown by real-time listener.');
+        // Show immediate toast for the current user (who just created the match)
+        Toast.show({
+          type: 'success',
+          text1: "It's a Match! 🎉",
+          text2: `You and ${likedProfile.first_name} liked each other.`,
+          position: 'top',
+          visibilityTime: 4000,
+          autoHide: true,
+          topOffset: 50,
+          onPress: () => {
+            Toast.hide();
+            router.push('/matches');
+          }
+        });
+
+        // Mark as notified for the current user
+        await LikeAPI.update(newLike.id, { 
+          liker_notified_of_match: true
+        });
       }
     } catch (error) {
       console.error('Error creating like:', error);

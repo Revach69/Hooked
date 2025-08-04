@@ -6,6 +6,43 @@ import { Platform } from 'react-native';
 import { logFirebaseError } from './errorMonitoring';
 import { attemptFirebaseRecovery, shouldAttemptFirebaseRecovery } from './firebaseRecovery';
 
+// Initialize global event emitter safely
+if (!(global as any).eventEmitter) {
+  (global as any).eventEmitter = {
+    listeners: new Map(),
+    on: function(event: string, callback: Function) {
+      if (!this.listeners.has(event)) {
+        this.listeners.set(event, []);
+      }
+      this.listeners.get(event).push(callback);
+    },
+    off: function(event: string, callback: Function) {
+      if (this.listeners.has(event)) {
+        const callbacks = this.listeners.get(event);
+        const index = callbacks.indexOf(callback);
+        if (index > -1) {
+          callbacks.splice(index, 1);
+        }
+      }
+    },
+    emit: function(event: string, ...args: any[]) {
+      if (this.listeners.has(event)) {
+        const callbacks = this.listeners.get(event);
+        // Use setTimeout to prevent blocking the main thread
+        setTimeout(() => {
+          callbacks.forEach((callback: Function) => {
+            try {
+              callback(...args);
+            } catch (error) {
+              console.error('Event emitter error:', error);
+            }
+          });
+        }, 0);
+      }
+    }
+  };
+}
+
 export interface OfflineAction {
   id: string;
   operation: string;
@@ -81,11 +118,11 @@ class MobileErrorHandler {
       this.isOnline = state.isConnected ?? false;
 
       if (!wasOnline && this.isOnline) {
-        console.log('🌐 Mobile device is back online');
+        // Mobile device is back online
         this.processOfflineQueue();
         this.dispatchEvent('appOnline');
       } else if (wasOnline && !this.isOnline) {
-        console.log('📴 Mobile device is offline');
+        // Mobile device is offline
         this.dispatchEvent('appOffline');
       }
     });
@@ -141,11 +178,11 @@ class MobileErrorHandler {
 
         // Check if this is a Firebase-specific error that might need recovery
         if (this.isFirebaseConnectionError(error) && shouldAttemptFirebaseRecovery()) {
-          console.log('🔄 Attempting Firebase recovery due to connection error...');
+          // Attempting Firebase recovery due to connection error
           try {
             const recoverySuccess = await attemptFirebaseRecovery(operationName);
             if (recoverySuccess) {
-              console.log('✅ Firebase recovery successful, retrying operation...');
+              // Firebase recovery successful, retrying operation
               // Try the operation again after successful recovery
               try {
                 const result = await operation();
@@ -169,7 +206,7 @@ class MobileErrorHandler {
           // Calculate delay with exponential backoff and jitter
           const delay = this.calculateDelay(attempt, baseDelay);
 
-          console.log(`⏳ Retrying ${operationName} in ${Math.round(delay)}ms (attempt ${attempt}/${maxRetries})`);
+          // Retrying operation
 
           // Call onRetry callback if provided
           if (onRetry) {
@@ -255,7 +292,7 @@ class MobileErrorHandler {
 
     this.saveOfflineQueue();
 
-    console.log(`📝 Queued offline action: ${metadata.operation || 'Unknown'}`);
+            // Queued offline action
 
     return offlineAction.id;
   }
@@ -266,7 +303,7 @@ class MobileErrorHandler {
       return;
     }
 
-    console.log(`🔄 Processing ${this.offlineQueue.length} queued actions`);
+            // Processing queued actions
     this.isProcessingQueue = true;
 
     try {
@@ -284,7 +321,7 @@ class MobileErrorHandler {
             }
           );
 
-          console.log(`✅ Successfully processed offline action: ${action.operation}`);
+          // Successfully processed offline action
         } catch (error) {
           console.error(`❌ Failed to process offline action:`, error);
 
@@ -323,7 +360,7 @@ class MobileErrorHandler {
       const saved = await AsyncStorage.getItem('hooked_mobile_offline_queue');
       if (saved) {
         const parsedQueue = JSON.parse(saved);
-        console.log(`📋 Loaded ${parsedQueue.length} offline actions`);
+        // Loaded offline actions
         // Note: We can't restore the actual action functions, so we'll just track the count
         this.offlineQueue = [];
       }

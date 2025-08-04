@@ -32,7 +32,7 @@ class FirebaseRecoveryManager {
   // Attempt to recover from Firebase connection issues
   async attemptRecovery(operationName: string = 'Unknown operation'): Promise<boolean> {
     if (this.isRecovering) {
-      console.log('🔄 Recovery already in progress, skipping...');
+      // Recovery already in progress, skipping
       return false;
     }
 
@@ -40,7 +40,7 @@ class FirebaseRecoveryManager {
     const recoveryId = Date.now().toString();
 
     try {
-      console.log('🔄 Starting Firebase recovery process...');
+      // Starting Firebase recovery process
       
       // Step 1: Check network connectivity
       const netInfo = await NetInfo.fetch();
@@ -49,13 +49,13 @@ class FirebaseRecoveryManager {
       }
 
       // Step 2: Disable and re-enable Firebase network
-      console.log('🔄 Resetting Firebase network connection...');
+      // Resetting Firebase network connection
       await disableNetwork(db);
       await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
       await enableNetwork(db);
 
       // Step 3: Test connection
-      console.log('🔄 Testing Firebase connection...');
+      // Testing Firebase connection
       const isConnected = await this.testConnection();
       
       if (!isConnected) {
@@ -65,7 +65,7 @@ class FirebaseRecoveryManager {
       // Step 4: Clear any cached data that might be causing issues
       await this.clearProblematicCache();
 
-      console.log('✅ Firebase recovery successful');
+      // Firebase recovery successful
       this.recordRecoveryAction(recoveryId, 'reconnect', true);
       return true;
 
@@ -97,7 +97,7 @@ class FirebaseRecoveryManager {
       await AsyncStorage.removeItem('firebase_connection_state');
       await AsyncStorage.removeItem('firebase_last_error');
       
-      console.log('🧹 Cleared problematic cache data');
+      // Cleared problematic cache data
     } catch (error) {
       console.warn('⚠️ Failed to clear cache:', error);
     }

@@ -15,6 +15,7 @@ import { User as UserIcon, Edit, Save, Trash2, Eye, EyeOff, X, Camera, Sparkles,
 import { toast } from "sonner";
 import ReportModal from "@/components/ReportModal";
 
+
 const ALL_INTERESTS = [
   "music", "tech", "food", "books", "travel", "art", "fitness", "nature",
   "movies", "business", "photography", "dancing", "yoga", "gaming", "comedy",

@@ -13,6 +13,9 @@ import {
   TextInput,
   FlatList,
   useColorScheme,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { User, LogOut, Edit, Camera, Users, MessageCircle, Flag, AlertTriangle, Shield, Clock, Mail, AlertCircle } from 'lucide-react-native';
@@ -202,7 +205,7 @@ export default function Profile() {
       });
       
       if (currentUserProfiles.length === 0) {
-        console.log('Current user profile not found');
+        // Profile not found
         return;
       }
       
@@ -293,12 +296,27 @@ export default function Profile() {
               setReportStep('select');
               setSelectedUserToReport(null);
               setReportExplanation('');
+              Keyboard.dismiss();
             }
           }
         ]
       );
     } catch (error) {
-      Alert.alert("Error", "Failed to submit report. Please try again.");
+      console.error('Report submission error:', error);
+      let errorMessage = "Failed to submit report. Please try again.";
+      
+      // Provide more specific error messages based on the error type
+      if (error instanceof Error) {
+        if (error.message.includes('permission')) {
+          errorMessage = "Permission denied. Please check your connection and try again.";
+        } else if (error.message.includes('network')) {
+          errorMessage = "Network error. Please check your internet connection and try again.";
+        } else if (error.message.includes('quota')) {
+          errorMessage = "Service temporarily unavailable. Please try again later.";
+        }
+      }
+      
+      Alert.alert("Error", errorMessage);
     } finally {
       setSubmittingReport(false);
     }
@@ -817,12 +835,20 @@ export default function Profile() {
       alignItems: 'center',
       backgroundColor: 'rgba(0,0,0,0.5)',
     },
+    modalScrollContainer: {
+      flexGrow: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingVertical: 20,
+    },
     modalCard: {
       backgroundColor: isDark ? '#263238' : '#ffffff',
       borderRadius: 15,
       padding: 25,
       width: '90%',
       maxWidth: 400,
+      minHeight: 300, // Add minimum height to prevent shrinking
+      maxHeight: '80%', // Limit maximum height
       borderWidth: 1,
       borderColor: isDark ? '#374151' : '#e5e7eb',
     },
@@ -1231,93 +1257,116 @@ export default function Profile() {
 
       {/* Report User Modal */}
       <Modal visible={showReportModal} transparent animationType="slide" onRequestClose={() => setShowReportModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            {reportStep === 'select' ? (
-              <>
-                <Text style={styles.modalTitle}>Select User to Report</Text>
-                <FlatList
-                  data={allUsers}
-                  keyExtractor={(item) => item.id}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      style={styles.userListItem}
-                      onPress={() => handleSelectUserToReport(item)}
-                    >
-                      <View style={styles.userListPhoto}>
-                        {item.profile_photo_url ? (
-                          <Image source={{ uri: item.profile_photo_url }} style={styles.userListPhotoImage} />
-                        ) : (
-                          <View style={[styles.userListPhotoFallback, { backgroundColor: item.profile_color || '#cccccc' }]}>
-                            <Text style={styles.userListPhotoFallbackText}>{item.first_name[0]}</Text>
-                          </View>
-                        )}
-                      </View>
-                      <View style={styles.userListInfo}>
-                        <Text style={styles.userListName}>{item.first_name}</Text>
-                        <Text style={styles.userListAge}>{item.age} years old</Text>
-                      </View>
-                    </TouchableOpacity>
-                  )}
-                />
-                <TouchableOpacity
-                  style={styles.cancelButton}
-                  onPress={() => setShowReportModal(false)}
-                >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              <>
-                <Text style={styles.modalTitle}>Report {selectedUserToReport?.first_name}</Text>
-                <View style={styles.reportUserInfo}>
-                  <View style={styles.userListPhoto}>
-                    {selectedUserToReport?.profile_photo_url ? (
-                      <Image source={{ uri: selectedUserToReport.profile_photo_url }} style={styles.userListPhotoImage} />
-                    ) : (
-                      <View style={[styles.userListPhotoFallback, { backgroundColor: selectedUserToReport?.profile_color || '#cccccc' }]}>
-                        <Text style={styles.userListPhotoFallbackText}>{selectedUserToReport?.first_name[0]}</Text>
-                      </View>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+          style={styles.modalOverlay}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          <ScrollView 
+            contentContainerStyle={styles.modalScrollContainer}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            onScrollBeginDrag={() => Keyboard.dismiss()}
+          >
+            <View style={styles.modalCard}>
+              {reportStep === 'select' ? (
+                <>
+                  <Text style={styles.modalTitle}>Select User to Report</Text>
+                  <FlatList
+                    data={allUsers}
+                    keyExtractor={(item) => item.id}
+                    scrollEnabled={false}
+                    style={{ maxHeight: 200 }} // Limit list height
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={styles.userListItem}
+                        onPress={() => handleSelectUserToReport(item)}
+                      >
+                        <View style={styles.userListPhoto}>
+                          {item.profile_photo_url ? (
+                            <Image source={{ uri: item.profile_photo_url }} style={styles.userListPhotoImage} />
+                          ) : (
+                            <View style={[styles.userListPhotoFallback, { backgroundColor: item.profile_color || '#cccccc' }]}>
+                              <Text style={styles.userListPhotoFallbackText}>{item.first_name[0]}</Text>
+                            </View>
+                          )}
+                        </View>
+                        <View style={styles.userListInfo}>
+                          <Text style={styles.userListName}>{item.first_name}</Text>
+                          <Text style={styles.userListAge}>{item.age} years old</Text>
+                        </View>
+                      </TouchableOpacity>
                     )}
-                  </View>
-                  <View style={styles.userListInfo}>
-                    <Text style={styles.userListName}>{selectedUserToReport?.first_name}</Text>
-                    <Text style={styles.userListAge}>{selectedUserToReport?.age} years old</Text>
-                  </View>
-                </View>
-                <TextInput
-                  style={[styles.input, { minHeight: 120 }]}
-                  value={reportExplanation}
-                  onChangeText={setReportExplanation}
-                  placeholder="Please explain why you are reporting this user..."
-                  multiline
-                  textAlignVertical="top"
-                />
-                <View style={styles.modalButtons}>
-                  <TouchableOpacity
-                    style={styles.submitButton}
-                    onPress={handleSubmitReport}
-                    disabled={submittingReport}
-                  >
-                    <Text style={styles.submitButtonText}>
-                      {submittingReport ? 'Submitting...' : 'Submit Report'}
-                    </Text>
-                  </TouchableOpacity>
+                  />
                   <TouchableOpacity
                     style={styles.cancelButton}
-                    onPress={() => {
-                      setReportStep('select');
-                      setSelectedUserToReport(null);
-                      setReportExplanation('');
-                    }}
+                    onPress={() => setShowReportModal(false)}
                   >
                     <Text style={styles.cancelButtonText}>Cancel</Text>
                   </TouchableOpacity>
-                </View>
-              </>
-            )}
-          </View>
-        </View>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.modalTitle}>Report {selectedUserToReport?.first_name}</Text>
+                  <View style={styles.reportUserInfo}>
+                    <View style={styles.userListPhoto}>
+                      {selectedUserToReport?.profile_photo_url ? (
+                        <Image source={{ uri: selectedUserToReport.profile_photo_url }} style={styles.userListPhotoImage} />
+                      ) : (
+                        <View style={[styles.userListPhotoFallback, { backgroundColor: selectedUserToReport?.profile_color || '#cccccc' }]}>
+                          <Text style={styles.userListPhotoFallbackText}>{selectedUserToReport?.first_name[0]}</Text>
+                        </View>
+                      )}
+                    </View>
+                    <View style={styles.userListInfo}>
+                      <Text style={styles.userListName}>{selectedUserToReport?.first_name}</Text>
+                      <Text style={styles.userListAge}>{selectedUserToReport?.age} years old</Text>
+                    </View>
+                  </View>
+                  <TextInput
+                    style={[styles.input, { minHeight: 120, maxHeight: 150 }]} // Limit input height
+                    value={reportExplanation}
+                    onChangeText={setReportExplanation}
+                    placeholder="Please explain why you are reporting this user..."
+                    multiline
+                    textAlignVertical="top"
+                    onFocus={() => {
+                      // Add a small delay to ensure keyboard is shown before scrolling
+                      setTimeout(() => {
+                        // This will be handled by the ScrollView automatically
+                      }, 100);
+                    }}
+                    onBlur={() => {
+                      // Optional: dismiss keyboard when user finishes typing
+                    }}
+                  />
+                  <View style={styles.modalButtons}>
+                    <TouchableOpacity
+                      style={styles.submitButton}
+                      onPress={handleSubmitReport}
+                      disabled={submittingReport}
+                    >
+                      <Text style={styles.submitButtonText}>
+                        {submittingReport ? 'Submitting...' : 'Submit Report'}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.cancelButton}
+                      onPress={() => {
+                        setReportStep('select');
+                        setSelectedUserToReport(null);
+                        setReportExplanation('');
+                        Keyboard.dismiss();
+                      }}
+                    >
+                      <Text style={styles.cancelButtonText}>Cancel</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
       {/* Bottom Navigation */}
       <View style={styles.bottomNavigation}>

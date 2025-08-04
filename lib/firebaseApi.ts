@@ -17,7 +17,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, firebaseNetworkManager } from './firebaseConfig';
 import NetInfo from '@react-native-community/netinfo';
 
-// Enhanced retry mechanism with network connectivity checks
+// Enhanced retry mechanism with network connectivity checks and memory safety
 export async function firebaseRetry<T>(
   operation: () => Promise<T>,
   options: { 
@@ -43,10 +43,15 @@ export async function firebaseRetry<T>(
         throw new Error('Firebase connection failed');
       }
 
-      // Execute the operation
-      console.log(`🔍 Executing ${options.operation} (attempt ${attempt})`);
-      const result = await operation();
-      console.log(`✅ ${options.operation} completed successfully`);
+      // Execute the operation with memory safety
+      const result = await Promise.race([
+        operation(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Operation timeout')), 30000)
+        )
+      ]);
+      
+      // Operation completed successfully
       return result;
       
     } catch (error: any) {
@@ -59,7 +64,7 @@ export async function firebaseRetry<T>(
       
       if (shouldRetryFirebaseError(error)) {
         const delay = calculateRetryDelay(attempt, baseDelay);
-        console.log(`⏳ Retrying in ${delay}ms...`);
+        // Retrying operation
         await new Promise(resolve => setTimeout(resolve, delay));
       } else {
         throw error;
@@ -331,11 +336,8 @@ export const LikeAPI = {
         created_at: serverTimestamp()
       });
       
-      return {
-        id: docRef.id,
-        ...data,
-        created_at: new Date().toISOString()
-      };
+      const docSnap = await getDoc(docRef);
+      return { id: docRef.id, ...docSnap.data() } as Like;
     }, { operation: 'Create like' });
   },
 
@@ -506,11 +508,8 @@ export const ReportAPI = {
         created_at: serverTimestamp()
       });
       
-      return {
-        id: docRef.id,
-        ...data,
-        created_at: new Date().toISOString()
-      };
+      const docSnap = await getDoc(docRef);
+      return { id: docRef.id, ...docSnap.data() } as Report;
     }, { operation: 'Create report' });
   },
 
@@ -521,8 +520,17 @@ export const ReportAPI = {
       if (filters.event_id) {
         q = query(q, where('event_id', '==', filters.event_id));
       }
+      if (filters.reporter_session_id) {
+        q = query(q, where('reporter_session_id', '==', filters.reporter_session_id));
+      }
+      if (filters.reported_session_id) {
+        q = query(q, where('reported_session_id', '==', filters.reported_session_id));
+      }
       if (filters.status) {
         q = query(q, where('status', '==', filters.status));
+      }
+      if (filters.id) {
+        q = query(q, where('__name__', '==', filters.id));
       }
       
       const querySnapshot = await getDocs(q);
@@ -572,13 +580,19 @@ export const AuthAPI = {
     }, { operation: 'Sign up' });
   },
 
-  async signIn(email: string, password: string): Promise<any> { // Changed FirebaseUser to any
+  async signIn(email: string, password: string): Promise<any> {
     return firebaseRetry(async () => {
-      // Removed signInWithEmailAndPassword as it requires authentication
-      // const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      // return userCredential.user;
-      console.warn('signIn operation is deprecated as authentication is no longer required.');
-      return null; // Placeholder
+      // Simple admin authentication without Firebase Auth
+      // For now, allow any email/password combination for admin access
+      // In production, you should implement proper admin authentication
+      console.log('Admin login attempt:', email);
+      
+      // Return a mock user object
+      return {
+        uid: `admin_${Date.now()}`,
+        email: email,
+        displayName: 'Admin User'
+      };
     }, { operation: 'Sign in' });
   },
 
@@ -600,10 +614,10 @@ export const AuthAPI = {
     }, { operation: 'Update profile' });
   },
 
-  getCurrentUser(): any | null { // Changed FirebaseUser to any
-    // Removed auth.currentUser as authentication is no longer required
-    console.warn('getCurrentUser operation is deprecated as authentication is no longer required.');
-    return null; // Placeholder
+  getCurrentUser(): any | null {
+    // For now, return null as we're not using Firebase Auth
+    // This will be handled by AdminUtils with AsyncStorage
+    return null;
   }
 };
 
@@ -617,7 +631,7 @@ export const StorageAPI = {
       // Check if the URI is a remote URL (starts with http/https) or a local file
       if (file.uri.startsWith('http://') || file.uri.startsWith('https://')) {
         // Handle remote URL - download the file first
-        console.log('Downloading remote file for upload:', file.uri);
+        // Downloading remote file for upload
         try {
           const response = await fetch(file.uri);
           if (!response.ok) {
@@ -634,7 +648,7 @@ export const StorageAPI = {
         }
       } else {
         // Handle local file URI - use the working approach from before
-        console.log('Uploading local file:', file.uri);
+        // Uploading local file
         
         try {
           const { readAsStringAsync, EncodingType } = await import('expo-file-system');
@@ -658,10 +672,10 @@ export const StorageAPI = {
         }
       }
       
-      console.log('File uploaded to Firebase Storage successfully');
+      // File uploaded to Firebase Storage successfully
       
       const downloadURL = await getDownloadURL(storageRef);
-      console.log('Download URL generated:', downloadURL);
+      // Download URL generated
       return { file_url: downloadURL };
     }, { operation: 'Upload file', maxRetries: 3, baseDelay: 2000 });
   }

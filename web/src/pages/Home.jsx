@@ -1,16 +1,35 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { Button } from "@/components/ui/button";
 import { QrCode, Hash, Heart, X } from "lucide-react";
 import QRScanner from "../components/QRScanner";
 import EventCodeEntry from "../components/EventCodeEntry";
+import { SurveyNotificationService } from "../lib/surveyNotificationService";
 
 export default function Home() {
   const navigate = useNavigate();
   const [activeModal, setActiveModal] = useState(null);
   const [showHowItWorks, setShowHowItWorks] = useState(false);
+
+  useEffect(() => {
+    checkForSurvey();
+  }, []);
+
+  const checkForSurvey = async () => {
+    try {
+      const surveyData = await SurveyNotificationService.shouldShowSurvey();
+      if (surveyData) {
+        // Add delay to avoid interrupting immediate user actions
+        setTimeout(() => {
+          navigate(`/Survey?eventId=${surveyData.eventId}&eventName=${encodeURIComponent(surveyData.eventName)}&sessionId=${surveyData.sessionId}&source=manual`);
+        }, 3000); // 3 second delay
+      }
+    } catch (error) {
+      console.error('Error checking for survey:', error);
+    }
+  };
 
 
   const handleScanSuccess = (scannedUrl) => {
@@ -150,6 +169,8 @@ export default function Home() {
           >
             Simple Test Route
           </Button>
+          
+
         </div>
       </div>
 
@@ -158,7 +179,7 @@ export default function Home() {
         <p className="text-white text-sm leading-relaxed">
           By creating a temporary profile, you agree to our{' '}
           <a 
-            href="https://hooked-app.com/terms" 
+            href={`${window.location.origin}/terms`}
             target="_blank" 
             rel="noopener noreferrer"
             className="underline hover:opacity-80 transition-opacity"
@@ -167,7 +188,7 @@ export default function Home() {
           </a>
           {' '}and{' '}
           <a 
-            href="https://hooked-app.com/privacy" 
+            href={`${window.location.origin}/privacy`}
             target="_blank" 
             rel="noopener noreferrer"
             className="underline hover:opacity-80 transition-opacity"

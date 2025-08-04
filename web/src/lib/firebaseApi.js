@@ -46,6 +46,65 @@ async function retryOperation(
   });
 }
 
+// Enhanced retry mechanism with network connectivity checks
+export async function firebaseRetry(operation, options = { 
+  operation: 'Unknown operation', 
+  maxRetries: 2, 
+  baseDelay: 1000 
+}) {
+  const maxRetries = options.maxRetries || 2;
+  const baseDelay = options.baseDelay || 1000;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      // Execute the operation
+      console.log(`🔍 Executing ${options.operation} (attempt ${attempt})`);
+      const result = await operation();
+      console.log(`✅ ${options.operation} completed successfully`);
+      return result;
+      
+    } catch (error) {
+      console.error(`❌ ${options.operation} failed (attempt ${attempt}/${maxRetries}):`, error.message);
+      console.error(`🔍 Full error details:`, error);
+      
+      if (attempt === maxRetries) {
+        throw error;
+      }
+      
+      if (shouldRetryFirebaseError(error)) {
+        const delay = calculateRetryDelay(attempt, baseDelay);
+        console.log(`⏳ Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      } else {
+        throw error;
+      }
+    }
+  }
+  
+  throw new Error(`Operation failed after ${maxRetries} attempts`);
+}
+
+// Determine if an error should be retried
+function shouldRetryFirebaseError(error) {
+  const retryableErrors = [
+    'WebChannelConnection',
+    'Failed to get document because the client is offline',
+    'The operation could not be completed',
+    'Network request failed',
+    'No network connection',
+    'Firebase connection failed'
+  ];
+  
+  return retryableErrors.some(retryableError => 
+    error.message?.includes(retryableError)
+  );
+}
+
+// Calculate retry delay with exponential backoff
+function calculateRetryDelay(attempt, baseDelay) {
+  return baseDelay * Math.pow(2, attempt - 1);
+}
+
 // Image optimization utilities
 const imageOptimizer = {
   // Compress image before upload
@@ -598,6 +657,68 @@ export const uploadFile = async (file, options = {}) => {
   }, 3, 1000, 'uploadFile');
 };
 
+// Admin file upload functionality (requires authentication)
+export const uploadAdminFile = async (file, options = {}) => {
+  return await retryOperation(async () => {
+    // Check if user is authenticated
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error('Authentication required for admin uploads');
+    }
+    
+    // Validate file
+    imageOptimizer.validateFile(file, options.maxSizeMB || 20);
+    
+    const fileName = imageOptimizer.generateOptimizedFilename(file.name);
+    const storageRef = ref(storage, `admin/${Date.now()}_${fileName}`);
+    const snapshot = await uploadBytes(storageRef, file);
+    const downloadURL = await getDownloadURL(snapshot.ref);
+    
+    console.log('✅ Admin file uploaded successfully');
+    
+    return { file_url: downloadURL };
+  }, 3, 1000, 'uploadAdminFile');
+};
+
+// Event image upload functionality (requires authentication)
+export const uploadEventImage = async (file, eventId, options = {}) => {
+  return await retryOperation(async () => {
+    // Check if user is authenticated
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error('Authentication required for event image uploads');
+    }
+    
+    // Validate file
+    imageOptimizer.validateFile(file, options.maxSizeMB || 5);
+    
+    // Compress image if it's an image file
+    let uploadFile = file;
+    if (file.type.startsWith('image/')) {
+      try {
+        const compressedBlob = await imageOptimizer.compressImage(
+          file, 
+          options.maxWidth || 1200, 
+          options.quality || 0.8
+        );
+        uploadFile = new File([compressedBlob], file.name, { type: 'image/jpeg' });
+        console.log('✅ Event image compressed successfully');
+      } catch (error) {
+        console.warn('⚠️ Event image compression failed, uploading original:', error);
+      }
+    }
+    
+    const fileName = imageOptimizer.generateOptimizedFilename(file.name);
+    const storageRef = ref(storage, `events/${eventId}/${Date.now()}_${fileName}`);
+    const snapshot = await uploadBytes(storageRef, uploadFile);
+    const downloadURL = await getDownloadURL(snapshot.ref);
+    
+    console.log('✅ Event image uploaded successfully');
+    
+    return { file_url: downloadURL };
+  }, 3, 1000, 'uploadEventImage');
+};
+
 // Real-time listeners with proper cleanup
 export const createRealtimeListener = (collectionName, callback, filters = {}) => {
   let q = collection(db, collectionName);
@@ -624,4 +745,87 @@ export const getListenerStats = () => {
     ...listenerManager.getStats(),
     memoryManager: firebaseMemoryManager.getListenerCount()
   };
+};
+
+// Profile management utilities
+export const ProfileUtils = {
+  // Save profile locally (for web, use localStorage)
+  async saveProfileLocally(profileData) {
+    try {
+      const savedProfiles = JSON.parse(localStorage.getItem('savedProfiles') || '[]');
+      const newProfile = {
+        id: `local_${Date.now()}`,
+        profile_data: profileData,
+        created_at: new Date().toISOString()
+      };
+      savedProfiles.push(newProfile);
+      localStorage.setItem('savedProfiles', JSON.stringify(savedProfiles));
+      return newProfile.id;
+    } catch (error) {
+      console.error('Error saving profile locally:', error);
+      throw error;
+    }
+  },
+
+  // Get local profiles
+  async getLocalProfiles() {
+    try {
+      const savedProfiles = JSON.parse(localStorage.getItem('savedProfiles') || '[]');
+      return savedProfiles;
+    } catch (error) {
+      console.error('Error getting local profiles:', error);
+      return [];
+    }
+  },
+
+  // Delete local profile
+  async deleteLocalProfile(profileId) {
+    try {
+      const savedProfiles = JSON.parse(localStorage.getItem('savedProfiles') || '[]');
+      const filteredProfiles = savedProfiles.filter(p => p.id !== profileId);
+      localStorage.setItem('savedProfiles', JSON.stringify(filteredProfiles));
+    } catch (error) {
+      console.error('Error deleting local profile:', error);
+      throw error;
+    }
+  },
+
+  // Save profile to cloud (Firestore)
+  async saveProfileToCloud(profileData) {
+    try {
+      const docRef = await addDoc(collection(db, 'saved_profiles'), {
+        profile_data: profileData,
+        created_at: serverTimestamp()
+      });
+      return docRef.id;
+    } catch (error) {
+      console.error('Error saving profile to cloud:', error);
+      throw error;
+    }
+  },
+
+  // Get cloud profiles
+  async getCloudProfiles() {
+    try {
+      const snapshot = await getDocs(collection(db, 'saved_profiles'));
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Error getting cloud profiles:', error);
+      return [];
+    }
+  },
+
+  // Delete cloud profile
+  async deleteCloudProfile(profileId) {
+    try {
+      const docRef = doc(db, 'saved_profiles', profileId);
+      await deleteDoc(docRef);
+    } catch (error) {
+      console.error('Error deleting cloud profile:', error);
+      throw error;
+    }
+  }
 }; 
