@@ -40,7 +40,7 @@ export default function ProfileDetailModal({ profile, onClose, onLike, isLiked }
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.8, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-          className="relative w-full max-w-sm bg-white dark:bg-gray-900 rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto"
+          className="relative w-[90vw] max-w-sm min-w-[320px] bg-white dark:bg-gray-900 rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto"
           onClick={(e) => e.stopPropagation()} // Prevent closing when clicking on the modal content
         >
           {/* Header with Photo */}

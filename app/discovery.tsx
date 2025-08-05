@@ -787,7 +787,7 @@ export default function Discovery() {
       backgroundColor: isDark ? '#2d2d2d' : 'white',
       borderRadius: 20,
       padding: 24,
-      width: '90%',
+      width: Math.min(Dimensions.get('window').width * 0.9, 400), // Responsive width: 90% of screen width, max 400px
       maxHeight: '80%',
     },
     modalHeader: {

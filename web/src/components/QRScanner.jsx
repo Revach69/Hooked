@@ -115,7 +115,7 @@ export default function QRScanner({ onScan, onClose, onSwitchToManual }) {
   return (
     <Dialog open={true} onOpenChange={handleClose}>
         <div className="fixed inset-0 z-50 bg-black/40 dark:bg-black/70 flex items-center justify-center p-4 modal-overlay">
-            <div className="modal-content w-full max-w-sm bg-white dark:bg-gray-900 rounded-2xl overflow-hidden shadow-2xl">
+            <div className="modal-content w-[90vw] max-w-sm min-w-[320px] bg-white dark:bg-gray-900 rounded-2xl overflow-hidden shadow-2xl">
                 <div className="absolute top-0 left-0 right-0 z-10 bg-gradient-to-b from-black/80 to-transparent p-4">
                     <div className="flex items-center justify-between">
                         <h3 className="text-white flex items-center gap-2 font-semibold">

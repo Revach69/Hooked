@@ -26,33 +26,22 @@ export async function firebaseRetry<T>(
     baseDelay?: number;
   } = { operation: 'Unknown operation' }
 ): Promise<T> {
-  const maxRetries = options.maxRetries || 2;
+  const maxRetries = options.maxRetries || 3;
   const baseDelay = options.baseDelay || 1000;
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      // Check network connectivity
-      const netInfo = await NetInfo.fetch();
-      if (!netInfo.isConnected) {
-        throw new Error('No network connection');
-      }
-
-      // Check Firebase connection
-      const isConnected = await firebaseNetworkManager.checkConnection();
-      if (!isConnected) {
-        throw new Error('Firebase connection failed');
-      }
-
-      // Execute the operation with memory safety
+      console.log(`🔄 ${options.operation} (attempt ${attempt}/${maxRetries})`);
+      
       const result = await Promise.race([
         operation(),
-        new Promise((_, reject) => 
+        new Promise<never>((_, reject) => 
           setTimeout(() => reject(new Error('Operation timeout')), 30000)
         )
       ]);
       
       // Operation completed successfully
-      return result;
+      return result as T;
       
     } catch (error: any) {
       console.error(`❌ ${options.operation} failed (attempt ${attempt}/${maxRetries}):`, error.message);

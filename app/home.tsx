@@ -37,7 +37,7 @@ export default function Home() {
   const [isInitialized, setIsInitialized] = useState(false);
   const { executeOperationWithOfflineFallback, showErrorAlert } = useMobileAsyncOperation();
   const componentId = useRef('Home-' + Date.now()).current;
-  const initializationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const initializationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     MemoryManager.registerComponent(componentId);
@@ -298,7 +298,7 @@ export default function Home() {
       backgroundColor: isDark ? '#2d2d2d' : '#ffffff',
       borderRadius: 20,
       padding: 24,
-      width: '90%',
+      width: Math.min(Dimensions.get('window').width * 0.9, 400), // Responsive width: 90% of screen width, max 400px
       maxHeight: '80%',
       alignItems: 'center',
       shadowColor: '#000',
@@ -451,7 +451,7 @@ export default function Home() {
         <View style={styles.headerSection}>
           <View style={styles.logoContainer}>
             <Image 
-              source={require('../assets/Icon.png')} 
+              source={require('../assets/round icon.png')} 
               style={styles.logo}
               resizeMode="contain"
             />
@@ -504,6 +504,37 @@ export default function Home() {
               <Hash size={24} color="black" />
               <Text style={styles.buttonText}>Enter Code Manually</Text>
             </TouchableOpacity>
+
+            {/* Debug button for testing notifications */}
+            {__DEV__ && (
+              <TouchableOpacity
+                style={[styles.button, { backgroundColor: '#ff6b6b' }]}
+                onPress={async () => {
+                  console.log('🧪 Testing notification system...');
+                  
+                  // Check permissions first
+                  const hasPermissions = await SurveyNotificationService.checkNotificationPermissions();
+                  console.log(`🔐 Permissions granted: ${hasPermissions}`);
+                  
+                  // Debug existing notifications
+                  await SurveyNotificationService.debugScheduledNotifications();
+                  
+                  // Test new notification
+                  if (hasPermissions) {
+                    await SurveyNotificationService.testSurveyNotification(
+                      'test-event-id',
+                      'Test Event',
+                      'test-session-id',
+                      1 // 1 minute delay
+                    );
+                  }
+                }}
+                accessibilityLabel="Test Notifications"
+                accessibilityHint="Debug button to test notification system"
+              >
+                <Text style={styles.buttonText}>🧪 Test Notifications</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 

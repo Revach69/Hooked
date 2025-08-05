@@ -16,6 +16,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Keyboard,
+  Dimensions,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { User, LogOut, Edit, Camera, Users, MessageCircle, Flag, AlertTriangle, Shield, Clock, Mail, AlertCircle } from 'lucide-react-native';
@@ -845,8 +846,7 @@ export default function Profile() {
       backgroundColor: isDark ? '#263238' : '#ffffff',
       borderRadius: 15,
       padding: 25,
-      width: '90%',
-      maxWidth: 400,
+      width: Math.min(Dimensions.get('window').width * 0.9, 400), // Responsive width: 90% of screen width, max 400px
       minHeight: 300, // Add minimum height to prevent shrinking
       maxHeight: '80%', // Limit maximum height
       borderWidth: 1,

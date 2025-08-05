@@ -56,7 +56,7 @@ export default function ProfileFilters({ filters, onFiltersChange, onClose }) {
   return (
     <Dialog open={true} onOpenChange={onClose}>
       <div className="fixed inset-0 z-50 bg-black/40 dark:bg-black/70 flex items-center justify-center p-4 modal-overlay">
-        <div className="modal-content w-full max-w-sm bg-white dark:bg-gray-900 rounded-2xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="modal-content w-[90vw] max-w-sm min-w-[320px] bg-white dark:bg-gray-900 rounded-2xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader className="mb-6">
             <div className="flex items-center justify-between">
               <DialogTitle className="flex items-center gap-2 text-gray-900 dark:text-white">

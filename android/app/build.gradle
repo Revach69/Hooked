@@ -84,15 +84,15 @@ def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 android {
     ndkVersion rootProject.ext.ndkVersion
 
-    buildToolsVersion findProperty('android.buildToolsVersion') ?: '35.0.0'
-    compileSdk findProperty('android.compileSdkVersion')?.toInteger() ?: 35
+    buildToolsVersion rootProject.ext.buildToolsVersion
+    compileSdk rootProject.ext.compileSdkVersion
 
     namespace 'com.hookedapp.app'
     defaultConfig {
         applicationId 'com.hookedapp.app'
-        minSdkVersion findProperty('android.minSdkVersion')?.toInteger() ?: 24
-        targetSdkVersion findProperty('android.targetSdkVersion')?.toInteger() ?: 35
-        versionCode 2
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 1
         versionName "1.0.1"
     }
     signingConfigs {
@@ -102,12 +102,6 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
-        release {
-            storeFile file('../../hooked-release-key.keystore')
-            storePassword System.getenv('KEYSTORE_PASSWORD') ?: 'Hooked_69US69'
-            keyAlias System.getenv('KEY_ALIAS') ?: 'hooked-key-alias'
-            keyPassword System.getenv('KEY_PASSWORD') ?: 'Hooked_69US69'
-        }
     }
     buildTypes {
         debug {
@@ -116,7 +110,7 @@ android {
         release {
             // Caution! In production, you need to generate your own keystore file.
             // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.release
+            signingConfig signingConfigs.debug
             shrinkResources (findProperty('android.enableShrinkResourcesInReleaseBuilds')?.toBoolean() ?: false)
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"

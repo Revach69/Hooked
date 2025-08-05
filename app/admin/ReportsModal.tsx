@@ -10,6 +10,7 @@ import {
   StyleSheet,
   useColorScheme,
   Image,
+  Dimensions,
 } from 'react-native';
 import { X, User, Flag, AlertTriangle, CheckCircle, XCircle, Ban } from 'lucide-react-native';
 import { ReportAPI, EventProfileAPI, type Report } from '../../lib/firebaseApi';
@@ -397,8 +398,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContent: {
-    width: '90%',
-    maxWidth: 400,
+    width: Math.min(Dimensions.get('window').width * 0.9, 500), // Responsive width: 90% of screen width, max 500px
     maxHeight: '80%',
     borderRadius: 16,
     overflow: 'hidden',

@@ -1,68 +1,28 @@
 import * as Sentry from '@sentry/react-native';
 
-// Initialize Sentry with console.warn capture
-export const initSentry = () => {
-  Sentry.init({
-    dsn: process.env.EXPO_PUBLIC_SENTRY_DSN || 'YOUR_SENTRY_DSN_HERE',
-    debug: __DEV__, // Enable debug mode in development
-    enableAutoSessionTracking: true,
-    // Capture all console.warn calls
-    beforeSend(event) {
-      // Ensure warnings are captured
-      if (event.level === 'warning') {
+export function initSentry() {
+  if (__DEV__) {
+    return; // Don't initialize Sentry in development
+  }
+
+  try {
+    Sentry.init({
+      dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+      debug: false,
+      enableAutoSessionTracking: true,
+      // Remove ReactNativeTracing as it doesn't exist in this version
+      integrations: [
+        // Add any other integrations here if needed
+      ],
+      beforeSend(event) {
+        // Filter out certain errors if needed
         return event;
-      }
-      return event;
-    },
-    // Capture console.warn calls
-    integrations: [
-      new Sentry.ReactNativeTracing({
-        tracingOrigins: ['localhost', 'your-api-domain.com'],
-      }),
-    ],
-  });
-
-  // Override console.warn to force send to Sentry
-  const originalWarn = console.warn;
-  console.warn = (...args) => {
-    // Send to Sentry
-    Sentry.captureMessage(args.join(' '), {
-      level: 'warning',
-      tags: {
-        source: 'console.warn',
-        environment: __DEV__ ? 'development' : 'production',
-      },
-      extra: {
-        arguments: args,
-        timestamp: new Date().toISOString(),
       },
     });
-    
-    // Call original console.warn
-    originalWarn.apply(console, args);
-  };
-
-  // Also capture console.error calls
-  const originalError = console.error;
-  console.error = (...args) => {
-    // Send to Sentry
-    Sentry.captureException(new Error(args.join(' ')), {
-      tags: {
-        source: 'console.error',
-        environment: __DEV__ ? 'development' : 'production',
-      },
-      extra: {
-        arguments: args,
-        timestamp: new Date().toISOString(),
-      },
-    });
-    
-    // Call original console.error
-    originalError.apply(console, args);
-  };
-
-  console.log('Sentry initialized with console.warn capture enabled');
-};
+  } catch (error) {
+    console.warn('Failed to initialize Sentry:', error);
+  }
+}
 
 // Helper function to manually send warnings
 export const sendWarning = (message: string, extra?: any) => {

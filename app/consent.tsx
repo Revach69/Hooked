@@ -369,6 +369,9 @@ export default function Consent() {
         2 // 2 hours after event ends
       );
       
+      // Debug: Log scheduled notifications to help troubleshoot
+      await SurveyNotificationService.debugScheduledNotifications();
+      
       router.replace('/discovery');
     } catch (err) {
       setError("Failed to create profile. Please try again.");
@@ -745,7 +748,7 @@ export default function Consent() {
             <View style={styles.header}>
               <View style={styles.logoContainer}>
                 <Image 
-                  source={require('../assets/Icon.png')} 
+                  source={require('../assets/round icon.png')} 
                   style={styles.logoImage}
                   resizeMode="contain"
                 />

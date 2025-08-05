@@ -59,7 +59,6 @@ export default function RootLayout() {
         // Simple notification handler setup
         Notifications.setNotificationHandler({
           handleNotification: async () => ({
-            shouldShowAlert: true,
             shouldPlaySound: true,
             shouldSetBadge: false,
             shouldShowBanner: true,

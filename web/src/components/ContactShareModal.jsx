@@ -71,7 +71,7 @@ export default function ContactShareModal({ matchName, onConfirm, onCancel, isSh
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.9, opacity: 0 }}
-        className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-sm shadow-2xl relative"
+        className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-[90vw] max-w-sm min-w-[320px] shadow-2xl relative"
       >
         <button
           onClick={onCancel}

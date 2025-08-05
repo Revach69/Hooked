@@ -183,6 +183,13 @@ export default function Consent() {
             <motion.div key="manual" {...stepAnimation}>
               <Card className="border-0 shadow-xl bg-white dark:bg-gray-800">
                 <CardHeader className="text-center">
+                  <div className="w-16 h-16 mx-auto mb-4">
+                    <img 
+                      src="/round-icon.png" 
+                      alt="Hooked Icon" 
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
                   <CardTitle className="text-2xl font-bold text-gray-900 dark:text-white">
                     Create Your Event Profile For:
                   </CardTitle>

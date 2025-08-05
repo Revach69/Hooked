@@ -189,7 +189,7 @@ export default function ChatModal({ match, onClose }) {
   return (
     <Dialog open={true} onOpenChange={onClose}>
       <div className="fixed inset-0 z-50 bg-black/40 dark:bg-black/70 flex items-center justify-center p-4 modal-overlay">
-        <div className="modal-content w-full max-w-sm h-[600px] bg-white dark:bg-gray-900 rounded-2xl flex flex-col shadow-2xl">
+        <div className="modal-content w-[90vw] max-w-md min-w-[320px] h-[600px] bg-white dark:bg-gray-900 rounded-2xl flex flex-col shadow-2xl">
           {/* Header */}
           <DialogHeader className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-pink-50 to-purple-50 dark:from-pink-900/20 dark:to-purple-900/20 rounded-t-2xl">
             <div className="flex items-center gap-3">

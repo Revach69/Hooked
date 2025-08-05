@@ -12,7 +12,7 @@ export default function QRInstructionsModal({ onClose }) {
   return (
     <Dialog open={true} onOpenChange={onClose}>
       <div className="fixed inset-0 z-50 bg-black/40 dark:bg-black/70 flex items-center justify-center p-4 modal-overlay">
-        <div className="modal-content w-full max-w-sm bg-white dark:bg-gray-900 rounded-2xl shadow-2xl">
+        <div className="modal-content w-[90vw] max-w-sm min-w-[320px] bg-white dark:bg-gray-900 rounded-2xl shadow-2xl">
           {/* Header */}
           <DialogHeader className="p-6 pb-4 border-b border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between">

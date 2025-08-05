@@ -78,7 +78,7 @@ export default function ReportModal({ isOpen, onClose, currentEventId, currentSe
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md bg-white dark:bg-gray-800">
+      <Card className="w-[90vw] max-w-md min-w-[320px] bg-white dark:bg-gray-800">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
           <CardTitle className="flex items-center gap-2 text-lg text-gray-900 dark:text-white">
             <Flag className="w-5 h-5 text-orange-500" />

@@ -18,7 +18,7 @@ export default function SplashScreen({ progress = 0 }: SplashScreenProps) {
       {/* App Icon */}
       <View style={styles.iconContainer}>
         <Image 
-          source={require('../../assets/Icon.png')}
+          source={require('../../assets/icon.png')}
           style={styles.appIcon}
           resizeMode="contain"
         />
