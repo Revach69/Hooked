@@ -12,6 +12,7 @@ import {
   useColorScheme,
   Alert,
   Image,
+  Keyboard,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Send, User, Flag } from 'lucide-react-native';
@@ -22,6 +23,7 @@ import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp,
 import { db } from '../lib/firebaseConfig';
 import { formatTime } from '../lib/utils';
 import UserProfileModal from '../lib/UserProfileModal';
+import { handleNewMessageNotification } from '../lib/messageNotificationHelper';
 
 interface ChatMessage {
   id: string;
@@ -47,6 +49,7 @@ export default function Chat() {
   const [currentUserProfileId, setCurrentUserProfileId] = useState<string | null>(null);
   const [matchProfile, setMatchProfile] = useState<any>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [processedMessageIds, setProcessedMessageIds] = useState<Set<string>>(new Set());
   
   const flatListRef = useRef<FlatList>(null);
   // Single ref to hold unsubscribe function
@@ -63,6 +66,31 @@ export default function Chat() {
         listenerRef.current();
         listenerRef.current = null;
       }
+    };
+  }, []);
+
+  // Keyboard event listeners for better Android behavior
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener(
+      'keyboardDidShow',
+      () => {
+        // Scroll to bottom when keyboard appears
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }
+    );
+
+    const keyboardDidHideListener = Keyboard.addListener(
+      'keyboardDidHide',
+      () => {
+        // Optional: handle keyboard hide if needed
+      }
+    );
+
+    return () => {
+      keyboardDidShowListener?.remove();
+      keyboardDidHideListener?.remove();
     };
   }, []);
 
@@ -140,6 +168,38 @@ export default function Chat() {
           );
 
           setMessages(messagesWithNames);
+
+          // Check for new messages and trigger notifications
+          const newMessages = messagesWithNames.filter(msg => 
+            !processedMessageIds.has(msg.id) && 
+            msg.to_profile_id === currentUserProfileId && 
+            msg.from_profile_id === matchProfileId
+          );
+
+          // Process new messages and trigger notifications
+          for (const newMessage of newMessages) {
+            // Get sender's name for notification
+            const senderProfile = await EventProfileAPI.get(newMessage.from_profile_id);
+            if (senderProfile) {
+              await handleNewMessageNotification(
+                currentEventId,
+                newMessage.from_profile_id,
+                newMessage.to_profile_id,
+                newMessage.content,
+                senderProfile.first_name
+              );
+            }
+          }
+
+          // Update processed message IDs
+          if (newMessages.length > 0) {
+            setProcessedMessageIds(prev => {
+              const newSet = new Set(prev);
+              newMessages.forEach(msg => newSet.add(msg.id));
+              return newSet;
+            });
+          }
+
         } catch (error) {
           // Handle error silently
         }
@@ -291,24 +351,25 @@ export default function Chat() {
   const styles = StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: isDark ? '#1a1a1a' : '#f8fafc',
+      backgroundColor: isDark ? '#1f2937' : '#ffffff',
     },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
-      padding: 16,
-      paddingTop: 8,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
       backgroundColor: isDark ? '#2d2d2d' : 'white',
       borderBottomWidth: 1,
       borderBottomColor: isDark ? '#404040' : '#e5e7eb',
     },
     backButton: {
-      marginRight: 12,
-      padding: 4,
+      padding: 8,
+      marginRight: 8,
     },
     reportButton: {
+      padding: 8,
+      marginLeft: 'auto',
       marginRight: 8,
-      padding: 4,
     },
     headerInfo: {
       flex: 1,
@@ -329,8 +390,8 @@ export default function Chat() {
       width: 40,
       height: 40,
       borderRadius: 20,
-      alignItems: 'center',
       justifyContent: 'center',
+      alignItems: 'center',
     },
     headerFallbackText: {
       fontSize: 18,
@@ -342,7 +403,7 @@ export default function Chat() {
     },
     headerName: {
       fontSize: 18,
-      fontWeight: '600',
+      fontWeight: 'bold',
       color: isDark ? '#ffffff' : '#1f2937',
     },
     headerSubtitle: {
@@ -401,11 +462,12 @@ export default function Chat() {
     },
     inputContainer: {
       flexDirection: 'row',
-      alignItems: 'center',
+      alignItems: 'flex-end',
       padding: 16,
       backgroundColor: isDark ? '#2d2d2d' : 'white',
       borderTopWidth: 1,
       borderTopColor: isDark ? '#404040' : '#e5e7eb',
+      minHeight: 60,
     },
     textInput: {
       flex: 1,
@@ -416,6 +478,9 @@ export default function Chat() {
       fontSize: 16,
       color: isDark ? '#ffffff' : '#1f2937',
       marginRight: 8,
+      minHeight: 40,
+      maxHeight: 100,
+      textAlignVertical: 'top',
     },
     sendButton: {
       backgroundColor: '#8b5cf6',
@@ -453,96 +518,98 @@ export default function Chat() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <ArrowLeft size={24} color={isDark ? '#ffffff' : '#1f2937'} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.reportButton}
-          onPress={() => {
-            Alert.alert(
-              `Report ${matchProfile?.first_name || 'User'}`,
-              'Report this user for inappropriate behavior?',
-              [
-                {
-                  text: 'Cancel',
-                  style: 'cancel'
-                },
-                {
-                  text: 'Report',
-                  style: 'destructive',
-                  onPress: () => {
-                    Alert.alert(
-                      'Report Submitted',
-                      `Thank you for your report. We will review the information about ${matchProfile?.first_name || 'this user'}.`,
-                      [{ text: 'OK' }]
-                    );
-                  }
-                }
-              ]
-            );
-          }}
-        >
-          <Flag size={20} color={isDark ? '#ef4444' : '#dc2626'} />
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.headerInfo}
-          onPress={() => setShowProfileModal(true)}
-        >
-          <View style={styles.headerUserInfo}>
-            <View style={styles.headerAvatarContainer}>
-              {matchProfile?.profile_photo_url ? (
-                <Image
-                  source={{ uri: matchProfile.profile_photo_url }}
-                  style={styles.headerAvatar}
-                />
-              ) : (
-                <View style={[styles.headerFallbackAvatar, { backgroundColor: matchProfile?.profile_color || '#cccccc' }]}>
-                  <Text style={styles.headerFallbackText}>
-                    {(matchProfile?.first_name || matchName || 'M')[0]}
-                  </Text>
-                </View>
-              )}
-            </View>
-            <View style={styles.headerTextInfo}>
-              <Text style={styles.headerName}>
-                {matchProfile?.first_name || matchName || 'Match'}
-              </Text>
-              <Text style={styles.headerSubtitle}>
-                {matchProfile?.age ? `${matchProfile.age} years old` : 'Online'}
-              </Text>
-            </View>
-          </View>
-        </TouchableOpacity>
-      </View>
-
-      {/* Messages */}
-      <FlatList
-        ref={flatListRef}
-        data={messages}
-        renderItem={renderMessage}
-        keyExtractor={(item) => item.id}
-        style={styles.messagesContainer}
-        contentContainerStyle={{ paddingVertical: 16 }}
-        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-        onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>
-              Start a conversation with {matchProfile?.first_name || 'your match'}!
-            </Text>
-          </View>
-        }
-      />
-
-      {/* Message Input */}
       <KeyboardAvoidingView
+        style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <ArrowLeft size={24} color={isDark ? '#ffffff' : '#1f2937'} />
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.reportButton}
+            onPress={() => {
+              Alert.alert(
+                'Report User',
+                'Are you sure you want to report this user?',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Report',
+                    style: 'destructive',
+                    onPress: () => {
+                      Alert.alert(
+                        'Report Submitted',
+                        'Thank you for your report. We will review it shortly.',
+                        [{ text: 'OK' }]
+                      );
+                    }
+                  }
+                ]
+              );
+            }}
+          >
+            <Flag size={20} color={isDark ? '#ef4444' : '#dc2626'} />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.headerInfo}
+            onPress={() => setShowProfileModal(true)}
+          >
+            <View style={styles.headerUserInfo}>
+              <View style={styles.headerAvatarContainer}>
+                {matchProfile?.profile_photo_url ? (
+                  <Image
+                    source={{ uri: matchProfile.profile_photo_url }}
+                    style={styles.headerAvatar}
+                  />
+                ) : (
+                  <View style={[styles.headerFallbackAvatar, { backgroundColor: matchProfile?.profile_color || '#cccccc' }]}>
+                    <Text style={styles.headerFallbackText}>
+                      {(matchProfile?.first_name || matchName || 'M')[0]}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              <View style={styles.headerTextInfo}>
+                <Text style={styles.headerName}>
+                  {matchProfile?.first_name || matchName || 'Match'}
+                </Text>
+                <Text style={styles.headerSubtitle}>
+                  {matchProfile?.age ? `${matchProfile.age} years old` : 'Online'}
+                </Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Messages */}
+        <FlatList
+          ref={flatListRef}
+          data={messages}
+          renderItem={renderMessage}
+          keyExtractor={(item) => item.id}
+          style={styles.messagesContainer}
+          contentContainerStyle={{ paddingVertical: 16 }}
+          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+          onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>
+                Start a conversation with {matchProfile?.first_name || 'your match'}!
+              </Text>
+            </View>
+          }
+        />
+
+        {/* Message Input */}
         <View style={styles.inputContainer}>
           <TextInput
             style={styles.textInput}
@@ -552,6 +619,12 @@ export default function Chat() {
             placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
             multiline
             maxLength={500}
+            onFocus={() => {
+              // Scroll to bottom when keyboard appears
+              setTimeout(() => {
+                flatListRef.current?.scrollToEnd({ animated: true });
+              }, 100);
+            }}
           />
           <TouchableOpacity
             style={[

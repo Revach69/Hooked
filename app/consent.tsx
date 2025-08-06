@@ -15,6 +15,7 @@ import {
   useColorScheme,
   Switch,
   Linking,
+  I18nManager,
 } from 'react-native';
 import { router } from 'expo-router';
 import { AuthAPI, EventProfileAPI, EventAPI, StorageAPI } from '../lib/firebaseApi';
@@ -181,15 +182,21 @@ export default function Consent() {
 
   const handleCameraCapture = async () => {
     try {
-      const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+      // Check current camera permissions
+      const permissionResult = await ImagePicker.getCameraPermissionsAsync();
       
       if (permissionResult.granted === false) {
-        Alert.alert("Permission Required", "Camera permission is required to take a photo!");
-        return;
+        // Request camera permissions
+        const requestResult = await ImagePicker.requestCameraPermissionsAsync();
+        
+        if (requestResult.granted === false) {
+          Alert.alert("Permission Required", "Camera permission is required to take a photo!");
+          return;
+        }
       }
 
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: 'images',
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.6, // Reduced quality for faster upload
@@ -198,25 +205,32 @@ export default function Consent() {
         exif: false,
       });
 
-      if (!result.canceled && result.assets[0]) {
+      if (!result.canceled && result.assets && result.assets[0]) {
         await processImageAsset(result.assets[0]);
       }
     } catch (error) {
+      console.error('Camera capture error:', error);
       Alert.alert("Error", "Failed to capture photo. Please try again.");
     }
   };
 
   const handleGalleryPick = async () => {
     try {
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      // Check current media library permissions
+      const permissionResult = await ImagePicker.getMediaLibraryPermissionsAsync();
       
       if (permissionResult.granted === false) {
-        Alert.alert("Permission Required", "Permission to access camera roll is required!");
-        return;
+        // Request media library permissions
+        const requestResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        
+        if (requestResult.granted === false) {
+          Alert.alert("Permission Required", "Permission to access camera roll is required!");
+          return;
+        }
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: 'images',
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.6, // Reduced quality for faster upload
@@ -225,10 +239,11 @@ export default function Consent() {
         exif: false,
       });
 
-      if (!result.canceled && result.assets[0]) {
+      if (!result.canceled && result.assets && result.assets[0]) {
         await processImageAsset(result.assets[0]);
       }
     } catch (error) {
+      console.error('Gallery pick error:', error);
       Alert.alert("Error", "Failed to pick image. Please try again.");
     }
   };
@@ -243,25 +258,53 @@ export default function Consent() {
     setIsUploadingPhoto(true);
     
     try {
+      // Check network connectivity before upload
+      const { checkNetworkConnectivityWithTimeout } = await import('../lib/utils');
+      const isConnected = await checkNetworkConnectivityWithTimeout(5000);
+      
+      if (!isConnected) {
+        throw new Error('No internet connection. Please check your network and try again.');
+      }
+
       // Create file object for upload
       const fileObject = {
         uri: asset.uri,
         name: `profile-photo-${Date.now()}.jpg`,
-        type: 'image/jpeg'
+        type: 'image/jpeg',
+        fileSize: asset.fileSize
       };
 
-      // Upload to Firebase Storage
-      const { file_url } = await StorageAPI.uploadFile(fileObject);
+      // Upload to Firebase Storage with retry logic
+      let uploadAttempts = 0;
+      const maxAttempts = 3;
       
-      // Update form data with the uploaded photo URL
-      setFormData(prev => ({
-        ...prev,
-        profile_photo_url: file_url
-      }));
+      while (uploadAttempts < maxAttempts) {
+        try {
+          const { file_url } = await StorageAPI.uploadFile(fileObject);
+          
+          // Update form data with the uploaded photo URL
+          setFormData(prev => ({
+            ...prev,
+            profile_photo_url: file_url
+          }));
 
-      // Save photo URL locally if "remember profile" is checked
-      if (rememberProfile) {
-        await AsyncStorage.setItem('savedProfilePhotoUrl', file_url);
+          // Save photo URL locally if "remember profile" is checked
+          if (rememberProfile) {
+            await AsyncStorage.setItem('savedProfilePhotoUrl', file_url);
+          }
+          
+          // Success - break out of retry loop
+          break;
+        } catch (uploadError) {
+          uploadAttempts++;
+          
+          if (uploadAttempts >= maxAttempts) {
+            throw uploadError;
+          }
+          
+          // Wait before retrying (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, 1000 * uploadAttempts));
+        }
       }
     } catch (err) {
       // Enhanced error logging
@@ -275,11 +318,24 @@ export default function Consent() {
           type: asset.type
         },
         timestamp: new Date().toISOString(),
-        userAgent: 'iOS App'
+        platform: 'Android'
       });
       
-      // Use the existing error handling system
-      const errorMessage = err instanceof Error ? err.message : 'Unknown upload error';
+      // Provide more specific error messages
+      let errorMessage = 'Unknown upload error';
+      
+      if (err instanceof Error) {
+        if (err.message.includes('Network request failed')) {
+          errorMessage = 'Network connection failed. Please check your internet connection and try again.';
+        } else if (err.message.includes('No internet connection')) {
+          errorMessage = 'No internet connection. Please check your network and try again.';
+        } else if (err.message.includes('Failed to upload local file')) {
+          errorMessage = 'Failed to process image. Please try selecting a different photo.';
+        } else {
+          errorMessage = err.message;
+        }
+      }
+      
       Alert.alert("Upload Failed", `Failed to upload photo: ${errorMessage}. Please try again.`);
     } finally {
       setIsUploadingPhoto(false);
@@ -382,11 +438,13 @@ export default function Consent() {
   const styles = StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: isDark ? '#1a1a1a' : '#f8fafc',
+      backgroundColor: isDark ? '#1f2937' : '#f9fafb',
+      direction: 'ltr',
     },
     contentContainer: {
       padding: 16,
       alignItems: 'center',
+      direction: 'ltr',
     },
     card: {
       backgroundColor: isDark ? '#2d2d2d' : 'white',
@@ -399,10 +457,12 @@ export default function Consent() {
       shadowOpacity: isDark ? 0.3 : 0.1,
       shadowRadius: 12,
       elevation: 4,
+      direction: 'ltr',
     },
     header: {
       alignItems: 'center',
       marginBottom: 20,
+      direction: 'ltr',
     },
     logoContainer: {
       width: 80,
@@ -411,6 +471,7 @@ export default function Consent() {
       alignItems: 'center',
       justifyContent: 'center',
       marginBottom: 16,
+      direction: 'ltr',
     },
     logoImage: {
       width: '100%',
@@ -423,25 +484,30 @@ export default function Consent() {
       color: isDark ? '#ffffff' : '#1f2937',
       textAlign: 'center',
       marginBottom: 2,
+      writingDirection: 'ltr',
     },
     eventName: {
       fontSize: 18,
       color: isDark ? '#9ca3af' : '#6b7280',
       textAlign: 'center',
       marginTop: 2,
+      writingDirection: 'ltr',
     },
     subtitle: {
       fontSize: 16,
       color: isDark ? '#9ca3af' : '#6b7280',
       textAlign: 'center',
       lineHeight: 24,
+      writingDirection: 'ltr',
     },
     form: {
       gap: 12,
+      direction: 'ltr',
     },
     photoSection: {
       alignItems: 'center',
       marginBottom: 16,
+      direction: 'ltr',
     },
     sectionTitle: {
       fontSize: 16,
@@ -450,6 +516,8 @@ export default function Consent() {
       marginBottom: 8,
       textAlign: 'left',
       width: '100%',
+      writingDirection: 'ltr',
+      direction: 'ltr',
     },
     photoContainer: {
       width: 120,
@@ -464,6 +532,7 @@ export default function Consent() {
       marginBottom: 8,
       position: 'relative',
       overflow: 'hidden',
+      direction: 'ltr',
     },
     profilePhoto: {
       width: '100%',
@@ -474,21 +543,26 @@ export default function Consent() {
       alignItems: 'center',
       justifyContent: 'flex-end',
       paddingBottom: 8,
+      direction: 'ltr',
     },
     uploadText: {
       fontSize: 12,
       color: isDark ? '#9ca3af' : '#6b7280',
       marginTop: 8,
+      writingDirection: 'ltr',
+      textAlign: 'center',
     },
     photoRequirements: {
       fontSize: 12,
       color: isDark ? '#9ca3af' : '#6b7280',
       textAlign: 'center',
       marginTop: 8,
+      writingDirection: 'ltr',
     },
     formSection: {
       gap: 8,
       width: '100%',
+      direction: 'ltr',
     },
     input: {
       borderWidth: 1,
@@ -498,6 +572,8 @@ export default function Consent() {
       fontSize: 16,
       backgroundColor: isDark ? '#374151' : 'white',
       color: isDark ? '#e5e7eb' : '#1f2937',
+      writingDirection: 'ltr',
+      textAlign: 'left',
     },
     selectContainer: {
       gap: 8,
@@ -506,6 +582,8 @@ export default function Consent() {
       fontSize: 14,
       fontWeight: '500',
       color: isDark ? '#e5e7eb' : '#374151',
+      writingDirection: 'ltr',
+      textAlign: 'left',
     },
     selectButtons: {
       flexDirection: 'row',
@@ -527,17 +605,23 @@ export default function Consent() {
     selectButtonText: {
       fontSize: 14,
       color: isDark ? '#e5e7eb' : '#374151',
+      writingDirection: 'ltr',
+      textAlign: 'center',
     },
     selectButtonTextActive: {
       color: 'white',
+      writingDirection: 'ltr',
+      textAlign: 'center',
     },
     selectionSection: {
       marginTop: 20,
       width: '100%',
+      direction: 'ltr',
     },
     selectionButtons: {
       flexDirection: 'row',
       gap: 12,
+      direction: 'ltr',
     },
     selectionButton: {
       flex: 1,
@@ -547,6 +631,7 @@ export default function Consent() {
       paddingVertical: 12,
       alignItems: 'center',
       backgroundColor: isDark ? '#374151' : 'white',
+      direction: 'ltr',
     },
     selectionButtonActive: {
       borderColor: '#8b5cf6',
@@ -556,9 +641,13 @@ export default function Consent() {
       fontSize: 17,
       fontWeight: '500',
       color: isDark ? '#e5e7eb' : '#374151',
+      writingDirection: 'ltr',
+      textAlign: 'center',
     },
     selectionButtonTextActive: {
       color: 'white',
+      writingDirection: 'ltr',
+      textAlign: 'center',
     },
     submitButton: {
       backgroundColor: '#8b5cf6',
@@ -566,6 +655,7 @@ export default function Consent() {
       padding: 16,
       alignItems: 'center',
       marginTop: 20,
+      direction: 'ltr',
     },
     submitButtonDisabled: {
       backgroundColor: '#9ca3af',
@@ -574,6 +664,8 @@ export default function Consent() {
       color: 'white',
       fontSize: 17,
       fontWeight: '500',
+      writingDirection: 'ltr',
+      textAlign: 'center',
     },
     loadingContainer: {
       flexDirection: 'row',
@@ -589,6 +681,7 @@ export default function Consent() {
       color: '#dc2626',
       marginBottom: 8,
       textAlign: 'center',
+      writingDirection: 'ltr',
     },
     errorText: {
       fontSize: 16,
@@ -596,6 +689,7 @@ export default function Consent() {
       textAlign: 'center',
       marginBottom: 24,
       lineHeight: 24,
+      writingDirection: 'ltr',
     },
     button: {
       backgroundColor: '#8b5cf6',
@@ -608,20 +702,27 @@ export default function Consent() {
       color: 'white',
       fontSize: 16,
       fontWeight: '500',
+      writingDirection: 'ltr',
+      textAlign: 'center',
     },
     inputText: {
       fontSize: 16,
       color: isDark ? '#e5e7eb' : '#1f2937',
+      writingDirection: 'ltr',
+      textAlign: 'left',
     },
     placeholderText: {
       fontSize: 16,
       color: isDark ? '#9ca3af' : '#9ca3af',
+      writingDirection: 'ltr',
+      textAlign: 'left',
     },
     modalOverlay: {
       flex: 1,
       backgroundColor: 'rgba(0, 0, 0, 0.5)',
       justifyContent: 'center',
       alignItems: 'center',
+      direction: 'ltr',
     },
     agePickerContainer: {
       backgroundColor: isDark ? '#2d2d2d' : 'white',
@@ -629,6 +730,7 @@ export default function Consent() {
       padding: 20,
       width: '80%',
       maxHeight: '70%',
+      direction: 'ltr',
     },
     agePickerTitle: {
       fontSize: 18,
@@ -636,15 +738,18 @@ export default function Consent() {
       color: isDark ? '#ffffff' : '#1f2937',
       textAlign: 'center',
       marginBottom: 16,
+      writingDirection: 'ltr',
     },
     agePickerScroll: {
       maxHeight: 300,
+      direction: 'ltr',
     },
     ageOption: {
       paddingVertical: 12,
       paddingHorizontal: 16,
       borderBottomWidth: 1,
       borderBottomColor: isDark ? '#404040' : '#e5e7eb',
+      direction: 'ltr',
     },
     ageOptionSelected: {
       backgroundColor: '#8b5cf6',
@@ -653,10 +758,13 @@ export default function Consent() {
       fontSize: 16,
       color: isDark ? '#e5e7eb' : '#1f2937',
       textAlign: 'center',
+      writingDirection: 'ltr',
     },
     ageOptionTextSelected: {
       color: 'white',
       fontWeight: '600',
+      writingDirection: 'ltr',
+      textAlign: 'center',
     },
     cancelButton: {
       marginTop: 16,
@@ -665,26 +773,33 @@ export default function Consent() {
       backgroundColor: isDark ? '#374151' : '#f3f4f6',
       borderRadius: 8,
       alignItems: 'center',
+      direction: 'ltr',
     },
     cancelButtonText: {
       fontSize: 16,
       color: isDark ? '#9ca3af' : '#6b7280',
       fontWeight: '500',
+      writingDirection: 'ltr',
+      textAlign: 'center',
     },
     rememberSection: {
       marginTop: 20,
       width: '100%',
+      direction: 'ltr',
     },
     checkboxContainer: {
       flexDirection: 'row',
       alignItems: 'center',
       marginBottom: 8,
+      direction: 'ltr',
     },
     checkboxText: {
       fontSize: 14,
       color: isDark ? '#e5e7eb' : '#374151',
       marginLeft: 12,
       flex: 1,
+      writingDirection: 'ltr',
+      textAlign: 'left',
     },
     checkboxDescription: {
       fontSize: 12,
@@ -692,6 +807,7 @@ export default function Consent() {
       marginLeft: 44,
       lineHeight: 16,
       textAlign: 'center',
+      writingDirection: 'ltr',
     },
 
 
@@ -699,16 +815,19 @@ export default function Consent() {
       marginTop: 16,
       marginBottom: 8,
       width: '100%',
+      direction: 'ltr',
     },
     legalText: {
       fontSize: 14,
       color: isDark ? '#9ca3af' : '#6b7280',
       textAlign: 'center',
       lineHeight: 20,
+      writingDirection: 'ltr',
     },
     legalLink: {
       color: '#8b5cf6',
       textDecorationLine: 'underline',
+      writingDirection: 'ltr',
     },
   });
 

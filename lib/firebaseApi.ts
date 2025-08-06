@@ -31,7 +31,7 @@ export async function firebaseRetry<T>(
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`🔄 ${options.operation} (attempt ${attempt}/${maxRetries})`);
+      // Operation attempt ${attempt}/${maxRetries}
       
       const result = await Promise.race([
         operation(),
@@ -44,8 +44,7 @@ export async function firebaseRetry<T>(
       return result as T;
       
     } catch (error: any) {
-      console.error(`❌ ${options.operation} failed (attempt ${attempt}/${maxRetries}):`, error.message);
-      console.error(`🔍 Full error details:`, error);
+      // Operation failed: ${error.message}
       
       if (attempt === maxRetries) {
         throw error;
@@ -140,6 +139,8 @@ export interface Message {
   to_profile_id: string;
   content: string;
   created_at: string;
+  is_read?: boolean;
+  updated_at?: string;
 }
 
 export interface ContactShare {
@@ -320,13 +321,20 @@ export const EventProfileAPI = {
 export const LikeAPI = {
   async create(data: Omit<Like, 'id' | 'created_at'>): Promise<Like> {
     return firebaseRetry(async () => {
-      const docRef = await addDoc(collection(db, 'likes'), {
+      const likeData = {
         ...data,
         created_at: serverTimestamp()
-      });
+      };
       
-      const docSnap = await getDoc(docRef);
-      return { id: docRef.id, ...docSnap.data() } as Like;
+      const docRef = await addDoc(collection(db, 'likes'), likeData);
+      
+      // Don't read back the document since users might not have read permissions
+      // Instead, return the data we already have with the document ID
+      return { 
+        id: docRef.id, 
+        ...data,
+        created_at: new Date().toISOString() // Convert serverTimestamp to ISO string
+      } as Like;
     }, { operation: 'Create like' });
   },
 
@@ -394,24 +402,6 @@ export const MessageAPI = {
         created_at: serverTimestamp()
       });
       
-      // Notify recipient of new message
-      try {
-        // Get sender profile to get the name for notification
-        const senderProfile = await EventProfileAPI.get(data.from_profile_id);
-        if (senderProfile) {
-          // Removed notifyNewMessage as it requires authentication
-          // await notifyNewMessage(
-          //   data.event_id,
-          //   data.from_profile_id,
-          //   data.to_profile_id,
-          //   data.content,
-          //   senderProfile.first_name
-          // );
-        }
-      } catch (error) {
-        console.warn('Failed to send notification:', error);
-      }
-      
       return {
         id: docRef.id,
         ...data,
@@ -442,6 +432,13 @@ export const MessageAPI = {
         ...(doc.data() as any)
       })) as Message[];
     }, { operation: 'Filter messages' });
+  },
+
+  async update(id: string, data: Partial<Message>): Promise<void> {
+    return firebaseRetry(async () => {
+      const docRef = doc(db, 'messages', id);
+      await updateDoc(docRef, { ...data, updated_at: serverTimestamp() });
+    }, { operation: 'Update message' });
   },
 
   async delete(id: string): Promise<void> {
@@ -492,13 +489,42 @@ export const EventFeedbackAPI = {
 export const ReportAPI = {
   async create(data: Omit<Report, 'id' | 'created_at'>): Promise<Report> {
     return firebaseRetry(async () => {
-      const docRef = await addDoc(collection(db, 'reports'), {
-        ...data,
-        created_at: serverTimestamp()
-      });
+      // Enhanced validation and logging
+      console.log('ReportAPI.create called with data:', data);
       
-      const docSnap = await getDoc(docRef);
-      return { id: docRef.id, ...docSnap.data() } as Report;
+      // Validate required fields
+      if (!data.event_id || !data.reporter_session_id || !data.reported_session_id || !data.reason) {
+        console.error('Missing required fields for report creation:', {
+          event_id: !!data.event_id,
+          reporter_session_id: !!data.reporter_session_id,
+          reported_session_id: !!data.reported_session_id,
+          reason: !!data.reason
+        });
+        throw new Error('Missing required fields for report creation');
+      }
+      
+      // Ensure status is set to pending if not provided
+      const reportData = {
+        ...data,
+        status: data.status || 'pending',
+        created_at: serverTimestamp()
+      };
+      
+      console.log('Creating report with data:', reportData);
+      
+      const docRef = await addDoc(collection(db, 'reports'), reportData);
+      console.log('Report document created with ID:', docRef.id);
+      
+      // Don't read back the document since users don't have read permissions
+      // Instead, return the data we already have with the document ID
+      const result = { 
+        id: docRef.id, 
+        ...reportData,
+        created_at: new Date().toISOString() // Convert serverTimestamp to ISO string
+      } as Report;
+      console.log('Report creation successful:', result);
+      
+      return result;
     }, { operation: 'Create report' });
   },
 
@@ -574,7 +600,7 @@ export const AuthAPI = {
       // Simple admin authentication without Firebase Auth
       // For now, allow any email/password combination for admin access
       // In production, you should implement proper admin authentication
-      console.log('Admin login attempt:', email);
+      // Admin login attempt
       
       // Return a mock user object
       return {
@@ -620,7 +646,7 @@ export const StorageAPI = {
       // Check if the URI is a remote URL (starts with http/https) or a local file
       if (file.uri.startsWith('http://') || file.uri.startsWith('https://')) {
         // Handle remote URL - download the file first
-        // Downloading remote file for upload
+        console.log('Downloading remote file for upload');
         try {
           const response = await fetch(file.uri);
           if (!response.ok) {
@@ -636,21 +662,19 @@ export const StorageAPI = {
           throw new Error(`Failed to download remote file: ${downloadError instanceof Error ? downloadError.message : 'Unknown error'}`);
         }
       } else {
-        // Handle local file URI - use the working approach from before
-        // Uploading local file
+        // Handle local file URI - use a simpler, more reliable approach for Android
+        console.log('Uploading local file:', file.uri);
         
         try {
-          const { readAsStringAsync, EncodingType } = await import('expo-file-system');
           const { uploadBytesResumable } = await import('firebase/storage');
           
-          // Read file as base64 (this was working before)
-          const base64Data = await readAsStringAsync(file.uri, {
-            encoding: EncodingType.Base64,
-          });
+          // For Android, use a simpler approach that doesn't rely on complex base64 conversion
+          // Read the file as a blob directly using fetch
+          const response = await fetch(file.uri);
+          if (!response.ok) {
+            throw new Error(`Failed to read local file: ${response.status} ${response.statusText}`);
+          }
           
-          // Convert base64 to blob (this was the working approach)
-          const dataUrl = `data:${file.type};base64,${base64Data}`;
-          const response = await fetch(dataUrl);
           const blob = await response.blob();
           
           // Upload the blob to Firebase Storage
@@ -662,9 +686,10 @@ export const StorageAPI = {
       }
       
       // File uploaded to Firebase Storage successfully
+      console.log('File uploaded successfully, generating download URL');
       
       const downloadURL = await getDownloadURL(storageRef);
-      // Download URL generated
+      console.log('Download URL generated:', downloadURL);
       return { file_url: downloadURL };
     }, { operation: 'Upload file', maxRetries: 3, baseDelay: 2000 });
   }
@@ -779,3 +804,45 @@ export const SavedProfileAPI = {
 
 // Add User export
 export { User as FirebaseUser } from 'firebase/auth'; 
+
+// Test function to verify Firebase connectivity and permissions
+export const testFirebaseConnection = async (): Promise<{ success: boolean; error?: string }> => {
+  try {
+    console.log('Testing Firebase connection...');
+    
+    // Test basic database connection
+    const testCollection = collection(db, 'events');
+    const testQuery = query(testCollection, limit(1));
+    const testSnapshot = await getDocs(testQuery);
+    console.log('✅ Basic database connection successful');
+    
+    // Test reports collection access
+    const reportsCollection = collection(db, 'reports');
+    console.log('✅ Reports collection reference created');
+    
+    // Test creating a test report (don't delete since users don't have delete permissions)
+    const testReportData = {
+      event_id: 'test-event-' + Date.now(),
+      reporter_session_id: 'test-reporter-' + Date.now(),
+      reported_session_id: 'test-reported-' + Date.now(),
+      reason: 'test-report',
+      status: 'pending',
+      created_at: serverTimestamp()
+    };
+    
+    console.log('Attempting to create test report...');
+    const testDocRef = await addDoc(reportsCollection, testReportData);
+    console.log('✅ Test report created successfully with ID:', testDocRef.id);
+    
+    // Don't try to delete the test report since users don't have delete permissions
+    // The test report will remain in the database but that's okay for testing
+    
+    return { success: true };
+  } catch (error: any) {
+    console.error('❌ Firebase connection test failed:', error);
+    return { 
+      success: false, 
+      error: error.message || 'Unknown error' 
+    };
+  }
+}; 

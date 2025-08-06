@@ -4,7 +4,7 @@ import * as Sentry from '@sentry/react';
 export const initSentry = () => {
   Sentry.init({
     dsn: import.meta.env.VITE_SENTRY_DSN || 'YOUR_SENTRY_DSN_HERE',
-    debug: import.meta.env.DEV, // Enable debug mode in development
+    debug: false, // Disabled for production
     enableAutoSessionTracking: true,
     environment: import.meta.env.MODE,
     // Capture all console.warn calls

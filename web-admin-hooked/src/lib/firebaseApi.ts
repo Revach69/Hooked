@@ -85,14 +85,21 @@ export interface Report {
 // Event API - renamed to avoid conflict with browser Event
 export const EventAPI = {
   async create(data: Omit<Event, 'id' | 'created_at' | 'updated_at'>): Promise<Event> {
-    const docRef = await addDoc(collection(db, 'events'), {
+    const eventData = {
       ...data,
       created_at: serverTimestamp(),
       updated_at: serverTimestamp(),
-    });
+    };
     
-    const docSnap = await getDoc(docRef);
-    return { id: docRef.id, ...docSnap.data() } as Event;
+    const docRef = await addDoc(collection(db, 'events'), eventData);
+    
+    // Return the data we already have with the document ID
+    return { 
+      id: docRef.id, 
+      ...data,
+      created_at: new Date().toISOString(), // Convert serverTimestamp to ISO string
+      updated_at: new Date().toISOString() // Convert serverTimestamp to ISO string
+    } as Event;
   },
 
   async filter(filters: Partial<Event> = {}): Promise<Event[]> {
@@ -130,14 +137,21 @@ export const EventAPI = {
 // EventProfile API
 export const EventProfile = {
   async create(data: Omit<EventProfile, 'id' | 'created_at' | 'updated_at'>): Promise<EventProfile> {
-    const docRef = await addDoc(collection(db, 'event_profiles'), {
+    const profileData = {
       ...data,
       created_at: serverTimestamp(),
       updated_at: serverTimestamp(),
-    });
+    };
     
-    const docSnap = await getDoc(docRef);
-    return { id: docRef.id, ...docSnap.data() } as EventProfile;
+    const docRef = await addDoc(collection(db, 'event_profiles'), profileData);
+    
+    // Return the data we already have with the document ID
+    return { 
+      id: docRef.id, 
+      ...data,
+      created_at: new Date().toISOString(), // Convert serverTimestamp to ISO string
+      updated_at: new Date().toISOString() // Convert serverTimestamp to ISO string
+    } as EventProfile;
   },
 
   async filter(filters: Partial<EventProfile> = {}): Promise<EventProfile[]> {
@@ -178,13 +192,19 @@ export const EventProfile = {
 // Like API
 export const Like = {
   async create(data: Omit<Like, 'id' | 'created_at'>): Promise<Like> {
-    const docRef = await addDoc(collection(db, 'likes'), {
+    const likeData = {
       ...data,
       created_at: serverTimestamp(),
-    });
+    };
     
-    const docSnap = await getDoc(docRef);
-    return { id: docRef.id, ...docSnap.data() } as Like;
+    const docRef = await addDoc(collection(db, 'likes'), likeData);
+    
+    // Return the data we already have with the document ID
+    return { 
+      id: docRef.id, 
+      ...data,
+      created_at: new Date().toISOString() // Convert serverTimestamp to ISO string
+    } as Like;
   },
 
   async filter(filters: Partial<Like> = {}): Promise<Like[]> {
@@ -228,13 +248,19 @@ export const Like = {
 // Message API
 export const Message = {
   async create(data: Omit<Message, 'id' | 'created_at'>): Promise<Message> {
-    const docRef = await addDoc(collection(db, 'messages'), {
+    const messageData = {
       ...data,
       created_at: serverTimestamp(),
-    });
+    };
     
-    const docSnap = await getDoc(docRef);
-    return { id: docRef.id, ...docSnap.data() } as Message;
+    const docRef = await addDoc(collection(db, 'messages'), messageData);
+    
+    // Return the data we already have with the document ID
+    return { 
+      id: docRef.id, 
+      ...data,
+      created_at: new Date().toISOString() // Convert serverTimestamp to ISO string
+    } as Message;
   },
 
   async filter(filters: Partial<Message> = {}): Promise<Message[]> {
@@ -271,17 +297,22 @@ export const Message = {
 // Report API
 export const ReportAPI = {
   async create(data: Omit<Report, 'id' | 'created_at'>): Promise<Report> {
-    const docRef = await addDoc(collection(db, 'reports'), {
+    const reportData = {
       ...data,
       created_at: serverTimestamp(),
-    });
+    };
     
-    const docSnap = await getDoc(docRef);
-    return { id: docRef.id, ...docSnap.data() } as Report;
+    const docRef = await addDoc(collection(db, 'reports'), reportData);
+    
+    // Return the data we already have with the document ID
+    return { 
+      id: docRef.id, 
+      ...data,
+      created_at: new Date().toISOString() // Convert serverTimestamp to ISO string
+    } as Report;
   },
 
   async filter(filters: Partial<Report> = {}): Promise<Report[]> {
-    console.log('ReportAPI.filter called with filters:', filters);
     let q = query(collection(db, 'reports'));
     
     if (filters.event_id) {
@@ -302,7 +333,6 @@ export const ReportAPI = {
     
     const snapshot = await getDocs(q);
     const reports = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Report);
-    console.log('ReportAPI.filter found reports:', reports);
     return reports;
   },
 

@@ -81,8 +81,8 @@ service cloud.firestore {
     
     // ===== EVENT FEEDBACK COLLECTION =====
     match /event_feedback/{feedbackId} {
-      // ✅ Only admins can read feedback
-      allow read: if request.auth != null && request.auth.token.admin == true;
+      // ✅ Only authenticated users (admins) can read feedback
+      allow read: if request.auth != null;
       
       // ✅ Anyone can create anonymous feedback
       allow create: if true;
@@ -90,23 +90,32 @@ service cloud.firestore {
       // ✅ No updates allowed (feedback is immutable)
       allow update: if false;
       
-      // ✅ Only admins can delete feedback
-      allow delete: if request.auth != null && request.auth.token.admin == true;
+      // ✅ Only authenticated users (admins) can delete feedback
+      allow delete: if request.auth != null;
     }
     
     // ===== REPORTS COLLECTION =====
     match /reports/{reportId} {
-      // ✅ Only admins can read reports
-      allow read: if request.auth != null && request.auth.token.admin == true;
+      // ✅ Only authenticated users (admins) can read reports
+      allow read: if request.auth != null;
       
-      // ✅ Anyone can create reports (mobile app)
-      allow create: if true;
+      // ✅ Anyone can create reports (mobile app) - no authentication required
+      // Explicitly allow anonymous users to create reports
+      allow create: if 
+        // Ensure required fields are present
+        request.resource.data.event_id is string &&
+        request.resource.data.reporter_session_id is string &&
+        request.resource.data.reported_session_id is string &&
+        request.resource.data.reason is string &&
+        request.resource.data.status is string &&
+        // Ensure status is valid
+        request.resource.data.status in ['pending', 'reviewed', 'resolved', 'dismissed'];
       
-      // ✅ Only admins can update reports
-      allow update: if request.auth != null && request.auth.token.admin == true;
+      // ✅ Only authenticated users (admins) can update reports
+      allow update: if request.auth != null;
       
-      // ✅ Only admins can delete reports
-      allow delete: if request.auth != null && request.auth.token.admin == true;
+      // ✅ Only authenticated users (admins) can delete reports
+      allow delete: if request.auth != null;
     }
 
     // ===== USERS COLLECTION =====

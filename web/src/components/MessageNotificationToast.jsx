@@ -2,11 +2,13 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { Button } from '@/components/ui/button';
-import { X, MessageCircle, ArrowRight } from 'lucide-react';
+import { X, Heart, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useTheme } from '@/hooks/use-mobile';
 
 export default function MessageNotificationToast({ senderName, senderSessionId, onDismiss, onView }) {
   const navigate = useNavigate();
+  const { isDark } = useTheme();
 
   const handleViewClick = () => {
     if (onView) onView();
@@ -21,21 +23,27 @@ export default function MessageNotificationToast({ senderName, senderSessionId, 
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 20, scale: 0.9 }}
       transition={{ type: 'spring', stiffness: 200, damping: 20 }}
-      className="fixed bottom-6 right-6 z-[100] w-full max-w-sm p-5 bg-gradient-to-br from-blue-500 via-sky-500 to-cyan-600 text-white rounded-xl shadow-2xl"
+      className={`fixed bottom-6 right-6 z-[100] w-full max-w-sm p-6 rounded-xl shadow-2xl ${
+        isDark 
+          ? 'bg-gray-800 border border-gray-700 text-white' 
+          : 'bg-white border border-gray-200 text-gray-900'
+      }`}
     >
       <button
         onClick={onDismiss}
-        className="absolute top-3 right-3 p-1 text-white/70 hover:text-white"
+        className={`absolute top-4 right-4 p-1 rounded-full ${
+          isDark ? 'text-gray-400 hover:text-white hover:bg-gray-700' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+        }`}
         aria-label="Dismiss notification"
       >
         <X className="w-5 h-5" />
       </button>
       
       <div className="flex items-center gap-4">
-        <MessageCircle className="w-10 h-10 text-white/80 flex-shrink-0" />
-        <div>
-          <h3 className="text-lg font-bold">New Message</h3>
-          <p className="text-sm opacity-90">
+        <Heart className="w-8 h-8 text-red-500 flex-shrink-0" fill="currentColor" />
+        <div className="flex-1">
+          <h3 className="text-xl font-bold mb-2">New Message</h3>
+          <p className={`text-base ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
             You have a new message from {senderName}.
           </p>
         </div>
@@ -43,7 +51,11 @@ export default function MessageNotificationToast({ senderName, senderSessionId, 
 
       <Button
         onClick={handleViewClick}
-        className="mt-4 w-full bg-white/20 hover:bg-white/30 text-white backdrop-blur-sm border border-white/30"
+        className={`mt-4 w-full ${
+          isDark 
+            ? 'bg-gray-700 hover:bg-gray-600 text-white border border-gray-600' 
+            : 'bg-gray-100 hover:bg-gray-200 text-gray-900 border border-gray-300'
+        }`}
       >
         View Message <ArrowRight className="w-4 h-4 ml-2" />
       </Button>

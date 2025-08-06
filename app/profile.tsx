@@ -1,30 +1,36 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
-  ScrollView,
   TouchableOpacity,
-  Image,
-  ActivityIndicator,
   Alert,
   StyleSheet,
-  Switch,
+  Dimensions,
   Modal,
   TextInput,
-  FlatList,
+  ActivityIndicator,
   useColorScheme,
-  KeyboardAvoidingView,
-  Platform,
+  Image,
   Keyboard,
-  Dimensions,
+  ScrollView,
+  FlatList,
+  RefreshControl,
+  Platform,
+  Switch,
+  KeyboardAvoidingView
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { User, LogOut, Edit, Camera, Users, MessageCircle, Flag, AlertTriangle, Shield, Clock, Mail, AlertCircle } from 'lucide-react-native';
-import { EventProfileAPI, EventAPI, AuthAPI, ReportAPI, StorageAPI } from '../lib/firebaseApi';
+import { Heart, QrCode, Hash, Shield, Clock, Users, X, Camera, Settings, LogOut, Flag, Edit3, Eye, EyeOff, Edit, User, AlertCircle, MessageCircle } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { EventProfileAPI, EventAPI, AuthAPI, ReportAPI, StorageAPI, testFirebaseConnection, LikeAPI, MessageAPI } from '../lib/firebaseApi';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LikeAPI, MessageAPI } from '../lib/firebaseApi';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useMobileAsyncOperation } from '../lib/hooks/useMobileErrorHandling';
+import MobileOfflineStatusBar from '../lib/components/MobileOfflineStatusBar';
+import { SurveyNotificationService } from '../lib/surveyNotificationService';
+import { MemoryManager, checkNetworkConnectivityWithTimeout, checkSimpleNetworkConnectivity } from '../lib/utils';
+import { testDatabaseConnection } from '../lib/firebaseConfig';
 
 export default function Profile() {
   const colorScheme = useColorScheme();
@@ -61,6 +67,23 @@ export default function Profile() {
 
   useEffect(() => {
     initializeSession();
+    
+    // Test Firebase connection to help debug permission issues
+    const testConnection = async () => {
+      try {
+        console.log('Testing Firebase connection for reports...');
+        const result = await testFirebaseConnection();
+        if (result.success) {
+          console.log('✅ Firebase connection test successful');
+        } else {
+          console.error('❌ Firebase connection test failed:', result.error);
+        }
+      } catch (error) {
+        console.error('❌ Firebase connection test error:', error);
+      }
+    };
+    
+    testConnection();
   }, []);
 
   // Synchronize eventVisible state with profile data
@@ -268,16 +291,48 @@ export default function Profile() {
 
     setSubmittingReport(true);
     try {
+      // Check network connectivity before attempting to submit report
+      console.log('Checking network connectivity...');
+      let isConnected = true; // Default to true to bypass network check if it's causing issues
+      
+      try {
+        isConnected = await checkSimpleNetworkConnectivity();
+        console.log('Network connectivity result:', isConnected);
+      } catch (error) {
+        console.log('Network check failed, proceeding anyway:', error);
+        isConnected = true; // Proceed even if network check fails
+      }
+      
+      if (!isConnected) {
+        Alert.alert("No Internet Connection", "Please check your internet connection and try again.");
+        setSubmittingReport(false);
+        return;
+      }
+
+      // Test database connection
+      console.log('Testing database connection...');
+      const dbConnected = await testDatabaseConnection();
+      console.log('Database connection result:', dbConnected);
+      
+      if (!dbConnected) {
+        Alert.alert("Database Connection Error", "Unable to connect to the database. Please try again.");
+        setSubmittingReport(false);
+        return;
+      }
+
       const eventId = await AsyncStorage.getItem('currentEventId');
       const sessionId = await AsyncStorage.getItem('currentSessionId');
+      
+      console.log('Session data:', { eventId, sessionId });
       
       if (!eventId || !sessionId) {
         Alert.alert("Error", "Session information not found. Please try again.");
         return;
       }
 
-      // Create the report in Firestore
-      await ReportAPI.create({
+      // Log the data being sent for debugging
+      console.log('Selected user to report:', selectedUserToReport);
+      console.log('Submitting report with data:', {
         event_id: eventId,
         reporter_session_id: sessionId,
         reported_session_id: selectedUserToReport.session_id,
@@ -285,6 +340,42 @@ export default function Profile() {
         details: reportExplanation.trim(),
         status: 'pending'
       });
+
+      // Create the report in Firestore
+      console.log('Attempting to create report...');
+      console.log('Report data:', {
+        event_id: eventId,
+        reporter_session_id: sessionId,
+        reported_session_id: selectedUserToReport.session_id,
+        reason: 'Inappropriate behavior',
+        details: reportExplanation.trim(),
+        status: 'pending'
+      });
+      
+      let reportResult;
+      
+      try {
+        reportResult = await ReportAPI.create({
+          event_id: eventId,
+          reporter_session_id: sessionId,
+          reported_session_id: selectedUserToReport.session_id,
+          reason: 'Inappropriate behavior',
+          details: reportExplanation.trim(),
+          status: 'pending'
+        });
+        
+        console.log('Report creation result:', reportResult);
+        
+        // Verify the report was created successfully
+        if (!reportResult || !reportResult.id) {
+          throw new Error('Report creation failed - no ID returned');
+        }
+        
+        console.log('✅ Report created successfully with ID:', reportResult.id);
+      } catch (reportError) {
+        console.error('ReportAPI.create failed:', reportError);
+        throw reportError; // Re-throw to be caught by the outer catch block
+      }
 
       Alert.alert(
         "Report Submitted",
@@ -303,17 +394,34 @@ export default function Profile() {
         ]
       );
     } catch (error) {
-      console.error('Report submission error:', error);
+      // Report submission error - log for debugging
+      console.error('Report submission error details:', {
+        error: error,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      
       let errorMessage = "Failed to submit report. Please try again.";
       
       // Provide more specific error messages based on the error type
       if (error instanceof Error) {
-        if (error.message.includes('permission')) {
-          errorMessage = "Permission denied. Please check your connection and try again.";
-        } else if (error.message.includes('network')) {
+        const errorMsg = error.message.toLowerCase();
+        
+        if (errorMsg.includes('permission') || errorMsg.includes('permission denied')) {
+          errorMessage = "Unable to submit report. Please check your internet connection and try again.";
+        } else if (errorMsg.includes('network') || errorMsg.includes('network request failed')) {
           errorMessage = "Network error. Please check your internet connection and try again.";
-        } else if (error.message.includes('quota')) {
+        } else if (errorMsg.includes('quota') || errorMsg.includes('quota exceeded')) {
           errorMessage = "Service temporarily unavailable. Please try again later.";
+        } else if (errorMsg.includes('timeout') || errorMsg.includes('operation timeout')) {
+          errorMessage = "Request timed out. Please check your connection and try again.";
+        } else if (errorMsg.includes('offline') || errorMsg.includes('client is offline')) {
+          errorMessage = "You appear to be offline. Please check your internet connection and try again.";
+        } else if (errorMsg.includes('missing required fields')) {
+          errorMessage = "Invalid report data. Please try again.";
+        } else {
+          // For unknown errors, show a more generic message but log the actual error
+          errorMessage = "Unable to submit report. Please try again later.";
         }
       }
       

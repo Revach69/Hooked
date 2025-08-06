@@ -43,19 +43,19 @@ export default function ReportsModal({ isOpen, onClose, eventId, eventName }: Re
     setIsLoading(true);
     try {
       console.log('Loading reports for event:', eventId);
+      // Filter reports by event_id
       const eventReports = await ReportAPI.filter({ event_id: eventId });
-      console.log('Found reports:', eventReports);
       
       // Load profiles for each report
       const reportsWithProfiles = await Promise.all(
         eventReports.map(async (report) => {
           const [reporterProfiles, reportedProfiles] = await Promise.all([
             EventProfile.filter({ 
-              event_id: eventId, 
+              event_id: report.event_id, 
               session_id: report.reporter_session_id 
             }),
             EventProfile.filter({ 
-              event_id: eventId, 
+              event_id: report.event_id, 
               session_id: report.reported_session_id 
             })
           ]);
@@ -68,7 +68,6 @@ export default function ReportsModal({ isOpen, onClose, eventId, eventName }: Re
         })
       );
 
-      console.log('Reports with profiles:', reportsWithProfiles);
       setReports(reportsWithProfiles);
     } catch (error) {
       console.error('Error loading reports:', error);
@@ -145,9 +144,9 @@ export default function ReportsModal({ isOpen, onClose, eventId, eventName }: Re
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[90vw] max-w-4xl min-w-[600px] max-h-[90vh] overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[90vw] max-w-4xl min-w-[600px] max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
           <div className="flex items-center gap-3">
             <Flag className="w-6 h-6 text-orange-500" />
             <div>
@@ -168,7 +167,7 @@ export default function ReportsModal({ isOpen, onClose, eventId, eventName }: Re
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-6 pb-8 min-h-0">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>

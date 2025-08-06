@@ -16,29 +16,7 @@ import Survey from "./Survey";
 
 import { BrowserRouter as Router, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 
-// Test component for debugging
-const TestComponent = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
-  
-  console.log("🔍 TestComponent rendered");
-  console.log("🔍 TestComponent location:", location.pathname);
-  console.log("🔍 TestComponent navigate function:", typeof navigate);
-  console.log("🔍 TestComponent full location:", location);
-  
-  return (
-    <div style={{padding: '20px', textAlign: 'center', backgroundColor: 'yellow'}}>
-      <h2>🧪 Test Component - Router Working!</h2>
-      <p>✅ Router is working!</p>
-      <p>Current path: {location.pathname}</p>
-      <p>Current search: {location.search}</p>
-      <p>Navigate function: {typeof navigate}</p>
-      <button onClick={() => navigate('/')}>Go Home</button>
-      <button onClick={() => navigate('/join?code=TEST')}>Go to Join</button>
-      <button onClick={() => window.location.href = '/join?code=TEST'}>Force Reload to Join</button>
-    </div>
-  );
-};
+// Test component removed for production
 
 const PAGES = {
     
@@ -100,18 +78,15 @@ function PagesContent() {
                 } />
                 <Route path="/Profile" element={<Profile />} />
                 <Route path="/Survey" element={<Survey />} />
-                <Route path="/test" element={<TestComponent />} />
+                {/* Test route removed for production */}
                 
-                {/* Catch-all route for debugging */}
+                {/* 404 route */}
                 <Route path="*" element={
                   (() => {
-                    console.log("🔍 Catch-all route matched - path:", location.pathname);
                     return (
                       <div style={{padding: '20px', textAlign: 'center'}}>
                         <h2>404 - Page Not Found</h2>
-                        <p>Current path: {location.pathname}</p>
-                        <p>Current search: {location.search}</p>
-                        <p>Current hash: {location.hash}</p>
+                        <p>The page you're looking for doesn't exist.</p>
                         <p>Navigate function: {typeof navigate}</p>
                         <button onClick={() => navigate('/')}>Go Home</button>
                       </div>

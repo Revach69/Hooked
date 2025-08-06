@@ -54,21 +54,21 @@ export default function Home() {
   };
 
   const handleEventAccess = (eventCode) => {
-    console.log("🔍 handleEventAccess called with code:", eventCode);
+    // handleEventAccess called
     
     // Use direct URL construction to avoid any issues with createPageUrl
     const url = `/join?code=${eventCode.toUpperCase()}`;
-    console.log("🔍 Direct URL:", url);
+          // Direct URL constructed
     
     // Navigate first, then close modal to prevent interference
     try {
-      console.log("🔍 Attempting navigation to:", url);
+      // Attempting navigation
       navigate(url);
-      console.log("🔍 Navigation successful to:", url);
+              // Navigation successful
       // Close modal after successful navigation
       closeModal();
     } catch (error) {
-      console.error("🔍 Navigation failed:", error);
+              // Navigation failed
       // Only close modal if navigation failed
       closeModal();
     }
@@ -149,34 +149,7 @@ export default function Home() {
             Enter Code Manually
           </Button>
           
-          {/* Test button for debugging */}
-          <Button
-            onClick={() => {
-              console.log("🔍 Test navigation button clicked");
-              console.log("🔍 navigate function:", typeof navigate);
-              console.log("🔍 Current location:", window.location.href);
-              try {
-                navigate('/join?code=TEST');
-                console.log("🔍 Navigation call completed");
-              } catch (error) {
-                console.error("🔍 Navigation error:", error);
-              }
-            }}
-            className="w-full bg-red-500 hover:bg-red-600 text-white font-medium py-2 rounded-full shadow-lg transition-all"
-          >
-            Test Navigation
-          </Button>
-          
-          {/* Simple test button */}
-          <Button
-            onClick={() => {
-              console.log("🔍 Simple test button clicked");
-              navigate('/test');
-            }}
-            className="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 rounded-full shadow-lg transition-all"
-          >
-            Simple Test Route
-          </Button>
+          {/* Test buttons removed for production */}
           
 
         </div>

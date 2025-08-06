@@ -203,10 +203,7 @@ class FirebasePerformanceMonitor {
 // Global performance monitor instance
 const performanceMonitor = new FirebasePerformanceMonitor();
 
-// Auto-start monitoring in development
-if (process.env.NODE_ENV === 'development') {
-  performanceMonitor.start();
-}
+// Auto-start monitoring disabled for production
 
 export default performanceMonitor;
 

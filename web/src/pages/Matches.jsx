@@ -9,6 +9,7 @@ import { Heart, MessageCircle, Users, Sparkles, User } from "lucide-react";
 import { EventProfile, Like, Message, cleanupListeners, getListenerStats } from "@/api/entities";
 import ChatModal from "../components/ChatModal";
 import ProfileDetailModal from "../components/ProfileDetailModal";
+import { markMessagesAsRead } from '@/lib/messageNotificationService';
 
 export default function Matches() {
   const navigate = useNavigate();
@@ -209,17 +210,7 @@ export default function Matches() {
     }
   }, [matches]); // Rerun when matches data is loaded/updated
 
-  // Debug listener stats (remove in production)
-  useEffect(() => {
-    const debugInterval = setInterval(() => {
-      if (process.env.NODE_ENV === 'development') {
-        const stats = getListenerStats();
-        console.log('📊 Matches Listener Stats:', stats);
-      }
-    }, 30000); // Log every 30 seconds in development
-
-    return () => clearInterval(debugInterval);
-  }, []);
+  // Debug listener stats removed for production
 
   if (isLoading) {
     return (
@@ -249,7 +240,25 @@ export default function Matches() {
         {/* Matches List */}
         <div className="space-y-4">
           {matches.map((match) => (
-            <Card key={match.id} className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-white dark:bg-gray-800">
+            <Card 
+              key={match.id} 
+              className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-white dark:bg-gray-800 cursor-pointer"
+              onClick={async () => {
+                // Mark messages as read when entering chat
+                if (match.unreadCount > 0 && eventId && currentSessionId) {
+                  try {
+                    await markMessagesAsRead(eventId, match.session_id, currentSessionId);
+                    // Refresh the matches to update unread counts
+                    loadMatches();
+                  } catch (error) {
+                    console.error('Error marking messages as read:', error);
+                  }
+                }
+                
+                // Open chat modal
+                setSelectedMatch(match);
+              }}
+            >
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
@@ -261,7 +270,10 @@ export default function Matches() {
                             alt={`${match.first_name}'s avatar`}
                             className="w-16 h-16 rounded-full object-cover border-2 border-purple-200 dark:border-purple-700 cursor-pointer hover:opacity-80 transition-opacity"
                             loading="lazy"
-                            onClick={() => setSelectedProfileForDetail(match)}
+                            onClick={(e) => {
+                              e.stopPropagation(); // Prevent card click
+                              setSelectedProfileForDetail(match);
+                            }}
                             onError={(e) => {
                               // Hide the broken image and show fallback avatar
                               e.target.style.display = 'none';
@@ -276,7 +288,10 @@ export default function Matches() {
                               backgroundColor: match.profile_color,
                               display: 'none' // Initially hidden
                             }}
-                            onClick={() => setSelectedProfileForDetail(match)}
+                            onClick={(e) => {
+                              e.stopPropagation(); // Prevent card click
+                              setSelectedProfileForDetail(match);
+                            }}
                           >
                             {match.first_name[0]}
                           </div>
@@ -285,7 +300,10 @@ export default function Matches() {
                         <div
                           className="w-16 h-16 rounded-full flex items-center justify-center text-white font-semibold text-xl cursor-pointer hover:opacity-80 transition-opacity border-2 border-purple-200 dark:border-purple-700"
                           style={{ backgroundColor: match.profile_color }}
-                          onClick={() => setSelectedProfileForDetail(match)}
+                          onClick={(e) => {
+                            e.stopPropagation(); // Prevent card click
+                            setSelectedProfileForDetail(match);
+                          }}
                         >
                           {match.first_name[0]}
                         </div>
@@ -293,6 +311,11 @@ export default function Matches() {
                       <div className="absolute -top-1 -right-1 w-6 h-6 bg-gradient-to-r from-pink-500 to-red-500 rounded-full flex items-center justify-center shadow-md">
                         <Sparkles className="w-3 h-3 text-white" />
                       </div>
+                      {match.unreadCount > 0 && (
+                        <div className="absolute -bottom-1 -left-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center shadow-md">
+                          <div className="w-2 h-2 bg-white rounded-full"></div>
+                        </div>
+                      )}
                     </div>
                     <div>
                       <h3 className="font-semibold text-lg text-gray-900 dark:text-white">{match.first_name}</h3>
@@ -317,7 +340,10 @@ export default function Matches() {
                   </div>
                   <div className="flex flex-col items-center gap-2">
                     <Button
-                      onClick={() => setSelectedMatch(match)}
+                      onClick={(e) => {
+                        e.stopPropagation(); // Prevent card click
+                        setSelectedMatch(match);
+                      }}
                       className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white rounded-full"
                       size="icon"
                     >

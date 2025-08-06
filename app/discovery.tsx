@@ -25,6 +25,7 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebaseConfig';
 import UserProfileModal from '../lib/UserProfileModal';
 import Toast from 'react-native-toast-message';
+import { updateUserActivity } from '../lib/messageNotificationHelper';
 
 const { width } = Dimensions.get('window');
 const gap = 8;
@@ -59,6 +60,7 @@ export default function Discovery() {
   const [likedProfiles, setLikedProfiles] = useState(new Set<string>());
   const [selectedProfileForDetail, setSelectedProfileForDetail] = useState<any>(null);
   const [isAppActive, setIsAppActive] = useState(true);
+  const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
   
   // Single ref to hold all unsubscribe functions
   const listenersRef = useRef<{
@@ -82,11 +84,50 @@ export default function Discovery() {
   useEffect(() => {
     const handleAppStateChange = (nextAppState: string) => {
       setIsAppActive(nextAppState === 'active');
+      
+      // Update user activity when app becomes active
+      if (nextAppState === 'active' && currentSessionId) {
+        updateUserActivity(currentSessionId);
+      }
     };
 
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription?.remove();
-  }, []);
+  }, [currentSessionId]);
+
+  // Update activity periodically while app is active
+  useEffect(() => {
+    if (!currentSessionId) return;
+
+    const activityInterval = setInterval(() => {
+      if (isAppActive) {
+        updateUserActivity(currentSessionId);
+      }
+    }, 30000); // Update every 30 seconds
+
+    return () => clearInterval(activityInterval);
+  }, [currentSessionId, isAppActive]);
+
+  // Check for unread messages
+  useEffect(() => {
+    if (!currentEvent?.id || !currentSessionId) return;
+
+    const checkUnreadMessages = async () => {
+      try {
+        const { hasUnreadMessages } = await import('../lib/messageNotificationHelper');
+        const hasUnread = await hasUnreadMessages(currentEvent.id, currentSessionId);
+        setHasUnreadMessages(hasUnread);
+      } catch (error) {
+        console.error('Error checking unread messages:', error);
+      }
+    };
+
+    checkUnreadMessages();
+    
+    // Check every 30 seconds
+    const interval = setInterval(checkUnreadMessages, 30000);
+    return () => clearInterval(interval);
+  }, [currentEvent?.id, currentSessionId]);
 
   // Consolidated listener setup with proper cleanup
   useEffect(() => {
@@ -195,11 +236,11 @@ export default function Discovery() {
               }, (error) => {
           // Handle Firestore listener errors gracefully
           if (error.code === 'permission-denied') {
-            console.warn("Permission denied for other profiles listener - this is normal if user is not authenticated");
+            // Permission denied for other profiles listener
           } else if (error.code === 'unavailable') {
-            console.warn("Firestore temporarily unavailable - listener will retry automatically");
+            // Firestore temporarily unavailable
           } else {
-            console.error("Error in other profiles listener:", error);
+            // Error in other profiles listener
           }
         });
 
@@ -226,11 +267,11 @@ export default function Discovery() {
               }, (error) => {
           // Handle Firestore listener errors gracefully
           if (error.code === 'permission-denied') {
-            console.warn("Permission denied for likes listener - this is normal if user is not authenticated");
+            // Permission denied for likes listener
           } else if (error.code === 'unavailable') {
-            console.warn("Firestore temporarily unavailable - listener will retry automatically");
+            // Firestore temporarily unavailable
           } else {
-            console.error("Error in likes listener:", error);
+            // Error in likes listener
           }
         });
 
@@ -299,18 +340,18 @@ export default function Discovery() {
       }, (error) => {
         // Handle Firestore listener errors gracefully
         if (error.code === 'permission-denied') {
-          console.warn("Permission denied for mutual matches listener - this is normal if user is not authenticated");
+          // Permission denied for mutual matches listener
         } else if (error.code === 'unavailable') {
-          console.warn("Firestore temporarily unavailable - listener will retry automatically");
+          // Firestore temporarily unavailable
         } else {
-          console.error("Error in mutual matches listener:", error);
+          // Error in mutual matches listener
         }
       });
 
       listenersRef.current.mutualMatches = mutualMatchesUnsubscribe;
 
     } catch (error) {
-      console.error("Error setting up other listeners:", error);
+      // Error setting up other listeners
     }
   };
 
@@ -1185,7 +1226,29 @@ export default function Discovery() {
           style={styles.navButton}
           onPress={() => router.push('/matches')}
         >
-          <MessageCircle size={24} color="#9ca3af" />
+          <View style={{ position: 'relative' }}>
+            <MessageCircle size={24} color="#9ca3af" />
+            {hasUnreadMessages && (
+              <View style={{
+                position: 'absolute',
+                top: -2,
+                right: -2,
+                backgroundColor: '#ef4444',
+                borderRadius: 6,
+                width: 12,
+                height: 12,
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}>
+                <View style={{
+                  width: 6,
+                  height: 6,
+                  backgroundColor: '#ffffff',
+                  borderRadius: 3,
+                }} />
+              </View>
+            )}
+          </View>
           <Text style={styles.navButtonText}>Matches</Text>
         </TouchableOpacity>
       </View>

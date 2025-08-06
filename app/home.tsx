@@ -505,36 +505,7 @@ export default function Home() {
               <Text style={styles.buttonText}>Enter Code Manually</Text>
             </TouchableOpacity>
 
-            {/* Debug button for testing notifications */}
-            {__DEV__ && (
-              <TouchableOpacity
-                style={[styles.button, { backgroundColor: '#ff6b6b' }]}
-                onPress={async () => {
-                  console.log('🧪 Testing notification system...');
-                  
-                  // Check permissions first
-                  const hasPermissions = await SurveyNotificationService.checkNotificationPermissions();
-                  console.log(`🔐 Permissions granted: ${hasPermissions}`);
-                  
-                  // Debug existing notifications
-                  await SurveyNotificationService.debugScheduledNotifications();
-                  
-                  // Test new notification
-                  if (hasPermissions) {
-                    await SurveyNotificationService.testSurveyNotification(
-                      'test-event-id',
-                      'Test Event',
-                      'test-session-id',
-                      1 // 1 minute delay
-                    );
-                  }
-                }}
-                accessibilityLabel="Test Notifications"
-                accessibilityHint="Debug button to test notification system"
-              >
-                <Text style={styles.buttonText}>🧪 Test Notifications</Text>
-              </TouchableOpacity>
-            )}
+
           </View>
         </View>
 

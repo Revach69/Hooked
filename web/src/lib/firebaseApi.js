@@ -487,6 +487,7 @@ export const Message = {
         ...data,
         created_at: serverTimestamp()
       });
+
       return { id: docRef.id, ...data };
     }, 3, 1000, 'Message.create');
   },

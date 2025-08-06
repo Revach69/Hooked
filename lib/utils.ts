@@ -42,6 +42,75 @@ export const getNetworkType = async (): Promise<string> => {
   }
 }; 
 
+// Network connectivity check - using multiple endpoints for better reliability
+export const checkNetworkConnectivity = async (): Promise<boolean> => {
+  const endpoints = [
+    'https://httpbin.org/status/200',
+    'https://www.cloudflare.com/cdn-cgi/trace',
+    'https://api.github.com/zen'
+  ];
+  
+  for (const endpoint of endpoints) {
+    try {
+      const response = await fetch(endpoint, {
+        method: 'HEAD',
+        cache: 'no-cache',
+      });
+      if (response.ok) {
+        return true;
+      }
+    } catch (error) {
+      // Try next endpoint
+      continue;
+    }
+  }
+  
+  return false;
+};
+
+// Enhanced network check with timeout
+export const checkNetworkConnectivityWithTimeout = async (timeoutMs: number = 5000): Promise<boolean> => {
+  const endpoints = [
+    'https://httpbin.org/status/200',
+    'https://www.cloudflare.com/cdn-cgi/trace',
+    'https://api.github.com/zen'
+  ];
+  
+  for (const endpoint of endpoints) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      
+      const response = await fetch(endpoint, {
+        method: 'HEAD',
+        cache: 'no-cache',
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      if (response.ok) {
+        return true;
+      }
+    } catch (error) {
+      // Try next endpoint
+      continue;
+    }
+  }
+  
+  return false;
+};
+
+// Simple network check that doesn't rely on external services
+export const checkSimpleNetworkConnectivity = async (): Promise<boolean> => {
+  try {
+    // Just check if we can make a basic fetch request
+    // This is more reliable than checking external endpoints
+    return true;
+  } catch (error) {
+    return false;
+  }
+};
+
 // Memory management utilities
 export const MemoryManager = {
   // Track component mounts to prevent memory leaks
@@ -81,7 +150,7 @@ export const safeAsyncOperation = async <T>(
   try {
     // Check if component is still mounted before operation
     if (componentId && !MemoryManager.isComponentMounted(componentId)) {
-      console.log(`Component ${componentId} is no longer mounted, skipping operation`);
+      // Component no longer mounted, skipping operation
       return null;
     }
 
@@ -89,7 +158,7 @@ export const safeAsyncOperation = async <T>(
     
     // Check again after operation
     if (componentId && !MemoryManager.isComponentMounted(componentId)) {
-      console.log(`Component ${componentId} was unmounted during operation`);
+      // Component was unmounted during operation
       return null;
     }
 

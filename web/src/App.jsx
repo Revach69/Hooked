@@ -34,7 +34,7 @@ function App() {
       <OfflineStatusBar />
       <Pages />
       <Toaster />
-      {process.env.NODE_ENV === 'development' && <FirebasePerformanceTest />}
+              {/* FirebasePerformanceTest removed for production */}
     </ErrorBoundary>
   )
 }

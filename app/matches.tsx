@@ -30,6 +30,7 @@ export default function Matches() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedProfileForDetail, setSelectedProfileForDetail] = useState<any>(null);
   const [likedProfiles, setLikedProfiles] = useState<Set<string>>(new Set());
+  const [unreadMessages, setUnreadMessages] = useState<Set<string>>(new Set());
   // Single ref to hold all unsubscribe functions
   const listenersRef = useRef<{
     userProfile?: () => void;
@@ -48,6 +49,52 @@ export default function Matches() {
       cleanupAllListeners();
     };
   }, []);
+
+  // Check for unread messages
+  useEffect(() => {
+    if (!currentEvent?.id || !currentSessionId) return;
+
+    const checkUnreadMessages = async () => {
+      try {
+        const { hasUnreadMessages } = await import('../lib/messageNotificationHelper');
+        const hasUnread = await hasUnreadMessages(currentEvent.id, currentSessionId);
+        
+        if (hasUnread) {
+          // Get all unread messages to determine which chats have unread messages
+          const { MessageAPI, EventProfileAPI } = await import('../lib/firebaseApi');
+          const messages = await MessageAPI.filter({
+            event_id: currentEvent.id,
+            to_profile_id: currentUserProfile?.id
+          });
+          
+          // Create a set of session IDs that have sent unread messages
+          const unreadSessionIds = new Set<string>();
+          for (const message of messages) {
+            // Get the sender's session ID
+            const senderProfiles = await EventProfileAPI.filter({
+              id: message.from_profile_id,
+              event_id: currentEvent.id
+            });
+            if (senderProfiles.length > 0) {
+              unreadSessionIds.add(senderProfiles[0].session_id);
+            }
+          }
+          
+          setUnreadMessages(unreadSessionIds);
+        } else {
+          setUnreadMessages(new Set());
+        }
+      } catch (error) {
+        console.error('Error checking unread messages:', error);
+      }
+    };
+
+    checkUnreadMessages();
+    
+    // Check every 30 seconds
+    const interval = setInterval(checkUnreadMessages, 30000);
+    return () => clearInterval(interval);
+  }, [currentEvent?.id, currentSessionId, currentUserProfile?.id]);
 
   // Consolidated listener setup with proper cleanup
   useEffect(() => {
@@ -157,11 +204,11 @@ export default function Matches() {
               }, (error) => {
           // Handle Firestore listener errors gracefully
           if (error.code === 'permission-denied') {
-            console.warn("Permission denied for matches listener - this is normal if user is not authenticated");
+            // Permission denied for matches listener
           } else if (error.code === 'unavailable') {
-            console.warn("Firestore temporarily unavailable - listener will retry automatically");
+            // Firestore temporarily unavailable
           } else {
-            console.error("Error in matches listener:", error);
+            // Error in matches listener
           }
         });
 
@@ -188,11 +235,11 @@ export default function Matches() {
       }, (error) => {
         // Handle Firestore listener errors gracefully
         if (error.code === 'permission-denied') {
-          console.warn("Permission denied for likes listener - this is normal if user is not authenticated");
+          // Permission denied for likes listener
         } else if (error.code === 'unavailable') {
-          console.warn("Firestore temporarily unavailable - listener will retry automatically");
+          // Firestore temporarily unavailable
         } else {
-          console.error("Error in likes listener:", error);
+          // Error in likes listener
         }
       });
 
@@ -258,18 +305,18 @@ export default function Matches() {
       }, (error) => {
         // Handle Firestore listener errors gracefully
         if (error.code === 'permission-denied') {
-          console.warn("Permission denied for mutual matches listener - this is normal if user is not authenticated");
+          // Permission denied for mutual matches listener
         } else if (error.code === 'unavailable') {
-          console.warn("Firestore temporarily unavailable - listener will retry automatically");
+          // Firestore temporarily unavailable
         } else {
-          console.error("Error in mutual matches listener:", error);
+          // Error in mutual matches listener
         }
       });
 
       listenersRef.current.mutualMatches = mutualMatchesUnsubscribe;
 
     } catch (error) {
-      console.error("Error setting up matches listener:", error);
+      // Error setting up matches listener
     }
   };
 
@@ -480,7 +527,7 @@ export default function Matches() {
     },
     matchCard: {
       flexDirection: 'row',
-      backgroundColor: isDark ? '#2d2d2d' : 'white',
+      backgroundColor: isDark ? '#1e293b' : '#ffffff',
       borderRadius: 16,
       padding: 16,
       shadowColor: '#000',
@@ -488,6 +535,8 @@ export default function Matches() {
       shadowOpacity: isDark ? 0.3 : 0.1,
       shadowRadius: 4,
       elevation: 3,
+      borderWidth: 1,
+      borderColor: isDark ? '#374151' : '#e5e7eb',
     },
     matchImageContainer: {
       marginRight: 16,
@@ -738,11 +787,42 @@ export default function Matches() {
               <TouchableOpacity
                 key={match.id}
                 style={styles.matchCard}
-                onPress={() => handleProfileTap(match)}
-                accessibilityLabel={`View ${match.first_name}'s Profile`}
-                accessibilityHint={`Tap to view ${match.first_name}'s full profile details`}
+                onPress={async () => {
+                  // Mark messages as read when entering chat
+                  if (unreadMessages.has(match.session_id) && currentEvent?.id && currentSessionId) {
+                    try {
+                      const { markMessagesAsRead } = await import('../lib/messageNotificationHelper');
+                      await markMessagesAsRead(currentEvent.id, match.session_id, currentSessionId);
+                      
+                      // Update local state to remove the unread indicator
+                      setUnreadMessages(prev => {
+                        const newSet = new Set(prev);
+                        newSet.delete(match.session_id);
+                        return newSet;
+                      });
+                    } catch (error) {
+                      console.error('Error marking messages as read:', error);
+                    }
+                  }
+                  
+                  // Navigate to chat
+                  router.push({
+                    pathname: '/chat',
+                    params: { 
+                      matchId: match.session_id,
+                      matchName: match.first_name
+                    }
+                  });
+                }}
+                accessibilityLabel={`Open chat with ${match.first_name}`}
+                accessibilityHint={`Tap to open chat with ${match.first_name}`}
               >
-                <View style={styles.matchImageContainer}>
+                <TouchableOpacity
+                  style={styles.matchImageContainer}
+                  onPress={() => handleProfileTap(match)}
+                  accessibilityLabel={`View ${match.first_name}'s Profile`}
+                  accessibilityHint={`Tap to view ${match.first_name}'s full profile details`}
+                >
                   {match.profile_photo_url ? (
                     <Image
                       source={{ uri: match.profile_photo_url }}
@@ -754,7 +834,27 @@ export default function Matches() {
                       <Text style={styles.fallbackText}>{match.first_name[0]}</Text>
                     </View>
                   )}
-                </View>
+                  {unreadMessages.has(match.session_id) && (
+                    <View style={{
+                      position: 'absolute',
+                      top: -2,
+                      right: -2,
+                      backgroundColor: '#ef4444',
+                      borderRadius: 6,
+                      width: 12,
+                      height: 12,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}>
+                      <View style={{
+                        width: 6,
+                        height: 6,
+                        backgroundColor: '#ffffff',
+                        borderRadius: 3,
+                      }} />
+                    </View>
+                  )}
+                </TouchableOpacity>
                 
                 <View style={styles.matchInfo}>
                   <Text style={styles.matchName}>{match.first_name}</Text>

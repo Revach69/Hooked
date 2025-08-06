@@ -196,7 +196,11 @@ export default function ReportsModal({ visible, onClose, eventId, eventName }: R
           </View>
 
           {/* Content */}
-          <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          <ScrollView 
+            style={styles.content} 
+            contentContainerStyle={styles.contentContainer}
+            showsVerticalScrollIndicator={true}
+          >
             {isLoading ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#8b5cf6" />
@@ -396,10 +400,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
   },
   modalContent: {
     width: Math.min(Dimensions.get('window').width * 0.9, 500), // Responsive width: 90% of screen width, max 500px
-    maxHeight: '80%',
+    maxHeight: Dimensions.get('window').height * 0.8, // 80% of screen height
     borderRadius: 16,
     overflow: 'hidden',
   },
@@ -436,6 +441,9 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 20,
+  },
+  contentContainer: {
+    paddingBottom: 20, // Add some padding at the bottom for the last item
   },
   loadingContainer: {
     flex: 1,

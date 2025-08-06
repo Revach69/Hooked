@@ -1,5 +1,5 @@
 import { Stack } from 'expo-router';
-import { useColorScheme, View, Text } from 'react-native';
+import { useColorScheme, View, Text, AppState } from 'react-native';
 import { useEffect, useState, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
 import { Alert } from 'react-native';
@@ -9,14 +9,99 @@ import CustomSplashScreen from '../lib/components/SplashScreen';
 import ErrorBoundary from '../lib/components/ErrorBoundary';
 import { SurveyNotificationService } from '../lib/surveyNotificationService';
 import { initSentry } from '../lib/sentryConfig';
-
+import { Heart } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { checkPendingMessageNotifications, updateUserActivity } from '../lib/messageNotificationHelper';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
   const [appIsReady, setAppIsReady] = useState(false);
   const [progress, setProgress] = useState(0);
   const notificationSubscriptionRef = useRef<any>(null);
   const isInitialized = useRef(false);
+
+  // Custom toast configuration
+  const toastConfig = {
+    success: ({ text1, text2, onPress }: any) => (
+      <View style={{
+        backgroundColor: isDark ? '#1f2937' : '#ffffff',
+        borderWidth: 1,
+        borderColor: isDark ? '#374151' : '#e5e7eb',
+        borderRadius: 12,
+        padding: 16,
+        marginHorizontal: 16,
+        marginTop: 50,
+        flexDirection: 'row',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 8,
+      }}>
+        <Heart size={24} color="#ef4444" style={{ marginRight: 12 }} />
+        <View style={{ flex: 1 }}>
+          <Text style={{
+            fontSize: 18,
+            fontWeight: 'bold',
+            color: isDark ? '#ffffff' : '#1f2937',
+            marginBottom: 4,
+          }}>
+            {text1}
+          </Text>
+          {text2 && (
+            <Text style={{
+              fontSize: 16,
+              color: isDark ? '#9ca3af' : '#6b7280',
+              lineHeight: 22,
+            }}>
+              {text2}
+            </Text>
+          )}
+        </View>
+      </View>
+    ),
+    error: ({ text1, text2, onPress }: any) => (
+      <View style={{
+        backgroundColor: isDark ? '#1f2937' : '#ffffff',
+        borderWidth: 1,
+        borderColor: isDark ? '#374151' : '#e5e7eb',
+        borderRadius: 12,
+        padding: 16,
+        marginHorizontal: 16,
+        marginTop: 50,
+        flexDirection: 'row',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 8,
+      }}>
+        <Heart size={24} color="#ef4444" style={{ marginRight: 12 }} />
+        <View style={{ flex: 1 }}>
+          <Text style={{
+            fontSize: 18,
+            fontWeight: 'bold',
+            color: isDark ? '#ffffff' : '#1f2937',
+            marginBottom: 4,
+          }}>
+            {text1}
+          </Text>
+          {text2 && (
+            <Text style={{
+              fontSize: 16,
+              color: isDark ? '#9ca3af' : '#6b7280',
+              lineHeight: 22,
+            }}>
+              {text2}
+            </Text>
+          )}
+        </View>
+      </View>
+    ),
+  };
 
   useEffect(() => {
     if (isInitialized.current) return;
@@ -96,6 +181,13 @@ export default function RootLayout() {
                   router.push('/matches');
                 }
               }, 1000);
+            } else if (type === 'message') {
+              // Navigate to matches page for message notifications
+              setTimeout(() => {
+                if (isMounted) {
+                  router.push('/matches');
+                }
+              }, 1000);
             }
           } catch (error) {
             console.error('Error processing notification response:', error);
@@ -142,6 +234,29 @@ export default function RootLayout() {
     };
   }, []);
 
+  // Handle app state changes for message notifications
+  useEffect(() => {
+    const handleAppStateChange = async (nextAppState: string) => {
+      if (nextAppState === 'active') {
+        // App became active - check for pending notifications
+        try {
+          await checkPendingMessageNotifications();
+          
+          // Update user activity
+          const currentSessionId = await AsyncStorage.getItem('currentSessionId');
+          if (currentSessionId) {
+            await updateUserActivity(currentSessionId);
+          }
+        } catch (error) {
+          console.error('Error handling app state change:', error);
+        }
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription?.remove();
+  }, []);
+
   if (!appIsReady) {
     return (
       <ErrorBoundary>
@@ -166,7 +281,7 @@ export default function RootLayout() {
           <Stack.Screen name="admin" />
 
         </Stack>
-        <Toast />
+        <Toast config={toastConfig} />
     </ErrorBoundary>
   );
 } 

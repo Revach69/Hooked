@@ -21,12 +21,23 @@ let auth: any = null;
 let storage: any = null;
 
 try {
+  console.log('Initializing Firebase with config:', {
+    projectId: firebaseConfig.projectId,
+    authDomain: firebaseConfig.authDomain,
+    apiKey: firebaseConfig.apiKey ? '***' : 'missing'
+  });
+  
   app = initializeApp(firebaseConfig);
   db = getFirestore(app);
   auth = getAuth(app);
   storage = getStorage(app);
+  
+  console.log('✅ Firebase initialized successfully');
+  console.log('Database instance:', db);
+  console.log('Auth instance:', auth);
+  console.log('Storage instance:', storage);
 } catch (error) {
-  console.error('Firebase initialization failed:', error);
+  console.error('❌ Firebase initialization failed:', error);
   // Create fallback objects to prevent crashes
   app = { name: 'fallback' };
   db = { collection: () => ({ add: () => Promise.resolve() }) };
@@ -136,4 +147,32 @@ export { app, db, auth, storage };
 // Check Firebase status
 export const checkFirebaseStatus = () => {
   console.log('Firebase status check completed');
+};
+
+// Test database connection
+export const testDatabaseConnection = async (): Promise<boolean> => {
+  try {
+    console.log('Testing database connection...');
+    console.log('Database object:', db);
+    
+    if (!db) {
+      console.error('❌ Database object is null or undefined');
+      return false;
+    }
+    
+    const eventsRef = collection(db, 'events');
+    console.log('Events collection reference:', eventsRef);
+    
+    const q = query(eventsRef, limit(1));
+    console.log('Query object:', q);
+    
+    const snapshot = await getDocs(q);
+    console.log('Query result:', snapshot);
+    
+    console.log('✅ Database connection test successful');
+    return true;
+  } catch (error) {
+    console.error('❌ Database connection test failed:', error);
+    return false;
+  }
 };

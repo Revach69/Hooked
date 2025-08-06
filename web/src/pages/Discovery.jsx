@@ -261,17 +261,7 @@ export default function Discovery() {
     setSelectedProfileForDetail(profile);
   };
 
-  // Debug listener stats (remove in production)
-  useEffect(() => {
-    const debugInterval = setInterval(() => {
-      if (process.env.NODE_ENV === 'development') {
-        const stats = getListenerStats();
-        console.log('📊 Listener Stats:', stats);
-      }
-    }, 30000); // Log every 30 seconds in development
-
-    return () => clearInterval(debugInterval);
-  }, []);
+  // Debug listener stats removed for production
 
   if (isLoading) {
     return (
