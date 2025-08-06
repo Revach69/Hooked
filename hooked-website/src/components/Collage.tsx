@@ -25,9 +25,9 @@ export default function Collage({ className = "" }: CollageProps) {
   ];
 
   useEffect(() => {
-    // Randomly shuffle the array and select 6 images (2 rows of 3)
+    // Randomly shuffle the array and select 3 images (1 row of 3)
     const shuffled = [...allImages].sort(() => Math.random() - 0.5);
-    setSelectedImages(shuffled.slice(0, 6));
+    setSelectedImages(shuffled.slice(0, 3));
   }, []);
 
   return (
