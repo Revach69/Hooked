@@ -77,19 +77,24 @@ async function checkIfUserIsInApp(sessionId: string): Promise<boolean> {
     if (lastActivity) {
       const lastActivityTime = new Date(lastActivity).getTime();
       const now = new Date().getTime();
-      const oneMinuteAgo = now - (1 * 60 * 1000); // 1 minute instead of 2
       
-      const isRecentlyActive = lastActivityTime > oneMinuteAgo;
+      // More lenient timeout for iOS (3 minutes) vs Android (1 minute)
+      const timeoutMinutes = Platform.OS === 'ios' ? 3 : 1;
+      const timeoutAgo = now - (timeoutMinutes * 60 * 1000);
+      
+      const isRecentlyActive = lastActivityTime > timeoutAgo;
       console.log('📱 Last activity check:', { 
         lastActivityTime, 
         now, 
-        oneMinuteAgo, 
+        timeoutAgo, 
         isRecentlyActive,
         timeDiff: now - lastActivityTime,
-        timeDiffMinutes: (now - lastActivityTime) / (60 * 1000)
+        timeDiffMinutes: (now - lastActivityTime) / (60 * 1000),
+        platform: Platform.OS,
+        timeoutMinutes
       });
       
-      // If user was active in the last 1 minute, consider them "in app"
+      // If user was active recently, consider them "in app"
       return isRecentlyActive;
     }
     
@@ -108,22 +113,26 @@ function showInAppMessageToast(senderName: string): void {
   console.log('📱 showInAppMessageToast called for:', senderName);
   console.log('📱 Platform:', Platform.OS);
   
-  Toast.show({
-    type: 'success',
-    text1: 'New Message! 💬',
-    text2: `${senderName} sent you a message!`,
-    position: 'top',
-    visibilityTime: 4000,
-    autoHide: true,
-    topOffset: 50,
-    onPress: () => {
-      console.log('📱 Toast pressed, navigating to matches');
-      Toast.hide();
-      router.push('/matches');
-    }
-  });
-  
-  console.log('📱 Toast.show called successfully');
+  try {
+    Toast.show({
+      type: 'success',
+      text1: 'New Message! 💬',
+      text2: `${senderName} sent you a message!`,
+      position: 'top',
+      visibilityTime: 4000,
+      autoHide: true,
+      topOffset: Platform.OS === 'ios' ? 60 : 50, // Adjust for iOS status bar
+      onPress: () => {
+        console.log('📱 Toast pressed, navigating to matches');
+        Toast.hide();
+        router.push('/matches');
+      }
+    });
+    
+    console.log('📱 Toast.show called successfully');
+  } catch (error) {
+    console.error('📱 Error showing toast:', error);
+  }
 }
 
 /**
@@ -262,15 +271,23 @@ export async function markMessagesAsRead(eventId: string, fromSessionId: string,
     
     // Mark messages as read by updating them in Firestore
     const { MessageAPI } = await import('./firebaseApi');
-    const unreadMessages = await MessageAPI.filter({
+    const allMessages = await MessageAPI.filter({
       event_id: eventId,
       from_profile_id: senderProfileId,
       to_profile_id: currentUserProfileId
     });
     
-    console.log('📖 Found unread messages:', unreadMessages.length);
+    // Filter for unread messages only
+    const unreadMessages = allMessages.filter(message => !message.is_read);
     
-    // Update each message to mark as read
+    console.log('📖 Found messages:', { 
+      total: allMessages.length, 
+      unread: unreadMessages.length,
+      currentUserProfileId,
+      senderProfileId
+    });
+    
+    // Update each unread message to mark as read
     for (const message of unreadMessages) {
       try {
         await MessageAPI.update(message.id, { is_read: true });

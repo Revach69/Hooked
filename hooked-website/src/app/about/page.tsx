@@ -64,7 +64,7 @@ export default function About() {
             <div className="flex justify-center lg:justify-end">
               <div className="w-full max-w-md h-96 rounded-2xl overflow-hidden">
                 <img 
-                  src="/Assets/about - hero.JPG" 
+                  src="/about - hero.JPG" 
                   alt="Hooked - Meet in the moment" 
                   className="w-full h-full object-cover"
                 />

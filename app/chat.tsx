@@ -179,7 +179,28 @@ export default function Chat() {
           // Process new messages and trigger notifications
           for (const newMessage of newMessages) {
             // Only trigger notification if this message was sent TO the current user (not BY them)
-            if (newMessage.to_profile_id === currentUserProfileId && newMessage.from_profile_id === matchProfileId) {
+            // AND if the message was created recently (within the last 10 seconds) to avoid triggering on old messages when entering chat
+            let messageTime: number;
+            if (typeof newMessage.created_at === 'string') {
+              messageTime = new Date(newMessage.created_at).getTime();
+            } else {
+              // Handle Firestore Timestamp
+              messageTime = newMessage.created_at.toDate().getTime();
+            }
+            const now = new Date().getTime();
+            const tenSecondsAgo = now - (10 * 1000);
+            
+            if (newMessage.to_profile_id === currentUserProfileId && 
+                newMessage.from_profile_id === matchProfileId &&
+                messageTime > tenSecondsAgo) {
+              
+              console.log('📱 Triggering notification for new message:', {
+                messageId: newMessage.id,
+                messageTime: new Date(messageTime),
+                now: new Date(now),
+                timeDiff: now - messageTime
+              });
+              
               // Get sender's name for notification
               const senderProfile = await EventProfileAPI.get(newMessage.from_profile_id);
               if (senderProfile) {

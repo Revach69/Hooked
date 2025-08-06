@@ -11,17 +11,17 @@ export default function Collage({ className = "" }: CollageProps) {
 
   // Array of all 11 collage images
   const allImages = [
-    "/Assets/collage1.JPG",
-    "/Assets/collage2.JPG", 
-    "/Assets/collage3.JPG",
-    "/Assets/collage4.JPG",
-    "/Assets/collage5.JPG",
-    "/Assets/collage6.JPG",
-    "/Assets/collage7.JPG",
-    "/Assets/collage8.JPG",
-    "/Assets/collage9.JPG",
-    "/Assets/collage10.JPG",
-    "/Assets/collage11.JPG"
+    "/Collage1.JPG",
+    "/Collage2.JPG", 
+    "/Collage3.JPG",
+    "/Collage4.JPG",
+    "/Collage5.JPG",
+    "/Collage6.JPG",
+    "/Collage7.JPG",
+    "/Collage8.JPG",
+    "/Collage9.JPG",
+    "/Collage10.JPG",
+    "/Collage11.JPG"
   ];
 
   useEffect(() => {
