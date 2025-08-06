@@ -1,11 +1,42 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Header from "../../components/Header";
 import Collage from "../../components/Collage";
 
 export default function HowItWorks() {
-  const [firstCollageImages, setFirstCollageImages] = useState<string[]>([]);
+  // Array of all 11 collage images
+  const allImages = [
+    "/Collage1.JPG",
+    "/Collage2.JPG", 
+    "/Collage3.JPG",
+    "/Collage4.JPG",
+    "/Collage5.JPG",
+    "/Collage6.JPG",
+    "/Collage7.JPG",
+    "/Collage8.JPG",
+    "/Collage9.JPG",
+    "/Collage10.JPG",
+    "/Collage11.JPG"
+  ];
+
+  // Use useMemo to ensure images are assigned only once and remain stable
+  const { firstCollageImages, secondCollageImages } = useMemo(() => {
+    // Randomly shuffle all images
+    const shuffled = [...allImages].sort(() => Math.random() - 0.5);
+    
+    // First collage gets first 3 images
+    const firstImages = shuffled.slice(0, 3);
+    
+    // Second collage gets next 3 images (different from first)
+    const secondImages = shuffled.slice(3, 6);
+    
+    return {
+      firstCollageImages: firstImages,
+      secondCollageImages: secondImages
+    };
+  }, []); // Empty dependency array ensures this runs only once
+
   return (
     <div className="dark-mode-bg">
       {/* Header */}
@@ -91,7 +122,7 @@ export default function HowItWorks() {
           <div className="h-80 bg-gray-200 dark:bg-gray-700 rounded-xl p-4">
             <Collage 
               className="h-full" 
-              onImagesSelected={setFirstCollageImages}
+              selectedImages={firstCollageImages}
             />
           </div>
         </div>
@@ -165,7 +196,7 @@ export default function HowItWorks() {
           <div className="h-80 bg-white/10 rounded-xl p-4">
             <Collage 
               className="h-full" 
-              excludeImages={firstCollageImages}
+              selectedImages={secondCollageImages}
             />
           </div>
         </div>

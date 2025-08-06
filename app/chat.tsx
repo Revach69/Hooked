@@ -5,25 +5,26 @@ import {
   TextInput,
   TouchableOpacity,
   FlatList,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
+  Alert,
   StyleSheet,
   useColorScheme,
-  Alert,
   Image,
+  KeyboardAvoidingView,
+  Platform,
   Keyboard,
+  Modal,
+  ActivityIndicator,
 } from 'react-native';
+import { ArrowLeft, Send, Flag, X } from 'lucide-react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, Send, User, Flag } from 'lucide-react-native';
-import { MessageAPI, EventProfileAPI } from '../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '../lib/firebaseConfig';
-import { formatTime } from '../lib/utils';
+import { EventProfileAPI, MessageAPI, ReportAPI } from '../lib/firebaseApi';
+import { markMessagesAsSeen } from '../lib/messageNotificationHelper';
 import UserProfileModal from '../lib/UserProfileModal';
-import { handleNewMessageNotification } from '../lib/messageNotificationHelper';
+import { formatTime } from '../lib/utils';
 
 interface ChatMessage {
   id: string;
@@ -50,6 +51,9 @@ export default function Chat() {
   const [matchProfile, setMatchProfile] = useState<any>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [processedMessageIds, setProcessedMessageIds] = useState<Set<string>>(new Set());
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
   
   const flatListRef = useRef<FlatList>(null);
   // Single ref to hold unsubscribe function
@@ -297,7 +301,7 @@ export default function Chat() {
       
       const currentUserProfile = currentUserProfiles[0];
       
-      // Get match's profile to get the profile ID
+      // Get match profile to get the profile ID
       const matchProfiles = await EventProfileAPI.filter({
         session_id: matchId as string,
         event_id: currentEventId
@@ -309,27 +313,65 @@ export default function Chat() {
       }
       
       const matchProfile = matchProfiles[0];
-
-      // Use MessageAPI to create the message with correct profile IDs
-      await MessageAPI.create({
+      
+      // Create the message
+      const messageData = {
         event_id: currentEventId,
         from_profile_id: currentUserProfile.id,
         to_profile_id: matchProfile.id,
-        content: newMessage.trim()
-      });
-
+        content: newMessage.trim(),
+        created_at: serverTimestamp(),
+        seen: false
+      };
+      
+      await MessageAPI.create(messageData);
       setNewMessage('');
     } catch (error) {
       console.error('Error sending message:', error);
-      console.error('Error details:', {
-        currentEventId,
-        currentSessionId,
-        matchId,
-        messageLength: newMessage.trim().length
-      });
       Alert.alert('Error', 'Failed to send message');
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const submitReport = async () => {
+    if (!reportReason.trim()) {
+      Alert.alert('Error', 'Please provide a reason for the report');
+      return;
+    }
+
+    if (!currentEventId || !currentSessionId || !matchId || !matchProfile) {
+      Alert.alert('Error', 'Missing information for report');
+      return;
+    }
+
+    setIsSubmittingReport(true);
+    try {
+      // Create the report
+      const reportData = {
+        event_id: currentEventId,
+        reporter_session_id: currentSessionId,
+        reported_session_id: matchId as string,
+        reason: reportReason.trim(),
+        status: 'pending',
+        created_at: new Date().toISOString()
+      };
+
+      await ReportAPI.create(reportData);
+      
+      Alert.alert(
+        'Report Submitted',
+        'Thank you for your report. We will review it shortly.',
+        [{ text: 'OK' }]
+      );
+      
+      setShowReportModal(false);
+      setReportReason('');
+    } catch (error) {
+      console.error('Error submitting report:', error);
+      Alert.alert('Error', 'Failed to submit report');
+    } finally {
+      setIsSubmittingReport(false);
     }
   };
 
@@ -556,26 +598,7 @@ export default function Chat() {
           
           <TouchableOpacity
             style={styles.reportButton}
-            onPress={() => {
-              Alert.alert(
-                'Report User',
-                'Are you sure you want to report this user?',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  {
-                    text: 'Report',
-                    style: 'destructive',
-                    onPress: () => {
-                      Alert.alert(
-                        'Report Submitted',
-                        'Thank you for your report. We will review it shortly.',
-                        [{ text: 'OK' }]
-                      );
-                    }
-                  }
-                ]
-              );
-            }}
+            onPress={() => setShowReportModal(true)}
           >
             <Flag size={20} color={isDark ? '#ef4444' : '#dc2626'} />
           </TouchableOpacity>

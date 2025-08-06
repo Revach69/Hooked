@@ -4,45 +4,13 @@ import { useEffect, useState, useRef } from 'react';
 
 interface CollageProps {
   className?: string;
-  excludeImages?: string[]; // Images to exclude from selection
-  onImagesSelected?: (images: string[]) => void; // Callback to notify parent of selected images
+  selectedImages: string[]; // Images to display (passed from parent)
 }
 
-export default function Collage({ className = "", excludeImages = [], onImagesSelected }: CollageProps) {
-  const [selectedImages, setSelectedImages] = useState<string[]>([]);
+export default function Collage({ className = "", selectedImages }: CollageProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [imagesLoaded, setImagesLoaded] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  // Array of all 11 collage images
-  const allImages = [
-    "/Collage1.JPG",
-    "/Collage2.JPG", 
-    "/Collage3.JPG",
-    "/Collage4.JPG",
-    "/Collage5.JPG",
-    "/Collage6.JPG",
-    "/Collage7.JPG",
-    "/Collage8.JPG",
-    "/Collage9.JPG",
-    "/Collage10.JPG",
-    "/Collage11.JPG"
-  ];
-
-  useEffect(() => {
-    // Filter out excluded images
-    const availableImages = allImages.filter(img => !excludeImages.includes(img));
-    
-    // Randomly shuffle the array and select 3 images (1 row of 3)
-    const shuffled = [...availableImages].sort(() => Math.random() - 0.5);
-    const selected = shuffled.slice(0, 3);
-    setSelectedImages(selected);
-    
-    // Notify parent of selected images
-    if (onImagesSelected) {
-      onImagesSelected(selected);
-    }
-  }, [excludeImages, onImagesSelected]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -81,10 +49,11 @@ export default function Collage({ className = "", excludeImages = [], onImagesSe
     >
       {selectedImages.map((image, index) => (
         <div 
-          key={index} 
-          className={`overflow-hidden rounded-lg h-full transition-all duration-700 delay-${index * 200} ${
+          key={`${image}-${index}`} 
+          className={`overflow-hidden rounded-lg h-full transition-all duration-700 ${
             isVisible && imagesLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
           }`}
+          style={{ transitionDelay: `${index * 200}ms` }}
         >
           <img 
             src={image} 

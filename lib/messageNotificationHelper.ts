@@ -31,7 +31,7 @@ export function testToast(): void {
 /**
  * Show in-app toast notification for new message
  */
-function showInAppMessageToast(senderName: string): void {
+export function showInAppMessageToast(senderName: string): void {
   console.log('📱 showInAppMessageToast called for:', senderName);
   console.log('📱 Platform:', Platform.OS);
   console.log('📱 Expo Go:', __DEV__ ? 'Development mode' : 'Production mode');

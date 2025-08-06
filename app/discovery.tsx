@@ -164,18 +164,15 @@ export default function Discovery() {
             // Show toast for recent messages (within last 10 seconds)
             if (messageTime > tenSecondsAgo) {
               console.log('📱 New message received on discovery page - showing toast');
-              const { handleNewMessageNotification } = await import('../lib/messageNotificationHelper');
-              const { EventProfileAPI } = await import('../lib/firebaseApi');
               
+              // Get sender's profile to get their name
+              const { EventProfileAPI } = await import('../lib/firebaseApi');
               const senderProfile = await EventProfileAPI.get(latestMessage.from_profile_id);
+              
               if (senderProfile) {
-                await handleNewMessageNotification(
-                  currentEvent.id,
-                  latestMessage.from_profile_id,
-                  latestMessage.to_profile_id,
-                  latestMessage.content,
-                  senderProfile.first_name
-                );
+                // Show toast directly since we're the recipient
+                const { showInAppMessageToast } = await import('../lib/messageNotificationHelper');
+                showInAppMessageToast(senderProfile.first_name);
               }
             }
           }

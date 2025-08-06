@@ -186,12 +186,14 @@ export default function CreateEvent() {
   };
 
   const formatDate = (date: Date) => {
-    return date.toLocaleDateString('en-US', {
+          return date.toLocaleDateString('en-US', {
+        hour12: false,
       year: 'numeric',
       month: 'short',
       day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+              hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
     });
   };
 
