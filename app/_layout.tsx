@@ -1,5 +1,5 @@
 import { Stack } from 'expo-router';
-import { useColorScheme, View, Text, AppState } from 'react-native';
+import { useColorScheme, View, Text, AppState, TouchableOpacity } from 'react-native';
 import { useEffect, useState, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
 import { Alert } from 'react-native';
@@ -12,6 +12,8 @@ import { initSentry } from '../lib/sentryConfig';
 import { Heart } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { checkPendingMessageNotifications, updateUserActivity } from '../lib/messageNotificationHelper';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '../lib/firebaseConfig';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -20,6 +22,9 @@ export default function RootLayout() {
   const [progress, setProgress] = useState(0);
   const notificationSubscriptionRef = useRef<any>(null);
   const isInitialized = useRef(false);
+  const [currentEvent, setCurrentEvent] = useState<any>(null);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [currentUserProfile, setCurrentUserProfile] = useState<any>(null);
 
   // Custom toast configuration
   const toastConfig = {
@@ -257,6 +262,157 @@ export default function RootLayout() {
     return () => subscription?.remove();
   }, []);
 
+  // Load user data for global message listener
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        const [sessionId, eventId] = await Promise.all([
+          AsyncStorage.getItem('currentSessionId'),
+          AsyncStorage.getItem('currentEventId')
+        ]);
+        
+        console.log('📱 Layout: Loading user data:', { sessionId, eventId });
+        
+        setCurrentSessionId(sessionId);
+        
+        if (eventId) {
+          // The eventId is stored as a simple string, not JSON
+          setCurrentEvent({ id: eventId });
+          console.log('📱 Layout: Using eventId as string:', eventId);
+        }
+      } catch (error) {
+        console.error('Error loading user data for global message listener:', error);
+      }
+    };
+    
+    loadUserData();
+  }, []);
+
+  // Load user profile when event data is available
+  useEffect(() => {
+    const loadUserProfile = async () => {
+      if (!currentSessionId || !currentEvent?.id) return;
+      
+      try {
+        console.log('📱 Layout: Loading user profile for session:', currentSessionId, 'event:', currentEvent.id);
+        const { EventProfileAPI } = await import('../lib/firebaseApi');
+        const userProfiles = await EventProfileAPI.filter({
+          session_id: currentSessionId,
+          event_id: currentEvent.id
+        });
+        
+        if (userProfiles.length > 0) {
+          setCurrentUserProfile(userProfiles[0]);
+          console.log('📱 Layout: User profile loaded:', userProfiles[0].first_name);
+        } else {
+          console.log('📱 Layout: No user profile found');
+        }
+      } catch (error) {
+        console.error('Error loading user profile:', error);
+      }
+    };
+    
+    loadUserProfile();
+  }, [currentSessionId, currentEvent?.id]);
+
+  // Global message listener for toast notifications
+  useEffect(() => {
+    console.log('📱 Layout: Global message listener useEffect triggered');
+    console.log('📱 Layout: Dependencies:', { 
+      currentEventId: currentEvent?.id, 
+      currentSessionId, 
+      currentUserProfileId: currentUserProfile?.id 
+    });
+    
+    if (!currentEvent?.id || !currentSessionId || !currentUserProfile?.id) {
+      console.log('📱 Layout: Missing dependencies, not setting up listener');
+      return;
+    }
+
+    console.log('📱 Layout: Setting up global message listener');
+    
+    try {
+      const messagesQuery = query(
+        collection(db, 'messages'),
+        where('event_id', '==', currentEvent.id),
+        where('to_profile_id', '==', currentUserProfile.id)
+      );
+
+      console.log('📱 Layout: Created query for messages to profile:', currentUserProfile.id);
+
+      const unsubscribe = onSnapshot(messagesQuery, async (snapshot) => {
+        try {
+          console.log('📱 Layout: Global message listener triggered');
+          console.log('📱 Layout: Snapshot size:', snapshot.docs.length);
+          
+          // Check if there are unseen messages using manual check
+          const { MessageAPI, EventProfileAPI } = await import('../lib/firebaseApi');
+          const allMessages = await MessageAPI.filter({
+            event_id: currentEvent.id,
+            to_profile_id: currentUserProfile.id
+          });
+          
+          // Filter for unseen messages only
+          const unseenMessages = allMessages.filter(message => !message.seen);
+          
+          if (unseenMessages.length > 0) {
+            console.log('📱 Layout: Unseen messages detected - checking for recent ones');
+            
+            // Get the latest unseen message
+            const latestUnseenMessage = unseenMessages.sort((a, b) => 
+              new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+            )[0];
+            
+            // Check if this is a recent message (within last 5 minutes)
+            const messageTime = typeof latestUnseenMessage.created_at === 'string' 
+              ? new Date(latestUnseenMessage.created_at).getTime() 
+              : (latestUnseenMessage.created_at as any).toDate().getTime();
+            const now = new Date().getTime();
+            const fiveMinutesAgo = now - (5 * 60 * 1000);
+            
+            console.log('📱 Layout: Latest unseen message time check:', {
+              messageTime: new Date(messageTime),
+              now: new Date(now),
+              fiveMinutesAgo: new Date(fiveMinutesAgo),
+              timeDiff: now - messageTime,
+              isRecent: messageTime > fiveMinutesAgo
+            });
+            
+            if (messageTime > fiveMinutesAgo) {
+              console.log('📱 Layout: Recent unseen message detected - showing toast');
+              
+              // Get sender's profile to get their name
+              const senderProfile = await EventProfileAPI.get(latestUnseenMessage.from_profile_id);
+              
+              if (senderProfile) {
+                console.log('📱 Layout: Sender profile found:', senderProfile.first_name);
+                const { showInAppMessageToast } = await import('../lib/messageNotificationHelper');
+                showInAppMessageToast(senderProfile.first_name, senderProfile.session_id);
+              } else {
+                console.log('📱 Layout: Sender profile not found');
+              }
+            } else {
+              console.log('📱 Layout: Unseen message too old, not showing toast');
+            }
+          } else {
+            console.log('📱 Layout: No unseen messages found');
+          }
+        } catch (error) {
+          console.error('📱 Layout: Error in global message listener:', error);
+        }
+      });
+
+      console.log('📱 Layout: Global message listener set up successfully');
+
+      return () => {
+        console.log('📱 Layout: Cleaning up global message listener');
+        unsubscribe();
+      };
+    } catch (error) {
+      console.error('📱 Layout: Error setting up global message listener:', error);
+    }
+  }, [currentEvent?.id, currentSessionId, currentUserProfile?.id]);
+
   if (!appIsReady) {
     return (
       <ErrorBoundary>
@@ -267,7 +423,12 @@ export default function RootLayout() {
 
   return (
     <ErrorBoundary>
-              <Stack screenOptions={{ headerShown: false }}>
+      <View style={{ flex: 1 }}>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+          }}
+        >
           <Stack.Screen name="index" />
           <Stack.Screen name="home" />
           <Stack.Screen name="join" />
@@ -279,9 +440,9 @@ export default function RootLayout() {
           <Stack.Screen name="survey" />
           <Stack.Screen name="adminLogin" />
           <Stack.Screen name="admin" />
-
         </Stack>
         <Toast config={toastConfig} />
+      </View>
     </ErrorBoundary>
   );
 } 

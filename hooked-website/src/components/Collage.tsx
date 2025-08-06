@@ -40,6 +40,11 @@ export default function Collage({ className = "", selectedImages }: CollageProps
     setImagesLoaded(true);
   };
 
+  // Debug: Log when images are passed
+  useEffect(() => {
+    console.log('Collage received images:', selectedImages);
+  }, [selectedImages]);
+
   return (
     <div 
       ref={containerRef}
@@ -57,7 +62,7 @@ export default function Collage({ className = "", selectedImages }: CollageProps
         >
           <img 
             src={image} 
-            alt={`Event guest ${index + 1}`}
+            alt={`People enjoying a Hooked event - real connections being made`}
             className="w-full h-full object-cover"
             onLoad={handleImageLoad}
           />

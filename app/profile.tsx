@@ -64,6 +64,7 @@ export default function Profile() {
   const [reportExplanation, setReportExplanation] = useState('');
   const [submittingReport, setSubmittingReport] = useState(false);
   const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
 
   useEffect(() => {
     initializeSession();
@@ -85,6 +86,27 @@ export default function Profile() {
     
     testConnection();
   }, []);
+
+  // Check for unseen messages
+  useEffect(() => {
+    if (!currentEvent?.id || !profile?.session_id) return;
+
+    const checkUnseenMessages = async () => {
+      try {
+        const { hasUnseenMessages } = await import('../lib/messageNotificationHelper');
+        const hasUnseen = await hasUnseenMessages(currentEvent.id, profile.session_id);
+        setHasUnreadMessages(hasUnseen);
+      } catch (error) {
+        console.error('Error checking unseen messages in profile:', error);
+      }
+    };
+
+    checkUnseenMessages();
+    
+    // Check every 5 seconds for updates
+    const interval = setInterval(checkUnseenMessages, 5000);
+    return () => clearInterval(interval);
+  }, [currentEvent?.id, profile?.session_id]);
 
   // Synchronize eventVisible state with profile data
   useEffect(() => {
@@ -1498,7 +1520,29 @@ export default function Profile() {
           style={styles.navButton}
           onPress={() => router.push('/matches')}
         >
-          <MessageCircle size={24} color="#9ca3af" />
+          <View style={{ position: 'relative' }}>
+            <MessageCircle size={24} color="#9ca3af" />
+            {hasUnreadMessages && (
+              <View style={{
+                position: 'absolute',
+                top: -2,
+                right: -2,
+                backgroundColor: '#ef4444',
+                borderRadius: 6,
+                width: 12,
+                height: 12,
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}>
+                <View style={{
+                  width: 6,
+                  height: 6,
+                  backgroundColor: '#ffffff',
+                  borderRadius: 3,
+                }} />
+              </View>
+            )}
+          </View>
           <Text style={styles.navButtonText}>Matches</Text>
         </TouchableOpacity>
       </View>

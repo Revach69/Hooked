@@ -16,13 +16,13 @@ export default function Header() {
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <div className="flex-shrink-0">
-            <Link href="/" className="flex items-center">
-              <img src="/Hooked Full Logo.png" alt="Hooked" className="h-8 w-auto" />
+            <Link href="/" className="flex items-center" aria-label="Hooked - Home">
+              <img src="/Hooked Full Logo.png" alt="Hooked - Real-life dating app for events" className="h-8 w-auto" />
             </Link>
           </div>
           
           {/* Navigation */}
-          <nav className="hidden md:flex space-x-8">
+          <nav className="hidden md:flex space-x-8" role="navigation" aria-label="Main navigation">
             <Link href="/" className="dark-mode-text hover:text-purple-600 px-3 py-2 text-base font-bold transition-colors">
               Home
             </Link>
@@ -55,10 +55,10 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Mobile Navigation Overlay */}
-      {isMobileMenuOpen && (
-        <div className="md:hidden absolute top-full left-0 right-0 bg-white dark:bg-gray-900 border-b dark-mode-border shadow-lg z-50">
-          <nav className="px-4 py-6 space-y-4 text-center">
+                {/* Mobile Navigation Overlay */}
+          {isMobileMenuOpen && (
+            <div className="md:hidden absolute top-full left-0 right-0 bg-white dark:bg-gray-900 border-b dark-mode-border shadow-lg z-50">
+              <nav className="px-4 py-6 space-y-4 text-center" role="navigation" aria-label="Mobile navigation">
             <Link 
               href="/" 
               className="block dark-mode-text hover:text-purple-600 px-3 py-2 text-base font-bold transition-colors"

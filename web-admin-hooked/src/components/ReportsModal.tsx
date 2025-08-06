@@ -104,7 +104,7 @@ export default function ReportsModal({ isOpen, onClose, eventId, eventName }: Re
     
     try {
       if (pendingAction.type === 'accept') {
-        // Delete the reported user's profile
+      // Delete the reported user's profile
         if (pendingAction.report.reportedProfile) {
           await EventProfile.delete(pendingAction.report.reportedProfile.id);
         }
@@ -116,10 +116,10 @@ export default function ReportsModal({ isOpen, onClose, eventId, eventName }: Re
           event_name: eventName,
           admin_notes: adminNotes || 'User removed from event due to report'
         });
-        
-        // Update report status to resolved
+      
+      // Update report status to resolved
         await ReportAPI.update(pendingAction.report.id, { 
-          status: 'resolved',
+        status: 'resolved',
           admin_notes: adminNotes || 'User removed from event due to report'
         });
       } else {

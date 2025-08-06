@@ -143,41 +143,72 @@ export default function Discovery() {
       const unsubscribe = onSnapshot(messagesQuery, async (snapshot) => {
         // When messages change, immediately check unseen status
         try {
+          console.log('📱 Discovery: Real-time message listener triggered');
+          console.log('📱 Discovery: Snapshot size:', snapshot.docs.length);
+          
           const { hasUnseenMessages } = await import('../lib/messageNotificationHelper');
           const hasUnseen = await hasUnseenMessages(currentEvent.id, currentSessionId);
           setHasUnreadMessages(hasUnseen);
           
+          // Commented out toast logic since we now have a global listener in layout
+          /*
           // Check for new messages and show toast notifications
           const newMessages = snapshot.docs
             .map(doc => ({ id: doc.id, ...doc.data() } as any))
             .filter(msg => msg.to_profile_id === currentUserProfile.id);
           
+          console.log('📱 Discovery: Messages sent to current user:', newMessages.length);
+          
           // Get the latest new message
           if (newMessages.length > 0) {
             const latestMessage = newMessages[newMessages.length - 1];
+            console.log('📱 Discovery: Latest message:', {
+              id: latestMessage.id,
+              from: latestMessage.from_profile_id,
+              to: latestMessage.to_profile_id,
+              content: latestMessage.content?.substring(0, 50) + '...',
+              created_at: latestMessage.created_at
+            });
+            
             const messageTime = typeof latestMessage.created_at === 'string' 
               ? new Date(latestMessage.created_at).getTime() 
               : latestMessage.created_at.toDate().getTime();
             const now = new Date().getTime();
             const tenSecondsAgo = now - (10 * 1000);
             
+            console.log('📱 Discovery: Time check:', {
+              messageTime: new Date(messageTime),
+              now: new Date(now),
+              tenSecondsAgo: new Date(tenSecondsAgo),
+              timeDiff: now - messageTime,
+              isRecent: messageTime > tenSecondsAgo
+            });
+            
             // Show toast for recent messages (within last 10 seconds)
             if (messageTime > tenSecondsAgo) {
-              console.log('📱 New message received on discovery page - showing toast');
+              console.log('📱 Discovery: New message received - showing toast');
               
               // Get sender's profile to get their name
               const { EventProfileAPI } = await import('../lib/firebaseApi');
               const senderProfile = await EventProfileAPI.get(latestMessage.from_profile_id);
               
               if (senderProfile) {
+                console.log('📱 Discovery: Sender profile found:', senderProfile.first_name);
                 // Show toast directly since we're the recipient
                 const { showInAppMessageToast } = await import('../lib/messageNotificationHelper');
                 showInAppMessageToast(senderProfile.first_name);
+              } else {
+                console.log('📱 Discovery: Sender profile not found');
               }
+            } else {
+              console.log('📱 Discovery: Message too old, not showing toast');
             }
+          } else {
+            console.log('📱 Discovery: No messages sent to current user');
           }
+          */
         } catch (error) {
-          console.error('Error checking unseen messages from real-time listener:', error);
+          console.error('📱 Discovery: Error checking unseen messages from real-time listener:', error);
         }
       });
 
@@ -685,7 +716,7 @@ export default function Discovery() {
   const styles = StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: isDark ? '#1a1a1a' : '#f8fafc',
+      backgroundColor: isDark ? '#2d2d2d' : 'white',
     },
     loadingContainer: {
       flex: 1,

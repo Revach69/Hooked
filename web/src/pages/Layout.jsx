@@ -6,7 +6,7 @@ import { createPageUrl } from '@/utils';
 import MatchNotificationToast from "../components/MatchNotificationToast";
 import MessageNotificationToast from "../components/MessageNotificationToast"; // Import MessageNotificationToast
 import { EventProfile, Like, Message } from '@/lib/firebaseApi';
-import { Toaster } from "@/components/ui/sonner";
+import { Toaster, toast } from "@/components/ui/sonner";
 import { checkPendingMessageNotifications, updateUserActivity, requestNotificationPermission, hasUnseenMessages } from '@/lib/messageNotificationService';
 import { useKickedUserCheck } from '../hooks/useKickedUserCheck';
 import KickedUserModal from '../components/KickedUserModal';
@@ -163,18 +163,25 @@ export default function Layout({ children, currentPageName }) {
             // Sort to get the latest unread message
             const latestUnreadMessage = unreadMessages.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
 
-            // Only show toast if this specific message hasn't been notified this session
-            if (!notifiedMessageIdsThisSession.has(latestUnreadMessage.id)) {
-              // Get the sender's profile to get their name
-              const senderProfile = await EventProfile.get(latestUnreadMessage.from_profile_id);
-              if (senderProfile) {
-                setNewMessageDetails({ 
-                  name: senderProfile.first_name,
-                  senderSessionId: senderProfile.session_id 
-                });
-                setShowMessageToast(true); // Show the message toast
-                // Add the message ID to the set to prevent re-notifying it in this session
-                setNotifiedMessageIdsThisSession(prev => new Set([...prev, latestUnreadMessage.id]));
+            // Check if this is a recent message (within last 5 minutes)
+            const messageTime = new Date(latestUnreadMessage.created_at).getTime();
+            const now = new Date().getTime();
+            const fiveMinutesAgo = now - (5 * 60 * 1000);
+
+            if (messageTime > fiveMinutesAgo) {
+              // Only show toast if this specific message hasn't been notified this session
+              if (!notifiedMessageIdsThisSession.has(latestUnreadMessage.id)) {
+                // Get the sender's profile to get their name
+                const senderProfile = await EventProfile.get(latestUnreadMessage.from_profile_id);
+                if (senderProfile) {
+                  setNewMessageDetails({ 
+                    name: senderProfile.first_name,
+                    senderSessionId: senderProfile.session_id 
+                  });
+                  setShowMessageToast(true); // Show the message toast
+                  // Add the message ID to the set to prevent re-notifying it in this session
+                  setNotifiedMessageIdsThisSession(prev => new Set([...prev, latestUnreadMessage.id]));
+                }
               }
             }
           }
@@ -256,8 +263,109 @@ export default function Layout({ children, currentPageName }) {
   };
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-900">
-       <Toaster
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Header */}
+      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            {/* Logo */}
+            <div className="flex-shrink-0">
+              <button
+                onClick={handleLogoClick}
+                className="flex items-center space-x-2 text-gray-900 dark:text-white hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+              >
+                <img
+                  src="/Hooked Full Logo.png"
+                  alt="Hooked"
+                  className="h-8 w-auto"
+                />
+              </button>
+            </div>
+
+            {/* Navigation Icons */}
+            <nav className="flex space-x-4">
+              <button
+                onClick={() => handleIconClick("Discovery")}
+                className={`p-2 rounded-lg transition-colors ${
+                  currentPageName === "Discovery"
+                    ? "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white"
+                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
+                }`}
+                title="Discovery"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </button>
+
+              <button
+                onClick={() => handleIconClick("Matches")}
+                className={`p-2 rounded-lg transition-colors relative ${
+                  currentPageName === "Matches"
+                    ? "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white"
+                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
+                }`}
+                title="Matches"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                </svg>
+                {hasUnreadMessages && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
+                    !
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => handleIconClick("Profile")}
+                className={`p-2 rounded-lg transition-colors ${
+                  currentPageName === "Profile"
+                    ? "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white"
+                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
+                }`}
+                title="Profile"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </button>
+            </nav>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="flex-1">
+        {children}
+      </main>
+
+      {/* Footer */}
+      {shouldShowInstagramFooter && (
+        <footer className="bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+          <div className="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-center">
+              <button
+                onClick={handleInstagramClick}
+                className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+              >
+                Follow us on Instagram
+              </button>
+            </div>
+          </div>
+        </footer>
+      )}
+
+      {/* Kicked User Modal */}
+      <KickedUserModal
+        isVisible={kickedUser !== null}
+        onClose={handleKickedUserClose}
+        eventName={kickedUser?.eventName || ''}
+        adminNotes={kickedUser?.adminNotes || ''}
+      />
+
+      {/* Toaster */}
+      <Toaster
         position="bottom-center"
         expand={false}
         visibleToasts={1}
@@ -281,6 +389,32 @@ export default function Layout({ children, currentPageName }) {
           className: 'toast-with-icon',
         }}
       />
+
+      {/* Match Notification Toast */}
+      {showMatchToast && (
+        <MatchNotificationToast
+          matchName={matchDetails?.name}
+          onDismiss={() => setShowMatchToast(false)}
+          onSeeMatches={() => {
+            setShowMatchToast(false);
+            navigate(createPageUrl("Matches"));
+          }}
+        />
+      )}
+
+      {/* Message Notification Toast */}
+      {showMessageToast && (
+        <MessageNotificationToast
+          senderName={newMessageDetails?.name}
+          senderSessionId={newMessageDetails?.senderSessionId}
+          onDismiss={() => setShowMessageToast(false)}
+          onView={() => {
+            setShowMessageToast(false);
+            navigate(createPageUrl("Matches"));
+          }}
+        />
+      )}
+
       <style>{`
         :root {
           --primary: #1a1d29;
@@ -412,135 +546,6 @@ export default function Layout({ children, currentPageName }) {
           flex-shrink: 0;
         }
       `}</style>
-
-      {/* Match Notification Toast */}
-      <div>
-        {showMatchToast && (
-          <MatchNotificationToast
-            matchName={matchDetails?.name}
-            onDismiss={() => setShowMatchToast(false)}
-            onSeeMatches={() => {
-              setShowMatchToast(false);
-              navigate(createPageUrl("Matches"));
-            }}
-          />
-        )}
-      </div>
-
-      {/* Message Notification Toast */}
-      <div>
-        {showMessageToast && (
-          <MessageNotificationToast
-            senderName={newMessageDetails?.name}
-            senderSessionId={newMessageDetails?.senderSessionId}
-            onDismiss={() => setShowMessageToast(false)}
-            onView={() => {
-              setShowMessageToast(false);
-              navigate(createPageUrl("Matches"));
-            }}
-          />
-        )}
-      </div>
-
-      {/* Header */}
-      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            {/* Logo */}
-            <div className="flex-shrink-0">
-              <button
-                onClick={handleLogoClick}
-                className="flex items-center space-x-2 text-gray-900 dark:text-white hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
-              >
-                <img
-                  src="/Hooked Full Logo.png"
-                  alt="Hooked"
-                  className="h-8 w-auto"
-                />
-              </button>
-            </div>
-
-            {/* Navigation Icons */}
-            <nav className="flex space-x-4">
-              <button
-                onClick={() => handleIconClick("Discovery")}
-                className={`p-2 rounded-lg transition-colors ${
-                  currentPageName === "Discovery"
-                    ? "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white"
-                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
-                }`}
-                title="Discovery"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </button>
-
-              <button
-                onClick={() => handleIconClick("Matches")}
-                className={`p-2 rounded-lg transition-colors relative ${
-                  currentPageName === "Matches"
-                    ? "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white"
-                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
-                }`}
-                title="Matches"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                </svg>
-                {hasUnreadMessages && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
-                    !
-                  </span>
-                )}
-              </button>
-
-              <button
-                onClick={() => handleIconClick("Profile")}
-                className={`p-2 rounded-lg transition-colors ${
-                  currentPageName === "Profile"
-                    ? "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white"
-                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
-                }`}
-                title="Profile"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-              </button>
-            </nav>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="flex-1">
-        {children}
-      </main>
-
-      {/* Footer */}
-      {shouldShowInstagramFooter && (
-        <footer className="bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
-          <div className="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-center">
-              <button
-                onClick={handleInstagramClick}
-                className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
-              >
-                Follow us on Instagram
-              </button>
-            </div>
-          </div>
-        </footer>
-      )}
-
-      {/* Kicked User Modal */}
-      <KickedUserModal
-        isVisible={kickedUser !== null}
-        onClose={handleKickedUserClose}
-        eventName={kickedUser?.eventName || ''}
-        adminNotes={kickedUser?.adminNotes || ''}
-      />
     </div>
   );
 }

@@ -353,7 +353,7 @@ export default function Chat() {
         reporter_session_id: currentSessionId,
         reported_session_id: matchId as string,
         reason: reportReason.trim(),
-        status: 'pending',
+        status: 'pending' as const,
         created_at: new Date().toISOString()
       };
 
@@ -570,6 +570,83 @@ export default function Chat() {
       color: isDark ? '#9ca3af' : '#6b7280',
       textAlign: 'center',
     },
+    disabledButton: {
+      opacity: 0.5,
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    modalContent: {
+      width: '100%',
+      maxWidth: 400,
+      borderRadius: 12,
+      padding: 20,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.25,
+      shadowRadius: 8,
+      elevation: 8,
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: 'bold',
+    },
+    closeButton: {
+      padding: 4,
+    },
+    modalSubtitle: {
+      fontSize: 16,
+      marginBottom: 16,
+      lineHeight: 22,
+    },
+    reportReasonInput: {
+      borderWidth: 1,
+      borderRadius: 8,
+      padding: 12,
+      fontSize: 16,
+      minHeight: 100,
+      textAlignVertical: 'top',
+      marginBottom: 20,
+    },
+    modalButtons: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    modalButton: {
+      flex: 1,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      borderRadius: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    cancelButton: {
+      backgroundColor: '#f3f4f6',
+    },
+    cancelButtonText: {
+      color: '#6b7280',
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    submitButton: {
+      backgroundColor: '#ef4444',
+    },
+    submitButtonText: {
+      color: '#ffffff',
+      fontSize: 16,
+      fontWeight: '600',
+    },
   });
 
   if (isLoading) {
@@ -581,119 +658,196 @@ export default function Chat() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
-            <ArrowLeft size={24} color={isDark ? '#ffffff' : '#1f2937'} />
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={styles.reportButton}
-            onPress={() => setShowReportModal(true)}
-          >
-            <Flag size={20} color={isDark ? '#ef4444' : '#dc2626'} />
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.headerInfo}
-            onPress={() => setShowProfileModal(true)}
-          >
-            <View style={styles.headerUserInfo}>
-              <View style={styles.headerAvatarContainer}>
-                {matchProfile?.profile_photo_url ? (
-                  <Image
-                    source={{ uri: matchProfile.profile_photo_url }}
-                    style={styles.headerAvatar}
-                  />
-                ) : (
-                  <View style={[styles.headerFallbackAvatar, { backgroundColor: matchProfile?.profile_color || '#cccccc' }]}>
-                    <Text style={styles.headerFallbackText}>
-                      {(matchProfile?.first_name || matchName || 'M')[0]}
-                    </Text>
-                  </View>
-                )}
+    <>
+      <SafeAreaView style={styles.container}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        >
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => router.back()}
+            >
+              <ArrowLeft size={24} color={isDark ? '#ffffff' : '#1f2937'} />
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.reportButton}
+              onPress={() => setShowReportModal(true)}
+            >
+              <Flag size={20} color={isDark ? '#ef4444' : '#dc2626'} />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.headerInfo}
+              onPress={() => setShowProfileModal(true)}
+            >
+              <View style={styles.headerUserInfo}>
+                <View style={styles.headerAvatarContainer}>
+                  {matchProfile?.profile_photo_url ? (
+                    <Image
+                      source={{ uri: matchProfile.profile_photo_url }}
+                      style={styles.headerAvatar}
+                    />
+                  ) : (
+                    <View style={[styles.headerFallbackAvatar, { backgroundColor: matchProfile?.profile_color || '#cccccc' }]}>
+                      <Text style={styles.headerFallbackText}>
+                        {(matchProfile?.first_name || matchName || 'M')[0]}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <View style={styles.headerTextInfo}>
+                  <Text style={styles.headerName}>
+                    {matchProfile?.first_name || matchName || 'Match'}
+                  </Text>
+                  <Text style={styles.headerSubtitle}>
+                    {matchProfile?.age ? `${matchProfile.age} years old` : 'Online'}
+                  </Text>
+                </View>
               </View>
-              <View style={styles.headerTextInfo}>
-                <Text style={styles.headerName}>
-                  {matchProfile?.first_name || matchName || 'Match'}
-                </Text>
-                <Text style={styles.headerSubtitle}>
-                  {matchProfile?.age ? `${matchProfile.age} years old` : 'Online'}
+            </TouchableOpacity>
+          </View>
+
+          {/* Messages */}
+          <FlatList
+            ref={flatListRef}
+            data={messages}
+            renderItem={renderMessage}
+            keyExtractor={(item) => item.id}
+            style={styles.messagesContainer}
+            contentContainerStyle={{ paddingVertical: 16 }}
+            onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+            onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>
+                  Start a conversation with {matchProfile?.first_name || 'your match'}!
                 </Text>
               </View>
-            </View>
-          </TouchableOpacity>
-        </View>
-
-        {/* Messages */}
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          renderItem={renderMessage}
-          keyExtractor={(item) => item.id}
-          style={styles.messagesContainer}
-          contentContainerStyle={{ paddingVertical: 16 }}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-          onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="interactive"
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>
-                Start a conversation with {matchProfile?.first_name || 'your match'}!
-              </Text>
-            </View>
-          }
-        />
-
-        {/* Message Input */}
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.textInput}
-            value={newMessage}
-            onChangeText={setNewMessage}
-            placeholder="Type a message..."
-            placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
-            multiline
-            maxLength={500}
-            onFocus={() => {
-              // Scroll to bottom when keyboard appears
-              setTimeout(() => {
-                flatListRef.current?.scrollToEnd({ animated: true });
-              }, 100);
-            }}
+            }
           />
-          <TouchableOpacity
-            style={[
-              styles.sendButton,
-              { opacity: newMessage.trim() ? 1 : 0.5 }
-            ]}
-            onPress={sendMessage}
-            disabled={!newMessage.trim() || isSending}
-          >
-            {isSending ? (
-              <ActivityIndicator size="small" color="white" />
-            ) : (
-              <Send size={20} color="white" />
-            )}
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
-      
+
+          {/* Message Input */}
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.textInput}
+              value={newMessage}
+              onChangeText={setNewMessage}
+              placeholder="Type a message..."
+              placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
+              multiline
+              maxLength={500}
+              onFocus={() => {
+                // Scroll to bottom when keyboard appears
+                setTimeout(() => {
+                  flatListRef.current?.scrollToEnd({ animated: true });
+                }, 100);
+              }}
+            />
+            <TouchableOpacity
+              style={[
+                styles.sendButton,
+                { opacity: newMessage.trim() ? 1 : 0.5 }
+              ]}
+              onPress={sendMessage}
+              disabled={!newMessage.trim() || isSending}
+            >
+              {isSending ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Send size={20} color="white" />
+              )}
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+
+      {/* Report Modal */}
+      <Modal
+        visible={showReportModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowReportModal(false)}
+      >
+        <KeyboardAvoidingView 
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+        >
+          <View style={[styles.modalContent, { backgroundColor: isDark ? '#1f2937' : '#ffffff' }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: isDark ? '#ffffff' : '#1f2937' }]}>
+                Report User
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowReportModal(false)}
+                style={styles.closeButton}
+              >
+                <X size={24} color={isDark ? '#9ca3af' : '#6b7280'} />
+              </TouchableOpacity>
+            </View>
+            
+            <Text style={[styles.modalSubtitle, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+              Please provide a reason for reporting {matchProfile?.first_name || 'this user'}:
+            </Text>
+            
+            <TextInput
+              style={[
+                styles.reportReasonInput,
+                {
+                  backgroundColor: isDark ? '#374151' : '#f9fafb',
+                  color: isDark ? '#ffffff' : '#1f2937',
+                  borderColor: isDark ? '#4b5563' : '#d1d5db'
+                }
+              ]}
+              value={reportReason}
+              onChangeText={setReportReason}
+              placeholder="Enter the reason for your report..."
+              placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
+              multiline
+              numberOfLines={4}
+              maxLength={500}
+            />
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setShowReportModal(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.modalButton,
+                  styles.submitButton,
+                  !reportReason.trim() && styles.disabledButton
+                ]}
+                onPress={submitReport}
+                disabled={!reportReason.trim() || isSubmittingReport}
+              >
+                {isSubmittingReport ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text style={styles.submitButtonText}>Submit Report</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
       {/* Profile Modal */}
       <UserProfileModal
         visible={showProfileModal}
         profile={matchProfile}
         onClose={() => setShowProfileModal(false)}
       />
-    </SafeAreaView>
+    </>
   );
 } 

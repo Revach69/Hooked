@@ -158,7 +158,7 @@ export default function About() {
       </section>
 
       {/* Section 4: Our Values */}
-      <section className="py-16 dark-mode-middle">
+      <section className="py-16 a">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-4xl font-bold dark-mode-text mb-12 text-center font-heading">
             Our Values

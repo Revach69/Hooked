@@ -133,8 +133,8 @@ export default function HowItWorks() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center mb-16">
             {/* Left side - 3 organizer points */}
-            <div className="space-y-6 order-2 lg:order-1">
-              <div className="flex items-start">
+            <div className="space-y-6 order-2 lg:order-1 flex flex-col items-center lg:items-end">
+              <div className="flex items-start w-full max-w-sm">
                 <div className="bg-white/20 w-12 h-12 rounded-full flex items-center justify-center mr-4 flex-shrink-0">
                   <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V6a1 1 0 00-1-1H5a1 1 0 00-1 1v1a1 1 0 001 1zm12 0h2a1 1 0 001-1V6a1 1 0 00-1-1h-2a1 1 0 00-1 1v1a1 1 0 001 1zM5 20h2a1 1 0 001-1v-1a1 1 0 00-1-1H5a1 1 0 00-1 1v1a1 1 0 001 1z" />
@@ -150,7 +150,7 @@ export default function HowItWorks() {
                 </div>
               </div>
               
-              <div className="flex items-start">
+              <div className="flex items-start w-full max-w-sm">
                 <div className="bg-white/20 w-12 h-12 rounded-full flex items-center justify-center mr-4 flex-shrink-0">
                   <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
@@ -166,7 +166,7 @@ export default function HowItWorks() {
                 </div>
               </div>
               
-              <div className="flex items-start">
+              <div className="flex items-start w-full max-w-sm">
                 <div className="bg-white/20 w-12 h-12 rounded-full flex items-center justify-center mr-4 flex-shrink-0">
                   <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />

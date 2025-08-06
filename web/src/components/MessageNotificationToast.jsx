@@ -1,64 +1,51 @@
 import React from 'react';
+import { Heart } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
-import { Button } from '@/components/ui/button';
-import { X, Heart, ArrowRight } from 'lucide-react';
-import { motion } from 'framer-motion';
-import { useTheme } from '@/hooks/use-mobile';
 
 export default function MessageNotificationToast({ senderName, senderSessionId, onDismiss, onView }) {
   const navigate = useNavigate();
-  const { isDark } = useTheme();
 
-  const handleViewClick = () => {
-    if (onView) onView();
-    // Navigate to matches page with a URL parameter to auto-open the specific chat
-    navigate(createPageUrl(`Matches?openChat=${senderSessionId}`));
-    onDismiss();
+  const handleView = () => {
+    if (senderSessionId) {
+      // Navigate to specific chat
+      navigate(`/chat?matchId=${senderSessionId}&matchName=${senderName}`);
+    } else {
+      // Fallback to matches page
+      navigate(createPageUrl("Matches"));
+    }
+    onView();
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 50, scale: 0.9 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 20, scale: 0.9 }}
-      transition={{ type: 'spring', stiffness: 200, damping: 20 }}
-      className={`fixed bottom-6 right-6 z-[100] w-full max-w-sm p-6 rounded-xl shadow-2xl ${
-        isDark 
-          ? 'bg-gray-800 border border-gray-700 text-white' 
-          : 'bg-white border border-gray-200 text-gray-900'
-      }`}
-    >
-      <button
-        onClick={onDismiss}
-        className={`absolute top-4 right-4 p-1 rounded-full ${
-          isDark ? 'text-gray-400 hover:text-white hover:bg-gray-700' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-        }`}
-        aria-label="Dismiss notification"
-      >
-        <X className="w-5 h-5" />
-      </button>
-      
-      <div className="flex items-center gap-4">
-        <Heart className="w-8 h-8 text-red-500 flex-shrink-0" fill="currentColor" />
-        <div className="flex-1">
-          <h3 className="text-xl font-bold mb-2">New Message</h3>
-          <p className={`text-base ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
-            You have a new message from {senderName}.
+    <div className="fixed top-4 right-4 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-4 max-w-sm animate-in slide-in-from-top-2 duration-300">
+      <div className="flex items-start space-x-3">
+        <div className="flex-shrink-0">
+          <Heart className="h-6 w-6 text-red-500" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-lg font-semibold text-gray-900 dark:text-white">
+            New Message! 💬
+          </p>
+          <p className="text-base text-gray-600 dark:text-gray-300 mt-1">
+            {senderName} sent you a message!
           </p>
         </div>
+        <div className="flex flex-col space-y-2">
+          <button
+            onClick={handleView}
+            className="text-sm bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-md transition-colors"
+          >
+            View
+          </button>
+          <button
+            onClick={onDismiss}
+            className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+          >
+            Dismiss
+          </button>
+        </div>
       </div>
-
-      <Button
-        onClick={handleViewClick}
-        className={`mt-4 w-full ${
-          isDark 
-            ? 'bg-gray-700 hover:bg-gray-600 text-white border border-gray-600' 
-            : 'bg-gray-100 hover:bg-gray-200 text-gray-900 border border-gray-300'
-        }`}
-      >
-        View Message <ArrowRight className="w-4 h-4 ml-2" />
-      </Button>
-    </motion.div>
+    </div>
   );
 }

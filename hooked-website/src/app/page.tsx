@@ -84,7 +84,7 @@ export default function Home() {
             <div className="relative flex justify-center lg:justify-end">
               <img
                 src="/Site Image.png"
-                alt="Hooked App Interface"
+                alt="Hooked - One scan shows you who's single"
                 className="rounded-lg shadow-2xl max-w-[300px] mx-auto filter drop-shadow-lg"
                 style={{
                   boxShadow: '0 20px 40px rgba(147, 51, 234, 0.15), 0 10px 20px rgba(236, 72, 153, 0.1)'
@@ -186,29 +186,58 @@ export default function Home() {
             Designed For
           </h2>
           
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-8">
+          {/* Mobile Layout - 2x3 grid with centered fifth item */}
+          <div className="grid grid-cols-2 gap-12 md:hidden">
             <div className="text-center">
-              <img src="/party.png" alt="Parties" className="w-16 h-16 mx-auto mb-4 rounded-lg" />
+              <img src="/party.png" alt="Colorful party icon representing social events and celebrations" className="w-16 h-16 mx-auto mb-4 rounded-lg" />
               <h3 className="text-lg font-semibold dark-mode-text font-heading">Parties</h3>
             </div>
             
             <div className="text-center">
-              <img src="/private events.png" alt="Private Events" className="w-16 h-16 mx-auto mb-4 rounded-lg" />
+              <img src="/private events.png" alt="Private event icon for exclusive gatherings and special occasions" className="w-16 h-16 mx-auto mb-4 rounded-lg" />
               <h3 className="text-lg font-semibold dark-mode-text font-heading">Private Events</h3>
             </div>
             
             <div className="text-center">
-              <img src="/conference.png" alt="Conferences" className="w-16 h-16 mx-auto mb-4 rounded-lg" />
+              <img src="/conference.png" alt="Conference icon for business meetings and professional networking" className="w-16 h-16 mx-auto mb-4 rounded-lg" />
               <h3 className="text-lg font-semibold dark-mode-text font-heading">Conferences</h3>
             </div>
             
             <div className="text-center">
-              <img src="/ring.png" alt="Weddings" className="w-16 h-16 mx-auto mb-4 rounded-lg" />
+              <img src="/ring.png" alt="Wedding ring icon for wedding events and ceremonies" className="w-16 h-16 mx-auto mb-4 rounded-lg" />
               <h3 className="text-lg font-semibold dark-mode-text font-heading">Weddings</h3>
             </div>
             
-            <div className="text-center col-span-2 md:col-span-1 md:col-start-3">
-              <img src="/bars & lounges.png" alt="Bars & Lounges" className="w-16 h-16 mx-auto mb-4 rounded-lg" />
+            <div className="text-center col-span-2">
+              <img src="/bars & lounges.png" alt="Bar and lounge icon for nightlife and social venues" className="w-16 h-16 mx-auto mb-4 rounded-lg" />
+              <h3 className="text-lg font-semibold dark-mode-text font-heading">Bars & Lounges</h3>
+            </div>
+          </div>
+
+          {/* Desktop Layout - All icons in a single row */}
+          <div className="hidden md:flex justify-center items-center gap-20">
+            <div className="text-center">
+              <img src="/party.png" alt="Colorful party icon representing social events and celebrations" className="w-16 h-16 mx-auto mb-4 rounded-lg" />
+              <h3 className="text-lg font-semibold dark-mode-text font-heading">Parties</h3>
+            </div>
+            
+            <div className="text-center">
+              <img src="/private events.png" alt="Private event icon for exclusive gatherings and special occasions" className="w-16 h-16 mx-auto mb-4 rounded-lg" />
+              <h3 className="text-lg font-semibold dark-mode-text font-heading">Private Events</h3>
+            </div>
+            
+            <div className="text-center">
+              <img src="/conference.png" alt="Conference icon for business meetings and professional networking" className="w-16 h-16 mx-auto mb-4 rounded-lg" />
+              <h3 className="text-lg font-semibold dark-mode-text font-heading">Conferences</h3>
+            </div>
+            
+            <div className="text-center">
+              <img src="/ring.png" alt="Wedding ring icon for wedding events and ceremonies" className="w-16 h-16 mx-auto mb-4 rounded-lg" />
+              <h3 className="text-lg font-semibold dark-mode-text font-heading">Weddings</h3>
+            </div>
+            
+            <div className="text-center">
+              <img src="/bars & lounges.png" alt="Bar and lounge icon for nightlife and social venues" className="w-16 h-16 mx-auto mb-4 rounded-lg" />
               <h3 className="text-lg font-semibold dark-mode-text font-heading">Bars & Lounges</h3>
             </div>
           </div>

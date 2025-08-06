@@ -31,8 +31,8 @@ export function testToast(): void {
 /**
  * Show in-app toast notification for new message
  */
-export function showInAppMessageToast(senderName: string): void {
-  console.log('📱 showInAppMessageToast called for:', senderName);
+export function showInAppMessageToast(senderName: string, senderSessionId?: string): void {
+  console.log('📱 showInAppMessageToast called for:', senderName, 'session:', senderSessionId);
   console.log('📱 Platform:', Platform.OS);
   console.log('📱 Expo Go:', __DEV__ ? 'Development mode' : 'Production mode');
   
@@ -52,9 +52,25 @@ export function showInAppMessageToast(senderName: string): void {
       autoHide: true,
       topOffset: Platform.OS === 'ios' ? 60 : 50, // Adjust for iOS status bar
       onPress: () => {
-        console.log('📱 Toast pressed, navigating to matches');
+        console.log('📱 Toast pressed, navigating to chat with session:', senderSessionId);
         Toast.hide();
-        router.push('/matches');
+        if (senderSessionId) {
+          // Navigate to specific chat
+          const chatUrl = `/chat?matchId=${senderSessionId}&matchName=${encodeURIComponent(senderName)}`;
+          console.log('📱 Navigating to:', chatUrl);
+          try {
+            router.push(chatUrl);
+            console.log('📱 Router.push called successfully');
+          } catch (error) {
+            console.error('📱 Error navigating to chat:', error);
+            // Fallback to matches page
+            router.push('/matches');
+          }
+        } else {
+          // Fallback to matches page
+          console.log('📱 No session ID, navigating to matches');
+          router.push('/matches');
+        }
       }
     });
     
@@ -373,10 +389,12 @@ export async function hasUnseenMessages(eventId: string, sessionId: string): Pro
     });
     
     if (currentUserProfiles.length === 0) {
+      console.log('👁️ No user profile found for session:', sessionId);
       return false;
     }
     
     const currentUserProfileId = currentUserProfiles[0].id;
+    console.log('👁️ Found user profile ID:', currentUserProfileId, 'for session:', sessionId);
     
     // Check for unseen messages (messages sent TO the current user that are not marked as seen)
     const allMessages = await MessageAPI.filter({
@@ -387,12 +405,33 @@ export async function hasUnseenMessages(eventId: string, sessionId: string): Pro
     // Filter for messages that are not marked as seen
     const unseenMessages = allMessages.filter(message => !message.seen);
     
+    // Add detailed logging for debugging
     console.log('👁️ Unseen messages check:', { 
       totalMessages: allMessages.length, 
       unseenMessages: unseenMessages.length,
       sessionId,
-      eventId 
+      eventId,
+      currentUserProfileId
     });
+    
+    // Log details of unseen messages for debugging
+    if (unseenMessages.length > 0) {
+      console.log('👁️ Unseen messages details:', unseenMessages.map(m => ({
+        id: m.id,
+        from: m.from_profile_id,
+        to: m.to_profile_id,
+        seen: m.seen,
+        content: m.content?.substring(0, 30) + '...'
+      })));
+    } else {
+      console.log('👁️ All messages are marked as seen. Sample messages:', allMessages.slice(0, 3).map(m => ({
+        id: m.id,
+        from: m.from_profile_id,
+        to: m.to_profile_id,
+        seen: m.seen,
+        content: m.content?.substring(0, 30) + '...'
+      })));
+    }
     
     return unseenMessages.length > 0;
   } catch (error) {

@@ -11,7 +11,7 @@
   --muted-foreground: #737373;
   --border: #e5e5e5;
   --input: #ffffff;
-  --primary: #9B5DE5;
+  --primary: #7C3AED; /* Improved contrast */
   --primary-foreground: #ffffff;
   --secondary: #f3f4f6;
   --secondary-foreground: #374151;
@@ -19,7 +19,7 @@
   --accent-foreground: #374151;
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
-  --ring: #9B5DE5;
+  --ring: #7C3AED; /* Improved contrast */
 }
 
 @theme inline {
@@ -39,7 +39,7 @@
     --muted-foreground: #a3a3a3;
     --border: #404040;
     --input: #1a1a1a;
-    --primary: #9B5DE5;
+    --primary: #A855F7; /* Lighter purple for better contrast on dark background */
     --primary-foreground: #ffffff;
     --secondary: #2a2a2a;
     --secondary-foreground: #d4d4d4;
@@ -47,7 +47,7 @@
     --accent-foreground: #d4d4d4;
     --destructive: #ef4444;
     --destructive-foreground: #ffffff;
-    --ring: #9B5DE5;
+    --ring: #A855F7; /* Lighter purple for better contrast on dark background */
   }
 }
 
@@ -68,16 +68,16 @@ body {
 
 /* Custom Button Styling */
 .btn-primary {
-  background-color: #9B5DE5;
+  background: linear-gradient(135deg, #7C3AED 0%, #6D28D9 100%);
   color: white;
   font-family: 'Manrope', sans-serif;
   font-weight: 700;
-  padding: 12px 24px;
-  border-radius: 8px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  padding: 14px 28px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.25), 0 2px 4px rgba(0, 0, 0, 0.1);
   text-transform: none;
   text-align: center;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   border: none;
   cursor: pointer;
   display: inline-block;
@@ -85,39 +85,94 @@ body {
   font-size: 16px;
   line-height: 1.5;
   box-sizing: border-box;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-primary::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
 }
 
 .btn-primary:hover {
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-  transform: translateY(-1px);
-  background-color: #8B4DD5;
+  box-shadow: 0 6px 20px rgba(124, 58, 237, 0.35), 0 4px 8px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+  background: linear-gradient(135deg, #6D28D9 0%, #5B21B6 100%);
+}
+
+.btn-primary:hover::before {
+  left: 100%;
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
+}
+
+.btn-primary:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.3), 0 4px 12px rgba(124, 58, 237, 0.25);
 }
 
 /* Secondary Button Styling */
 .btn-secondary {
-  background-color: transparent;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
   color: white;
   font-family: 'Manrope', sans-serif;
   font-weight: 700;
-  padding: 12px 24px;
-  border-radius: 8px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  padding: 14px 28px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.2);
   text-transform: none;
   text-align: center;
-  transition: all 0.2s ease;
-  border: 2px solid #9B5DE5;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 2px solid rgba(255, 255, 255, 0.3);
   cursor: pointer;
   display: inline-block;
   text-decoration: none;
   font-size: 16px;
   line-height: 1.5;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-secondary::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  transition: left 0.5s;
 }
 
 .btn-secondary:hover {
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-  transform: translateY(-1px);
-  background-color: rgba(155, 93, 229, 0.1);
-  border-color: #8B4DD5;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.btn-secondary:hover::before {
+  left: 100%;
+}
+
+.btn-secondary:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.btn-secondary:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3), 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 /* Dark mode utility classes */
