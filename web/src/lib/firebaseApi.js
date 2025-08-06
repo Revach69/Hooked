@@ -485,10 +485,11 @@ export const Message = {
     return await retryOperation(async () => {
       const docRef = await addDoc(collection(db, 'messages'), {
         ...data,
+        seen: false, // Messages start as unseen
         created_at: serverTimestamp()
       });
 
-      return { id: docRef.id, ...data };
+      return { id: docRef.id, ...data, seen: false };
     }, 3, 1000, 'Message.create');
   },
 

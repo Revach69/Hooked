@@ -7,7 +7,7 @@ import MatchNotificationToast from "../components/MatchNotificationToast";
 import MessageNotificationToast from "../components/MessageNotificationToast"; // Import MessageNotificationToast
 import { EventProfile, Like, Message } from '@/lib/firebaseApi';
 import { Toaster } from "@/components/ui/sonner";
-import { checkPendingMessageNotifications, updateUserActivity, requestNotificationPermission, hasUnreadMessages } from '@/lib/messageNotificationService';
+import { checkPendingMessageNotifications, updateUserActivity, requestNotificationPermission, hasUnseenMessages } from '@/lib/messageNotificationService';
 import { useKickedUserCheck } from '../hooks/useKickedUserCheck';
 import KickedUserModal from '../components/KickedUserModal';
 
@@ -139,7 +139,7 @@ export default function Layout({ children, currentPageName }) {
       }
 
       // --- Check for new messages ---
-      const hasUnread = await hasUnreadMessages(currentEventId, currentSessionId);
+      const hasUnread = await hasUnseenMessages(currentEventId, currentSessionId);
       setHasUnreadMessages(hasUnread);
 
       // If unread messages found AND no message toast is currently showing

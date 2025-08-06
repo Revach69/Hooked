@@ -108,28 +108,28 @@ export default function Discovery() {
     return () => clearInterval(activityInterval);
   }, [currentSessionId, isAppActive]);
 
-  // Check for unread messages
+  // Check for unseen messages
   useEffect(() => {
     if (!currentEvent?.id || !currentSessionId) return;
 
-    const checkUnreadMessages = async () => {
+    const checkUnseenMessages = async () => {
       try {
-        const { hasUnreadMessages } = await import('../lib/messageNotificationHelper');
-        const hasUnread = await hasUnreadMessages(currentEvent.id, currentSessionId);
-        setHasUnreadMessages(hasUnread);
+        const { hasUnseenMessages } = await import('../lib/messageNotificationHelper');
+        const hasUnseen = await hasUnseenMessages(currentEvent.id, currentSessionId);
+        setHasUnreadMessages(hasUnseen);
       } catch (error) {
-        console.error('Error checking unread messages:', error);
+        console.error('Error checking unseen messages:', error);
       }
     };
 
-    checkUnreadMessages();
+    checkUnseenMessages();
     
     // Check every 5 seconds instead of 30 for faster updates
-    const interval = setInterval(checkUnreadMessages, 5000);
+    const interval = setInterval(checkUnseenMessages, 5000);
     return () => clearInterval(interval);
   }, [currentEvent?.id, currentSessionId]);
 
-  // Real-time message listener for immediate unread status updates
+  // Real-time message listener for immediate unseen status updates
   useEffect(() => {
     if (!currentEvent?.id || !currentSessionId || !currentUserProfile?.id) return;
 
@@ -141,13 +141,13 @@ export default function Discovery() {
       );
 
       const unsubscribe = onSnapshot(messagesQuery, async () => {
-        // When messages change, immediately check unread status
+        // When messages change, immediately check unseen status
         try {
-          const { hasUnreadMessages } = await import('../lib/messageNotificationHelper');
-          const hasUnread = await hasUnreadMessages(currentEvent.id, currentSessionId);
-          setHasUnreadMessages(hasUnread);
+          const { hasUnseenMessages } = await import('../lib/messageNotificationHelper');
+          const hasUnseen = await hasUnseenMessages(currentEvent.id, currentSessionId);
+          setHasUnreadMessages(hasUnseen);
         } catch (error) {
-          console.error('Error checking unread messages from real-time listener:', error);
+          console.error('Error checking unseen messages from real-time listener:', error);
         }
       });
 

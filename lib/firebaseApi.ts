@@ -140,6 +140,8 @@ export interface Message {
   content: string;
   created_at: string;
   is_read?: boolean;
+  seen?: boolean;
+  seen_at?: string;
   updated_at?: string;
 }
 
@@ -408,12 +410,14 @@ export const MessageAPI = {
     return firebaseRetry(async () => {
       const docRef = await addDoc(collection(db, 'messages'), {
         ...data,
+        seen: false, // Messages start as unseen
         created_at: serverTimestamp()
       });
       
       return {
         id: docRef.id,
         ...data,
+        seen: false,
         created_at: new Date().toISOString()
       };
     }, { operation: 'Create message' });

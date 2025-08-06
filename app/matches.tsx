@@ -63,16 +63,16 @@ export default function Matches() {
     };
   }, []);
 
-  // Check for unread messages
+  // Check for unseen messages
   useEffect(() => {
     if (!currentEvent?.id || !currentSessionId) return;
 
-    const checkUnreadMessages = async () => {
+    const checkUnseenMessages = async () => {
       try {
-        const { hasUnreadMessages } = await import('../lib/messageNotificationHelper');
-        const hasUnread = await hasUnreadMessages(currentEvent.id, currentSessionId);
+        const { hasUnseenMessages } = await import('../lib/messageNotificationHelper');
+        const hasUnseen = await hasUnseenMessages(currentEvent.id, currentSessionId);
         
-        if (hasUnread) {
+        if (hasUnseen) {
           // Get all messages sent TO the current user
           const { MessageAPI, EventProfileAPI } = await import('../lib/firebaseApi');
           const allMessages = await MessageAPI.filter({
@@ -80,39 +80,39 @@ export default function Matches() {
             to_profile_id: currentUserProfile?.id
           });
           
-          // Filter for unread messages only
-          const unreadMessages = allMessages.filter(message => !message.is_read);
+          // Filter for unseen messages only
+          const unseenMessages = allMessages.filter(message => !message.seen);
           
-          // Create a set of session IDs that have sent unread messages
-          const unreadSessionIds = new Set<string>();
-          for (const message of unreadMessages) {
+          // Create a set of session IDs that have sent unseen messages
+          const unseenSessionIds = new Set<string>();
+          for (const message of unseenMessages) {
             // Get the sender's session ID
             const senderProfiles = await EventProfileAPI.filter({
               id: message.from_profile_id,
               event_id: currentEvent.id
             });
             if (senderProfiles.length > 0) {
-              unreadSessionIds.add(senderProfiles[0].session_id);
+              unseenSessionIds.add(senderProfiles[0].session_id);
             }
           }
           
-          setUnreadMessages(unreadSessionIds);
+          setUnreadMessages(unseenSessionIds);
         } else {
           setUnreadMessages(new Set());
         }
       } catch (error) {
-        console.error('Error checking unread messages:', error);
+        console.error('Error checking unseen messages:', error);
       }
     };
 
-    checkUnreadMessages();
+    checkUnseenMessages();
     
     // Check every 5 seconds instead of 30 for faster updates
-    const interval = setInterval(checkUnreadMessages, 5000);
+    const interval = setInterval(checkUnseenMessages, 5000);
     return () => clearInterval(interval);
   }, [currentEvent?.id, currentSessionId, currentUserProfile?.id]);
 
-  // Real-time message listener for immediate unread status updates
+  // Real-time message listener for immediate unseen status updates
   useEffect(() => {
     if (!currentEvent?.id || !currentSessionId || !currentUserProfile?.id) return;
 
@@ -124,12 +124,12 @@ export default function Matches() {
       );
 
       const unsubscribe = onSnapshot(messagesQuery, async () => {
-        // When messages change, immediately check unread status
+        // When messages change, immediately check unseen status
         try {
-          const { hasUnreadMessages } = await import('../lib/messageNotificationHelper');
-          const hasUnread = await hasUnreadMessages(currentEvent.id, currentSessionId);
+          const { hasUnseenMessages } = await import('../lib/messageNotificationHelper');
+          const hasUnseen = await hasUnseenMessages(currentEvent.id, currentSessionId);
           
-          if (hasUnread) {
+          if (hasUnseen) {
             // Get all messages sent TO the current user
             const { MessageAPI, EventProfileAPI } = await import('../lib/firebaseApi');
             const allMessages = await MessageAPI.filter({
@@ -137,28 +137,28 @@ export default function Matches() {
               to_profile_id: currentUserProfile.id
             });
             
-            // Filter for unread messages only
-            const unreadMessages = allMessages.filter(message => !message.is_read);
+            // Filter for unseen messages only
+            const unseenMessages = allMessages.filter(message => !message.seen);
             
-            // Create a set of session IDs that have sent unread messages
-            const unreadSessionIds = new Set<string>();
-            for (const message of unreadMessages) {
+            // Create a set of session IDs that have sent unseen messages
+            const unseenSessionIds = new Set<string>();
+            for (const message of unseenMessages) {
               // Get the sender's session ID
               const senderProfiles = await EventProfileAPI.filter({
                 id: message.from_profile_id,
                 event_id: currentEvent.id
               });
               if (senderProfiles.length > 0) {
-                unreadSessionIds.add(senderProfiles[0].session_id);
+                unseenSessionIds.add(senderProfiles[0].session_id);
               }
             }
             
-            setUnreadMessages(unreadSessionIds);
+            setUnreadMessages(unseenSessionIds);
           } else {
             setUnreadMessages(new Set());
           }
         } catch (error) {
-          console.error('Error checking unread messages from real-time listener:', error);
+          console.error('Error checking unseen messages from real-time listener:', error);
         }
       });
 
@@ -876,8 +876,8 @@ export default function Matches() {
                   // Mark messages as read when entering chat
                   if (unreadMessages.has(match.session_id) && currentEvent?.id && currentSessionId) {
                     try {
-                      const { markMessagesAsRead } = await import('../lib/messageNotificationHelper');
-                      await markMessagesAsRead(currentEvent.id, match.session_id, currentSessionId);
+                      const { markMessagesAsSeen } = await import('../lib/messageNotificationHelper');
+                      await markMessagesAsSeen(currentEvent.id, match.session_id, currentSessionId);
                       
                       // Update local state to remove the unread indicator
                       setUnreadMessages(prev => {

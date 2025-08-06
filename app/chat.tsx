@@ -59,6 +59,23 @@ export default function Chat() {
     initializeChat();
   }, []);
 
+  // Mark messages as seen when entering chat
+  useEffect(() => {
+    if (currentEventId && currentSessionId && matchId && !isLoading) {
+      const markMessagesAsSeen = async () => {
+        try {
+          const { markMessagesAsSeen } = await import('../lib/messageNotificationHelper');
+          await markMessagesAsSeen(currentEventId, matchId as string, currentSessionId);
+          console.log('👁️ Marked messages as seen when entering chat');
+        } catch (error) {
+          console.error('Error marking messages as seen:', error);
+        }
+      };
+      
+      markMessagesAsSeen();
+    }
+  }, [currentEventId, currentSessionId, matchId, isLoading]);
+
   // Cleanup listener on unmount
   useEffect(() => {
     return () => {

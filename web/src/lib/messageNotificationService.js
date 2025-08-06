@@ -289,9 +289,9 @@ export async function markMessagesAsRead(eventId, fromSessionId, toSessionId) {
 }
 
 /**
- * Check if user has unread messages
+ * Check if user has unseen messages
  */
-export async function hasUnreadMessages(eventId, sessionId) {
+export async function hasUnseenMessages(eventId, sessionId) {
   try {
     const { EventProfile, Message } = await import('./firebaseApi.js');
     
@@ -307,16 +307,96 @@ export async function hasUnreadMessages(eventId, sessionId) {
     
     const currentUserProfileId = currentUserProfiles[0].id;
     
-    // Check for messages sent TO the current user (not from them)
-    const unreadMessages = await Message.filter({
+    // Check for unseen messages (messages sent TO the current user that are not marked as seen)
+    const allMessages = await Message.filter({
       event_id: eventId,
       to_profile_id: currentUserProfileId
     });
     
-    return unreadMessages.length > 0;
+    // Filter for messages that are not marked as seen
+    const unseenMessages = allMessages.filter(message => !message.seen);
+    
+    console.log('👁️ Unseen messages check:', { 
+      totalMessages: allMessages.length, 
+      unseenMessages: unseenMessages.length,
+      sessionId,
+      eventId 
+    });
+    
+    return unseenMessages.length > 0;
   } catch (error) {
-    console.error('Error checking unread messages:', error);
+    console.error('Error checking unseen messages:', error);
     return false;
+  }
+}
+
+/**
+ * Mark messages as seen when entering a chat
+ */
+export async function markMessagesAsSeen(eventId, fromSessionId, toSessionId) {
+  try {
+    console.log('👁️ Marking messages as seen:', { eventId, fromSessionId, toSessionId });
+    
+    // Get the current user's profile ID
+    const { EventProfile } = await import('./firebaseApi.js');
+    const currentUserProfiles = await EventProfile.filter({
+      session_id: toSessionId,
+      event_id: eventId
+    });
+    
+    if (currentUserProfiles.length === 0) {
+      console.error('Current user profile not found');
+      return;
+    }
+    
+    const currentUserProfileId = currentUserProfiles[0].id;
+    
+    // Get the sender's profile ID
+    const senderProfiles = await EventProfile.filter({
+      session_id: fromSessionId,
+      event_id: eventId
+    });
+    
+    if (senderProfiles.length === 0) {
+      console.error('Sender profile not found');
+      return;
+    }
+    
+    const senderProfileId = senderProfiles[0].id;
+    
+    // Mark messages as seen by updating them in Firestore
+    const { Message } = await import('./firebaseApi.js');
+    const allMessages = await Message.filter({
+      event_id: eventId,
+      from_profile_id: senderProfileId,
+      to_profile_id: currentUserProfileId
+    });
+    
+    // Filter for unseen messages only
+    const unseenMessages = allMessages.filter(message => !message.seen);
+    
+    console.log('👁️ Found messages:', { 
+      total: allMessages.length, 
+      unseen: unseenMessages.length,
+      currentUserProfileId,
+      senderProfileId
+    });
+    
+    // Update each unseen message to mark as seen
+    for (const message of unseenMessages) {
+      try {
+        await Message.update(message.id, { 
+          seen: true, 
+          seen_at: new Date().toISOString() 
+        });
+        console.log('👁️ Marked message as seen:', message.id);
+      } catch (error) {
+        console.error('Error marking message as seen:', error);
+      }
+    }
+    
+  } catch (error) {
+    console.error('Error marking messages as seen:', error);
   }
 }
 

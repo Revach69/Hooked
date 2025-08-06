@@ -9,7 +9,7 @@ import { Heart, MessageCircle, Users, Sparkles, User } from "lucide-react";
 import { EventProfile, Like, Message, cleanupListeners, getListenerStats } from "@/api/entities";
 import ChatModal from "../components/ChatModal";
 import ProfileDetailModal from "../components/ProfileDetailModal";
-import { markMessagesAsRead } from '@/lib/messageNotificationService';
+import { markMessagesAsSeen } from '@/lib/messageNotificationService';
 
 export default function Matches() {
   const navigate = useNavigate();
@@ -247,7 +247,7 @@ export default function Matches() {
                 // Mark messages as read when entering chat
                 if (match.unreadCount > 0 && eventId && currentSessionId) {
                   try {
-                    await markMessagesAsRead(eventId, match.session_id, currentSessionId);
+                    await markMessagesAsSeen(eventId, match.session_id, currentSessionId);
                     // Refresh the matches to update unread counts
                     loadMatches();
                   } catch (error) {

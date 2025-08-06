@@ -31,9 +31,9 @@ export default function Collage({ className = "" }: CollageProps) {
   }, []);
 
   return (
-    <div className={`grid grid-cols-3 gap-2 ${className}`}>
+    <div className={`grid grid-cols-3 gap-2 h-full ${className}`}>
       {selectedImages.map((image, index) => (
-        <div key={index} className="aspect-square overflow-hidden rounded-lg">
+        <div key={index} className="overflow-hidden rounded-lg h-full">
           <img 
             src={image} 
             alt={`Event guest ${index + 1}`}
