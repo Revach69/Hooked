@@ -118,6 +118,21 @@ service cloud.firestore {
       allow delete: if request.auth != null;
     }
 
+    // ===== KICKED USERS COLLECTION =====
+    match /kicked_users/{kickedUserId} {
+      // ✅ Only authenticated users (admins) can read all kicked users
+      allow read: if request.auth != null;
+      
+      // ✅ Only authenticated users (admins) can create kicked user records
+      allow create: if request.auth != null;
+      
+      // ✅ Anyone can read kicked user records (for mobile app notifications)
+      allow read: if true;
+      
+      // ✅ Only authenticated users (admins) can delete kicked user records
+      allow delete: if request.auth != null;
+    }
+
     // ===== USERS COLLECTION =====
     match /users/{userId} {
       // ✅ Only authenticated users can access user data

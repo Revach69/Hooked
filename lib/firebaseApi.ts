@@ -174,6 +174,15 @@ export interface Report {
   updated_at?: string;
 }
 
+export interface KickedUser {
+  id: string;
+  event_id: string;
+  session_id: string;
+  event_name: string;
+  admin_notes: string;
+  created_at: string;
+}
+
 // Event API
 export const EventAPI = {
   async create(data: Omit<Event, 'id' | 'created_at' | 'updated_at'>): Promise<Event> {
@@ -484,6 +493,64 @@ export const EventFeedbackAPI = {
     }, { operation: 'Create event feedback' });
   }
 };
+
+// KickedUser API
+export const KickedUserAPI = {
+  async create(data: Omit<KickedUser, 'id' | 'created_at'>): Promise<KickedUser> {
+    return firebaseRetry(async () => {
+      const docRef = await addDoc(collection(db, 'kicked_users'), {
+        ...data,
+        created_at: serverTimestamp()
+      });
+      
+      return {
+        id: docRef.id,
+        ...data,
+        created_at: new Date().toISOString()
+      };
+    }, { operation: 'Create kicked user record' });
+  },
+
+  async filter(filters: Partial<KickedUser> = {}): Promise<KickedUser[]> {
+    return firebaseRetry(async () => {
+      let q: any = collection(db, 'kicked_users');
+      
+      if (filters.event_id) {
+        q = query(q, where('event_id', '==', filters.event_id));
+      }
+      if (filters.session_id) {
+        q = query(q, where('session_id', '==', filters.session_id));
+      }
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...(doc.data() as any)
+      })) as KickedUser[];
+    }, { operation: 'Filter kicked users' });
+  },
+
+  async get(id: string): Promise<KickedUser | null> {
+    return firebaseRetry(async () => {
+      const docRef = doc(db, 'kicked_users', id);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        return { id: docSnap.id, ...docSnap.data() } as KickedUser;
+      }
+      return null;
+    }, { operation: 'Get kicked user' });
+  },
+
+  async delete(id: string): Promise<void> {
+    return firebaseRetry(async () => {
+      const docRef = doc(db, 'kicked_users', id);
+      await deleteDoc(docRef);
+    }, { operation: 'Delete kicked user record' });
+  }
+};
+
+
 
 // Report API
 export const ReportAPI = {

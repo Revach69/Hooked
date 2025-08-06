@@ -82,6 +82,15 @@ export interface Report {
   updated_at?: string;
 }
 
+export interface KickedUser {
+  id: string;
+  event_id: string;
+  session_id: string;
+  event_name: string;
+  admin_notes: string;
+  created_at: string;
+}
+
 // Event API - renamed to avoid conflict with browser Event
 export const EventAPI = {
   async create(data: Omit<Event, 'id' | 'created_at' | 'updated_at'>): Promise<Event> {
@@ -291,6 +300,49 @@ export const Message = {
 
   async delete(id: string): Promise<void> {
     await deleteDoc(doc(db, 'messages', id));
+  },
+};
+
+// KickedUser API
+export const KickedUserAPI = {
+  async create(data: Omit<KickedUser, 'id' | 'created_at'>): Promise<KickedUser> {
+    const kickedUserData = {
+      ...data,
+      created_at: serverTimestamp(),
+    };
+    
+    const docRef = await addDoc(collection(db, 'kicked_users'), kickedUserData);
+    
+    // Return the data we already have with the document ID
+    return { 
+      id: docRef.id, 
+      ...data,
+      created_at: new Date().toISOString() // Convert serverTimestamp to ISO string
+    } as KickedUser;
+  },
+
+  async filter(filters: Partial<KickedUser> = {}): Promise<KickedUser[]> {
+    let q = query(collection(db, 'kicked_users'));
+    
+    if (filters.event_id) {
+      q = query(q, where('event_id', '==', filters.event_id));
+    }
+    if (filters.session_id) {
+      q = query(q, where('session_id', '==', filters.session_id));
+    }
+    
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as KickedUser);
+  },
+
+  async get(id: string): Promise<KickedUser | null> {
+    const docSnap = await getDoc(doc(db, 'kicked_users', id));
+    if (!docSnap.exists()) return null;
+    return { id: docSnap.id, ...docSnap.data() } as KickedUser;
+  },
+
+  async delete(id: string): Promise<void> {
+    await deleteDoc(doc(db, 'kicked_users', id));
   },
 };
 

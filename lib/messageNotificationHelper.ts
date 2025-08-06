@@ -3,6 +3,7 @@ import Toast from 'react-native-toast-message';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
+import { Platform } from 'react-native';
 
 /**
  * Send notification when a new message is created
@@ -61,6 +62,7 @@ async function checkIfUserIsInApp(sessionId: string): Promise<boolean> {
     // Get current user's session ID
     const currentSessionId = await AsyncStorage.getItem('currentSessionId');
     console.log('📱 Current session ID:', currentSessionId, 'Checking against:', sessionId);
+    console.log('📱 Platform:', Platform.OS);
     
     // If it's the same session ID, user is in app
     if (currentSessionId === sessionId) {
@@ -75,12 +77,19 @@ async function checkIfUserIsInApp(sessionId: string): Promise<boolean> {
     if (lastActivity) {
       const lastActivityTime = new Date(lastActivity).getTime();
       const now = new Date().getTime();
-      const twoMinutesAgo = now - (2 * 60 * 1000); // 2 minutes instead of 5
+      const oneMinuteAgo = now - (1 * 60 * 1000); // 1 minute instead of 2
       
-      const isRecentlyActive = lastActivityTime > twoMinutesAgo;
-      console.log('📱 Last activity check:', { lastActivityTime, now, twoMinutesAgo, isRecentlyActive });
+      const isRecentlyActive = lastActivityTime > oneMinuteAgo;
+      console.log('📱 Last activity check:', { 
+        lastActivityTime, 
+        now, 
+        oneMinuteAgo, 
+        isRecentlyActive,
+        timeDiff: now - lastActivityTime,
+        timeDiffMinutes: (now - lastActivityTime) / (60 * 1000)
+      });
       
-      // If user was active in the last 2 minutes, consider them "in app"
+      // If user was active in the last 1 minute, consider them "in app"
       return isRecentlyActive;
     }
     
@@ -96,6 +105,9 @@ async function checkIfUserIsInApp(sessionId: string): Promise<boolean> {
  * Show in-app toast notification for new message
  */
 function showInAppMessageToast(senderName: string): void {
+  console.log('📱 showInAppMessageToast called for:', senderName);
+  console.log('📱 Platform:', Platform.OS);
+  
   Toast.show({
     type: 'success',
     text1: 'New Message! 💬',
@@ -105,10 +117,13 @@ function showInAppMessageToast(senderName: string): void {
     autoHide: true,
     topOffset: 50,
     onPress: () => {
+      console.log('📱 Toast pressed, navigating to matches');
       Toast.hide();
       router.push('/matches');
     }
   });
+  
+  console.log('📱 Toast.show called successfully');
 }
 
 /**
@@ -300,10 +315,20 @@ export async function hasUnreadMessages(eventId: string, sessionId: string): Pro
     
     const currentUserProfileId = currentUserProfiles[0].id;
     
-    // Check for unread messages
-    const unreadMessages = await MessageAPI.filter({
+    // Check for unread messages (messages sent TO the current user that are not marked as read)
+    const allMessages = await MessageAPI.filter({
       event_id: eventId,
       to_profile_id: currentUserProfileId
+    });
+    
+    // Filter for messages that are not marked as read
+    const unreadMessages = allMessages.filter(message => !message.is_read);
+    
+    console.log('📱 Unread messages check:', { 
+      totalMessages: allMessages.length, 
+      unreadMessages: unreadMessages.length,
+      sessionId,
+      eventId 
     });
     
     return unreadMessages.length > 0;

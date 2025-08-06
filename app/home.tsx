@@ -24,6 +24,8 @@ import { useMobileAsyncOperation } from '../lib/hooks/useMobileErrorHandling';
 import MobileOfflineStatusBar from '../lib/components/MobileOfflineStatusBar';
 import { SurveyNotificationService } from '../lib/surveyNotificationService';
 import { MemoryManager } from '../lib/utils';
+import { useKickedUserCheck } from '../lib/hooks/useKickedUserCheck';
+import KickedUserModal from './KickedUserModal';
 
 const { width } = Dimensions.get('window');
 
@@ -36,6 +38,7 @@ export default function Home() {
   const [manualCode, setManualCode] = useState('');
   const [isInitialized, setIsInitialized] = useState(false);
   const { executeOperationWithOfflineFallback, showErrorAlert } = useMobileAsyncOperation();
+  const { kickedUser, isChecking, handleKickedUserClose } = useKickedUserCheck();
   const componentId = useRef('Home-' + Date.now()).current;
   const initializationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -591,6 +594,14 @@ export default function Home() {
             </View>
           </View>
         </Modal>
+
+        {/* Kicked User Modal */}
+        <KickedUserModal
+          isVisible={kickedUser !== null}
+          onClose={handleKickedUserClose}
+          eventName={kickedUser?.eventName || ''}
+          adminNotes={kickedUser?.adminNotes || ''}
+        />
       </LinearGradient>
     </SafeAreaView>
   );

@@ -829,4 +829,41 @@ export const ProfileUtils = {
       throw error;
     }
   }
+};
+
+// KickedUser API
+export const KickedUser = {
+  async filter(filters = {}) {
+    return await retryOperation(async () => {
+      let q = collection(db, 'kicked_users');
+      
+      if (filters.event_id) {
+        q = query(q, where('event_id', '==', filters.event_id));
+      }
+      if (filters.session_id) {
+        q = query(q, where('session_id', '==', filters.session_id));
+      }
+      
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    }, 3, 1000, 'KickedUser.filter');
+  },
+
+  async get(id) {
+    return await retryOperation(async () => {
+      const docRef = doc(db, 'kicked_users', id);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        return { id: docSnap.id, ...docSnap.data() };
+      }
+      return null;
+    }, 3, 1000, 'KickedUser.get');
+  },
+
+  async delete(id) {
+    return await retryOperation(async () => {
+      const docRef = doc(db, 'kicked_users', id);
+      await deleteDoc(docRef);
+    }, 3, 1000, 'KickedUser.delete');
+  }
 }; 

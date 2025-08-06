@@ -178,16 +178,19 @@ export default function Chat() {
 
           // Process new messages and trigger notifications
           for (const newMessage of newMessages) {
-            // Get sender's name for notification
-            const senderProfile = await EventProfileAPI.get(newMessage.from_profile_id);
-            if (senderProfile) {
-              await handleNewMessageNotification(
-                currentEventId,
-                newMessage.from_profile_id,
-                newMessage.to_profile_id,
-                newMessage.content,
-                senderProfile.first_name
-              );
+            // Only trigger notification if this message was sent TO the current user (not BY them)
+            if (newMessage.to_profile_id === currentUserProfileId && newMessage.from_profile_id === matchProfileId) {
+              // Get sender's name for notification
+              const senderProfile = await EventProfileAPI.get(newMessage.from_profile_id);
+              if (senderProfile) {
+                await handleNewMessageNotification(
+                  currentEventId,
+                  newMessage.from_profile_id,
+                  newMessage.to_profile_id,
+                  newMessage.content,
+                  senderProfile.first_name
+                );
+              }
             }
           }
 

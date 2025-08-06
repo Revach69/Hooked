@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ReportAPI, EventProfile, type Report } from '@/lib/firebaseApi';
+import { ReportAPI, EventProfile, KickedUserAPI, type Report } from '@/lib/firebaseApi';
 import { 
   X, 
   CheckCircle, 
@@ -32,6 +32,12 @@ export default function ReportsModal({ isOpen, onClose, eventId, eventName }: Re
   const [isLoading, setIsLoading] = useState(false);
   const [processingReport, setProcessingReport] = useState<string | null>(null);
   const [showOldReports, setShowOldReports] = useState(false);
+  const [showAdminNotesDialog, setShowAdminNotesDialog] = useState(false);
+  const [adminNotes, setAdminNotes] = useState('');
+  const [pendingAction, setPendingAction] = useState<{
+    type: 'accept' | 'reject';
+    report: ReportWithProfiles;
+  } | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -76,45 +82,69 @@ export default function ReportsModal({ isOpen, onClose, eventId, eventName }: Re
     }
   };
 
-  const handleAcceptReport = async (report: ReportWithProfiles) => {
+  const handleAcceptReport = (report: ReportWithProfiles) => {
     if (!report.reportedProfile) return;
     
-    setProcessingReport(report.id);
+    setPendingAction({ type: 'accept', report });
+    setAdminNotes('');
+    setShowAdminNotesDialog(true);
+  };
+
+  const handleRejectReport = (report: ReportWithProfiles) => {
+    setPendingAction({ type: 'reject', report });
+    setAdminNotes('');
+    setShowAdminNotesDialog(true);
+  };
+
+  const handleConfirmAction = async () => {
+    if (!pendingAction) return;
+    
+    setProcessingReport(pendingAction.report.id);
+    setShowAdminNotesDialog(false);
+    
     try {
-      // Delete the reported user's profile
-      await EventProfile.delete(report.reportedProfile.id);
-      
-      // Update report status to resolved
-      await ReportAPI.update(report.id, { 
-        status: 'resolved',
-        admin_notes: 'User removed from event due to report'
-      });
+      if (pendingAction.type === 'accept') {
+        // Delete the reported user's profile
+        if (pendingAction.report.reportedProfile) {
+          await EventProfile.delete(pendingAction.report.reportedProfile.id);
+        }
+        
+        // Create kicked user record
+        await KickedUserAPI.create({
+          event_id: pendingAction.report.event_id,
+          session_id: pendingAction.report.reported_session_id,
+          event_name: eventName,
+          admin_notes: adminNotes || 'User removed from event due to report'
+        });
+        
+        // Update report status to resolved
+        await ReportAPI.update(pendingAction.report.id, { 
+          status: 'resolved',
+          admin_notes: adminNotes || 'User removed from event due to report'
+        });
+      } else {
+        // Update report status to dismissed
+        await ReportAPI.update(pendingAction.report.id, { 
+          status: 'dismissed',
+          admin_notes: adminNotes || 'Report dismissed - false report or insufficient evidence'
+        });
+      }
       
       // Reload reports
       await loadReports();
     } catch (error) {
-      console.error('Error accepting report:', error);
+      console.error('Error processing report:', error);
     } finally {
       setProcessingReport(null);
+      setPendingAction(null);
+      setAdminNotes('');
     }
   };
 
-  const handleRejectReport = async (report: ReportWithProfiles) => {
-    setProcessingReport(report.id);
-    try {
-      // Update report status to dismissed
-      await ReportAPI.update(report.id, { 
-        status: 'dismissed',
-        admin_notes: 'Report dismissed - false report or insufficient evidence'
-      });
-      
-      // Reload reports
-      await loadReports();
-    } catch (error) {
-      console.error('Error rejecting report:', error);
-    } finally {
-      setProcessingReport(null);
-    }
+  const handleCancelAction = () => {
+    setShowAdminNotesDialog(false);
+    setPendingAction(null);
+    setAdminNotes('');
   };
 
   const getStatusColor = (status: string) => {
@@ -126,8 +156,35 @@ export default function ReportsModal({ isOpen, onClose, eventId, eventName }: Re
     }
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+  const formatDate = (dateValue: any) => {
+    let date: Date;
+    
+    // Handle Firestore Timestamp object (most common case)
+    if (dateValue && typeof dateValue === 'object' && dateValue.seconds !== undefined) {
+      // Firestore Timestamp with seconds and nanoseconds
+      date = new Date(dateValue.seconds * 1000);
+    } else if (dateValue && typeof dateValue === 'object' && dateValue.toDate) {
+      // Firestore Timestamp object with toDate method
+      date = dateValue.toDate();
+    } else if (typeof dateValue === 'string') {
+      // ISO string
+      date = new Date(dateValue);
+    } else if (dateValue instanceof Date) {
+      // Already a Date object
+      date = dateValue;
+    } else {
+      // Fallback
+      console.warn('Unknown date format:', dateValue);
+      return 'Unknown Date';
+    }
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      console.warn('Invalid date:', dateValue);
+      return 'Invalid Date';
+    }
+    
+    return date.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -183,7 +240,7 @@ export default function ReportsModal({ isOpen, onClose, eventId, eventName }: Re
               </p>
             </div>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-6 pb-4">
               {/* Pending Reports Section */}
               {pendingReports.length > 0 && (
                 <div>
@@ -408,6 +465,69 @@ export default function ReportsModal({ isOpen, onClose, eventId, eventName }: Re
           )}
         </div>
       </div>
+
+      {/* Admin Notes Dialog */}
+      {showAdminNotesDialog && pendingAction && (
+        <div className="fixed inset-0 z-60 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                {pendingAction.type === 'accept' ? 'Remove User' : 'Dismiss Report'}
+              </h3>
+              
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  {pendingAction.type === 'accept' 
+                    ? 'You are about to remove the reported user from this event. Please add any notes about this action.'
+                    : 'You are about to dismiss this report. Please add any notes about why it was dismissed.'
+                  }
+                </p>
+                
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Admin Notes (Optional)
+                </label>
+                <textarea
+                  value={adminNotes}
+                  onChange={(e) => setAdminNotes(e.target.value)}
+                  placeholder={pendingAction.type === 'accept' 
+                    ? 'e.g., User removed due to inappropriate behavior'
+                    : 'e.g., Report dismissed - insufficient evidence'
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm resize-none"
+                  rows={3}
+                />
+              </div>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={handleCancelAction}
+                  className="flex-1 px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmAction}
+                  disabled={processingReport === pendingAction.report.id}
+                  className={`flex-1 px-4 py-2 text-white rounded-lg transition-colors ${
+                    pendingAction.type === 'accept'
+                      ? 'bg-red-600 hover:bg-red-700 disabled:bg-red-400'
+                      : 'bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400'
+                  }`}
+                >
+                  {processingReport === pendingAction.report.id ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Processing...
+                    </div>
+                  ) : (
+                    pendingAction.type === 'accept' ? 'Remove User' : 'Dismiss Report'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

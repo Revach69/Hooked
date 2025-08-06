@@ -8,6 +8,8 @@ import MessageNotificationToast from "../components/MessageNotificationToast"; /
 import { EventProfile, Like, Message } from '@/lib/firebaseApi';
 import { Toaster } from "@/components/ui/sonner";
 import { checkPendingMessageNotifications, updateUserActivity, requestNotificationPermission, hasUnreadMessages } from '@/lib/messageNotificationService';
+import { useKickedUserCheck } from '../hooks/useKickedUserCheck';
+import KickedUserModal from '../components/KickedUserModal';
 
 export default function Layout({ children, currentPageName }) {
   const navigate = useNavigate();
@@ -23,6 +25,7 @@ export default function Layout({ children, currentPageName }) {
   const [newMessageDetails, setNewMessageDetails] = useState(null);
   const [notifiedMessageIdsThisSession, setNotifiedMessageIdsThisSession] = useState(new Set());
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
+  const { kickedUser, isChecking, handleKickedUserClose } = useKickedUserCheck();
 
   // Handle logo click with conditional navigation
   const handleLogoClick = async () => {
@@ -530,6 +533,14 @@ export default function Layout({ children, currentPageName }) {
           </div>
         </footer>
       )}
+
+      {/* Kicked User Modal */}
+      <KickedUserModal
+        isVisible={kickedUser !== null}
+        onClose={handleKickedUserClose}
+        eventName={kickedUser?.eventName || ''}
+        adminNotes={kickedUser?.adminNotes || ''}
+      />
     </div>
   );
 }

@@ -9,9 +9,10 @@ import {
   StyleSheet,
   useColorScheme,
   Alert,
+  AppState,
 } from 'react-native';
 import { router } from 'expo-router';
-import { Heart, MessageCircle, Users, User } from 'lucide-react-native';
+import { Heart, MessageCircle, Users, User, ArrowLeft, Flag } from 'lucide-react-native';
 import { EventProfileAPI, LikeAPI, EventAPI } from '../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,6 +20,7 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebaseConfig';
 import UserProfileModal from '../lib/UserProfileModal';
 import { sendMatchNotification, sendLikeNotification } from '../lib/notificationService';
+import { updateUserActivity } from '../lib/messageNotificationHelper';
 
 export default function Matches() {
   const colorScheme = useColorScheme();
@@ -31,6 +33,7 @@ export default function Matches() {
   const [selectedProfileForDetail, setSelectedProfileForDetail] = useState<any>(null);
   const [likedProfiles, setLikedProfiles] = useState<Set<string>>(new Set());
   const [unreadMessages, setUnreadMessages] = useState<Set<string>>(new Set());
+  const [isAppActive, setIsAppActive] = useState(true);
   // Single ref to hold all unsubscribe functions
   const listenersRef = useRef<{
     userProfile?: () => void;
@@ -41,6 +44,16 @@ export default function Matches() {
 
   useEffect(() => {
     initializeSession();
+  }, []);
+
+  // Track app state changes
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: string) => {
+      setIsAppActive(nextAppState === 'active');
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription?.remove();
   }, []);
 
   // Cleanup all listeners on unmount
@@ -60,16 +73,19 @@ export default function Matches() {
         const hasUnread = await hasUnreadMessages(currentEvent.id, currentSessionId);
         
         if (hasUnread) {
-          // Get all unread messages to determine which chats have unread messages
+          // Get all messages sent TO the current user
           const { MessageAPI, EventProfileAPI } = await import('../lib/firebaseApi');
-          const messages = await MessageAPI.filter({
+          const allMessages = await MessageAPI.filter({
             event_id: currentEvent.id,
             to_profile_id: currentUserProfile?.id
           });
           
+          // Filter for unread messages only
+          const unreadMessages = allMessages.filter(message => !message.is_read);
+          
           // Create a set of session IDs that have sent unread messages
           const unreadSessionIds = new Set<string>();
-          for (const message of messages) {
+          for (const message of unreadMessages) {
             // Get the sender's session ID
             const senderProfiles = await EventProfileAPI.filter({
               id: message.from_profile_id,
@@ -91,9 +107,65 @@ export default function Matches() {
 
     checkUnreadMessages();
     
-    // Check every 30 seconds
-    const interval = setInterval(checkUnreadMessages, 30000);
+    // Check every 5 seconds instead of 30 for faster updates
+    const interval = setInterval(checkUnreadMessages, 5000);
     return () => clearInterval(interval);
+  }, [currentEvent?.id, currentSessionId, currentUserProfile?.id]);
+
+  // Real-time message listener for immediate unread status updates
+  useEffect(() => {
+    if (!currentEvent?.id || !currentSessionId || !currentUserProfile?.id) return;
+
+    try {
+      const messagesQuery = query(
+        collection(db, 'messages'),
+        where('event_id', '==', currentEvent.id),
+        where('to_profile_id', '==', currentUserProfile.id)
+      );
+
+      const unsubscribe = onSnapshot(messagesQuery, async () => {
+        // When messages change, immediately check unread status
+        try {
+          const { hasUnreadMessages } = await import('../lib/messageNotificationHelper');
+          const hasUnread = await hasUnreadMessages(currentEvent.id, currentSessionId);
+          
+          if (hasUnread) {
+            // Get all messages sent TO the current user
+            const { MessageAPI, EventProfileAPI } = await import('../lib/firebaseApi');
+            const allMessages = await MessageAPI.filter({
+              event_id: currentEvent.id,
+              to_profile_id: currentUserProfile.id
+            });
+            
+            // Filter for unread messages only
+            const unreadMessages = allMessages.filter(message => !message.is_read);
+            
+            // Create a set of session IDs that have sent unread messages
+            const unreadSessionIds = new Set<string>();
+            for (const message of unreadMessages) {
+              // Get the sender's session ID
+              const senderProfiles = await EventProfileAPI.filter({
+                id: message.from_profile_id,
+                event_id: currentEvent.id
+              });
+              if (senderProfiles.length > 0) {
+                unreadSessionIds.add(senderProfiles[0].session_id);
+              }
+            }
+            
+            setUnreadMessages(unreadSessionIds);
+          } else {
+            setUnreadMessages(new Set());
+          }
+        } catch (error) {
+          console.error('Error checking unread messages from real-time listener:', error);
+        }
+      });
+
+      return () => unsubscribe();
+    } catch (error) {
+      console.error('Error setting up real-time message listener:', error);
+    }
   }, [currentEvent?.id, currentSessionId, currentUserProfile?.id]);
 
   // Consolidated listener setup with proper cleanup
@@ -157,6 +229,19 @@ export default function Matches() {
       cleanupAllListeners();
     };
   }, [currentEvent?.id, currentSessionId]);
+
+  // Update activity periodically while app is active
+  useEffect(() => {
+    if (!currentSessionId) return;
+
+    const activityInterval = setInterval(() => {
+      if (isAppActive) {
+        updateUserActivity(currentSessionId);
+      }
+    }, 15000); // Update every 15 seconds instead of 30
+
+    return () => clearInterval(activityInterval);
+  }, [currentSessionId, isAppActive]);
 
   const setupMatchesListener = () => {
     if (!currentEvent?.id || !currentSessionId) return;

@@ -103,7 +103,7 @@ export default function Discovery() {
       if (isAppActive) {
         updateUserActivity(currentSessionId);
       }
-    }, 30000); // Update every 30 seconds
+    }, 15000); // Update every 15 seconds instead of 30
 
     return () => clearInterval(activityInterval);
   }, [currentSessionId, isAppActive]);
@@ -124,10 +124,38 @@ export default function Discovery() {
 
     checkUnreadMessages();
     
-    // Check every 30 seconds
-    const interval = setInterval(checkUnreadMessages, 30000);
+    // Check every 5 seconds instead of 30 for faster updates
+    const interval = setInterval(checkUnreadMessages, 5000);
     return () => clearInterval(interval);
   }, [currentEvent?.id, currentSessionId]);
+
+  // Real-time message listener for immediate unread status updates
+  useEffect(() => {
+    if (!currentEvent?.id || !currentSessionId || !currentUserProfile?.id) return;
+
+    try {
+      const messagesQuery = query(
+        collection(db, 'messages'),
+        where('event_id', '==', currentEvent.id),
+        where('to_profile_id', '==', currentUserProfile.id)
+      );
+
+      const unsubscribe = onSnapshot(messagesQuery, async () => {
+        // When messages change, immediately check unread status
+        try {
+          const { hasUnreadMessages } = await import('../lib/messageNotificationHelper');
+          const hasUnread = await hasUnreadMessages(currentEvent.id, currentSessionId);
+          setHasUnreadMessages(hasUnread);
+        } catch (error) {
+          console.error('Error checking unread messages from real-time listener:', error);
+        }
+      });
+
+      return () => unsubscribe();
+    } catch (error) {
+      console.error('Error setting up real-time message listener:', error);
+    }
+  }, [currentEvent?.id, currentSessionId, currentUserProfile?.id]);
 
   // Consolidated listener setup with proper cleanup
   useEffect(() => {
