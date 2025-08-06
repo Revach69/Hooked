@@ -140,12 +140,45 @@ export default function Discovery() {
         where('to_profile_id', '==', currentUserProfile.id)
       );
 
-      const unsubscribe = onSnapshot(messagesQuery, async () => {
+      const unsubscribe = onSnapshot(messagesQuery, async (snapshot) => {
         // When messages change, immediately check unseen status
         try {
           const { hasUnseenMessages } = await import('../lib/messageNotificationHelper');
           const hasUnseen = await hasUnseenMessages(currentEvent.id, currentSessionId);
           setHasUnreadMessages(hasUnseen);
+          
+          // Check for new messages and show toast notifications
+          const newMessages = snapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() } as any))
+            .filter(msg => msg.to_profile_id === currentUserProfile.id);
+          
+          // Get the latest new message
+          if (newMessages.length > 0) {
+            const latestMessage = newMessages[newMessages.length - 1];
+            const messageTime = typeof latestMessage.created_at === 'string' 
+              ? new Date(latestMessage.created_at).getTime() 
+              : latestMessage.created_at.toDate().getTime();
+            const now = new Date().getTime();
+            const tenSecondsAgo = now - (10 * 1000);
+            
+            // Show toast for recent messages (within last 10 seconds)
+            if (messageTime > tenSecondsAgo) {
+              console.log('📱 New message received on discovery page - showing toast');
+              const { handleNewMessageNotification } = await import('../lib/messageNotificationHelper');
+              const { EventProfileAPI } = await import('../lib/firebaseApi');
+              
+              const senderProfile = await EventProfileAPI.get(latestMessage.from_profile_id);
+              if (senderProfile) {
+                await handleNewMessageNotification(
+                  currentEvent.id,
+                  latestMessage.from_profile_id,
+                  latestMessage.to_profile_id,
+                  latestMessage.content,
+                  senderProfile.first_name
+                );
+              }
+            }
+          }
         } catch (error) {
           console.error('Error checking unseen messages from real-time listener:', error);
         }

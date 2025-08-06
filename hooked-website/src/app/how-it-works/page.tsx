@@ -1,7 +1,11 @@
+"use client";
+
+import { useState } from 'react';
 import Header from "../../components/Header";
 import Collage from "../../components/Collage";
 
 export default function HowItWorks() {
+  const [firstCollageImages, setFirstCollageImages] = useState<string[]>([]);
   return (
     <div className="dark-mode-bg">
       {/* Header */}
@@ -84,8 +88,11 @@ export default function HowItWorks() {
           </div>
           
           {/* Collage of images */}
-          <div className="h-64 bg-gray-200 dark:bg-gray-700 rounded-xl p-4">
-            <Collage className="h-full" />
+          <div className="h-80 bg-gray-200 dark:bg-gray-700 rounded-xl p-4">
+            <Collage 
+              className="h-full" 
+              onImagesSelected={setFirstCollageImages}
+            />
           </div>
         </div>
       </section>
@@ -155,8 +162,11 @@ export default function HowItWorks() {
           </div>
           
           {/* Collage of images */}
-          <div className="h-64 bg-white/10 rounded-xl p-4">
-            <Collage className="h-full" />
+          <div className="h-80 bg-white/10 rounded-xl p-4">
+            <Collage 
+              className="h-full" 
+              excludeImages={firstCollageImages}
+            />
           </div>
         </div>
       </section>

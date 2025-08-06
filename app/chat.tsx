@@ -197,13 +197,10 @@ export default function Chat() {
           for (const newMessage of newMessages) {
             // Only trigger notification if this message was sent TO the current user (not BY them)
             // AND if the message was created recently (within the last 10 seconds) to avoid triggering on old messages when entering chat
-            let messageTime: number;
-            if (typeof newMessage.created_at === 'string') {
-              messageTime = new Date(newMessage.created_at).getTime();
-            } else {
-              // Handle Firestore Timestamp
-              messageTime = newMessage.created_at.toDate().getTime();
-            }
+            // BUT DON'T show toast when we're already in the chat with this specific user
+            const messageTime = typeof newMessage.created_at === 'string' 
+              ? new Date(newMessage.created_at).getTime() 
+              : newMessage.created_at.toDate().getTime();
             const now = new Date().getTime();
             const tenSecondsAgo = now - (10 * 1000);
             
@@ -211,24 +208,8 @@ export default function Chat() {
                 newMessage.from_profile_id === matchProfileId &&
                 messageTime > tenSecondsAgo) {
               
-              console.log('📱 Triggering notification for new message:', {
-                messageId: newMessage.id,
-                messageTime: new Date(messageTime),
-                now: new Date(now),
-                timeDiff: now - messageTime
-              });
-              
-              // Get sender's name for notification
-              const senderProfile = await EventProfileAPI.get(newMessage.from_profile_id);
-              if (senderProfile) {
-                await handleNewMessageNotification(
-                  currentEventId,
-                  newMessage.from_profile_id,
-                  newMessage.to_profile_id,
-                  newMessage.content,
-                  senderProfile.first_name
-                );
-              }
+              console.log('📱 Message received in chat - NOT showing toast since we are in the chat with this user');
+              // Don't show toast when we're already in the chat with this user
             }
           }
 

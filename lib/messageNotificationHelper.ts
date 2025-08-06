@@ -6,103 +6,25 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
 /**
- * Send notification when a new message is created
- * This function handles both in-app toasts and push notifications
+ * Test toast function for debugging
  */
-export async function handleNewMessageNotification(
-  eventId: string,
-  fromProfileId: string,
-  toProfileId: string,
-  messageContent: string,
-  senderName: string
-): Promise<void> {
+export function testToast(): void {
+  console.log('🧪 Testing toast on platform:', Platform.OS);
+  
   try {
-    console.log('🔔 handleNewMessageNotification called:', { eventId, fromProfileId, toProfileId, senderName });
+    Toast.show({
+      type: 'success',
+      text1: 'Test Toast! 🧪',
+      text2: 'This is a test toast message',
+      position: 'top' as const,
+      visibilityTime: 3000,
+      autoHide: true,
+      topOffset: Platform.OS === 'ios' ? 60 : 50,
+    });
     
-    // Get the recipient's session ID
-    const recipientProfiles = await import('./firebaseApi').then(api => 
-      api.EventProfileAPI.filter({ id: toProfileId, event_id: eventId })
-    );
-    
-    if (recipientProfiles.length === 0) {
-      console.error('Recipient profile not found');
-      return;
-    }
-    
-    const recipientSessionId = recipientProfiles[0].session_id;
-    console.log('📱 Recipient session ID:', recipientSessionId);
-    
-    // Check if recipient is currently in the app
-    const isRecipientInApp = await checkIfUserIsInApp(recipientSessionId);
-    console.log('📱 Is recipient in app?', isRecipientInApp);
-    
-    if (isRecipientInApp) {
-      // User is in app - show toast notification
-      console.log('📱 Showing in-app toast for:', senderName);
-      showInAppMessageToast(senderName);
-    } else {
-      // User is not in app - send push notification
-      console.log('📱 Sending push notification for:', senderName);
-      await sendPushNotificationForMessage(recipientSessionId, senderName);
-    }
-    
-    // Store notification for when user returns to app (if they don't have push permissions)
-    await storePendingMessageNotification(recipientSessionId, senderName);
-    
-  } catch (error) {
-    console.error('Error handling new message notification:', error);
-  }
-}
-
-/**
- * Check if a user is currently active in the app
- */
-async function checkIfUserIsInApp(sessionId: string): Promise<boolean> {
-  try {
-    // Get current user's session ID
-    const currentSessionId = await AsyncStorage.getItem('currentSessionId');
-    console.log('📱 Current session ID:', currentSessionId, 'Checking against:', sessionId);
-    console.log('📱 Platform:', Platform.OS);
-    
-    // If it's the same session ID, user is in app
-    if (currentSessionId === sessionId) {
-      console.log('📱 User is in app - session ID match');
-      return true;
-    }
-    
-    // Additional check: look for recent activity timestamp
-    const lastActivityKey = `lastActivity_${sessionId}`;
-    const lastActivity = await AsyncStorage.getItem(lastActivityKey);
-    
-    if (lastActivity) {
-      const lastActivityTime = new Date(lastActivity).getTime();
-      const now = new Date().getTime();
-      
-      // More lenient timeout for iOS (3 minutes) vs Android (1 minute)
-      const timeoutMinutes = Platform.OS === 'ios' ? 3 : 1;
-      const timeoutAgo = now - (timeoutMinutes * 60 * 1000);
-      
-      const isRecentlyActive = lastActivityTime > timeoutAgo;
-      console.log('📱 Last activity check:', { 
-        lastActivityTime, 
-        now, 
-        timeoutAgo, 
-        isRecentlyActive,
-        timeDiff: now - lastActivityTime,
-        timeDiffMinutes: (now - lastActivityTime) / (60 * 1000),
-        platform: Platform.OS,
-        timeoutMinutes
-      });
-      
-      // If user was active recently, consider them "in app"
-      return isRecentlyActive;
-    }
-    
-    console.log('📱 No recent activity found for session:', sessionId);
-    return false;
-  } catch (error) {
-    console.error('Error checking if user is in app:', error);
-    return false;
+    console.log('🧪 Test toast called successfully');
+  } catch (error: any) {
+    console.error('🧪 Error in test toast:', error);
   }
 }
 
@@ -112,13 +34,20 @@ async function checkIfUserIsInApp(sessionId: string): Promise<boolean> {
 function showInAppMessageToast(senderName: string): void {
   console.log('📱 showInAppMessageToast called for:', senderName);
   console.log('📱 Platform:', Platform.OS);
+  console.log('📱 Expo Go:', __DEV__ ? 'Development mode' : 'Production mode');
   
   try {
+    // Check if Toast is available
+    if (!Toast || typeof Toast.show !== 'function') {
+      console.error('📱 Toast is not available or Toast.show is not a function');
+      return;
+    }
+    
     Toast.show({
       type: 'success',
       text1: 'New Message! 💬',
       text2: `${senderName} sent you a message!`,
-      position: 'top',
+      position: 'top' as const,
       visibilityTime: 4000,
       autoHide: true,
       topOffset: Platform.OS === 'ios' ? 60 : 50, // Adjust for iOS status bar
@@ -130,8 +59,13 @@ function showInAppMessageToast(senderName: string): void {
     });
     
     console.log('📱 Toast.show called successfully');
-  } catch (error) {
+  } catch (error: any) {
     console.error('📱 Error showing toast:', error);
+    console.error('📱 Error details:', {
+      message: error?.message,
+      stack: error?.stack,
+      platform: Platform.OS
+    });
   }
 }
 
@@ -463,6 +397,107 @@ export async function hasUnseenMessages(eventId: string, sessionId: string): Pro
     return unseenMessages.length > 0;
   } catch (error) {
     console.error('Error checking unseen messages:', error);
+    return false;
+  }
+} 
+
+/**
+ * Send notification when a new message is created
+ * This function handles both in-app toasts and push notifications
+ */
+export async function handleNewMessageNotification(
+  eventId: string,
+  fromProfileId: string,
+  toProfileId: string,
+  messageContent: string,
+  senderName: string
+): Promise<void> {
+  try {
+    console.log('🔔 handleNewMessageNotification called:', { eventId, fromProfileId, toProfileId, senderName });
+    
+    // Get the recipient's session ID
+    const recipientProfiles = await import('./firebaseApi').then(api => 
+      api.EventProfileAPI.filter({ id: toProfileId, event_id: eventId })
+    );
+    
+    if (recipientProfiles.length === 0) {
+      console.error('Recipient profile not found');
+      return;
+    }
+    
+    const recipientSessionId = recipientProfiles[0].session_id;
+    console.log('📱 Recipient session ID:', recipientSessionId);
+    
+    // Check if recipient is currently in the app
+    const isRecipientInApp = await checkIfUserIsInApp(recipientSessionId);
+    console.log('📱 Is recipient in app?', isRecipientInApp);
+    
+    if (isRecipientInApp) {
+      // User is in app - show toast notification
+      console.log('📱 Showing in-app toast for:', senderName);
+      showInAppMessageToast(senderName);
+    } else {
+      // User is not in app - send push notification
+      console.log('📱 Sending push notification for:', senderName);
+      await sendPushNotificationForMessage(recipientSessionId, senderName);
+    }
+    
+    // Store notification for when user returns to app (if they don't have push permissions)
+    await storePendingMessageNotification(recipientSessionId, senderName);
+    
+  } catch (error) {
+    console.error('Error handling new message notification:', error);
+  }
+}
+
+/**
+ * Check if a user is currently active in the app
+ */
+async function checkIfUserIsInApp(sessionId: string): Promise<boolean> {
+  try {
+    // Get current user's session ID
+    const currentSessionId = await AsyncStorage.getItem('currentSessionId');
+    console.log('📱 Current session ID:', currentSessionId, 'Checking against:', sessionId);
+    console.log('📱 Platform:', Platform.OS);
+    
+    // If it's the same session ID, user is in app
+    if (currentSessionId === sessionId) {
+      console.log('📱 User is in app - session ID match');
+      return true;
+    }
+    
+    // Additional check: look for recent activity timestamp
+    const lastActivityKey = `lastActivity_${sessionId}`;
+    const lastActivity = await AsyncStorage.getItem(lastActivityKey);
+    
+    if (lastActivity) {
+      const lastActivityTime = new Date(lastActivity).getTime();
+      const now = new Date().getTime();
+      
+      // More lenient timeout for iOS (3 minutes) vs Android (1 minute)
+      const timeoutMinutes = Platform.OS === 'ios' ? 3 : 1;
+      const timeoutAgo = now - (timeoutMinutes * 60 * 1000);
+      
+      const isRecentlyActive = lastActivityTime > timeoutAgo;
+      console.log('📱 Last activity check:', { 
+        lastActivityTime, 
+        now, 
+        timeoutAgo, 
+        isRecentlyActive,
+        timeDiff: now - lastActivityTime,
+        timeDiffMinutes: (now - lastActivityTime) / (60 * 1000),
+        platform: Platform.OS,
+        timeoutMinutes
+      });
+      
+      // If user was active recently, consider them "in app"
+      return isRecentlyActive;
+    }
+    
+    console.log('📱 No recent activity found for session:', sessionId);
+    return false;
+  } catch (error) {
+    console.error('Error checking if user is in app:', error);
     return false;
   }
 } 
