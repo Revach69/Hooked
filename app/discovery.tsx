@@ -26,6 +26,8 @@ import { db } from '../lib/firebaseConfig';
 import UserProfileModal from '../lib/UserProfileModal';
 import Toast from 'react-native-toast-message';
 import { updateUserActivity } from '../lib/messageNotificationHelper';
+import { usePerformanceMonitoring } from '../lib/hooks/usePerformanceMonitoring';
+import { showMatchAlert, showMatchToast, clearActiveAlerts, isAlertActive } from '../lib/matchAlertService';
 
 const { width } = Dimensions.get('window');
 const gap = 8;
@@ -44,6 +46,19 @@ const ALL_INTERESTS = [...BASIC_INTERESTS, ...EXTENDED_INTERESTS];
 export default function Discovery() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  
+  // Performance monitoring
+  const { 
+    trackUserInteraction, 
+    stopUserInteraction, 
+    trackAsyncOperation,
+    trackCustomMetric,
+    trackCustomAttribute 
+  } = usePerformanceMonitoring({ 
+    screenName: 'discovery',
+    enableScreenTracking: true,
+    enableUserInteractionTracking: true 
+  });
   const [profiles, setProfiles] = useState<any[]>([]);
   const [currentUserProfile, setCurrentUserProfile] = useState<any>(null);
   const [filteredProfiles, setFilteredProfiles] = useState<any[]>([]);
@@ -78,6 +93,7 @@ export default function Discovery() {
   useEffect(() => {
     return () => {
       cleanupAllListeners();
+      clearActiveAlerts();
     };
   }, []);
 
@@ -118,7 +134,7 @@ export default function Discovery() {
         const hasUnseen = await hasUnseenMessages(currentEvent.id, currentSessionId);
         setHasUnreadMessages(hasUnseen);
       } catch (error) {
-        console.error('Error checking unseen messages:', error);
+        // Error checking unseen messages
       }
     };
 
@@ -143,9 +159,6 @@ export default function Discovery() {
       const unsubscribe = onSnapshot(messagesQuery, async (snapshot) => {
         // When messages change, immediately check unseen status
         try {
-          console.log('📱 Discovery: Real-time message listener triggered');
-          console.log('📱 Discovery: Snapshot size:', snapshot.docs.length);
-          
           const { hasUnseenMessages } = await import('../lib/messageNotificationHelper');
           const hasUnseen = await hasUnseenMessages(currentEvent.id, currentSessionId);
           setHasUnreadMessages(hasUnseen);
@@ -157,18 +170,12 @@ export default function Discovery() {
             .map(doc => ({ id: doc.id, ...doc.data() } as any))
             .filter(msg => msg.to_profile_id === currentUserProfile.id);
           
-          console.log('📱 Discovery: Messages sent to current user:', newMessages.length);
+          
           
           // Get the latest new message
           if (newMessages.length > 0) {
             const latestMessage = newMessages[newMessages.length - 1];
-            console.log('📱 Discovery: Latest message:', {
-              id: latestMessage.id,
-              from: latestMessage.from_profile_id,
-              to: latestMessage.to_profile_id,
-              content: latestMessage.content?.substring(0, 50) + '...',
-              created_at: latestMessage.created_at
-            });
+
             
             const messageTime = typeof latestMessage.created_at === 'string' 
               ? new Date(latestMessage.created_at).getTime() 
@@ -176,45 +183,39 @@ export default function Discovery() {
             const now = new Date().getTime();
             const tenSecondsAgo = now - (10 * 1000);
             
-            console.log('📱 Discovery: Time check:', {
-              messageTime: new Date(messageTime),
-              now: new Date(now),
-              tenSecondsAgo: new Date(tenSecondsAgo),
-              timeDiff: now - messageTime,
-              isRecent: messageTime > tenSecondsAgo
-            });
+
             
             // Show toast for recent messages (within last 10 seconds)
             if (messageTime > tenSecondsAgo) {
-              console.log('📱 Discovery: New message received - showing toast');
+  
               
               // Get sender's profile to get their name
               const { EventProfileAPI } = await import('../lib/firebaseApi');
               const senderProfile = await EventProfileAPI.get(latestMessage.from_profile_id);
               
               if (senderProfile) {
-                console.log('📱 Discovery: Sender profile found:', senderProfile.first_name);
+    
                 // Show toast directly since we're the recipient
                 const { showInAppMessageToast } = await import('../lib/messageNotificationHelper');
                 showInAppMessageToast(senderProfile.first_name);
               } else {
-                console.log('📱 Discovery: Sender profile not found');
+    
               }
             } else {
-              console.log('📱 Discovery: Message too old, not showing toast');
+  
             }
           } else {
-            console.log('📱 Discovery: No messages sent to current user');
+
           }
           */
         } catch (error) {
-          console.error('📱 Discovery: Error checking unseen messages from real-time listener:', error);
+          // Error checking unseen messages from real-time listener
         }
       });
 
       return () => unsubscribe();
     } catch (error) {
-      console.error('Error setting up real-time message listener:', error);
+              // Error setting up real-time message listener
     }
   }, [currentEvent?.id, currentSessionId, currentUserProfile?.id]);
 
@@ -320,7 +321,7 @@ export default function Discovery() {
           const otherUsersProfiles = allVisibleProfiles.filter(p => p.session_id !== currentSessionId);
           setProfiles(otherUsersProfiles);
         } catch (error) {
-          console.error("Error in other profiles listener:", error);
+          // Error in other profiles listener
         }
               }, (error) => {
           // Handle Firestore listener errors gracefully
@@ -351,7 +352,7 @@ export default function Discovery() {
           
           setLikedProfiles(new Set(likes.map(like => like.liked_session_id)));
         } catch (error) {
-          console.error("Error in likes listener:", error);
+          // Error in likes listener
         }
               }, (error) => {
           // Handle Firestore listener errors gracefully
@@ -390,7 +391,8 @@ export default function Discovery() {
             const isLiker = match.liker_session_id === currentSessionId;
             const shouldNotify = isLiker ? !match.liker_notified_of_match : !match.liked_notified_of_match;
             
-            if (shouldNotify) {
+            // Don't show alerts if already active
+            if (shouldNotify && !isAlertActive(match.id, currentSessionId)) {
               // Get the other person's profile
               const otherSessionId = isLiker ? match.liked_session_id : match.liker_session_id;
               const otherProfiles = await EventProfileAPI.filter({
@@ -401,19 +403,13 @@ export default function Discovery() {
               if (otherProfiles.length > 0) {
                 const otherProfile = otherProfiles[0];
                 
-                // Show toast notification for in-app users
-                Toast.show({
-                  type: 'success',
-                  text1: "It's a Match! 🎉",
-                  text2: `You and ${otherProfile.first_name} liked each other.`,
-                  position: 'top',
-                  visibilityTime: 4000,
-                  autoHide: true,
-                  topOffset: 50,
-                  onPress: () => {
-                    Toast.hide();
-                    router.push('/matches');
-                  }
+                // Use centralized match alert service to prevent duplicates
+                await showMatchAlert({
+                  matchedUserName: otherProfile.first_name,
+                  matchId: match.id,
+                  isLiker,
+                  currentEventId: currentEvent.id,
+                  currentSessionId
                 });
 
                 // Mark as notified
@@ -424,7 +420,7 @@ export default function Discovery() {
             }
           }
         } catch (error) {
-          console.error("Error in mutual matches listener:", error);
+          // Error in mutual matches listener
         }
       }, (error) => {
         // Handle Firestore listener errors gracefully
@@ -505,13 +501,6 @@ export default function Discovery() {
       return;
     }
 
-    // Check if user has completed profile creation (has profile photo)
-    if (!profilePhotoUrl) {
-              // User hasn't completed profile creation, redirecting to consent
-      router.replace('/consent');
-      return;
-    }
-
     setCurrentSessionId(sessionId);
     
     try {
@@ -519,13 +508,57 @@ export default function Discovery() {
       if (events.length > 0) {
         setCurrentEvent(events[0]);
       } else {
+        // Event doesn't exist, clear all data and redirect to home
+        await AsyncStorage.multiRemove([
+          'currentEventId',
+          'currentSessionId',
+          'currentEventCode',
+          'currentProfileColor',
+          'currentProfilePhotoUrl'
+        ]);
         router.replace('/home');
+        return;
+      }
+
+      // Verify that the user's profile actually exists in the database
+      const userProfiles = await EventProfileAPI.filter({
+        event_id: eventId,
+        session_id: sessionId
+      });
+
+      if (userProfiles.length === 0) {
+        // Profile doesn't exist in database (user left event and deleted profile)
+        // Clear all AsyncStorage data and redirect to home
+        await AsyncStorage.multiRemove([
+          'currentEventId',
+          'currentSessionId',
+          'currentEventCode',
+          'currentProfileColor',
+          'currentProfilePhotoUrl'
+        ]);
+        router.replace('/home');
+        return;
+      }
+
+      // Check if user has completed profile creation (has profile photo)
+      if (!profilePhotoUrl) {
+        // User hasn't completed profile creation, redirecting to consent
+        router.replace('/consent');
         return;
       }
 
       // Likes are now handled by real-time listener
     } catch (error) {
-      // Handle error silently
+      // Handle error silently - if there's an error, clear data and redirect to home
+      await AsyncStorage.multiRemove([
+        'currentEventId',
+        'currentSessionId',
+        'currentEventCode',
+        'currentProfileColor',
+        'currentProfilePhotoUrl'
+      ]);
+      router.replace('/home');
+      return;
     }
     setIsLoading(false);
   };
@@ -580,6 +613,12 @@ export default function Discovery() {
 
     if (!eventId) return;
 
+    // Track user interaction
+    await trackUserInteraction('like_profile', { 
+      target_profile_id: likedProfile.id,
+      event_id: eventId 
+    });
+
     // Check if both profiles are visible (required by Firestore rules)
     if (!currentUserProfile.is_visible || !likedProfile.is_visible) {
       Alert.alert(
@@ -594,31 +633,35 @@ export default function Discovery() {
       // Optimistically update UI
       setLikedProfiles(prev => new Set([...prev, likedProfile.session_id]));
 
-      const newLike = await LikeAPI.create({
-        event_id: eventId,
-        from_profile_id: currentUserProfile.id,
-        to_profile_id: likedProfile.id,
-        liker_session_id: likerSessionId,
-        liked_session_id: likedProfile.session_id,
-        is_mutual: false,
-        liker_notified_of_match: false,
-        liked_notified_of_match: false
-      });
-
-              // Like created successfully
+      const newLike = await trackAsyncOperation('create_like', async () => {
+        return await LikeAPI.create({
+          event_id: eventId,
+          from_profile_id: currentUserProfile.id,
+          to_profile_id: likedProfile.id,
+          liker_session_id: likerSessionId,
+          liked_session_id: likedProfile.session_id,
+          is_mutual: false,
+          liker_notified_of_match: false,
+          liked_notified_of_match: false
+        });
+      }, { profile_id: likedProfile.id, event_id: eventId });
 
       // Send notification to the person being liked (they get notified that someone liked them)
       try {
-        await sendLikeNotification(likedProfile.session_id, currentUserProfile.first_name);
-              } catch (notificationError) {
-          // Handle notification error silently
-        }
+        await trackAsyncOperation('send_like_notification', async () => {
+          return await sendLikeNotification(likedProfile.session_id, currentUserProfile.first_name);
+        });
+      } catch (notificationError) {
+        // Handle notification error silently
+      }
 
       // Check for mutual match
-      const theirLikesToMe = await LikeAPI.filter({
-        event_id: eventId,
-        liker_session_id: likedProfile.session_id,
-        liked_session_id: likerSessionId,
+      const theirLikesToMe = await trackAsyncOperation('check_mutual_like', async () => {
+        return await LikeAPI.filter({
+          event_id: eventId,
+          liker_session_id: likedProfile.session_id,
+          liked_session_id: likerSessionId,
+        });
       });
 
       if (theirLikesToMe.length > 0) {
@@ -626,47 +669,46 @@ export default function Discovery() {
         const theirLikeRecord = theirLikesToMe[0];
 
         // Update both records for mutual match
-        await LikeAPI.update(newLike.id, { 
-          is_mutual: true,
-          liker_notified_of_match: false // Don't mark as notified yet, let the listener handle it
+        await trackAsyncOperation('update_like_mutual', async () => {
+          await Promise.all([
+            LikeAPI.update(newLike.id, { 
+              is_mutual: true,
+              liker_notified_of_match: false // Don't mark as notified yet, let the listener handle it
+            }),
+            LikeAPI.update(theirLikeRecord.id, { 
+              is_mutual: true,
+              liked_notified_of_match: false // Don't mark as notified yet, let the listener handle it
+            })
+          ]);
         });
-        await LikeAPI.update(theirLikeRecord.id, { 
-          is_mutual: true,
-          liked_notified_of_match: false // Don't mark as notified yet, let the listener handle it
-        });
+        
+        // Track match metric
+        await trackCustomMetric('matches_count', 1);
         
         // 🎉 SEND PUSH NOTIFICATIONS TO BOTH USERS (for users not in the app)
         try {
-          await Promise.all([
-            sendMatchNotification(likerSessionId, likedProfile.first_name),
-            sendMatchNotification(likedProfile.session_id, currentUserProfile.first_name)
-          ]);
+          await trackAsyncOperation('send_match_notifications', async () => {
+            return await Promise.all([
+              sendMatchNotification(likerSessionId, likedProfile.first_name),
+              sendMatchNotification(likedProfile.session_id, currentUserProfile.first_name)
+            ]);
+          });
         } catch (notificationError) {
           // Handle notification error silently
         }
 
         // Show immediate toast for the current user (who just created the match)
-        Toast.show({
-          type: 'success',
-          text1: "It's a Match! 🎉",
-          text2: `You and ${likedProfile.first_name} liked each other.`,
-          position: 'top',
-          visibilityTime: 4000,
-          autoHide: true,
-          topOffset: 50,
-          onPress: () => {
-            Toast.hide();
-            router.push('/matches');
-          }
-        });
+        await showMatchToast(likedProfile.first_name);
 
         // Mark as notified for the current user
-        await LikeAPI.update(newLike.id, { 
-          liker_notified_of_match: true
+        await trackAsyncOperation('mark_like_notified', async () => {
+          return await LikeAPI.update(newLike.id, { 
+            liker_notified_of_match: true
+          });
         });
       }
     } catch (error) {
-      console.error('Error creating like:', error);
+              // Error creating like
       // Revert optimistic update on error
       setLikedProfiles(prev => {
         const newSet = new Set(prev);
@@ -1110,7 +1152,7 @@ export default function Discovery() {
   // Show hidden state if user is not visible
   if (currentUserProfile && !currentUserProfile.is_visible) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
         {/* Logo Section */}
         <View style={styles.logoContainer}>
           <Image 
@@ -1137,7 +1179,7 @@ export default function Discovery() {
             <Text style={styles.hiddenStateTitle}>Your Profile is Hidden</Text>
             <Text style={styles.hiddenStateText}>
               While your profile is hidden, you cannot see other users and they cannot see you. 
-              To start discovering people again, make your profile visible in your profile settings.
+              You can still access your matches and chat with them. To start discovering people again, make your profile visible.
             </Text>
             <TouchableOpacity
               style={styles.makeVisibleButton}
@@ -1185,7 +1227,7 @@ export default function Discovery() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
       {/* Logo Section */}
       <View style={styles.logoContainer}>
         <Image 

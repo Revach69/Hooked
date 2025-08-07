@@ -12,6 +12,7 @@ import {
   useColorScheme,
   Image,
   Linking,
+  Keyboard,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Heart, QrCode, Hash, Shield, Clock, Users, X, Camera } from 'lucide-react-native';
@@ -41,6 +42,7 @@ export default function Home() {
   const { kickedUser, isChecking, handleKickedUserClose } = useKickedUserCheck();
   const componentId = useRef('Home-' + Date.now()).current;
   const initializationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const manualCodeInputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     MemoryManager.registerComponent(componentId);
@@ -59,6 +61,20 @@ export default function Home() {
       }
     };
   }, []);
+
+  // Effect to handle keyboard focus when manual code entry modal opens
+  useEffect(() => {
+    if (activeModal === 'manualCodeEntry') {
+      // Delay focus to ensure modal animation completes
+      const focusTimer = setTimeout(() => {
+        if (manualCodeInputRef.current) {
+          manualCodeInputRef.current.focus();
+        }
+      }, 300); // 300ms delay to allow modal animation to complete
+
+      return () => clearTimeout(focusTimer);
+    }
+  }, [activeModal]);
 
   const initializeApp = async () => {
     if (!MemoryManager.isComponentMounted(componentId) || isInitialized) {
@@ -87,7 +103,7 @@ export default function Home() {
       }, 2000);
       
     } catch (error) {
-      console.error('Error during app initialization:', error);
+              // Error during app initialization
     }
   };
 
@@ -113,7 +129,7 @@ export default function Home() {
         }, 3000);
       }
     } catch (error) {
-      console.error('Error checking for survey:', error);
+              // Error checking for survey
     }
   };
 
@@ -172,7 +188,7 @@ export default function Home() {
         );
       }
     } catch (error) {
-      console.error('Camera access error:', error);
+              // Camera access error
     } finally {
       if (MemoryManager.isComponentMounted(componentId)) {
         setIsProcessing(false);
@@ -205,6 +221,8 @@ export default function Home() {
       Alert.alert("Invalid Code", "Please enter a valid event code.");
     }
   };
+
+
 
   const styles = StyleSheet.create({
     container: {
@@ -326,7 +344,7 @@ export default function Home() {
       padding: 5,
     },
     infoCard: {
-      backgroundColor: 'white',
+      backgroundColor: isDark ? '#1a1a1a' : 'white',
       borderRadius: 16,
       padding: 24,
       marginBottom: 16,
@@ -351,16 +369,16 @@ export default function Home() {
     infoTitle: {
       fontSize: 16,
       fontWeight: '600',
-      color: '#1f2937',
+      color: isDark ? '#f9fafb' : '#1f2937',
       marginBottom: 8,
     },
     infoText: {
       fontSize: 18,
-      color: '#6b7280',
+      color: isDark ? '#d1d5db' : '#6b7280',
       lineHeight: 26,
     },
     featureCard: {
-      backgroundColor: 'white',
+      backgroundColor: isDark ? '#1a1a1a' : 'white',
       borderRadius: 16,
       padding: 24,
       marginBottom: 16,
@@ -379,7 +397,7 @@ export default function Home() {
     },
     sideBySideFeatureCard: {
       flex: 1,
-      backgroundColor: 'white',
+      backgroundColor: isDark ? '#1a1a1a' : 'white',
       borderRadius: 16,
       padding: 20,
       alignItems: 'center',
@@ -393,13 +411,13 @@ export default function Home() {
     featureTitle: {
       fontSize: 16,
       fontWeight: '600',
-      color: '#1f2937',
+      color: isDark ? '#f9fafb' : '#1f2937',
       marginTop: 12,
       marginBottom: 4,
     },
     featureSubtitle: {
       fontSize: 14,
-      color: '#6b7280',
+      color: isDark ? '#d1d5db' : '#6b7280',
       textAlign: 'center',
     },
     manualCodeInput: {
@@ -442,7 +460,7 @@ export default function Home() {
   });
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
       <MobileOfflineStatusBar />
       <LinearGradient
         colors={['#FBA7D5', '#C187FD']}
@@ -573,6 +591,7 @@ export default function Home() {
                 </TouchableOpacity>
               </View>
               <TextInput
+                ref={manualCodeInputRef}
                 style={styles.manualCodeInput}
                 placeholder="Enter event code"
                 placeholderTextColor={isDark ? "#9ca3af" : "#6b7280"}
@@ -582,7 +601,7 @@ export default function Home() {
                 autoCorrect={false}
                 accessibilityLabel="Event Code Input"
                 accessibilityHint="Enter the event code to join"
-                autoFocus={true}
+                autoFocus={false}
                 keyboardType="default"
               />
               <TouchableOpacity

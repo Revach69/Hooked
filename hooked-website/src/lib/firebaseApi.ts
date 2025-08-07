@@ -22,6 +22,7 @@ export interface FirestoreEvent {
   is_active?: boolean;
   image_url?: string; // Added for event images
   event_type?: string; // Added back for event type filtering
+  event_link?: string; // Added for event link
   created_at: string;
   updated_at: string;
 }
@@ -103,22 +104,21 @@ export const EventAPI = {
     return categorized;
   },
 
-  // Helper function to format date
+  // Helper function to format date (date only, no time)
   formatDate(dateString: string): string {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+      day: 'numeric'
     });
   },
 
-  // Helper function to format time
+  // Helper function to format time (24-hour format)
   formatTime(dateString: string): string {
     return new Date(dateString).toLocaleTimeString('en-US', {
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      hour12: false
     });
   }
 }; 

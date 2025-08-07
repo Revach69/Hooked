@@ -15,7 +15,7 @@ const EventsClient = dynamic(() => import('../../components/EventsClient'), {
   )
 });
 
-export default function Events() {
+export default function IRL() {
   return (
     <div className="dark-mode-bg min-h-screen">
       {/* Header */}
@@ -26,7 +26,7 @@ export default function Events() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <h1 className="text-4xl font-bold mb-4">
-              Events
+              IRL
             </h1>
             <p className="text-xl mx-auto">
               Explore upcoming events using Hooked.<br />Browse by location, event type, and grab your tickets.
@@ -54,39 +54,6 @@ export default function Events() {
             >
               Get Started
             </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* Stats Section */}
-      <section className="py-16 dark-mode-middle">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold dark-mode-text mb-4">
-              Hooked by the Numbers
-            </h2>
-            <p className="text-lg text-gray-600 dark:text-gray-300">
-              The impact we&apos;ve made at events across the country
-            </p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-            <div className="text-center">
-              <div className="text-4xl font-bold text-purple-600 dark:text-purple-400 mb-2">500+</div>
-              <p className="dark-mode-text">Events Hosted</p>
-            </div>
-            <div className="text-center">
-              <div className="text-4xl font-bold text-purple-600 dark:text-purple-400 mb-2">50K+</div>
-              <p className="dark-mode-text">Connections Made</p>
-            </div>
-            <div className="text-center">
-              <div className="text-4xl font-bold text-purple-600 dark:text-purple-400 mb-2">95%</div>
-              <p className="dark-mode-text">Satisfaction Rate</p>
-            </div>
-            <div className="text-center">
-              <div className="text-4xl font-bold text-purple-600 dark:text-purple-400 mb-2">24/7</div>
-              <p className="dark-mode-text">Support Available</p>
-            </div>
           </div>
         </div>
       </section>

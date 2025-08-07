@@ -31,27 +31,27 @@ export class SurveyNotificationService {
     delayHours: number = 2
   ): Promise<string | null> {
     try {
-      console.log(`📅 Scheduling survey notification for event: ${eventName} (${eventId})`);
-      console.log(`⏰ Event expires at: ${expiresAt}`);
-      
       // Check notification permissions first
       const hasPermissions = await this.checkNotificationPermissions();
       if (!hasPermissions) {
-        console.log(`❌ Notification permissions not granted, cannot schedule survey notification`);
+        // Still schedule the notification in storage for manual app open checks
+        // This ensures users can still get surveys even without notification permissions
+        await this.addEventToHistory(eventId, eventName, sessionId, expiresAt);
+
         return null;
       }
       
       // Validate event data first
       const validation = this.validateEventData(eventId, eventName, expiresAt, sessionId);
       if (!validation.isValid) {
-        console.log(`❌ Event data validation failed:`, validation.errors);
+
         return null;
       }
       
       // Check if user has already filled survey in their lifetime
       const surveyFilled = await AsyncStorage.getItem(this.SURVEY_FILLED_KEY);
       if (surveyFilled === 'true') {
-        console.log(`❌ User has already filled survey in their lifetime, skipping notification`);
+
         return null;
       }
 
@@ -60,25 +60,15 @@ export class SurveyNotificationService {
       const notificationTime = eventEndTime + (delayHours * 60 * 60 * 1000);
       const now = Date.now();
       
-      console.log(`📊 Time calculations:`);
-      console.log(`   - Current time: ${new Date(now).toISOString()}`);
-      console.log(`   - Event end time: ${new Date(eventEndTime).toISOString()}`);
-      console.log(`   - Notification time: ${new Date(notificationTime).toISOString()}`);
-      console.log(`   - Time until notification: ${Math.round((notificationTime - now) / 1000 / 60)} minutes`);
-      
       // Check if notification time is in the future
       if (notificationTime <= now) {
-        console.log(`❌ Notification time is in the past, not scheduling survey notification`);
-        console.log(`   - Notification time: ${new Date(notificationTime).toISOString()}`);
-        console.log(`   - Current time: ${new Date(now).toISOString()}`);
+
         return null;
       }
 
       // Check if event hasn't ended yet (don't schedule for past events)
       if (eventEndTime <= now) {
-        console.log(`❌ Event has already ended, not scheduling survey notification`);
-        console.log(`   - Event end time: ${new Date(eventEndTime).toISOString()}`);
-        console.log(`   - Current time: ${new Date(now).toISOString()}`);
+
         return null;
       }
 
@@ -108,10 +98,6 @@ export class SurveyNotificationService {
         } as any,
       });
 
-      console.log(`✅ Survey notification scheduled successfully`);
-      console.log(`   - Notification ID: ${identifier}`);
-      console.log(`   - Will fire at: ${new Date(notificationTime).toISOString()}`);
-
       // Store notification info for later reference
       await AsyncStorage.setItem(`${this.NOTIFICATION_PREFIX}${eventId}`, JSON.stringify({
         identifier,
@@ -124,7 +110,14 @@ export class SurveyNotificationService {
 
       return identifier;
     } catch (error) {
-      console.error('❌ Error scheduling survey notification:', error);
+              // Error scheduling survey notification
+      // Even if notification scheduling fails, still add to history for manual checks
+      try {
+        await this.addEventToHistory(eventId, eventName, sessionId, expiresAt);
+
+      } catch (historyError) {
+        // Failed to add event to history as fallback
+      }
       return null;
     }
   }
@@ -159,7 +152,7 @@ export class SurveyNotificationService {
 
       return null;
     } catch (error) {
-      console.error('Error checking if survey should be shown:', error);
+              // Error checking if survey should be shown
       return null;
     }
   }
@@ -187,7 +180,7 @@ export class SurveyNotificationService {
         // Cancelled survey notification for event
       }
     } catch (error) {
-      console.error('Error cancelling survey notification:', error);
+              // Error cancelling survey notification
     }
   }
 
@@ -214,7 +207,7 @@ export class SurveyNotificationService {
 
               // Cancelled all survey notifications
     } catch (error) {
-      console.error('Error cancelling all survey notifications:', error);
+              // Error cancelling all survey notifications
     }
   }
 
@@ -223,87 +216,36 @@ export class SurveyNotificationService {
    */
   static async checkNotificationPermissions(): Promise<boolean> {
     try {
-      console.log(`🔐 Checking notification permissions...`);
-      
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
-      console.log(`📋 Current permission status: ${existingStatus}`);
       
       let finalStatus = existingStatus;
       
       if (existingStatus !== 'granted') {
-        console.log(`🔐 Requesting notification permissions...`);
         const { status } = await Notifications.requestPermissionsAsync();
         finalStatus = status;
-        console.log(`📋 New permission status: ${finalStatus}`);
       }
       
       if (finalStatus !== 'granted') {
-        console.log(`❌ Notification permissions not granted`);
+
         return false;
       }
       
-      console.log(`✅ Notification permissions granted`);
       return true;
     } catch (error) {
-      console.error('❌ Error checking notification permissions:', error);
+              // Error checking notification permissions
       return false;
     }
   }
 
-  /**
-   * Test method to schedule a survey notification with a short delay (for debugging)
-   */
-  static async testSurveyNotification(
-    eventId: string,
-    eventName: string,
-    sessionId: string,
-    delayMinutes: number = 1
-  ): Promise<string | null> {
-    try {
-      console.log(`🧪 Testing survey notification scheduling...`);
-      console.log(`   - Event: ${eventName} (${eventId})`);
-      console.log(`   - Delay: ${delayMinutes} minutes`);
-      
-      const notificationTime = Date.now() + (delayMinutes * 60 * 1000);
-      
-      const identifier = await Notifications.scheduleNotificationAsync({
-        content: {
-          title: `TEST: You got Hooked at ${eventName}`,
-          body: "TEST: We'd love to hear what you thought!",
-          data: {
-            type: 'survey_request',
-            eventId,
-            eventName,
-            sessionId,
-            expiresAt: new Date().toISOString(),
-            isTest: true
-          },
-          sound: 'default',
-          priority: Notifications.AndroidNotificationPriority.HIGH,
-        },
-        trigger: {
-          date: new Date(notificationTime),
-        } as any,
-      });
 
-      console.log(`✅ Test notification scheduled successfully`);
-      console.log(`   - Notification ID: ${identifier}`);
-      console.log(`   - Will fire at: ${new Date(notificationTime).toISOString()}`);
-      
-      return identifier;
-    } catch (error) {
-      console.error('❌ Error scheduling test notification:', error);
-      return null;
-    }
-  }
+
+
 
   /**
    * Cancel any existing survey notifications for the same event
    */
   static async cancelExistingSurveyNotification(eventId: string): Promise<void> {
     try {
-      console.log(`🔍 Checking for existing survey notifications for event: ${eventId}`);
-      
       const allNotifications = await Notifications.getAllScheduledNotificationsAsync();
       const existingNotifications = allNotifications.filter(n => 
         n.content.data?.type === 'survey_request' && 
@@ -311,14 +253,10 @@ export class SurveyNotificationService {
       );
       
       if (existingNotifications.length > 0) {
-        console.log(`🗑️  Found ${existingNotifications.length} existing survey notification(s) for event ${eventId}, cancelling...`);
         
         for (const notification of existingNotifications) {
           await Notifications.cancelScheduledNotificationAsync(notification.identifier);
-          console.log(`   ✅ Cancelled notification: ${notification.identifier}`);
         }
-      } else {
-        console.log(`✅ No existing survey notifications found for event ${eventId}`);
       }
       
       // Also remove stored notification data for this event
@@ -326,7 +264,7 @@ export class SurveyNotificationService {
       await AsyncStorage.removeItem(notificationKey);
       
     } catch (error) {
-      console.error('❌ Error cancelling existing survey notifications:', error);
+              // Error cancelling existing survey notifications
     }
   }
 
@@ -355,7 +293,7 @@ export class SurveyNotificationService {
       
       await AsyncStorage.setItem('eventHistory', JSON.stringify(trimmedHistory));
     } catch (error) {
-      console.error('Error adding event to history:', error);
+              // Error adding event to history
     }
   }
 
@@ -367,7 +305,7 @@ export class SurveyNotificationService {
       const historyData = await AsyncStorage.getItem('eventHistory');
       return historyData ? JSON.parse(historyData) : [];
     } catch (error) {
-      console.error('Error getting event history:', error);
+              // Error getting event history
       return [];
     }
   }
@@ -389,7 +327,7 @@ export class SurveyNotificationService {
       // Check if within 26 hours of event end (2h delay + 24h survey window)
       return (now - eventEndTime) >= 0 && (now - eventEndTime) <= twentySixHours;
     } catch (error) {
-      console.error('Error checking survey notification validity:', error);
+              // Error checking survey notification validity
       return false;
     }
   }
@@ -402,7 +340,7 @@ export class SurveyNotificationService {
       const eventHistory = await this.getEventHistory();
       return eventHistory.find(e => e.eventId === eventId) || null;
     } catch (error) {
-      console.error('Error getting survey data:', error);
+              // Error getting survey data
       return null;
     }
   }
@@ -443,58 +381,89 @@ export class SurveyNotificationService {
     };
   }
 
+
+
   /**
-   * Debug method to list all scheduled survey notifications
+   * Comprehensive survey system status check
    */
-  static async debugScheduledNotifications(): Promise<void> {
+  static async getSurveySystemStatus(): Promise<{
+    surveyFilled: boolean;
+    eventHistory: SurveyData[];
+    pendingNotifications: any[];
+    currentTime: string;
+    systemStatus: 'healthy' | 'warning' | 'error';
+    issues: string[];
+  }> {
     try {
-      console.log(`🔍 Debugging scheduled notifications...`);
+      const issues: string[] = [];
+      let systemStatus: 'healthy' | 'warning' | 'error' = 'healthy';
       
+      // Check if survey is filled
+      const surveyFilled = await AsyncStorage.getItem(this.SURVEY_FILLED_KEY) === 'true';
+      
+      // Get event history
+      const eventHistory = await this.getEventHistory();
+      
+      // Get pending notifications
       const allNotifications = await Notifications.getAllScheduledNotificationsAsync();
-      console.log(`📋 Total scheduled notifications: ${allNotifications.length}`);
-      
-      const surveyNotifications = allNotifications.filter(n => 
+      const pendingNotifications = allNotifications.filter(n => 
         n.content.data?.type === 'survey_request'
       );
       
-      console.log(`📊 Survey notifications found: ${surveyNotifications.length}`);
+      const currentTime = new Date().toISOString();
       
-      for (const notification of surveyNotifications) {
-        const data = notification.content.data;
-        const trigger = notification.trigger as any;
-        const scheduledTime = trigger?.date ? new Date(trigger.date) : new Date();
-        const now = new Date();
-        const timeUntilNotification = scheduledTime.getTime() - now.getTime();
-        
-        console.log(`   📅 Notification ID: ${notification.identifier}`);
-        console.log(`   🎯 Event: ${data?.eventName} (${data?.eventId})`);
-        console.log(`   ⏰ Scheduled for: ${scheduledTime.toISOString()}`);
-        console.log(`   ⏱️  Time until notification: ${Math.round(timeUntilNotification / 1000 / 60)} minutes`);
-        console.log(`   📝 Data:`, data);
-        console.log(`   ---`);
+      // Check for potential issues
+      if (eventHistory.length === 0) {
+        issues.push('No events in history');
+        systemStatus = 'warning';
       }
       
-      // Also check stored notification data
-      const keys = await AsyncStorage.getAllKeys();
-      const surveyKeys = keys.filter(key => key.startsWith(this.NOTIFICATION_PREFIX));
-      
-      console.log(`💾 Stored survey notification keys: ${surveyKeys.length}`);
-      for (const key of surveyKeys) {
-        const data = await AsyncStorage.getItem(key);
-        if (data) {
-          const parsed = JSON.parse(data);
-          console.log(`   🔑 Key: ${key}`);
-          console.log(`   📊 Data:`, parsed);
-        }
+      if (pendingNotifications.length === 0 && eventHistory.length > 0) {
+        issues.push('No pending notifications but events exist in history');
+        systemStatus = 'warning';
       }
       
+      // Check for expired events in history
+      const now = Date.now();
+      const expiredEvents = eventHistory.filter(event => {
+        const eventEndTime = new Date(event.expiresAt).getTime();
+        const twentySixHours = 26 * 60 * 60 * 1000;
+        return (now - eventEndTime) > twentySixHours;
+      });
+      
+      if (expiredEvents.length > 0) {
+        issues.push(`${expiredEvents.length} expired events in history`);
+        systemStatus = 'warning';
+      }
+      
+      return {
+        surveyFilled,
+        eventHistory,
+        pendingNotifications: pendingNotifications.map(n => ({
+          id: n.identifier,
+          eventId: n.content.data?.eventId,
+          eventName: n.content.data?.eventName,
+          scheduledFor: (n.trigger as any)?.date
+        })),
+        currentTime,
+        systemStatus,
+        issues
+      };
     } catch (error) {
-      console.error('❌ Error debugging notifications:', error);
+              // Error getting survey system status
+      return {
+        surveyFilled: false,
+        eventHistory: [],
+        pendingNotifications: [],
+        currentTime: new Date().toISOString(),
+        systemStatus: 'error',
+        issues: [`Error: ${error}`]
+      };
     }
   }
 
   /**
-   * Clear all survey-related data (for testing/debugging)
+   * Clear all survey-related data
    */
   static async clearAllSurveyData(): Promise<void> {
     try {
@@ -512,7 +481,7 @@ export class SurveyNotificationService {
       await this.cancelAllSurveyNotifications();
               // Cleared all survey data
     } catch (error) {
-      console.error('Error clearing survey data:', error);
+              // Error clearing survey data
     }
   }
 } 

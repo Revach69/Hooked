@@ -93,12 +93,12 @@ class ErrorMonitor {
       
       // Log to console in development only if not a recursive error
       if (__DEV__ && !error.message?.includes('Global error caught')) {
-        console.error('📊 Error logged:', errorLog);
+        // Error logged
       }
     } catch (storageError) {
       // Don't log storage errors to prevent infinite loops
       if (__DEV__) {
-        console.warn('❌ Failed to log error to storage (silenced to prevent loops)');
+        // Failed to log error to storage (silenced to prevent loops)
       }
     }
   }
@@ -108,7 +108,7 @@ class ErrorMonitor {
       const logs = await AsyncStorage.getItem(this.storageKey);
       return logs ? JSON.parse(logs) : [];
     } catch (error) {
-      console.error('❌ Failed to retrieve error logs:', error);
+              // Failed to retrieve error logs
       return [];
     }
   }
@@ -148,7 +148,7 @@ class ErrorMonitor {
       await AsyncStorage.removeItem(this.storageKey);
               // Error logs cleared
     } catch (error) {
-      console.error('❌ Failed to clear error logs:', error);
+              // Failed to clear error logs
     }
   }
 
@@ -290,11 +290,7 @@ export async function logFirebaseError(error: any, operation: string, context: P
 
   // Special handling for internal assertion errors
   if (error.message && error.message.includes('INTERNAL ASSERTION FAILED')) {
-    console.error('🚨 CRITICAL: Firebase Internal Assertion Error Detected:', {
-      error: error.message,
-      context: errorContext,
-      recommendation: 'This may require app restart or Firebase reinitialization'
-    });
+    // CRITICAL: Firebase Internal Assertion Error Detected
 
     // Log to persistent storage for debugging
     try {
@@ -318,7 +314,7 @@ export async function logFirebaseError(error: any, operation: string, context: P
       await AsyncStorage.setItem('firebase_critical_errors', JSON.stringify(logs));
               // Internal assertion error logged to storage
     } catch (logError) {
-      console.error('Failed to log internal assertion error:', logError);
+              // Failed to log internal assertion error
     }
 
     return;

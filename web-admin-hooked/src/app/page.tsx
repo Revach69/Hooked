@@ -246,7 +246,7 @@ export default function AdminDashboard() {
   };
 
   const handleDownloadQRSign = async (eventId: string) => {
-    // TODO: Implement QR sign template download
+    
     alert('QR Sign download feature will be implemented soon!');
   };
 
@@ -422,6 +422,31 @@ export default function AdminDashboard() {
                     </button>
                   </div>
                 </div>
+
+                {/* Event Link */}
+                {event.event_link && (
+                  <div className="mt-4">
+                    <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Event Link</h4>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={event.event_link || ''}
+                        readOnly
+                        className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
+                      />
+                      <button
+                        onClick={() => navigator.clipboard.writeText(event.event_link || '')}
+                        className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                        title="Copy to clipboard"
+                      >
+                        <Copy size={16} />
+                      </button>
+                    </div>
+                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                      This link is used for the "Join Event" button on the website
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Right Side - Actions */}

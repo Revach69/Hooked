@@ -117,16 +117,22 @@ export default function EventsClient() {
                     {/* Event Image */}
                     <div className="relative">
                       {event.image_url ? (
-                        <div className="w-full h-48 rounded-t-lg overflow-hidden">
+                        <div className="w-full h-48 bg-gray-100 dark:bg-gray-800 rounded-t-lg flex items-center justify-center overflow-hidden">
                           <img 
                             src={event.image_url} 
                             alt={event.name}
-                            className="w-full h-full object-cover"
+                            className="max-w-full max-h-full object-contain"
+                            loading="lazy"
                             onError={(e) => {
                               // Fallback to placeholder if image fails to load
                               const target = e.target as HTMLImageElement;
                               target.style.display = 'none';
                               target.nextElementSibling?.classList.remove('hidden');
+                            }}
+                            onLoad={(e) => {
+                              // Ensure image is properly displayed
+                              const target = e.target as HTMLImageElement;
+                              target.style.display = 'block';
                             }}
                           />
                           <div className="w-full h-48 bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900 dark:to-pink-900 rounded-t-lg flex items-center justify-center hidden">
@@ -168,17 +174,28 @@ export default function EventsClient() {
                         {event.name}
                       </h3>
                       
-                      <p className="text-gray-600 dark:text-gray-300 mb-4 line-clamp-2">
+                      <p className="text-gray-600 dark:text-gray-300 mb-4 line-clamp-2 whitespace-pre-wrap">
                         {event.description || 'No description available'}
                       </p>
 
                       {/* CTA Button */}
-                      <button 
-                        onClick={() => openEventModal(event)}
-                        className="btn-primary w-full"
-                      >
-                        Learn More
-                      </button>
+                      {event.event_link ? (
+                        <a 
+                          href={event.event_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn-primary w-full text-center"
+                        >
+                          Join Event
+                        </a>
+                      ) : (
+                        <button 
+                          onClick={() => openEventModal(event)}
+                          className="btn-primary w-full"
+                        >
+                          Learn More
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -210,16 +227,22 @@ export default function EventsClient() {
               {/* Event Image */}
               <div className="relative mb-6">
                 {selectedEvent.image_url ? (
-                  <div className="w-full h-48 rounded-lg overflow-hidden">
+                  <div className="w-full h-48 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center overflow-hidden">
                     <img 
                       src={selectedEvent.image_url} 
                       alt={selectedEvent.name}
-                      className="w-full h-full object-cover"
+                      className="max-w-full max-h-full object-contain"
+                      loading="lazy"
                       onError={(e) => {
                         // Fallback to placeholder if image fails to load
                         const target = e.target as HTMLImageElement;
                         target.style.display = 'none';
                         target.nextElementSibling?.classList.remove('hidden');
+                      }}
+                      onLoad={(e) => {
+                        // Ensure image is properly displayed
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'block';
                       }}
                     />
                     <div className="w-full h-48 bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900 dark:to-pink-900 rounded-lg flex items-center justify-center hidden">
@@ -275,7 +298,7 @@ export default function EventsClient() {
                 {selectedEvent.description && (
                   <div>
                     <h3 className="text-lg font-semibold dark-mode-text mb-2">Description</h3>
-                    <p className="text-gray-600 dark:text-gray-300">{selectedEvent.description}</p>
+                    <p className="text-gray-600 dark:text-gray-300 whitespace-pre-wrap">{selectedEvent.description}</p>
                   </div>
                 )}
 
@@ -286,9 +309,24 @@ export default function EventsClient() {
                   >
                     Close
                   </button>
-                  <button className="flex-1 btn-primary">
-                    Join Event
-                  </button>
+                  {selectedEvent.event_link ? (
+                    <a 
+                      href={selectedEvent.event_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 btn-primary text-center"
+                    >
+                      Join Event
+                    </a>
+                  ) : (
+                    <button 
+                      className="flex-1 btn-primary opacity-50 cursor-not-allowed"
+                      disabled
+                      title="No event link available"
+                    >
+                      Join Event
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

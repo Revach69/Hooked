@@ -27,7 +27,7 @@ export const checkNetworkStatus = async (): Promise<boolean> => {
     const state = await NetInfo.fetch();
     return state.isConnected ?? false;
   } catch (error) {
-    console.error('Error checking network status:', error);
+            // Error checking network status
     return false;
   }
 };
@@ -37,7 +37,7 @@ export const getNetworkType = async (): Promise<string> => {
     const state = await NetInfo.fetch();
     return state.type || 'unknown';
   } catch (error) {
-    console.error('Error getting network type:', error);
+            // Error getting network type
     return 'unknown';
   }
 }; 
@@ -164,7 +164,7 @@ export const safeAsyncOperation = async <T>(
 
     return result;
   } catch (error) {
-    console.error('Safe async operation failed:', error);
+            // Safe async operation failed
     return null;
   }
 };
@@ -212,10 +212,7 @@ export const createMemoryLeakDetector = (componentName: string) => {
       const timeElapsed = Date.now() - startTime;
       
       if (memoryIncrease > 10 * 1024 * 1024) { // 10MB threshold
-        console.warn(`Potential memory leak detected in ${componentName}:`, {
-          memoryIncrease: `${(memoryIncrease / 1024 / 1024).toFixed(2)}MB`,
-          timeElapsed: `${(timeElapsed / 1000).toFixed(2)}s`
-        });
+        // Potential memory leak detected
       }
     }
   };

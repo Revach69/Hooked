@@ -86,7 +86,7 @@ export default function ManageUsers() {
 
       setUsers(usersWithStats);
     } catch (error) {
-      console.error("Error loading users:", error);
+              // Error loading users
       Alert.alert('Error', 'Failed to load users');
     } finally {
       setIsLoading(false);
@@ -147,7 +147,7 @@ export default function ManageUsers() {
               Alert.alert('Success', 'User deleted successfully');
               loadUsers(); // Reload the list
             } catch (error) {
-              console.error('Error deleting user:', error);
+              // Error deleting user
               Alert.alert('Error', 'Failed to delete user');
             }
           }

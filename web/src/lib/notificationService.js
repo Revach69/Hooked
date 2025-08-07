@@ -56,7 +56,7 @@ export class NotificationService {
 
   static async sendMatchNotification(matchedUserName) {
     return this.sendNotification(
-      'New Match! 💕',
+      'You got Hooked! 💕',
       `You matched with ${matchedUserName}!`,
       {
         icon: '/favicon.ico',
@@ -67,15 +67,35 @@ export class NotificationService {
   }
 
   static async sendLikeNotification(likerName) {
-    return this.sendNotification(
-      'New Like! ❤️',
-      `${likerName} liked your profile!`,
-      {
-        icon: '/favicon.ico',
-        badge: '/favicon.ico',
-        tag: 'like-notification'
+    try {
+      // Check if user has been away for more than 10 minutes
+      const lastActivityKey = `lastActivity_${window.currentSessionId || 'unknown'}`;
+      const lastActivity = localStorage.getItem(lastActivityKey);
+      
+      if (lastActivity) {
+        const lastActivityTime = new Date(lastActivity).getTime();
+        const now = Date.now();
+        const tenMinutes = 10 * 60 * 1000; // 10 minutes in milliseconds
+        
+        // If user was active less than 10 minutes ago, don't send notification
+        if ((now - lastActivityTime) < tenMinutes) {
+          return false;
+        }
       }
-    );
+      
+      return this.sendNotification(
+        'Someone liked you! ❤️',
+        '', // Empty body to not reveal the name
+        {
+          icon: '/favicon.ico',
+          badge: '/favicon.ico',
+          tag: 'like-notification'
+        }
+      );
+    } catch (error) {
+      console.error('Error sending like notification:', error);
+      return false;
+    }
   }
 
   static async sendMessageNotification(senderName, messagePreview) {

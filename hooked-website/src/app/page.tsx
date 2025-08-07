@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, useRef } from "react";
 import AnimatedArrow from "../components/AnimatedArrow";
 import Header from "../components/Header";
+import Collage from "../components/Collage";
 
 export default function Home() {
   const [showHeadline, setShowHeadline] = useState(false);
@@ -11,6 +12,24 @@ export default function Home() {
   const [showContent, setShowContent] = useState(false);
   const [sectionVisible, setSectionVisible] = useState(false);
   const sectionRef = useRef<HTMLDivElement>(null);
+
+  // Array of collage images for The Hooked Experience section
+  const collageImages = [
+    "/Collage1.JPG",
+    "/Collage2.JPG", 
+    "/Collage3.JPG",
+    "/Collage4.JPG",
+    "/Collage5.JPG",
+    "/Collage6.JPG",
+    "/Collage7.JPG",
+    "/Collage8.JPG",
+    "/Collage9.JPG",
+    "/Collage10.JPG",
+    "/Collage11.JPG"
+  ];
+
+  // Randomly select 3 images for the collage
+  const selectedCollageImages = collageImages.slice(0, 3);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -61,18 +80,18 @@ export default function Home() {
             <div className="text-center lg:col-span-2">
               <p className="text-4xl md:text-5xl font-extrabold mb-4 font-heading ">One scan shows you who&apos;s single.</p>
               <p className="text-base md:text-lg mb-8 text-white/90 font-bold font-body">
-                A live social app for any kind of event - parties, conferences & weddings.
+                A live social app for any kind of event - parties, conferences,weddings...
               </p>
               <div className="flex flex-col items-center space-y-4">
                 <Link
-                  href="/contact"
+                  href="/event-organizers"
                   className="btn-primary px-8 py-4 text-lg inline-flex items-center justify-center text-center w-full max-w-sm"
                 >
                   Hooked for Organizers
                 </Link>
 
                 <Link
-                  href="/events"
+                  href="/irl"
                   className="btn-secondary px-8 py-4 text-lg inline-flex items-center justify-center text-center w-full max-w-sm"
                 >
                   Find Events
@@ -122,13 +141,6 @@ export default function Home() {
                   <p className="text-lg md:text-xl text-gray-600 dark:text-gray-300 leading-relaxed">
                     Tired of swiping and messaging people you&apos;ll never meet? So are we. Hooked makes it easy to see who&apos;s single nearby - at the same party, wedding, conference or any other event you are attending.
                   </p>
-                  
-                  <Link
-                    href="/how-it-works"
-                    className="inline-block bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-8 py-4 rounded-lg font-semibold hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
-                  >
-                    How it works
-                  </Link>
                 </div>
               </div>
             </div>
@@ -153,13 +165,6 @@ export default function Home() {
                 <p className="text-lg md:text-xl text-gray-600 dark:text-gray-300 leading-relaxed">
                   Tired of swiping and messaging people you&apos;ll never meet? So are we. Hooked makes it easy to see who&apos;s single nearby - at the same party, wedding, conference or any other event you are attending.
                 </p>
-                
-                <Link
-                  href="/how-it-works"
-                  className="inline-block bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-8 py-4 rounded-lg font-semibold hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
-                >
-                  How it works
-                </Link>
               </div>
             </div>
           </div>
@@ -174,6 +179,80 @@ export default function Home() {
               color="#4C1D95" 
               duration={1500}
               isMobile={false}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* The Hooked Experience Section */}
+      <section className="py-20 bg-gradient-to-r from-purple-400/90 to-pink-400/90 text-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center mb-16">
+            {/* Left side - Large text */}
+            <div className="text-center lg:text-left">
+              <h2 className="text-4xl md:text-5xl font-bold mb-6 font-heading">
+                The Hooked Experience
+              </h2>
+            </div>
+            
+            {/* Right side - 3-point list */}
+            <div className="space-y-6">
+              <div className="flex items-start">
+                <div className="bg-gradient-to-br from-purple-400 to-pink-400 w-12 h-12 rounded-full flex items-center justify-center mr-4 flex-shrink-0">
+                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V6a1 1 0 00-1-1H5a1 1 0 00-1 1v1a1 1 0 001 1zm12 0h2a1 1 0 001-1V6a1 1 0 00-1-1h-2a1 1 0 00-1 1v1a1 1 0 001 1zM5 20h2a1 1 0 001-1v-1a1 1 0 00-1-1H5a1 1 0 00-1 1v1a1 1 0 001 1z" />
+                  </svg>
+                </div>
+                <div>
+                  <h4 className="text-lg font-semibold mb-1">
+                    Scan the QR code
+                  </h4>
+                  <p className="text-white/80">
+                    Or join via a unique event code
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex items-start">
+                <div className="bg-gradient-to-br from-purple-400 to-pink-400 w-12 h-12 rounded-full flex items-center justify-center mr-4 flex-shrink-0">
+                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                </div>
+                <div>
+                  <h4 className="text-lg font-semibold mb-1">
+                    See who&apos;s single & match
+                  </h4>
+                  <p className="text-white/80">
+                    Send a like, match, and meet (if mutual)
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex items-start">
+                <div className="bg-gradient-to-br from-purple-400 to-pink-400 w-12 h-12 rounded-full flex items-center justify-center mr-4 flex-shrink-0">
+                  <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                  </svg>
+                </div>
+                <div>
+                  <h4 className="text-lg font-semibold mb-1">
+                    No strings attached
+                  </h4>
+                  <p className="text-white/80">
+                    Everything expires after the event ends
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Collage of images */}
+          <div className="h-80 bg-white/10 rounded-xl p-4">
+            <Collage 
+              className="h-full" 
+              selectedImages={selectedCollageImages}
             />
           </div>
         </div>

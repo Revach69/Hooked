@@ -40,7 +40,7 @@ export default function Collage({ className = "", selectedImages }: CollageProps
     setImagesLoaded(true);
   };
 
-  // Debug: Log when images are passed
+  
   useEffect(() => {
     console.log('Collage received images:', selectedImages);
   }, [selectedImages]);

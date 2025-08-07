@@ -39,6 +39,7 @@ export default function EditEvent() {
     description: '',
     location: '',
     event_code: '',
+    event_link: '',
     starts_at: new Date(),
     expires_at: new Date(),
   });
@@ -71,6 +72,7 @@ export default function EditEvent() {
         description: eventData.description || '',
         location: eventData.location || '',
         event_code: eventData.event_code || '',
+        event_link: eventData.event_link || '',
         starts_at: new Date(eventData.starts_at),
         expires_at: new Date(eventData.expires_at),
       });
@@ -80,7 +82,7 @@ export default function EditEvent() {
         setExistingImageUrl(eventData.image_url);
       }
     } catch (error) {
-      console.error('Error loading event:', error);
+              // Error loading event
       Alert.alert('Error', 'Failed to load event');
       router.back();
     } finally {
@@ -101,7 +103,7 @@ export default function EditEvent() {
         setSelectedImage(result.assets[0].uri);
       }
     } catch (error) {
-      console.error('Error picking image:', error);
+              // Error picking image
       Alert.alert('Error', 'Failed to pick image. Please try again.');
     }
   };
@@ -125,7 +127,7 @@ export default function EditEvent() {
       const downloadURL = await getDownloadURL(storageRef);
       return downloadURL;
     } catch (error) {
-      console.error('Error uploading image:', error);
+              // Error uploading image
       Alert.alert('Error', 'Failed to upload image. Please try again.');
       return null;
     } finally {
@@ -186,6 +188,7 @@ export default function EditEvent() {
         description: formData.description.trim(),
         location: formData.location.trim(),
         event_code: formData.event_code.trim(),
+        event_link: formData.event_link.trim(),
         starts_at: formData.starts_at.toISOString(),
         expires_at: formData.expires_at.toISOString(),
         image_url: imageUrl, // Add image URL if uploaded or existing
@@ -198,7 +201,7 @@ export default function EditEvent() {
         }
       ]);
     } catch (error) {
-      console.error('Error updating event:', error);
+              // Error updating event
       Alert.alert('Error', 'Failed to update event. Please try again.');
     } finally {
       setIsSaving(false);
@@ -417,7 +420,7 @@ export default function EditEvent() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#8b5cf6" />
           <Text style={styles.loadingText}>Loading event...</Text>
@@ -427,7 +430,7 @@ export default function EditEvent() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity 
@@ -519,6 +522,24 @@ export default function EditEvent() {
               placeholder="Enter event location"
               placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
             />
+          </View>
+
+          {/* Event Link */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Event Link</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.event_link}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, event_link: text }))}
+              placeholder="Enter event link (optional)"
+              placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+            />
+            <Text style={[styles.label, { fontSize: 12, color: isDark ? '#9ca3af' : '#6b7280', marginTop: 4 }]}>
+              This link will be used for the "Join Event" button on the website
+            </Text>
           </View>
 
           {/* Event Code */}

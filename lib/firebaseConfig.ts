@@ -21,158 +21,76 @@ let auth: any = null;
 let storage: any = null;
 
 try {
-  console.log('Initializing Firebase with config:', {
-    projectId: firebaseConfig.projectId,
-    authDomain: firebaseConfig.authDomain,
-    apiKey: firebaseConfig.apiKey ? '***' : 'missing'
-  });
-  
   app = initializeApp(firebaseConfig);
   db = getFirestore(app);
   auth = getAuth(app);
   storage = getStorage(app);
-  
-  console.log('✅ Firebase initialized successfully');
-  console.log('Database instance:', db);
-  console.log('Auth instance:', auth);
-  console.log('Storage instance:', storage);
 } catch (error) {
-  console.error('❌ Firebase initialization failed:', error);
-  // Create fallback objects to prevent crashes
-  app = { name: 'fallback' };
-  db = { collection: () => ({ add: () => Promise.resolve() }) };
-  auth = { currentUser: null };
-  storage = { ref: () => ({ put: () => Promise.resolve() }) };
+          // Failed to initialize Firebase
 }
 
-// Network connectivity manager with memory safety
-class FirebaseNetworkManager {
-  private isConnected = true;
+// Firebase reconnection manager
+class FirebaseReconnectionManager {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
-  private networkListener: any = null;
-  private isDestroyed = false;
+  private reconnectInterval = 5000; // 5 seconds
+  private isReconnecting = false;
 
-  constructor() {
-    this.setupNetworkListener();
-  }
-
-  private setupNetworkListener() {
-    if (this.isDestroyed) return;
-    
-    try {
-      this.networkListener = NetInfo.addEventListener((state: any) => {
-        if (this.isDestroyed) return;
-        
-        const wasConnected = this.isConnected;
-        this.isConnected = state.isConnected ?? false;
-        
-        if (!wasConnected && this.isConnected) {
-          // Network reconnected, attempting Firebase reconnection
-          setTimeout(() => this.attemptReconnection(), 1000);
-        }
-      });
-    } catch (error) {
-      console.error('Failed to setup network listener:', error);
-    }
-  }
-
-  public async checkConnection(): Promise<boolean> {
-    if (this.isDestroyed || !this.isConnected) {
+  async attemptReconnection(): Promise<boolean> {
+    if (this.isReconnecting || this.reconnectAttempts >= this.maxReconnectAttempts) {
       return false;
     }
 
-    try {
-      // Simple connection test with timeout
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Connection timeout')), 5000)
-      );
-      
-      const connectionPromise = (async () => {
-        const eventsRef = collection(db, 'events');
-        const q = query(eventsRef, limit(1));
-        await getDocs(q);
-        return true;
-      })();
-
-      await Promise.race([connectionPromise, timeoutPromise]);
-      return true;
-    } catch (error: any) {
-      console.warn('⚠️ Firebase connection test failed:', error.message);
-      return false;
-    }
-  }
-
-  private async attemptReconnection() {
-    if (this.isDestroyed || this.reconnectAttempts >= this.maxReconnectAttempts) {
-      return;
-    }
-
+    this.isReconnecting = true;
     this.reconnectAttempts++;
-    console.log(`Attempting Firebase reconnection (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
 
     try {
-      await this.checkConnection();
+      // Test connectivity by making a simple query
+      const eventsRef = collection(db, 'events');
+      const q = query(eventsRef, limit(1));
+      await getDocs(q);
+      
       this.reconnectAttempts = 0;
-      console.log('Firebase reconnection successful');
+      this.isReconnecting = false;
+      return true;
     } catch (error) {
-      console.log('Firebase reconnection failed, will retry');
-      setTimeout(() => this.attemptReconnection(), 2000);
-    }
-  }
-
-  public getConnectionStatus(): boolean {
-    return this.isConnected && !this.isDestroyed;
-  }
-
-  public destroy() {
-    this.isDestroyed = true;
-    if (this.networkListener) {
-      try {
-        this.networkListener();
-        this.networkListener = null;
-      } catch (error) {
-        console.error('Error removing network listener:', error);
+      this.isReconnecting = false;
+      
+      if (this.reconnectAttempts < this.maxReconnectAttempts) {
+        setTimeout(() => this.attemptReconnection(), this.reconnectInterval);
       }
+      
+      return false;
     }
+  }
+
+  resetAttempts(): void {
+    this.reconnectAttempts = 0;
+    this.isReconnecting = false;
   }
 }
 
-// Create network manager instance
-export const firebaseNetworkManager = new FirebaseNetworkManager();
-
-// Export Firebase services
-export { app, db, auth, storage };
+export const reconnectionManager = new FirebaseReconnectionManager();
 
 // Check Firebase status
-export const checkFirebaseStatus = () => {
-  console.log('Firebase status check completed');
-};
-
-// Test database connection
-export const testDatabaseConnection = async (): Promise<boolean> => {
+export const checkFirebaseStatus = async (): Promise<{ isConnected: boolean; error?: string }> => {
   try {
-    console.log('Testing database connection...');
-    console.log('Database object:', db);
+    const netInfo = await NetInfo.fetch();
     
-    if (!db) {
-      console.error('❌ Database object is null or undefined');
-      return false;
+    if (!netInfo.isConnected) {
+      return { isConnected: false, error: 'No internet connection' };
     }
-    
+
+    // Test Firebase connectivity
     const eventsRef = collection(db, 'events');
-    console.log('Events collection reference:', eventsRef);
-    
     const q = query(eventsRef, limit(1));
-    console.log('Query object:', q);
+    await getDocs(q);
     
-    const snapshot = await getDocs(q);
-    console.log('Query result:', snapshot);
-    
-    console.log('✅ Database connection test successful');
-    return true;
-  } catch (error) {
-    console.error('❌ Database connection test failed:', error);
-    return false;
+    return { isConnected: true };
+  } catch (error: any) {
+    return { isConnected: false, error: error.message };
   }
 };
+
+// Export Firebase instances
+export { app, db, auth, storage };

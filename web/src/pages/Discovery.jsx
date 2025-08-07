@@ -243,7 +243,7 @@ export default function Discovery() {
           console.error('Error sending match notification:', error);
         }
         
-        toast.success(`It's a Match! You and ${likedProfile.first_name} liked each other.`);
+        toast.success(`You got Hooked! You and ${likedProfile.first_name} liked each other.`);
         navigate(createPageUrl("Matches"));
       }
     } catch (error) {

@@ -22,7 +22,7 @@ import {
 import { router, useFocusEffect } from 'expo-router';
 import { Heart, QrCode, Hash, Shield, Clock, Users, X, Camera, Settings, LogOut, Flag, Edit3, Eye, EyeOff, Edit, User, AlertCircle, MessageCircle } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { EventProfileAPI, EventAPI, AuthAPI, ReportAPI, StorageAPI, testFirebaseConnection, LikeAPI, MessageAPI } from '../lib/firebaseApi';
+import { EventProfileAPI, EventAPI, AuthAPI, ReportAPI, StorageAPI, LikeAPI, MessageAPI } from '../lib/firebaseApi';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -30,7 +30,7 @@ import { useMobileAsyncOperation } from '../lib/hooks/useMobileErrorHandling';
 import MobileOfflineStatusBar from '../lib/components/MobileOfflineStatusBar';
 import { SurveyNotificationService } from '../lib/surveyNotificationService';
 import { MemoryManager, checkNetworkConnectivityWithTimeout, checkSimpleNetworkConnectivity } from '../lib/utils';
-import { testDatabaseConnection } from '../lib/firebaseConfig';
+
 
 export default function Profile() {
   const colorScheme = useColorScheme();
@@ -69,22 +69,7 @@ export default function Profile() {
   useEffect(() => {
     initializeSession();
     
-    // Test Firebase connection to help debug permission issues
-    const testConnection = async () => {
-      try {
-        console.log('Testing Firebase connection for reports...');
-        const result = await testFirebaseConnection();
-        if (result.success) {
-          console.log('✅ Firebase connection test successful');
-        } else {
-          console.error('❌ Firebase connection test failed:', result.error);
-        }
-      } catch (error) {
-        console.error('❌ Firebase connection test error:', error);
-      }
-    };
-    
-    testConnection();
+
   }, []);
 
   // Check for unseen messages
@@ -97,7 +82,7 @@ export default function Profile() {
         const hasUnseen = await hasUnseenMessages(currentEvent.id, profile.session_id);
         setHasUnreadMessages(hasUnseen);
       } catch (error) {
-        console.error('Error checking unseen messages in profile:', error);
+        // Error checking unseen messages in profile
       }
     };
 
@@ -146,6 +131,14 @@ export default function Profile() {
       if (events.length > 0) {
         setCurrentEvent(events[0]);
       } else {
+        // Event doesn't exist, clear all data and redirect to home
+        await AsyncStorage.multiRemove([
+          'currentEventId',
+          'currentSessionId',
+          'currentEventCode',
+          'currentProfileColor',
+          'currentProfilePhotoUrl'
+        ]);
         router.replace('/home');
         return;
       }
@@ -158,10 +151,27 @@ export default function Profile() {
       if (profiles.length > 0) {
         setProfile(profiles[0]);
       } else {
+        // Profile doesn't exist in database (user left event and deleted profile)
+        // Clear all AsyncStorage data and redirect to home
+        await AsyncStorage.multiRemove([
+          'currentEventId',
+          'currentSessionId',
+          'currentEventCode',
+          'currentProfileColor',
+          'currentProfilePhotoUrl'
+        ]);
         router.replace('/home');
         return;
       }
     } catch (error) {
+      // Clear data and redirect to home on error
+      await AsyncStorage.multiRemove([
+        'currentEventId',
+        'currentSessionId',
+        'currentEventCode',
+        'currentProfileColor',
+        'currentProfilePhotoUrl'
+      ]);
       router.replace('/home');
     }
     setIsLoading(false);
@@ -287,7 +297,7 @@ export default function Profile() {
 
       setAllUsers(filteredUsers);
     } catch (error) {
-      console.error('Error loading users for report:', error);
+              // Error loading users for report
       // Handle error silently
     }
   };
@@ -314,14 +324,14 @@ export default function Profile() {
     setSubmittingReport(true);
     try {
       // Check network connectivity before attempting to submit report
-      console.log('Checking network connectivity...');
+
       let isConnected = true; // Default to true to bypass network check if it's causing issues
       
       try {
         isConnected = await checkSimpleNetworkConnectivity();
-        console.log('Network connectivity result:', isConnected);
+
       } catch (error) {
-        console.log('Network check failed, proceeding anyway:', error);
+        
         isConnected = true; // Proceed even if network check fails
       }
       
@@ -331,48 +341,19 @@ export default function Profile() {
         return;
       }
 
-      // Test database connection
-      console.log('Testing database connection...');
-      const dbConnected = await testDatabaseConnection();
-      console.log('Database connection result:', dbConnected);
-      
-      if (!dbConnected) {
-        Alert.alert("Database Connection Error", "Unable to connect to the database. Please try again.");
-        setSubmittingReport(false);
-        return;
-      }
+
 
       const eventId = await AsyncStorage.getItem('currentEventId');
       const sessionId = await AsyncStorage.getItem('currentSessionId');
       
-      console.log('Session data:', { eventId, sessionId });
+
       
       if (!eventId || !sessionId) {
         Alert.alert("Error", "Session information not found. Please try again.");
         return;
       }
 
-      // Log the data being sent for debugging
-      console.log('Selected user to report:', selectedUserToReport);
-      console.log('Submitting report with data:', {
-        event_id: eventId,
-        reporter_session_id: sessionId,
-        reported_session_id: selectedUserToReport.session_id,
-        reason: 'Inappropriate behavior',
-        details: reportExplanation.trim(),
-        status: 'pending'
-      });
 
-      // Create the report in Firestore
-      console.log('Attempting to create report...');
-      console.log('Report data:', {
-        event_id: eventId,
-        reporter_session_id: sessionId,
-        reported_session_id: selectedUserToReport.session_id,
-        reason: 'Inappropriate behavior',
-        details: reportExplanation.trim(),
-        status: 'pending'
-      });
       
       let reportResult;
       
@@ -386,16 +367,16 @@ export default function Profile() {
           status: 'pending'
         });
         
-        console.log('Report creation result:', reportResult);
+
         
         // Verify the report was created successfully
         if (!reportResult || !reportResult.id) {
           throw new Error('Report creation failed - no ID returned');
         }
         
-        console.log('✅ Report created successfully with ID:', reportResult.id);
+
       } catch (reportError) {
-        console.error('ReportAPI.create failed:', reportError);
+        // ReportAPI.create failed
         throw reportError; // Re-throw to be caught by the outer catch block
       }
 
@@ -416,12 +397,7 @@ export default function Profile() {
         ]
       );
     } catch (error) {
-      // Report submission error - log for debugging
-      console.error('Report submission error details:', {
-        error: error,
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined
-      });
+      // Report submission error details
       
       let errorMessage = "Failed to submit report. Please try again.";
       
@@ -524,7 +500,7 @@ export default function Profile() {
               
               router.replace('/home');
             } catch (error) {
-              console.error("Error deleting profile:", error);
+              // Error deleting profile
               Alert.alert("Error", "Failed to delete profile. Please try again.");
             }
           }
@@ -574,8 +550,8 @@ export default function Profile() {
       Alert.alert(
         value ? "Profile Visible" : "Profile Hidden",
         value 
-          ? "Your profile is now visible to other users." 
-          : "Your profile is now hidden. You won't see other users and they won't see you."
+          ? "Your profile is now visible to other users. You can see and be seen by other users in discovery." 
+          : "Your profile is now hidden. You won't see other users in discovery, but you can still access your matches and chat with them."
       );
       
     } catch (error) {
@@ -1044,7 +1020,7 @@ export default function Profile() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerText}>
@@ -1204,7 +1180,10 @@ export default function Profile() {
             <Switch value={eventVisible} onValueChange={handleToggleVisibility} />
           </View>
           <Text style={{ color: isDark ? '#9ca3af' : '#6b7280' }}>
-            {eventVisible ? 'Your profile is visible to others at the current event.' : 'Your profile is hidden from others at the current event.'}
+            {eventVisible 
+              ? 'Your profile is visible to others at the current event. You can see and be seen by other users.' 
+              : 'Your profile is hidden from others at the current event. You cannot see other users, but you can still access your matches and chat with them.'
+            }
           </Text>
         </View>
         {/* About Me */}

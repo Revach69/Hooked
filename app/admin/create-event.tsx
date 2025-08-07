@@ -38,6 +38,7 @@ export default function CreateEvent() {
     description: '',
     location: '',
     event_code: '',
+    event_link: '',
     starts_at: new Date(),
     expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours from now
   });
@@ -70,7 +71,7 @@ export default function CreateEvent() {
         setSelectedImage(result.assets[0].uri);
       }
     } catch (error) {
-      console.error('Error picking image:', error);
+              // Error picking image
       Alert.alert('Error', 'Failed to pick image. Please try again.');
     }
   };
@@ -94,7 +95,7 @@ export default function CreateEvent() {
       const downloadURL = await getDownloadURL(storageRef);
       return downloadURL;
     } catch (error) {
-      console.error('Error uploading image:', error);
+              // Error uploading image
       Alert.alert('Error', 'Failed to upload image. Please try again.');
       return null;
     } finally {
@@ -150,6 +151,7 @@ export default function CreateEvent() {
         description: formData.description.trim(),
         location: formData.location.trim(),
         event_code: formData.event_code.trim(),
+        event_link: formData.event_link.trim(),
         starts_at: formData.starts_at.toISOString(),
         expires_at: formData.expires_at.toISOString(),
         organizer_email: AuthAPI.getCurrentUser()?.email || '',
@@ -164,7 +166,7 @@ export default function CreateEvent() {
         }
       ]);
     } catch (error) {
-      console.error('Error creating event:', error);
+              // Error creating event
       Alert.alert('Error', 'Failed to create event. Please try again.');
     } finally {
       setIsLoading(false);
@@ -186,14 +188,13 @@ export default function CreateEvent() {
   };
 
   const formatDate = (date: Date) => {
-          return date.toLocaleDateString('en-US', {
-        hour12: false,
+    return date.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
-              hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
     });
   };
 
@@ -385,7 +386,7 @@ export default function CreateEvent() {
   });
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity 
@@ -474,6 +475,24 @@ export default function CreateEvent() {
               placeholder="Enter event location"
               placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
             />
+          </View>
+
+          {/* Event Link */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Event Link</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.event_link}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, event_link: text }))}
+              placeholder="Enter event link (optional)"
+              placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+            />
+            <Text style={[styles.label, { fontSize: 12, color: isDark ? '#9ca3af' : '#6b7280', marginTop: 4 }]}>
+              This link will be used for the "Join Event" button on the website
+            </Text>
           </View>
 
           {/* Event Code */}

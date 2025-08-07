@@ -5,7 +5,13 @@ export const AdminUtils = {
   // Check if current user is admin
   async isAdmin(): Promise<boolean> {
     try {
-      // Check admin session from AsyncStorage
+      // Check if user is authenticated - authenticated users are admins
+      const currentUser = AuthAPI.getCurrentUser();
+      if (!currentUser) {
+        return false;
+      }
+
+      // Check admin session from AsyncStorage for performance
       const adminSession = await AsyncStorage.getItem('isAdmin');
       const adminAccessTime = await AsyncStorage.getItem('adminAccessTime');
       
@@ -19,10 +25,16 @@ export const AdminUtils = {
           return true;
         }
       }
+
+      // If no valid session but user is authenticated, set admin session
+      if (currentUser) {
+        await this.setAdminSession(currentUser.email || '');
+        return true;
+      }
       
       return false;
     } catch (error) {
-      console.error('Error checking admin status:', error);
+              // Error checking admin status
       return false;
     }
   },
@@ -34,7 +46,7 @@ export const AdminUtils = {
       await AsyncStorage.setItem('adminAccessTime', new Date().toISOString());
       await AsyncStorage.setItem('adminEmail', email);
     } catch (error) {
-      console.error('Error setting admin session:', error);
+              // Error setting admin session
     }
   },
 
@@ -48,7 +60,7 @@ export const AdminUtils = {
         'adminUid'
       ]);
     } catch (error) {
-      console.error('Error clearing admin session:', error);
+              // Error clearing admin session
     }
   },
 
@@ -57,7 +69,7 @@ export const AdminUtils = {
     try {
       return await AsyncStorage.getItem('adminEmail');
     } catch (error) {
-      console.error('Error getting admin email:', error);
+              // Error getting admin email
       return null;
     }
   }

@@ -109,7 +109,7 @@ export default function SurveyScreen() {
         [{ text: 'OK', onPress: () => router.replace('/home') }]
       );
     } catch (error) {
-      console.error('Failed to submit feedback:', error);
+              // Failed to submit feedback
       Alert.alert('Error', 'Failed to submit feedback. Please try again.');
     } finally {
       setIsSubmitting(false);

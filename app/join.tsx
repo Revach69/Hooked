@@ -99,7 +99,7 @@ export default function JoinPage() {
       // Event is valid and active, proceed to create profile
       await createEventProfile(foundEvent);
     } catch (error: any) {
-      console.error('Event join failed:', error);
+              // Event join failed
       const errorMessage = error.message || 'Failed to join event. Please try again.';
       setError(errorMessage);
       setIsLoading(false);
@@ -116,10 +116,25 @@ export default function JoinPage() {
       await AsyncStorage.setItem('currentSessionId', sessionId);
       await AsyncStorage.setItem('currentEventCode', event.event_code);
 
+      // Register for push notifications
+      try {
+        const { getExpoPushTokenAsync } = await import('expo-notifications');
+        const token = await getExpoPushTokenAsync({
+          projectId: '7a1de260-e3cb-4cbb-863c-1557213d69f0',
+        });
+        
+        if (token.data) {
+          const { storePushToken } = await import('../lib/notificationService');
+          await storePushToken(sessionId, token.data);
+        }
+      } catch (error) {
+        // Error registering push token - continue without it
+      }
+
       // Navigate to consent page
       router.replace('/consent');
     } catch (error) {
-      console.error('Failed to create event profile:', error);
+      // Failed to create event profile
       setError("Failed to set up your event session. Please try again.");
       setIsLoading(false);
     }
@@ -132,7 +147,7 @@ export default function JoinPage() {
     try {
       await handleEventJoin();
     } catch (error) {
-      console.error('Retry failed:', error);
+              // Retry failed
       setError("Retry failed. Please check your connection and try again.");
     } finally {
       setIsRetrying(false);

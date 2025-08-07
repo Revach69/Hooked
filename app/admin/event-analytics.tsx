@@ -140,7 +140,7 @@ export default function EventAnalytics() {
         dailyActivity,
       });
     } catch (error) {
-      console.error("Error loading analytics:", error);
+              // Error loading analytics
       Alert.alert('Error', 'Failed to load analytics');
     } finally {
       setIsLoading(false);

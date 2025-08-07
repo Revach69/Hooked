@@ -29,10 +29,10 @@ export default function Header() {
             <Link href="/about" className="dark-mode-text hover:text-purple-600 px-3 py-2 text-base font-bold transition-colors">
               About
             </Link>
-            <Link href="/how-it-works" className="dark-mode-text hover:text-purple-600 px-3 py-2 text-base font-bold transition-colors">
-              How it Works
+            <Link href="/event-organizers" className="dark-mode-text hover:text-purple-600 px-3 py-2 text-base font-bold transition-colors">
+              Event Organizers
             </Link>
-            <Link href="/events" className="dark-mode-text hover:text-purple-600 px-3 py-2 text-base font-bold transition-colors">
+            <Link href="/irl" className="dark-mode-text hover:text-purple-600 px-3 py-2 text-base font-bold transition-colors">
               IRL
             </Link>
             <Link href="/contact" className="dark-mode-text hover:text-purple-600 px-3 py-2 text-base font-bold transition-colors">
@@ -74,14 +74,14 @@ export default function Header() {
               About
             </Link>
             <Link 
-              href="/how-it-works" 
+              href="/event-organizers" 
               className="block dark-mode-text hover:text-purple-600 px-3 py-2 text-base font-bold transition-colors"
               onClick={() => setIsMobileMenuOpen(false)}
             >
-              How it Works
+              Event Organizers
             </Link>
             <Link 
-              href="/events" 
+              href="/irl" 
               className="block dark-mode-text hover:text-purple-600 px-3 py-2 text-base font-bold transition-colors"
               onClick={() => setIsMobileMenuOpen(false)}
             >

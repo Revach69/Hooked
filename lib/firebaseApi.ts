@@ -14,7 +14,14 @@ import {
   Timestamp
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage, firebaseNetworkManager } from './firebaseConfig';
+import { 
+  signInWithEmailAndPassword, 
+  signOut as firebaseSignOut, 
+  updateProfile as firebaseUpdateProfile,
+  User as FirebaseUser
+} from 'firebase/auth';
+import { db, storage, auth } from './firebaseConfig';
+import { trace } from './firebasePerformance';
 import NetInfo from '@react-native-community/netinfo';
 
 // Enhanced retry mechanism with network connectivity checks and memory safety
@@ -97,6 +104,7 @@ export interface Event {
   is_active: boolean;
   image_url?: string; // Added for event images
   event_type?: string; // Added for event type filtering
+  event_link?: string; // Added for event link
   created_at: string;
   updated_at: string;
 }
@@ -189,37 +197,41 @@ export interface KickedUser {
 export const EventAPI = {
   async create(data: Omit<Event, 'id' | 'created_at' | 'updated_at'>): Promise<Event> {
     return firebaseRetry(async () => {
-      const docRef = await addDoc(collection(db, 'events'), {
-        ...data,
-        created_at: serverTimestamp(),
-        updated_at: serverTimestamp()
+      return trace('create_event', async () => {
+        const docRef = await addDoc(collection(db, 'events'), {
+          ...data,
+          created_at: serverTimestamp(),
+          updated_at: serverTimestamp()
+        });
+        
+        return {
+          id: docRef.id,
+          ...data,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
       });
-      
-      return {
-        id: docRef.id,
-        ...data,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
     }, { operation: 'Create event' });
   },
 
   async filter(filters: Partial<Event> = {}): Promise<Event[]> {
     return firebaseRetry(async () => {
-      let q: any = collection(db, 'events');
-      
-      if (filters.event_code) {
-        q = query(q, where('event_code', '==', filters.event_code));
-      }
-      if (filters.id) {
-        q = query(q, where('__name__', '==', filters.id));
-      }
-      
-      const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...(doc.data() as any)
-      })) as Event[];
+      return trace('filter_events', async () => {
+        let q: any = collection(db, 'events');
+        
+        if (filters.event_code) {
+          q = query(q, where('event_code', '==', filters.event_code));
+        }
+        if (filters.id) {
+          q = query(q, where('__name__', '==', filters.id));
+        }
+        
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...(doc.data() as any)
+        })) as Event[];
+      });
     }, { operation: 'Filter events' });
   },
 
@@ -254,40 +266,44 @@ export const EventAPI = {
 export const EventProfileAPI = {
   async create(data: Omit<EventProfile, 'id' | 'created_at' | 'updated_at'>): Promise<EventProfile> {
     return firebaseRetry(async () => {
-      const docRef = await addDoc(collection(db, 'event_profiles'), {
-        ...data,
-        created_at: serverTimestamp(),
-        updated_at: serverTimestamp()
+      return trace('create_event_profile', async () => {
+        const docRef = await addDoc(collection(db, 'event_profiles'), {
+          ...data,
+          created_at: serverTimestamp(),
+          updated_at: serverTimestamp()
+        });
+        
+        return {
+          id: docRef.id,
+          ...data,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
       });
-      
-      return {
-        id: docRef.id,
-        ...data,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
     }, { operation: 'Create event profile' });
   },
 
   async filter(filters: Partial<EventProfile> = {}): Promise<EventProfile[]> {
     return firebaseRetry(async () => {
-      let q: any = collection(db, 'event_profiles');
-      
-      if (filters.event_id) {
-        q = query(q, where('event_id', '==', filters.event_id));
-      }
-      if (filters.session_id) {
-        q = query(q, where('session_id', '==', filters.session_id));
-      }
-      if (filters.is_visible !== undefined) {
-        q = query(q, where('is_visible', '==', filters.is_visible));
-      }
-      
-      const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...(doc.data() as any)
-      })) as EventProfile[];
+      return trace('filter_event_profiles', async () => {
+        let q: any = collection(db, 'event_profiles');
+        
+        if (filters.event_id) {
+          q = query(q, where('event_id', '==', filters.event_id));
+        }
+        if (filters.session_id) {
+          q = query(q, where('session_id', '==', filters.session_id));
+        }
+        if (filters.is_visible !== undefined) {
+          q = query(q, where('is_visible', '==', filters.is_visible));
+        }
+        
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...(doc.data() as any)
+        })) as EventProfile[];
+      });
     }, { operation: 'Filter event profiles' });
   },
 
@@ -561,16 +577,11 @@ export const ReportAPI = {
   async create(data: Omit<Report, 'id' | 'created_at'>): Promise<Report> {
     return firebaseRetry(async () => {
       // Enhanced validation and logging
-      console.log('ReportAPI.create called with data:', data);
+  
       
       // Validate required fields
       if (!data.event_id || !data.reporter_session_id || !data.reported_session_id || !data.reason) {
-        console.error('Missing required fields for report creation:', {
-          event_id: !!data.event_id,
-          reporter_session_id: !!data.reporter_session_id,
-          reported_session_id: !!data.reported_session_id,
-          reason: !!data.reason
-        });
+        // Missing required fields for report creation
         throw new Error('Missing required fields for report creation');
       }
       
@@ -581,10 +592,10 @@ export const ReportAPI = {
         created_at: serverTimestamp()
       };
       
-      console.log('Creating report with data:', reportData);
+
       
       const docRef = await addDoc(collection(db, 'reports'), reportData);
-      console.log('Report document created with ID:', docRef.id);
+      
       
       // Don't read back the document since users don't have read permissions
       // Instead, return the data we already have with the document ID
@@ -593,7 +604,7 @@ export const ReportAPI = {
         ...reportData,
         created_at: new Date().toISOString() // Convert serverTimestamp to ISO string
       } as Report;
-      console.log('Report creation successful:', result);
+      
       
       return result;
     }, { operation: 'Create report' });
@@ -656,54 +667,37 @@ export const ReportAPI = {
 
 // Auth API
 export const AuthAPI = {
-  async signUp(email: string, password: string): Promise<any> { // Changed FirebaseUser to any as authentication is no longer required
+  async signUp(email: string, password: string): Promise<FirebaseUser> {
     return firebaseRetry(async () => {
-      // Removed createUserWithEmailAndPassword as it requires authentication
-      // const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      // return userCredential.user;
-      console.warn('signUp operation is deprecated as authentication is no longer required.');
-      return null; // Placeholder
+      // Note: User creation should be done through Firebase Console or admin SDK
+      // This method is kept for compatibility but will throw an error
+      throw new Error('User creation is not supported in the mobile app. Please create users through Firebase Console.');
     }, { operation: 'Sign up' });
   },
 
-  async signIn(email: string, password: string): Promise<any> {
+  async signIn(email: string, password: string): Promise<FirebaseUser> {
     return firebaseRetry(async () => {
-      // Simple admin authentication without Firebase Auth
-      // For now, allow any email/password combination for admin access
-      // In production, you should implement proper admin authentication
-      // Admin login attempt
-      
-      // Return a mock user object
-      return {
-        uid: `admin_${Date.now()}`,
-        email: email,
-        displayName: 'Admin User'
-      };
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      return userCredential.user;
     }, { operation: 'Sign in' });
   },
 
   async signOut(): Promise<void> {
     return firebaseRetry(async () => {
-      // Removed signOut as it requires authentication
-      // await signOut(auth);
-      console.warn('signOut operation is deprecated as authentication is no longer required.');
+      await firebaseSignOut(auth);
     }, { operation: 'Sign out' });
   },
 
   async updateProfile(data: { displayName?: string; photoURL?: string }): Promise<void> {
     return firebaseRetry(async () => {
-      // Removed updateProfile as it requires authentication
-      // if (auth.currentUser) {
-      //   await updateProfile(auth.currentUser, data);
-      // }
-      console.warn('updateProfile operation is deprecated as authentication is no longer required.');
+      if (auth.currentUser) {
+        await firebaseUpdateProfile(auth.currentUser, data);
+      }
     }, { operation: 'Update profile' });
   },
 
-  getCurrentUser(): any | null {
-    // For now, return null as we're not using Firebase Auth
-    // This will be handled by AdminUtils with AsyncStorage
-    return null;
+  getCurrentUser(): FirebaseUser | null {
+    return auth.currentUser;
   }
 };
 
@@ -717,7 +711,7 @@ export const StorageAPI = {
       // Check if the URI is a remote URL (starts with http/https) or a local file
       if (file.uri.startsWith('http://') || file.uri.startsWith('https://')) {
         // Handle remote URL - download the file first
-        console.log('Downloading remote file for upload');
+  
         try {
           const response = await fetch(file.uri);
           if (!response.ok) {
@@ -729,12 +723,12 @@ export const StorageAPI = {
           const { uploadBytesResumable } = await import('firebase/storage');
           await uploadBytesResumable(storageRef, blob, { contentType: file.type });
         } catch (downloadError) {
-          console.error('Error downloading remote file:', downloadError);
+          // Error downloading remote file
           throw new Error(`Failed to download remote file: ${downloadError instanceof Error ? downloadError.message : 'Unknown error'}`);
         }
       } else {
         // Handle local file URI - use a simpler, more reliable approach for Android
-        console.log('Uploading local file:', file.uri);
+
         
         try {
           const { uploadBytesResumable } = await import('firebase/storage');
@@ -751,16 +745,16 @@ export const StorageAPI = {
           // Upload the blob to Firebase Storage
           await uploadBytesResumable(storageRef, blob, { contentType: file.type });
         } catch (uploadError) {
-          console.error('Error uploading local file:', uploadError);
+          // Error uploading local file
           throw new Error(`Failed to upload local file: ${uploadError instanceof Error ? uploadError.message : 'Unknown error'}`);
         }
       }
       
       // File uploaded to Firebase Storage successfully
-      console.log('File uploaded successfully, generating download URL');
+      
       
       const downloadURL = await getDownloadURL(storageRef);
-      console.log('Download URL generated:', downloadURL);
+      
       return { file_url: downloadURL };
     }, { operation: 'Upload file', maxRetries: 3, baseDelay: 2000 });
   }
@@ -798,7 +792,7 @@ export const SavedProfileAPI = {
       // Removed AsyncStorage as it's no longer needed for local storage
       // await AsyncStorage.setItem('saved_profiles', JSON.stringify(savedProfiles));
     } catch (error) {
-      console.error('Error saving profile locally:', error);
+              // Error saving profile locally
       throw error;
     }
   },
@@ -808,10 +802,10 @@ export const SavedProfileAPI = {
       // Removed AsyncStorage as it's no longer needed for local storage
       // const saved = await AsyncStorage.getItem('saved_profiles');
       // return saved ? JSON.parse(saved) : [];
-      console.warn('getLocalProfiles operation is deprecated as local storage is no longer used.');
+              // getLocalProfiles operation is deprecated as local storage is no longer used
       return []; // Placeholder
     } catch (error) {
-      console.error('Error getting local profiles:', error);
+              // Error getting local profiles
       return [];
     }
   },
@@ -823,7 +817,7 @@ export const SavedProfileAPI = {
       // const filtered = savedProfiles.filter(p => p.id !== profileId);
       // await AsyncStorage.setItem('saved_profiles', JSON.stringify(filtered));
     } catch (error) {
-      console.error('Error deleting local profile:', error);
+              // Error deleting local profile
       throw error;
     }
   },
@@ -837,7 +831,7 @@ export const SavedProfileAPI = {
       //   created_at: serverTimestamp()
       // });
       // return docRef.id;
-      console.warn('saveProfileToCloud operation is deprecated as authentication is no longer required.');
+              // saveProfileToCloud operation is deprecated as authentication is no longer required
       return 'local_id'; // Placeholder
     }, { operation: 'Save profile to cloud' });
   },
@@ -858,7 +852,7 @@ export const SavedProfileAPI = {
       //   id: doc.id,
       //   ...(doc.data() as any)
       // })) as SavedProfile[];
-      console.warn('getCloudProfiles operation is deprecated as authentication is no longer required.');
+              // getCloudProfiles operation is deprecated as authentication is no longer required
       return []; // Placeholder
     }, { operation: 'Get cloud profiles' });
   },
@@ -868,7 +862,7 @@ export const SavedProfileAPI = {
       // Removed deleteDoc as it requires authentication
       // const docRef = doc(db, 'user_saved_profiles', profileId);
       // await deleteDoc(docRef);
-      console.warn('deleteCloudProfile operation is deprecated as authentication is no longer required.');
+              // deleteCloudProfile operation is deprecated as authentication is no longer required
     }, { operation: 'Delete cloud profile' });
   }
 }; 
@@ -876,44 +870,4 @@ export const SavedProfileAPI = {
 // Add User export
 export { User as FirebaseUser } from 'firebase/auth'; 
 
-// Test function to verify Firebase connectivity and permissions
-export const testFirebaseConnection = async (): Promise<{ success: boolean; error?: string }> => {
-  try {
-    console.log('Testing Firebase connection...');
-    
-    // Test basic database connection
-    const testCollection = collection(db, 'events');
-    const testQuery = query(testCollection, limit(1));
-    const testSnapshot = await getDocs(testQuery);
-    console.log('✅ Basic database connection successful');
-    
-    // Test reports collection access
-    const reportsCollection = collection(db, 'reports');
-    console.log('✅ Reports collection reference created');
-    
-    // Test creating a test report (don't delete since users don't have delete permissions)
-    const testReportData = {
-      event_id: 'test-event-' + Date.now(),
-      reporter_session_id: 'test-reporter-' + Date.now(),
-      reported_session_id: 'test-reported-' + Date.now(),
-      reason: 'test-report',
-      status: 'pending',
-      created_at: serverTimestamp()
-    };
-    
-    console.log('Attempting to create test report...');
-    const testDocRef = await addDoc(reportsCollection, testReportData);
-    console.log('✅ Test report created successfully with ID:', testDocRef.id);
-    
-    // Don't try to delete the test report since users don't have delete permissions
-    // The test report will remain in the database but that's okay for testing
-    
-    return { success: true };
-  } catch (error: any) {
-    console.error('❌ Firebase connection test failed:', error);
-    return { 
-      success: false, 
-      error: error.message || 'Unknown error' 
-    };
-  }
-}; 
+ 

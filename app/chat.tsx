@@ -70,9 +70,9 @@ export default function Chat() {
         try {
           const { markMessagesAsSeen } = await import('../lib/messageNotificationHelper');
           await markMessagesAsSeen(currentEventId, matchId as string, currentSessionId);
-          console.log('👁️ Marked messages as seen when entering chat');
+      
         } catch (error) {
-          console.error('Error marking messages as seen:', error);
+          // Error marking messages as seen
         }
       };
       
@@ -157,7 +157,7 @@ export default function Chat() {
           });
           
           if (currentUserProfiles.length === 0 || matchProfiles.length === 0) {
-            console.error('Profile not found for filtering messages');
+            // Profile not found for filtering messages
             return;
           }
           
@@ -212,7 +212,7 @@ export default function Chat() {
                 newMessage.from_profile_id === matchProfileId &&
                 messageTime > tenSecondsAgo) {
               
-              console.log('📱 Message received in chat - NOT showing toast since we are in the chat with this user');
+      
               // Don't show toast when we're already in the chat with this user
             }
           }
@@ -260,6 +260,26 @@ export default function Chat() {
 
       setCurrentSessionId(sessionId);
       setCurrentEventId(eventId);
+
+      // Verify that the current user's profile exists
+      const currentUserProfiles = await EventProfileAPI.filter({
+        session_id: sessionId,
+        event_id: eventId
+      });
+      
+      if (currentUserProfiles.length === 0) {
+        // User profile doesn't exist (user left event and deleted profile)
+        // Clear all AsyncStorage data and redirect to home
+        await AsyncStorage.multiRemove([
+          'currentEventId',
+          'currentSessionId',
+          'currentEventCode',
+          'currentProfileColor',
+          'currentProfilePhotoUrl'
+        ]);
+        router.replace('/home');
+        return;
+      }
 
       // Get match profile - don't filter by visibility for matches
       const matchProfiles = await EventProfileAPI.filter({
@@ -327,7 +347,7 @@ export default function Chat() {
       await MessageAPI.create(messageData);
       setNewMessage('');
     } catch (error) {
-      console.error('Error sending message:', error);
+              // Error sending message
       Alert.alert('Error', 'Failed to send message');
     } finally {
       setIsSending(false);
@@ -368,7 +388,7 @@ export default function Chat() {
       setShowReportModal(false);
       setReportReason('');
     } catch (error) {
-      console.error('Error submitting report:', error);
+              // Error submitting report
       Alert.alert('Error', 'Failed to submit report');
     } finally {
       setIsSubmittingReport(false);
@@ -659,7 +679,7 @@ export default function Chat() {
 
   return (
     <>
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

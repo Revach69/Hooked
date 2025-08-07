@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { Event } from '@/lib/firebaseApi';
 import { X, Save, Plus, Camera, Upload } from 'lucide-react';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '@/lib/firebaseConfig';
 
 interface EventFormProps {
   event?: Event | null;
@@ -24,7 +26,8 @@ export default function EventForm({
     start_date: '',
     end_date: '',
     description: '',
-    event_type: ''
+    event_type: '',
+    event_link: ''
   });
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -32,6 +35,7 @@ export default function EventForm({
   const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   const isEditing = !!event;
 
@@ -44,7 +48,8 @@ export default function EventForm({
         start_date: event.starts_at ? new Date(event.starts_at).toISOString().slice(0, 16) : '',
         end_date: event.expires_at ? new Date(event.expires_at).toISOString().slice(0, 16) : '',
         description: event.description || '',
-        event_type: event.event_type || ''
+        event_type: event.event_type || '',
+        event_link: event.event_link || ''
       });
       
       // Load existing image if available
@@ -60,7 +65,8 @@ export default function EventForm({
         start_date: '',
         end_date: '',
         description: '',
-        event_type: ''
+        event_type: '',
+        event_link: ''
       });
       setSelectedImage(null);
       setExistingImageUrl(null);
@@ -72,6 +78,12 @@ export default function EventForm({
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      processImageFile(file);
+    }
+  };
+
+  const processImageFile = (file: File) => {
+    if (file && file.type.startsWith('image/')) {
       setSelectedImage(file);
       
       // Create preview URL
@@ -80,6 +92,26 @@ export default function EventForm({
         setImagePreview(e.target?.result as string);
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      processImageFile(files[0]);
     }
   };
 
@@ -93,20 +125,25 @@ export default function EventForm({
     try {
       setUploadingImage(true);
       
-      // Create FormData for file upload
-      const formData = new FormData();
-      formData.append('file', file);
+      // Create a unique filename
+      const timestamp = Date.now();
+      const randomString = Math.random().toString(36).substring(2, 15);
+      const fileExtension = file.name.split('.').pop();
+      const filename = `events/${timestamp}_${randomString}.${fileExtension}`;
       
-      // For now, we'll use a placeholder upload service
-      // In a real implementation, you'd upload to your storage service
-      // This is a mock implementation - replace with actual upload logic
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate upload
+      // Create a reference to the file location in Firebase Storage
+      const storageRef = ref(storage, filename);
       
-      // Return a mock URL - replace with actual upload URL
-      const mockUrl = `https://example.com/uploads/${Date.now()}_${file.name}`;
-      return mockUrl;
+      // Upload the file
+      const snapshot = await uploadBytes(storageRef, file);
+      
+      // Get the download URL
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      
+      console.log('✅ Image uploaded successfully:', downloadURL);
+      return downloadURL;
     } catch (error) {
-      console.error('Error uploading image:', error);
+      console.error('❌ Error uploading image:', error);
       return null;
     } finally {
       setUploadingImage(false);
@@ -181,6 +218,7 @@ export default function EventForm({
         starts_at: new Date(formData.start_date).toISOString(),
         expires_at: new Date(formData.end_date).toISOString(),
         event_type: formData.event_type,
+        event_link: formData.event_link,
         image_url: imageUrl, // Add image URL if uploaded or existing
       };
 
@@ -370,6 +408,23 @@ export default function EventForm({
             />
           </div>
 
+          {/* Event Link */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Event Link
+            </label>
+            <input
+              type="url"
+              value={formData.event_link}
+              onChange={(e) => handleInputChange('event_link', e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              placeholder="Enter event link (e.g., https://example.com/event)"
+            />
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              This link will be used for the "Join Event" button on the website
+            </p>
+          </div>
+
           {/* Image Upload */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -379,11 +434,13 @@ export default function EventForm({
               {/* Image Preview */}
               {imagePreview && (
                 <div className="relative">
-                  <img
-                    src={imagePreview}
-                    alt="Event Preview"
-                    className="w-full h-48 object-cover rounded-lg border border-gray-300 dark:border-gray-600"
-                  />
+                  <div className="w-full h-48 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600 flex items-center justify-center overflow-hidden">
+                    <img
+                      src={imagePreview}
+                      alt="Event Preview"
+                      className="max-w-full max-h-full object-contain"
+                    />
+                  </div>
                   <button
                     type="button"
                     onClick={removeImage}
@@ -394,9 +451,18 @@ export default function EventForm({
                 </div>
               )}
               
-              {/* Upload Button */}
+              {/* Upload Area */}
               {!imagePreview && (
-                <div className="flex items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg hover:border-gray-400 dark:hover:border-gray-500 transition-colors">
+                <div
+                  className={`flex items-center justify-center w-full h-32 border-2 border-dashed rounded-lg transition-all duration-200 ${
+                    isDragOver
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                      : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
+                  }`}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                >
                   <input
                     type="file"
                     accept="image/*"
@@ -408,9 +474,9 @@ export default function EventForm({
                     htmlFor="image-upload"
                     className="flex flex-col items-center cursor-pointer"
                   >
-                    <Upload size={24} className="text-gray-400 mb-2" />
-                    <span className="text-sm text-gray-500 dark:text-gray-400">
-                      Click to upload event image
+                    <Upload size={24} className={`mb-2 ${isDragOver ? 'text-blue-500' : 'text-gray-400'}`} />
+                    <span className={`text-sm ${isDragOver ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                      {isDragOver ? 'Drop image here' : 'Drag & drop or click to upload event image'}
                     </span>
                   </label>
                 </div>

@@ -41,7 +41,7 @@ export default function MatchNotificationToast({ matchName, onDismiss, onSeeMatc
       <div className="flex items-center gap-4">
         <Heart className="w-8 h-8 text-red-500 flex-shrink-0" fill="currentColor" />
         <div className="flex-1">
-          <h3 className="text-xl font-bold mb-2">It's a Match!</h3>
+          <h3 className="text-xl font-bold mb-2">You got Hooked!</h3>
           <p className={`text-base ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
             You and {matchName} liked each other.
           </p>

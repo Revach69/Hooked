@@ -5,83 +5,93 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
-/**
- * Test toast function for debugging
- */
-export function testToast(): void {
-  console.log('🧪 Testing toast on platform:', Platform.OS);
-  
-  try {
-    Toast.show({
-      type: 'success',
-      text1: 'Test Toast! 🧪',
-      text2: 'This is a test toast message',
+// Platform-specific toast configuration
+const getToastConfig = () => {
+  if (Platform.OS === 'ios') {
+    return {
       position: 'top' as const,
-      visibilityTime: 3000,
+      visibilityTime: 5000,
       autoHide: true,
-      topOffset: Platform.OS === 'ios' ? 60 : 50,
-    });
-    
-    console.log('🧪 Test toast called successfully');
-  } catch (error: any) {
-    console.error('🧪 Error in test toast:', error);
-  }
-}
-
-/**
- * Show in-app toast notification for new message
- */
-export function showInAppMessageToast(senderName: string, senderSessionId?: string): void {
-  console.log('📱 showInAppMessageToast called for:', senderName, 'session:', senderSessionId);
-  console.log('📱 Platform:', Platform.OS);
-  console.log('📱 Expo Go:', __DEV__ ? 'Development mode' : 'Production mode');
-  
-  try {
-    // Check if Toast is available
-    if (!Toast || typeof Toast.show !== 'function') {
-      console.error('📱 Toast is not available or Toast.show is not a function');
-      return;
-    }
-    
-    Toast.show({
-      type: 'success',
-      text1: 'New Message! 💬',
-      text2: `${senderName} sent you a message!`,
+      topOffset: 60,
+    };
+  } else {
+    return {
       position: 'top' as const,
       visibilityTime: 4000,
       autoHide: true,
-      topOffset: Platform.OS === 'ios' ? 60 : 50, // Adjust for iOS status bar
-      onPress: () => {
-        console.log('📱 Toast pressed, navigating to chat with session:', senderSessionId);
-        Toast.hide();
-        if (senderSessionId) {
-          // Navigate to specific chat
-          const chatUrl = `/chat?matchId=${senderSessionId}&matchName=${encodeURIComponent(senderName)}`;
-          console.log('📱 Navigating to:', chatUrl);
-          try {
+      topOffset: 50,
+    };
+  }
+};
+
+// Show in-app message toast with navigation
+export function showInAppMessageToast(senderName: string, senderSessionId: string): void {
+  try {
+    // Platform-specific configurations
+    const config = Platform.OS === 'ios' ? {
+      delay: 200,
+      topOffset: 60,
+      visibilityTime: 5000,
+    } : {
+      delay: 0,
+      topOffset: 50,
+      visibilityTime: 4000,
+    };
+    
+    setTimeout(() => {
+      Toast.show({
+        type: 'info',
+        text1: `New message from ${senderName}`,
+        text2: 'Tap to open chat',
+        position: 'top',
+        visibilityTime: config.visibilityTime,
+        autoHide: true,
+        topOffset: config.topOffset,
+        onPress: () => {
+          if (senderSessionId) {
+            const chatUrl = `/chat?sessionId=${senderSessionId}`;
             router.push(chatUrl);
-            console.log('📱 Router.push called successfully');
-          } catch (error) {
-            console.error('📱 Error navigating to chat:', error);
-            // Fallback to matches page
+          } else {
             router.push('/matches');
           }
-        } else {
-          // Fallback to matches page
-          console.log('📱 No session ID, navigating to matches');
+        }
+      });
+    }, config.delay);
+  } catch (error) {
+    // Error showing message toast
+  }
+}
+
+// Show match notification toast
+export function showMatchToast(matchName: string): void {
+  try {
+    // Platform-specific configurations
+    const config = Platform.OS === 'ios' ? {
+      delay: 200,
+      topOffset: 60,
+      visibilityTime: 5000,
+    } : {
+      delay: 0,
+      topOffset: 50,
+      visibilityTime: 4000,
+    };
+    
+    setTimeout(() => {
+      Toast.show({
+        type: 'success',
+        text1: `You got Hooked with ${matchName}!`,
+        text2: 'Tap to view matches',
+        position: 'top',
+        visibilityTime: config.visibilityTime,
+        autoHide: true,
+        topOffset: config.topOffset,
+        onPress: () => {
           router.push('/matches');
         }
-      }
-    });
-    
-    console.log('📱 Toast.show called successfully');
-  } catch (error: any) {
-    console.error('📱 Error showing toast:', error);
-    console.error('📱 Error details:', {
-      message: error?.message,
-      stack: error?.stack,
-      platform: Platform.OS
-    });
+      });
+    }, config.delay);
+  } catch (error) {
+    // Error showing match toast
   }
 }
 
@@ -94,7 +104,7 @@ async function sendPushNotificationForMessage(recipientSessionId: string, sender
     const { status } = await Notifications.getPermissionsAsync();
     
     if (status === 'granted') {
-      // Send push notification
+      // Send push notification using session-based system
       await sendMessageNotification(
         recipientSessionId,
         senderName,
@@ -103,14 +113,14 @@ async function sendPushNotificationForMessage(recipientSessionId: string, sender
       );
     }
   } catch (error) {
-    console.error('Error sending push notification for message:', error);
+    // Error sending push notification for message
   }
 }
 
 /**
  * Store pending message notification for when user returns to app
  */
-async function storePendingMessageNotification(recipientSessionId: string, senderName: string): Promise<void> {
+async function storePendingMessageNotification(recipientSessionId: string, senderName: string, senderSessionId?: string): Promise<void> {
   try {
     const pendingNotificationsKey = `pendingMessageNotifications_${recipientSessionId}`;
     const existingNotifications = await AsyncStorage.getItem(pendingNotificationsKey);
@@ -118,6 +128,7 @@ async function storePendingMessageNotification(recipientSessionId: string, sende
     const newNotification = {
       id: Date.now().toString(),
       senderName,
+      senderSessionId,
       timestamp: new Date().toISOString(),
       type: 'message'
     };
@@ -135,7 +146,7 @@ async function storePendingMessageNotification(recipientSessionId: string, sende
     
     await AsyncStorage.setItem(pendingNotificationsKey, JSON.stringify(notifications));
   } catch (error) {
-    console.error('Error storing pending message notification:', error);
+            // Error storing pending message notification
   }
 }
 
@@ -161,7 +172,8 @@ export async function checkPendingMessageNotifications(): Promise<void> {
         const latestNotification = notifications[notifications.length - 1];
         
         if (latestNotification.type === 'message') {
-          showInAppMessageToast(latestNotification.senderName);
+          // Use stored session ID if available for navigation
+          showInAppMessageToast(latestNotification.senderName, latestNotification.senderSessionId);
         }
         
         // Clear the pending notifications
@@ -169,7 +181,7 @@ export async function checkPendingMessageNotifications(): Promise<void> {
       }
     }
   } catch (error) {
-    console.error('Error checking pending message notifications:', error);
+            // Error checking pending message notifications
   }
 }
 
@@ -181,7 +193,7 @@ export async function updateUserActivity(sessionId: string): Promise<void> {
     const lastActivityKey = `lastActivity_${sessionId}`;
     await AsyncStorage.setItem(lastActivityKey, new Date().toISOString());
   } catch (error) {
-    console.error('Error updating user activity:', error);
+            // Error updating user activity
   }
 }
 
@@ -190,7 +202,7 @@ export async function updateUserActivity(sessionId: string): Promise<void> {
  */
 export async function markMessagesAsRead(eventId: string, fromSessionId: string, toSessionId: string): Promise<void> {
   try {
-    console.log('📖 Marking messages as read:', { eventId, fromSessionId, toSessionId });
+
     
     // Get the current user's profile ID
     const { EventProfileAPI } = await import('./firebaseApi');
@@ -230,20 +242,15 @@ export async function markMessagesAsRead(eventId: string, fromSessionId: string,
     // Filter for unread messages only
     const unreadMessages = allMessages.filter(message => !message.is_read);
     
-    console.log('📖 Found messages:', { 
-      total: allMessages.length, 
-      unread: unreadMessages.length,
-      currentUserProfileId,
-      senderProfileId
-    });
+
     
     // Update each unread message to mark as read
     for (const message of unreadMessages) {
       try {
         await MessageAPI.update(message.id, { is_read: true });
-        console.log('📖 Marked message as read:', message.id);
+
       } catch (error) {
-        console.error('Error marking message as read:', error);
+        // Error marking message as read
       }
     }
     
@@ -255,11 +262,11 @@ export async function markMessagesAsRead(eventId: string, fromSessionId: string,
       const unreadChatsSet = new Set(JSON.parse(unreadChats));
       unreadChatsSet.delete(fromSessionId);
       await AsyncStorage.setItem(unreadChatsKey, JSON.stringify(Array.from(unreadChatsSet)));
-      console.log('📖 Updated unread chats for session:', toSessionId);
+
     }
     
   } catch (error) {
-    console.error('Error marking messages as read:', error);
+    // Error marking messages as read
   }
 }
 
@@ -268,7 +275,7 @@ export async function markMessagesAsRead(eventId: string, fromSessionId: string,
  */
 export async function markMessagesAsSeen(eventId: string, fromSessionId: string, toSessionId: string): Promise<void> {
   try {
-    console.log('👁️ Marking messages as seen:', { eventId, fromSessionId, toSessionId });
+
     
     // Get the current user's profile ID
     const { EventProfileAPI } = await import('./firebaseApi');
@@ -308,12 +315,7 @@ export async function markMessagesAsSeen(eventId: string, fromSessionId: string,
     // Filter for unseen messages only
     const unseenMessages = allMessages.filter(message => !message.seen);
     
-    console.log('👁️ Found messages:', { 
-      total: allMessages.length, 
-      unseen: unseenMessages.length,
-      currentUserProfileId,
-      senderProfileId
-    });
+
     
     // Update each unseen message to mark as seen
     for (const message of unseenMessages) {
@@ -322,14 +324,14 @@ export async function markMessagesAsSeen(eventId: string, fromSessionId: string,
           seen: true, 
           seen_at: new Date().toISOString() 
         });
-        console.log('👁️ Marked message as seen:', message.id);
+
       } catch (error) {
-        console.error('Error marking message as seen:', error);
+        // Error marking message as seen
       }
     }
     
   } catch (error) {
-    console.error('Error marking messages as seen:', error);
+    // Error marking messages as seen
   }
 }
 
@@ -361,16 +363,11 @@ export async function hasUnreadMessages(eventId: string, sessionId: string): Pro
     // Filter for messages that are not marked as read
     const unreadMessages = allMessages.filter(message => !message.is_read);
     
-    console.log('📱 Unread messages check:', { 
-      totalMessages: allMessages.length, 
-      unreadMessages: unreadMessages.length,
-      sessionId,
-      eventId 
-    });
+
     
     return unreadMessages.length > 0;
   } catch (error) {
-    console.error('Error checking unread messages:', error);
+    // Error checking unread messages
     return false;
   }
 }
@@ -389,12 +386,12 @@ export async function hasUnseenMessages(eventId: string, sessionId: string): Pro
     });
     
     if (currentUserProfiles.length === 0) {
-      console.log('👁️ No user profile found for session:', sessionId);
+  
       return false;
     }
     
     const currentUserProfileId = currentUserProfiles[0].id;
-    console.log('👁️ Found user profile ID:', currentUserProfileId, 'for session:', sessionId);
+
     
     // Check for unseen messages (messages sent TO the current user that are not marked as seen)
     const allMessages = await MessageAPI.filter({
@@ -405,37 +402,11 @@ export async function hasUnseenMessages(eventId: string, sessionId: string): Pro
     // Filter for messages that are not marked as seen
     const unseenMessages = allMessages.filter(message => !message.seen);
     
-    // Add detailed logging for debugging
-    console.log('👁️ Unseen messages check:', { 
-      totalMessages: allMessages.length, 
-      unseenMessages: unseenMessages.length,
-      sessionId,
-      eventId,
-      currentUserProfileId
-    });
-    
-    // Log details of unseen messages for debugging
-    if (unseenMessages.length > 0) {
-      console.log('👁️ Unseen messages details:', unseenMessages.map(m => ({
-        id: m.id,
-        from: m.from_profile_id,
-        to: m.to_profile_id,
-        seen: m.seen,
-        content: m.content?.substring(0, 30) + '...'
-      })));
-    } else {
-      console.log('👁️ All messages are marked as seen. Sample messages:', allMessages.slice(0, 3).map(m => ({
-        id: m.id,
-        from: m.from_profile_id,
-        to: m.to_profile_id,
-        seen: m.seen,
-        content: m.content?.substring(0, 30) + '...'
-      })));
-    }
+
     
     return unseenMessages.length > 0;
   } catch (error) {
-    console.error('Error checking unseen messages:', error);
+    // Error checking unseen messages
     return false;
   }
 } 
@@ -452,40 +423,55 @@ export async function handleNewMessageNotification(
   senderName: string
 ): Promise<void> {
   try {
-    console.log('🔔 handleNewMessageNotification called:', { eventId, fromProfileId, toProfileId, senderName });
+
     
     // Get the recipient's session ID
-    const recipientProfiles = await import('./firebaseApi').then(api => 
-      api.EventProfileAPI.filter({ id: toProfileId, event_id: eventId })
+    const recipientProfile = await import('./firebaseApi').then(api => 
+      api.EventProfileAPI.get(toProfileId)
     );
     
-    if (recipientProfiles.length === 0) {
-      console.error('Recipient profile not found');
+    if (!recipientProfile) {
+      // Recipient profile not found
       return;
     }
     
-    const recipientSessionId = recipientProfiles[0].session_id;
-    console.log('📱 Recipient session ID:', recipientSessionId);
+    const recipientSessionId = recipientProfile.session_id;
+
     
     // Check if recipient is currently in the app
     const isRecipientInApp = await checkIfUserIsInApp(recipientSessionId);
-    console.log('📱 Is recipient in app?', isRecipientInApp);
+
     
     if (isRecipientInApp) {
       // User is in app - show toast notification
-      console.log('📱 Showing in-app toast for:', senderName);
-      showInAppMessageToast(senderName);
+
+      
+      // Get sender's session ID for navigation
+      const senderProfile = await import('./firebaseApi').then(api => 
+        api.EventProfileAPI.get(fromProfileId)
+      );
+      
+      if (senderProfile) {
+        showInAppMessageToast(senderName, senderProfile.session_id);
+      } else {
+        // Fallback without session ID if sender profile not found
+        showInAppMessageToast(senderName, '');
+      }
     } else {
       // User is not in app - send push notification
-      console.log('📱 Sending push notification for:', senderName);
+
       await sendPushNotificationForMessage(recipientSessionId, senderName);
     }
     
     // Store notification for when user returns to app (if they don't have push permissions)
-    await storePendingMessageNotification(recipientSessionId, senderName);
+    // Get sender's session ID for storing with notification
+    const senderProfileForStorage = await import('./firebaseApi').then(api => 
+      api.EventProfileAPI.get(fromProfileId)
+    );
+    await storePendingMessageNotification(recipientSessionId, senderName, senderProfileForStorage?.session_id);
     
   } catch (error) {
-    console.error('Error handling new message notification:', error);
+    // Error handling new message notification
   }
 }
 
@@ -496,12 +482,11 @@ async function checkIfUserIsInApp(sessionId: string): Promise<boolean> {
   try {
     // Get current user's session ID
     const currentSessionId = await AsyncStorage.getItem('currentSessionId');
-    console.log('📱 Current session ID:', currentSessionId, 'Checking against:', sessionId);
-    console.log('📱 Platform:', Platform.OS);
+
     
     // If it's the same session ID, user is in app
     if (currentSessionId === sessionId) {
-      console.log('📱 User is in app - session ID match');
+
       return true;
     }
     
@@ -518,25 +503,16 @@ async function checkIfUserIsInApp(sessionId: string): Promise<boolean> {
       const timeoutAgo = now - (timeoutMinutes * 60 * 1000);
       
       const isRecentlyActive = lastActivityTime > timeoutAgo;
-      console.log('📱 Last activity check:', { 
-        lastActivityTime, 
-        now, 
-        timeoutAgo, 
-        isRecentlyActive,
-        timeDiff: now - lastActivityTime,
-        timeDiffMinutes: (now - lastActivityTime) / (60 * 1000),
-        platform: Platform.OS,
-        timeoutMinutes
-      });
+
       
       // If user was active recently, consider them "in app"
       return isRecentlyActive;
     }
     
-    console.log('📱 No recent activity found for session:', sessionId);
+    
     return false;
   } catch (error) {
-    console.error('Error checking if user is in app:', error);
+    // Error checking if user is in app
     return false;
   }
 } 

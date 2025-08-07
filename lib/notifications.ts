@@ -51,7 +51,7 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
       canAskAgain,
     };
   } catch (error) {
-    console.error('Error requesting notification permission:', error);
+            // Error requesting notification permission
     return {
       granted: false,
       canAskAgain: false,
@@ -70,7 +70,7 @@ export async function getPushToken(): Promise<string | null> {
     });
     return token.data;
   } catch (error) {
-    console.error('Error getting push token:', error);
+            // Error getting push token
     return null;
   }
 }
@@ -96,7 +96,7 @@ export async function savePushTokenToFirestore(token: string): Promise<boolean> 
     await setDoc(doc(db, 'users', user.uid, 'pushTokens', token), tokenData);
     return true;
   } catch (error) {
-    console.error('Error saving push token to Firestore:', error);
+            // Error saving push token to Firestore
     return false;
   }
 }
@@ -116,7 +116,7 @@ export async function removePushTokenFromFirestore(token: string): Promise<boole
     await setDoc(tokenRef, { deleted: true, deletedAt: new Date() });
     return true;
   } catch (error) {
-    console.error('Error removing push token from Firestore:', error);
+            // Error removing push token from Firestore
     return false;
   }
 }
@@ -140,7 +140,7 @@ export async function initializeNotifications(): Promise<{
     // Get push token
     const token = await getPushToken();
     if (!token) {
-      console.error('Failed to get push token');
+              // Failed to get push token
       return { permissionGranted: true, tokenSaved: false };
     }
 
@@ -159,7 +159,7 @@ export async function initializeNotifications(): Promise<{
       tokenSaved,
     };
   } catch (error) {
-    console.error('Error initializing notifications:', error);
+            // Error initializing notifications
     return { permissionGranted: false, tokenSaved: false };
   }
 }
@@ -184,7 +184,7 @@ export async function requestAndInitializeNotifications(): Promise<{
     // Initialize notifications with the granted permission
     return await initializeNotifications();
   } catch (error) {
-    console.error('Error requesting and initializing notifications:', error);
+            // Error requesting and initializing notifications
     return { permissionGranted: false, tokenSaved: false };
   }
 }

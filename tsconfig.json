@@ -10,7 +10,7 @@
     "target": "es2017",
     "module": "esnext",
     "lib": ["es2017", "dom"],
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "allowJs": true,
     "paths": {
@@ -25,6 +25,7 @@
   ],
   "exclude": [
     "node_modules",
-    "web-admin-hooked/**/*"
+    "web-admin-hooked/**/*",
+    "hooked-website/**/*"
   ]
 }

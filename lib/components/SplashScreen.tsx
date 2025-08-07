@@ -48,7 +48,7 @@ const styles = StyleSheet.create({
   appIcon: {
     width: 140,
     height: 140,
-    borderRadius: 28,
+    borderRadius: 35,
   },
   appName: {
     fontSize: 28,

@@ -1,4 +1,4 @@
-import { db, firebaseNetworkManager } from './firebaseConfig';
+import { db, reconnectionManager } from './firebaseConfig';
 import { enableNetwork, disableNetwork, doc, getDoc } from 'firebase/firestore';
 import NetInfo from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -70,7 +70,7 @@ class FirebaseRecoveryManager {
       return true;
 
     } catch (error: any) {
-      console.error('❌ Firebase recovery failed:', error);
+              // Firebase recovery failed
       this.recordRecoveryAction(recoveryId, 'reconnect', false, error.message);
       return false;
     } finally {
@@ -85,7 +85,7 @@ class FirebaseRecoveryManager {
       await getDoc(testDoc);
       return true;
     } catch (error) {
-      console.warn('⚠️ Firebase connection test failed:', error);
+              // Firebase connection test failed
       return false;
     }
   }
@@ -99,7 +99,7 @@ class FirebaseRecoveryManager {
       
       // Cleared problematic cache data
     } catch (error) {
-      console.warn('⚠️ Failed to clear cache:', error);
+              // Failed to clear cache
     }
   }
 
@@ -133,7 +133,7 @@ class FirebaseRecoveryManager {
     try {
       await AsyncStorage.setItem('firebase_recovery_history', JSON.stringify(this.recoveryHistory));
     } catch (error) {
-      console.warn('⚠️ Failed to save recovery history:', error);
+              // Failed to save recovery history
     }
   }
 
@@ -145,7 +145,7 @@ class FirebaseRecoveryManager {
         this.recoveryHistory = JSON.parse(saved);
       }
     } catch (error) {
-      console.warn('⚠️ Failed to load recovery history:', error);
+              // Failed to load recovery history
       this.recoveryHistory = [];
     }
   }

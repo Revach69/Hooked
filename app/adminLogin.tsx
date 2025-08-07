@@ -296,7 +296,7 @@ export default function AdminLogin() {
   // Show loading screen while checking saved credentials
   if (isCheckingSavedCredentials) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
         <View style={styles.content}>
           <View style={styles.header}>
             <View style={styles.logo}>
@@ -316,7 +316,7 @@ export default function AdminLogin() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
       <KeyboardAvoidingView 
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

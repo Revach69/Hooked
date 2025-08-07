@@ -89,7 +89,7 @@ export default function EventDetails() {
         totalMessages: messages.length,
       });
     } catch (error) {
-      console.error("Error loading event details:", error);
+              // Error loading event details
       Alert.alert('Error', 'Failed to load event details');
     } finally {
       setIsLoading(false);
@@ -139,7 +139,7 @@ export default function EventDetails() {
               Alert.alert('Success', 'Event deleted successfully');
               router.back();
             } catch (error) {
-              console.error('Error deleting event:', error);
+              // Error deleting event
               Alert.alert('Error', 'Failed to delete event');
             }
           }
@@ -159,7 +159,7 @@ export default function EventDetails() {
         title: event.name,
       });
     } catch (error) {
-      console.error('Error sharing event:', error);
+              // Error sharing event
     }
   };
 
@@ -173,7 +173,7 @@ export default function EventDetails() {
       // For now, we'll just show the URL
       Alert.alert('Join URL', joinUrl);
     } catch (error) {
-      console.error('Error copying URL:', error);
+              // Error copying URL
     }
   };
 

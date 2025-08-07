@@ -34,7 +34,7 @@ if (!(global as any).eventEmitter) {
             try {
               callback(...args);
             } catch (error) {
-              console.error('Event emitter error:', error);
+              // Event emitter error
             }
           });
         }, 0);
@@ -188,12 +188,12 @@ class MobileErrorHandler {
                 const result = await operation();
                 return result;
               } catch (retryError) {
-                console.warn('⚠️ Operation still failed after Firebase recovery:', retryError);
+                // Operation still failed after Firebase recovery
                 lastError = retryError;
               }
             }
           } catch (recoveryError) {
-            console.error('❌ Firebase recovery failed:', recoveryError);
+            // Firebase recovery failed
           }
         }
 
@@ -323,7 +323,7 @@ class MobileErrorHandler {
 
           // Successfully processed offline action
         } catch (error) {
-          console.error(`❌ Failed to process offline action:`, error);
+          // Failed to process offline action
 
           // Re-queue if it's still a retryable error and hasn't exceeded max retries
           if (this.shouldRetryError(error, action.retryCount + 1) && 
@@ -350,7 +350,7 @@ class MobileErrorHandler {
 
       await AsyncStorage.setItem('hooked_mobile_offline_queue', JSON.stringify(serializableQueue));
     } catch (error) {
-      console.error('Failed to save offline queue:', error);
+              // Failed to save offline queue
     }
   }
 
@@ -365,7 +365,7 @@ class MobileErrorHandler {
         this.offlineQueue = [];
       }
     } catch (error) {
-      console.error('Failed to load offline queue:', error);
+              // Failed to load offline queue
       this.offlineQueue = [];
     }
   }
@@ -435,7 +435,7 @@ class MobileErrorHandler {
       ...context
     };
 
-    console.error('🚨 Mobile error occurred:', errorInfo);
+            // Mobile error occurred
 
     // Use existing error monitoring
     logFirebaseError(error, context.operation || 'Unknown', {

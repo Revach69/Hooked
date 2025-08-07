@@ -22,6 +22,7 @@ import { db } from '../lib/firebaseConfig';
 import UserProfileModal from '../lib/UserProfileModal';
 import { sendMatchNotification, sendLikeNotification } from '../lib/notificationService';
 import { updateUserActivity } from '../lib/messageNotificationHelper';
+import { showMatchAlert, clearActiveAlerts, isAlertActive } from '../lib/matchAlertService';
 
 export default function Matches() {
   const colorScheme = useColorScheme();
@@ -64,18 +65,9 @@ export default function Matches() {
   useEffect(() => {
     return () => {
       cleanupAllListeners();
+      clearActiveAlerts();
     };
   }, []);
-
-  // Debug: Monitor unreadMessages and matches state
-  useEffect(() => {
-    console.log('📱 Matches: unreadMessages state changed:', Array.from(unreadMessages));
-    console.log('📱 Matches: matches array length:', matches.length);
-    console.log('📱 Matches: Platform:', Platform.OS);
-    matches.forEach(match => {
-      console.log(`📱 Matches: Match ${match.first_name} (${match.session_id}) - has unread: ${unreadMessages.has(match.session_id)}`);
-    });
-  }, [unreadMessages, matches]);
 
   // Check for unseen messages - now handled when matches are loaded
   /*
@@ -84,11 +76,8 @@ export default function Matches() {
 
     const checkUnseenMessages = async () => {
       try {
-        console.log('📱 Matches: Checking unseen messages...');
         const { hasUnseenMessages } = await import('../lib/messageNotificationHelper');
         const hasUnseen = await hasUnseenMessages(currentEvent.id, currentSessionId);
-        
-        console.log('📱 Matches: Has unseen messages:', hasUnseen);
         
         if (hasUnseen) {
           // Get all messages sent TO the current user
@@ -98,169 +87,91 @@ export default function Matches() {
             to_profile_id: currentUserProfile?.id
           });
           
-          console.log('📱 Matches: Total messages received:', allMessages.length);
-          
-          // Filter for unseen messages only
+          // Find unseen messages and their senders
           const unseenMessages = allMessages.filter(message => !message.seen);
-          
-          console.log('📱 Matches: Unseen messages:', unseenMessages.length);
-          
-          // Create a set of session IDs that have sent unseen messages
           const unseenSessionIds = new Set<string>();
+          
           for (const message of unseenMessages) {
-            // Get the sender's session ID
             const senderProfiles = await EventProfileAPI.filter({
-              id: message.from_profile_id,
-              event_id: currentEvent.id
+              event_id: currentEvent.id,
+              id: message.from_profile_id
             });
+            
             if (senderProfiles.length > 0) {
               unseenSessionIds.add(senderProfiles[0].session_id);
-              console.log('📱 Matches: Added unseen session:', senderProfiles[0].session_id);
             }
           }
           
-          console.log('📱 Matches: Unseen session IDs:', Array.from(unseenSessionIds));
           setUnreadMessages(unseenSessionIds);
-          
-          // Debug: Log the current unreadMessages state
-          console.log('📱 Matches: Current unreadMessages set:', Array.from(unseenSessionIds));
-          console.log('📱 Matches: Number of matches:', matches.length);
-          matches.forEach(match => {
-            console.log(`📱 Matches: Match ${match.first_name} (${match.session_id}) - has unread: ${unseenSessionIds.has(match.session_id)}`);
-          });
-        } else {
-          console.log('📱 Matches: No unseen messages, clearing unread set');
-          setUnreadMessages(new Set());
         }
-      } catch (error) {
-        console.error('Error checking unseen messages:', error);
+              } catch (error) {
+        // Error checking unseen messages
       }
     };
 
     checkUnseenMessages();
-    
-    // Check every 5 seconds instead of 30 for faster updates
-    const interval = setInterval(checkUnseenMessages, 5000);
-    return () => clearInterval(interval);
   }, [currentEvent?.id, currentSessionId, currentUserProfile?.id]);
   */
 
-  // Real-time message listener for immediate unseen status updates
+  // Real-time message listener for unread indicators
   useEffect(() => {
-    if (!currentEvent?.id || !currentSessionId || !currentUserProfile?.id) return;
+    if (!currentEvent?.id || !currentUserProfile?.id) return;
 
-    try {
-      const messagesQuery = query(
-        collection(db, 'messages'),
-        where('event_id', '==', currentEvent.id),
-        where('to_profile_id', '==', currentUserProfile.id)
-      );
+    const setupMessageListener = async () => {
+      try {
+        const { onSnapshot, collection, query, where, orderBy, limit } = await import('firebase/firestore');
+        const { db } = await import('../lib/firebaseConfig');
 
-      const unsubscribe = onSnapshot(messagesQuery, async (snapshot) => {
-        // When messages change, immediately check unseen status
-        try {
-          console.log('📱 Matches: Real-time message listener triggered');
-          console.log('📱 Matches: Snapshot size:', snapshot.docs.length);
-          
-          const { hasUnseenMessages } = await import('../lib/messageNotificationHelper');
-          const hasUnseen = await hasUnseenMessages(currentEvent.id, currentSessionId);
-          
-          if (hasUnseen) {
-            // Get all messages sent TO the current user
-            const { MessageAPI, EventProfileAPI } = await import('../lib/firebaseApi');
-            const allMessages = await MessageAPI.filter({
-              event_id: currentEvent.id,
-              to_profile_id: currentUserProfile.id
-            });
-            
-            // Filter for unseen messages only
-            const unseenMessages = allMessages.filter(message => !message.seen);
-            
-            // Create a set of session IDs that have sent unseen messages
-            const unseenSessionIds = new Set<string>();
-            for (const message of unseenMessages) {
-              // Get the sender's session ID
-              const senderProfiles = await EventProfileAPI.filter({
-                id: message.from_profile_id,
-                event_id: currentEvent.id
-              });
-              if (senderProfiles.length > 0) {
-                unseenSessionIds.add(senderProfiles[0].session_id);
+        const messagesQuery = query(
+          collection(db, 'messages'),
+          where('event_id', '==', currentEvent.id),
+          where('to_profile_id', '==', currentUserProfile.id),
+          orderBy('created_at', 'desc'),
+          limit(50)
+        );
+
+        const unsubscribe = onSnapshot(messagesQuery, async (snapshot) => {
+          try {
+            const newMessages = snapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            } as any));
+
+            if (newMessages.length > 0) {
+              const latestMessage = newMessages[0];
+              
+              // Check if this is a recent message (within last 5 minutes)
+              const messageTime = new Date(latestMessage.created_at).getTime();
+              const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
+              
+              if (messageTime > fiveMinutesAgo && !latestMessage.seen) {
+                // Get sender profile for toast
+                const { EventProfileAPI } = await import('../lib/firebaseApi');
+                const senderProfiles = await EventProfileAPI.filter({
+                  event_id: currentEvent.id,
+                  id: latestMessage.from_profile_id
+                });
+
+                if (senderProfiles.length > 0) {
+                  const senderProfile = senderProfiles[0];
+                  const { showInAppMessageToast } = await import('../lib/messageNotificationHelper');
+                  showInAppMessageToast(senderProfile.first_name, senderProfile.session_id);
+                }
               }
             }
-            
-            setUnreadMessages(unseenSessionIds);
-          } else {
-            setUnreadMessages(new Set());
+          } catch (error) {
+            // Error processing real-time messages
           }
-          
-          // Commented out toast logic since we now have a global listener in layout
-          /*
-          // Check for new messages and show toast notifications
-          const newMessages = snapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() } as any))
-            .filter(msg => msg.to_profile_id === currentUserProfile.id);
-          
-          console.log('📱 Matches: Messages sent to current user:', newMessages.length);
-          
-          // Get the latest new message
-          if (newMessages.length > 0) {
-            const latestMessage = newMessages[newMessages.length - 1];
-            console.log('📱 Matches: Latest message:', {
-              id: latestMessage.id,
-              from: latestMessage.from_profile_id,
-              to: latestMessage.to_profile_id,
-              content: latestMessage.content?.substring(0, 50) + '...',
-              created_at: latestMessage.created_at
-            });
-            
-            const messageTime = typeof latestMessage.created_at === 'string' 
-              ? new Date(latestMessage.created_at).getTime() 
-              : latestMessage.created_at.toDate().getTime();
-            const now = new Date().getTime();
-            const tenSecondsAgo = now - (10 * 1000);
-            
-            console.log('📱 Matches: Time check:', {
-              messageTime: new Date(messageTime),
-              now: new Date(now),
-              tenSecondsAgo: new Date(tenSecondsAgo),
-              timeDiff: now - messageTime,
-              isRecent: messageTime > tenSecondsAgo
-            });
-            
-            // Show toast for recent messages (within last 10 seconds)
-            if (messageTime > tenSecondsAgo) {
-              console.log('📱 Matches: New message received - showing toast');
-              
-              // Get sender's profile to get their name
-              const { EventProfileAPI } = await import('../lib/firebaseApi');
-              const senderProfile = await EventProfileAPI.get(latestMessage.from_profile_id);
-              
-              if (senderProfile) {
-                console.log('📱 Matches: Sender profile found:', senderProfile.first_name);
-                // Show toast directly since we're the recipient
-                const { showInAppMessageToast } = await import('../lib/messageNotificationHelper');
-                showInAppMessageToast(senderProfile.first_name);
-              } else {
-                console.log('📱 Matches: Sender profile not found');
-              }
-            } else {
-              console.log('📱 Matches: Message too old, not showing toast');
-            }
-          } else {
-            console.log('📱 Matches: No messages sent to current user');
-          }
-          */
-        } catch (error) {
-          console.error('📱 Matches: Error checking unseen messages from real-time listener:', error);
-        }
-      });
+        });
 
-      return () => unsubscribe();
-    } catch (error) {
-      console.error('Error setting up real-time message listener:', error);
-    }
-  }, [currentEvent?.id, currentSessionId, currentUserProfile?.id]);
+        listenersRef.current.messages = unsubscribe;
+      } catch (error) {
+        // Error setting up message listener
+      }
+    };
+
+    setupMessageListener();
+  }, [currentEvent?.id, currentUserProfile?.id]);
 
   // Consolidated listener setup with proper cleanup
   useEffect(() => {
@@ -291,7 +202,7 @@ export default function Matches() {
           setCurrentUserProfile(userProfile);
 
           if (!userProfile) {
-            console.log('User profile not found in matches, redirecting to home');
+    
             await AsyncStorage.multiRemove([
               'currentEventId',
               'currentSessionId',
@@ -310,7 +221,7 @@ export default function Matches() {
           // Check for unseen messages after user profile is loaded
           const checkUnseenMessages = async () => {
             try {
-              console.log('📱 Matches: Checking unseen messages for user:', userProfile.first_name, 'ID:', userProfile.id, 'Platform:', Platform.OS);
+              
               
               // Manual check for unseen messages
               const { MessageAPI, EventProfileAPI } = await import('../lib/firebaseApi');
@@ -319,14 +230,12 @@ export default function Matches() {
                 to_profile_id: userProfile.id
               });
               
-              console.log('📱 Matches: Manual check - Total messages received:', allMessages.length, 'Platform:', Platform.OS);
-              console.log('📱 Matches: Manual check - Current user profile ID:', userProfile.id, 'Platform:', Platform.OS);
+              
               
               // Filter for unseen messages only
               const unseenMessages = allMessages.filter(message => !message.seen);
               
-              console.log('📱 Matches: Manual check - Unseen messages:', unseenMessages.length, 'Platform:', Platform.OS);
-              console.log('📱 Matches: Manual check - All messages seen status:', allMessages.map(m => ({ id: m.id, seen: m.seen, from: m.from_profile_id, to: m.to_profile_id })));
+              
               
               // Create a set of session IDs that have sent unseen messages
               const unseenSessionIds = new Set<string>();
@@ -338,24 +247,24 @@ export default function Matches() {
                 });
                 if (senderProfiles.length > 0) {
                   unseenSessionIds.add(senderProfiles[0].session_id);
-                  console.log('📱 Matches: Manual check - Added unseen session:', senderProfiles[0].session_id, 'Platform:', Platform.OS);
+          
                 } else {
-                  console.log('📱 Matches: Manual check - No sender profile found for message:', message.id, 'Platform:', Platform.OS);
+          
                 }
               }
               
-              console.log('📱 Matches: Manual check - Unseen session IDs:', Array.from(unseenSessionIds), 'Platform:', Platform.OS);
+      
               setUnreadMessages(unseenSessionIds);
               setHasUnreadMessages(unseenSessionIds.size > 0);
               
               // Also run the original hasUnseenMessages check for comparison
               const { hasUnseenMessages } = await import('../lib/messageNotificationHelper');
               const hasUnseen = await hasUnseenMessages(currentEvent.id, currentSessionId);
-              console.log('📱 Matches: hasUnseenMessages function result:', hasUnseen, 'Platform:', Platform.OS);
+      
               
-            } catch (error) {
-              console.error('Error checking unseen messages:', error);
-            }
+                    } catch (error) {
+        // Error checking unseen messages
+      }
           };
           
           checkUnseenMessages();
@@ -369,8 +278,7 @@ export default function Matches() {
 
           const messagesUnsubscribe = onSnapshot(messagesQuery, async (snapshot) => {
             try {
-              console.log('📱 Matches: Real-time message listener triggered for user:', userProfile.first_name, 'Platform:', Platform.OS);
-              console.log('📱 Matches: Snapshot size:', snapshot.size);
+              
               
               // Manual check for unseen messages
               const { MessageAPI, EventProfileAPI } = await import('../lib/firebaseApi');
@@ -382,7 +290,7 @@ export default function Matches() {
               // Filter for unseen messages only
               const unseenMessages = allMessages.filter(message => !message.seen);
               
-              console.log('📱 Matches: Real-time check - Unseen messages:', unseenMessages.length, 'Platform:', Platform.OS);
+              
               
               // Create a set of session IDs that have sent unseen messages
               const unseenSessionIds = new Set<string>();
@@ -394,17 +302,17 @@ export default function Matches() {
                 });
                 if (senderProfiles.length > 0) {
                   unseenSessionIds.add(senderProfiles[0].session_id);
-                  console.log('📱 Matches: Real-time check - Added unseen session:', senderProfiles[0].session_id, 'Platform:', Platform.OS);
+          
                 }
               }
               
-              console.log('📱 Matches: Real-time check - Setting unreadMessages to:', Array.from(unseenSessionIds), 'Platform:', Platform.OS);
+      
               setUnreadMessages(unseenSessionIds);
               setHasUnreadMessages(unseenSessionIds.size > 0);
               
-            } catch (error) {
-              console.error('Error in real-time message listener:', error);
-            }
+                      } catch (error) {
+            // Error in real-time message listener
+          }
           });
 
           listenersRef.current.messages = messagesUnsubscribe;
@@ -412,7 +320,7 @@ export default function Matches() {
           // Set up periodic check for unseen messages (every 5 seconds)
           const periodicCheck = setInterval(async () => {
             try {
-              console.log('📱 Matches: Periodic check for unseen messages. Platform:', Platform.OS);
+              
               
               // Manual check for unseen messages
               const { MessageAPI, EventProfileAPI } = await import('../lib/firebaseApi');
@@ -424,7 +332,7 @@ export default function Matches() {
               // Filter for unseen messages only
               const unseenMessages = allMessages.filter(message => !message.seen);
               
-              console.log('📱 Matches: Periodic check - found unseen messages:', unseenMessages.length, 'Platform:', Platform.OS);
+              
               
               // Create a set of session IDs that have sent unseen messages
               const unseenSessionIds = new Set<string>();
@@ -436,17 +344,17 @@ export default function Matches() {
                 });
                 if (senderProfiles.length > 0) {
                   unseenSessionIds.add(senderProfiles[0].session_id);
-                  console.log('📱 Matches: Periodic check - added unseen session:', senderProfiles[0].session_id, 'Platform:', Platform.OS);
+          
                 }
               }
               
-              console.log('📱 Matches: Periodic check - setting unreadMessages to:', Array.from(unseenSessionIds), 'Platform:', Platform.OS);
+      
               setUnreadMessages(unseenSessionIds);
               setHasUnreadMessages(unseenSessionIds.size > 0);
               
-            } catch (error) {
-              console.error('Error in periodic check:', error);
-            }
+                      } catch (error) {
+            // Error in periodic check
+          }
           }, 5000);
           
           listenersRef.current.periodicCheck = periodicCheck;
@@ -520,9 +428,9 @@ export default function Matches() {
           setUnreadMessages(new Set());
           setHasUnreadMessages(false);
         }
-      } catch (error) {
-        console.error('Error in periodic unseen messages check:', error);
-      }
+                } catch (error) {
+            // Error in periodic unseen messages check
+          }
     }, 5000); // Check every 5 seconds
 
     return () => clearInterval(checkUnseenInterval);
@@ -531,7 +439,7 @@ export default function Matches() {
   // Force refresh unread messages when component mounts or user navigates to matches
   useEffect(() => {
     if (currentEvent?.id && currentSessionId && currentUserProfile?.id) {
-      console.log('📱 Matches: Force refreshing unread messages. Platform:', Platform.OS);
+      
       
       const refreshUnreadMessages = async () => {
         try {
@@ -545,7 +453,7 @@ export default function Matches() {
           // Filter for unseen messages only
           const unseenMessages = allMessages.filter(message => !message.seen);
           
-          console.log('📱 Matches: Force refresh - found unseen messages:', unseenMessages.length, 'Platform:', Platform.OS);
+  
           
           // Create a set of session IDs that have sent unseen messages
           const unseenSessionIds = new Set<string>();
@@ -557,16 +465,16 @@ export default function Matches() {
             });
             if (senderProfiles.length > 0) {
               unseenSessionIds.add(senderProfiles[0].session_id);
-              console.log('📱 Matches: Force refresh - added unseen session:', senderProfiles[0].session_id, 'Platform:', Platform.OS);
+      
             }
           }
           
-          console.log('📱 Matches: Force refresh - setting unreadMessages to:', Array.from(unseenSessionIds), 'Platform:', Platform.OS);
+  
           setUnreadMessages(unseenSessionIds);
           setHasUnreadMessages(unseenSessionIds.size > 0);
           
         } catch (error) {
-          console.error('Error in force refresh:', error);
+          // Error in force refresh
         }
       };
       
@@ -614,9 +522,9 @@ export default function Matches() {
           }
 
           setMatches(matchedProfiles);
-        } catch (error) {
-          console.error("Error in matches listener:", error);
-        }
+                  } catch (error) {
+            // Error in matches listener
+          }
               }, (error) => {
           // Handle Firestore listener errors gracefully
           if (error.code === 'permission-denied') {
@@ -645,9 +553,9 @@ export default function Matches() {
           })) as any[];
           
           setLikedProfiles(new Set(likes.map(like => like.liked_session_id)));
-        } catch (error) {
-          console.error("Error in likes listener:", error);
-        }
+                  } catch (error) {
+            // Error in likes listener
+          }
       }, (error) => {
         // Handle Firestore listener errors gracefully
         if (error.code === 'permission-denied') {
@@ -685,7 +593,8 @@ export default function Matches() {
             const isLiker = match.liker_session_id === currentSessionId;
             const shouldNotify = isLiker ? !match.liker_notified_of_match : !match.liked_notified_of_match;
             
-            if (shouldNotify) {
+            // Don't show alerts when user is already on matches page
+            if (shouldNotify && !isAlertActive(match.id, currentSessionId)) {
               // Get the other person's profile
               const otherSessionId = isLiker ? match.liked_session_id : match.liker_session_id;
               const otherProfiles = await EventProfileAPI.filter({
@@ -696,17 +605,14 @@ export default function Matches() {
               if (otherProfiles.length > 0) {
                 const otherProfile = otherProfiles[0];
                 
-                // Show native popup for user in the app
-                Alert.alert(
-                  "It's a Match!", 
-                  `You and ${otherProfile.first_name} liked each other.`,
-                  [
-                    {
-                      text: "Continue Browsing",
-                      style: "cancel"
-                    }
-                  ]
-                );
+                // Use centralized match alert service to prevent duplicates
+                await showMatchAlert({
+                  matchedUserName: otherProfile.first_name,
+                  matchId: match.id,
+                  isLiker,
+                  currentEventId: currentEvent.id,
+                  currentSessionId
+                });
 
                 // Mark as notified
                 await LikeAPI.update(match.id, {
@@ -715,9 +621,9 @@ export default function Matches() {
               }
             }
           }
-        } catch (error) {
-          console.error("Error in mutual matches listener:", error);
-        }
+                  } catch (error) {
+            // Error in mutual matches listener
+          }
       }, (error) => {
         // Handle Firestore listener errors gracefully
         if (error.code === 'permission-denied') {
@@ -774,7 +680,7 @@ export default function Matches() {
       const sessionId = await AsyncStorage.getItem('currentSessionId');
       
       if (!eventId || !sessionId) {
-        console.log('No event or session found, redirecting to home');
+
         router.replace('/home');
         return;
       }
@@ -785,14 +691,51 @@ export default function Matches() {
       if (events.length > 0) {
         setCurrentEvent(events[0]);
       } else {
-        console.log('Event not found, redirecting to home');
+        // Event doesn't exist, clear all data and redirect to home
+
+        await AsyncStorage.multiRemove([
+          'currentEventId',
+          'currentSessionId',
+          'currentEventCode',
+          'currentProfileColor',
+          'currentProfilePhotoUrl'
+        ]);
+        router.replace('/home');
+        return;
+      }
+
+      // Verify that the user's profile actually exists in the database
+      const userProfiles = await EventProfileAPI.filter({
+        event_id: eventId,
+        session_id: sessionId
+      });
+
+      if (userProfiles.length === 0) {
+        // Profile doesn't exist in database (user left event and deleted profile)
+        // Clear all AsyncStorage data and redirect to home
+
+        await AsyncStorage.multiRemove([
+          'currentEventId',
+          'currentSessionId',
+          'currentEventCode',
+          'currentProfileColor',
+          'currentProfilePhotoUrl'
+        ]);
         router.replace('/home');
         return;
       }
 
       // Matches are now handled by real-time listener
     } catch (error) {
-      console.error('Error initializing matches session:', error);
+      // Error initializing matches session
+      // Clear data and redirect to home on error
+      await AsyncStorage.multiRemove([
+        'currentEventId',
+        'currentSessionId',
+        'currentEventCode',
+        'currentProfileColor',
+        'currentProfilePhotoUrl'
+      ]);
       router.replace('/home');
     } finally {
       setIsLoading(false);
@@ -881,8 +824,8 @@ export default function Matches() {
         // Note: Native popup will be shown by the real-time mutual matches listener
         // Match created! Native popup will be shown by real-time listener.
       }
-    } catch (error) {
-      console.error('Error creating like:', error);
+          } catch (error) {
+        // Error creating like
       // Revert optimistic update on error
       setLikedProfiles(prev => {
         const newSet = new Set(prev);
@@ -1123,6 +1066,26 @@ export default function Matches() {
       color: 'white',
       fontWeight: '600',
     },
+    hiddenNotice: {
+      backgroundColor: isDark ? '#1f2937' : '#fef3c7',
+      borderWidth: 1,
+      borderColor: isDark ? '#374151' : '#f59e0b',
+      borderRadius: 12,
+      marginHorizontal: 16,
+      marginBottom: 16,
+      padding: 16,
+    },
+    hiddenNoticeContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    hiddenNoticeText: {
+      flex: 1,
+      fontSize: 14,
+      color: isDark ? '#e5e7eb' : '#92400e',
+      lineHeight: 20,
+    },
   });
 
   if (isLoading) {
@@ -1134,72 +1097,11 @@ export default function Matches() {
     );
   }
 
-  // Show hidden state if user is not visible
-  if (currentUserProfile && !currentUserProfile.is_visible) {
-    return (
-      <SafeAreaView style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerText}>
-            <Text style={styles.title}>
-              Profile Hidden
-            </Text>
-            <Text style={styles.subtitle}>You are currently hidden from other users</Text>
-          </View>
-        </View>
-
-        {/* Hidden State Content */}
-        <View style={styles.hiddenStateContainer}>
-          <View style={styles.hiddenStateContent}>
-            <User size={64} color="#9ca3af" />
-            <Text style={styles.hiddenStateTitle}>Your Profile is Hidden</Text>
-            <Text style={styles.hiddenStateText}>
-              While your profile is hidden, you cannot see other users and they cannot see you. 
-              To access your matches again, make your profile visible in your profile settings.
-            </Text>
-            <TouchableOpacity
-              style={styles.makeVisibleButton}
-              onPress={() => router.push('/profile')}
-              accessibilityLabel="Go to Profile"
-              accessibilityHint="Navigate to profile settings to make your profile visible"
-            >
-              <Text style={styles.makeVisibleButtonText}>Go to Profile</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Bottom Navigation */}
-        <View style={styles.bottomNavigation}>
-          <TouchableOpacity
-            style={[styles.navButton, styles.navButtonActive]}
-            onPress={() => router.push('/profile')}
-          >
-            <User size={24} color="#8b5cf6" />
-            <Text style={[styles.navButtonText, styles.navButtonTextActive]}>Profile</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={styles.navButton}
-            onPress={() => router.push('/discovery')}
-          >
-            <Users size={24} color="#9ca3af" />
-            <Text style={styles.navButtonText}>Discover</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={styles.navButton}
-            onPress={() => {}} // Already on matches page but hidden
-          >
-            <MessageCircle size={24} color="#9ca3af" />
-            <Text style={styles.navButtonText}>Matches</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  // Show hidden state notice if user is not visible, but still allow access to matches
+  const isProfileHidden = currentUserProfile && !currentUserProfile.is_visible;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerText}>
@@ -1215,6 +1117,24 @@ export default function Matches() {
         </View>
       </View>
 
+      {/* Hidden State Notice */}
+      {isProfileHidden && (
+        <View style={styles.hiddenNotice}>
+          <View style={styles.hiddenNoticeContent}>
+            <User size={20} color="#f59e0b" />
+            <Text style={styles.hiddenNoticeText}>
+              Your profile is hidden. You can still chat with your matches, but you won't see new people in discovery.
+            </Text>
+            <TouchableOpacity
+              style={styles.makeVisibleButton}
+              onPress={() => router.push('/profile')}
+            >
+              <Text style={styles.makeVisibleButtonText}>Make Visible</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       {/* Matches List */}
       <ScrollView style={styles.matchesContainer}>
         {matches.length > 0 ? (
@@ -1224,11 +1144,11 @@ export default function Matches() {
                 key={match.id}
                 style={[
                   styles.matchCard,
-                  Platform.OS === 'android' && unreadMessages.has(match.session_id) && {
+                  unreadMessages.has(match.session_id) && {
                     borderWidth: 3,
-                    borderColor: '#ef4444',
-                    backgroundColor: isDark ? '#2d1b1b' : '#fef2f2',
-                    shadowColor: '#ef4444',
+                    borderColor: isDark ? '#A855F7' : '#7C3AED',
+                    backgroundColor: isDark ? '#2d1b1b' : '#fdf2f8',
+                    shadowColor: isDark ? '#A855F7' : '#7C3AED',
                     shadowOffset: { width: 0, height: 0 },
                     shadowOpacity: 0.3,
                     shadowRadius: 8,
@@ -1256,32 +1176,8 @@ export default function Matches() {
                         <Text style={styles.matchImageFallbackText}>{match.first_name[0]}</Text>
                       </View>
                     )}
-                    {/* Red dot for iOS only */}
-                    {Platform.OS === 'ios' && unreadMessages.has(match.session_id) && (
-                      <View style={{
-                        position: 'absolute',
-                        top: -4,
-                        right: -4,
-                        backgroundColor: '#ef4444',
-                        borderRadius: 8,
-                        width: 16,
-                        height: 16,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        borderWidth: 2,
-                        borderColor: isDark ? '#1a1a1a' : '#ffffff',
-                      }}>
-                        <View style={{
-                          width: 8,
-                          height: 8,
-                          backgroundColor: '#ffffff',
-                          borderRadius: 4,
-                        }} />
-                      </View>
-                    )}
-                    
-                    {/* Red dot for Android as well */}
-                    {Platform.OS === 'android' && unreadMessages.has(match.session_id) && (
+                    {/* Red dot for both platforms */}
+                    {unreadMessages.has(match.session_id) && (
                       <View style={{
                         position: 'absolute',
                         top: -4,

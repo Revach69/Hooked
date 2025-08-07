@@ -20,7 +20,7 @@ import {
 import { router } from 'expo-router';
 import { AuthAPI, EventProfileAPI, EventAPI, StorageAPI } from '../lib/firebaseApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { User as UserIcon, Camera, Upload } from 'lucide-react-native';
+import { User as UserIcon, Camera, Upload, ArrowLeft } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { SurveyNotificationService } from '../lib/surveyNotificationService';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -70,7 +70,7 @@ export default function Consent() {
       const { file_url } = await StorageAPI.uploadFile(fileObject);
       return file_url;
     } catch (error) {
-      console.error('Error re-uploading photo:', error);
+              // Error re-uploading photo
       throw error;
     }
   };
@@ -148,7 +148,7 @@ export default function Consent() {
           setRememberProfile(true);
         }
       } catch (error) {
-        console.error('Error loading saved profile:', error);
+        // Error loading saved profile
       }
     };
     loadSavedProfile();
@@ -209,7 +209,7 @@ export default function Consent() {
         await processImageAsset(result.assets[0]);
       }
     } catch (error) {
-      console.error('Camera capture error:', error);
+              // Camera capture error
       Alert.alert("Error", "Failed to capture photo. Please try again.");
     }
   };
@@ -243,7 +243,7 @@ export default function Consent() {
         await processImageAsset(result.assets[0]);
       }
     } catch (error) {
-      console.error('Gallery pick error:', error);
+              // Gallery pick error
       Alert.alert("Error", "Failed to pick image. Please try again.");
     }
   };
@@ -308,18 +308,7 @@ export default function Consent() {
       }
     } catch (err) {
       // Enhanced error logging
-      console.error('Photo upload error details:', {
-        error: err,
-        assetInfo: {
-          uri: asset.uri,
-          fileSize: asset.fileSize,
-          width: asset.width,
-          height: asset.height,
-          type: asset.type
-        },
-        timestamp: new Date().toISOString(),
-        platform: 'Android'
-      });
+      // Photo upload error details
       
       // Provide more specific error messages
       let errorMessage = 'Unknown upload error';
@@ -383,7 +372,7 @@ export default function Consent() {
             await AsyncStorage.setItem('savedProfileData', JSON.stringify(profileDataToSave));
           }
         } catch (error) {
-          console.error('Error saving profile data:', error);
+          // Error saving profile data
         }
       } else {
         // Clear saved profile data if not checked
@@ -391,7 +380,7 @@ export default function Consent() {
           await AsyncStorage.removeItem('savedProfileData');
           await AsyncStorage.removeItem('savedProfilePhotoUrl');
         } catch (error) {
-          console.error('Error clearing profile data:', error);
+          // Error clearing profile data
         }
       }
 
@@ -425,8 +414,7 @@ export default function Consent() {
         2 // 2 hours after event ends
       );
       
-      // Debug: Log scheduled notifications to help troubleshoot
-      await SurveyNotificationService.debugScheduledNotifications();
+
       
       router.replace('/discovery');
     } catch (err) {
@@ -440,6 +428,20 @@ export default function Consent() {
       flex: 1,
       backgroundColor: isDark ? '#1f2937' : '#f9fafb',
       direction: 'ltr',
+    },
+    backButton: {
+      position: 'absolute',
+      top: 16,
+      left: 16,
+      padding: 8,
+      borderRadius: 20,
+      backgroundColor: isDark ? '#374151' : '#ffffff',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: isDark ? 0.3 : 0.1,
+      shadowRadius: 2,
+      elevation: 2,
+      zIndex: 1,
     },
     contentContainer: {
       padding: 16,
@@ -833,8 +835,18 @@ export default function Consent() {
 
   if (step === 'processing') {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
         <View style={styles.card}>
+          {/* Back Button */}
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.replace('/home')}
+            accessibilityLabel="Back to Home"
+            accessibilityHint="Tap to return to the home screen"
+          >
+            <ArrowLeft size={20} color={isDark ? '#e5e7eb' : '#374151'} />
+          </TouchableOpacity>
+          
           <ActivityIndicator size="large" color="#8b5cf6" style={styles.spinner} />
           <Text style={styles.title}>Creating Your Profile...</Text>
           <Text style={styles.subtitle}>
@@ -847,8 +859,18 @@ export default function Consent() {
 
   if (step === 'error') {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
         <View style={styles.card}>
+          {/* Back Button */}
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.replace('/home')}
+            accessibilityLabel="Back to Home"
+            accessibilityHint="Tap to return to the home screen"
+          >
+            <ArrowLeft size={20} color={isDark ? '#e5e7eb' : '#374151'} />
+          </TouchableOpacity>
+          
           <Text style={styles.errorTitle}>Something went wrong</Text>
           <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity style={styles.button} onPress={() => setStep('manual')}>
@@ -860,10 +882,19 @@ export default function Consent() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <ScrollView contentContainerStyle={styles.contentContainer}>
           <View style={styles.card}>
+            {/* Back Button */}
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => router.replace('/home')}
+              accessibilityLabel="Back to Home"
+              accessibilityHint="Tap to return to the home screen"
+            >
+              <ArrowLeft size={20} color={isDark ? '#e5e7eb' : '#374151'} />
+            </TouchableOpacity>
             <View style={styles.header}>
               <View style={styles.logoContainer}>
                 <Image 

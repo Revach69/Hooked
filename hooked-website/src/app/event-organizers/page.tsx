@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import Header from "../../components/Header";
 import Collage from "../../components/Collage";
 
-export default function HowItWorks() {
+export default function EventOrganizers() {
   // Array of all 11 collage images
   const allImages = [
     "/Collage1.JPG",
@@ -21,18 +21,14 @@ export default function HowItWorks() {
   ];
 
   // Use useMemo to ensure images are assigned only once and remain stable
-  const { firstCollageImages, secondCollageImages } = useMemo(() => {
+  const { secondCollageImages } = useMemo(() => {
     // Randomly shuffle all images
     const shuffled = [...allImages].sort(() => Math.random() - 0.5);
     
-    // First collage gets first 3 images
-    const firstImages = shuffled.slice(0, 3);
-    
-    // Second collage gets next 3 images (different from first)
-    const secondImages = shuffled.slice(3, 6);
+    // Get 3 images for the collage
+    const secondImages = shuffled.slice(0, 3);
     
     return {
-      firstCollageImages: firstImages,
       secondCollageImages: secondImages
     };
   }, []); // Empty dependency array ensures this runs only once
@@ -42,100 +38,26 @@ export default function HowItWorks() {
       {/* Header */}
       <Header />
       
-      {/* Section 1: How It Works - Hero */}
+      {/* Section 1: Event Organizers - Hero */}
       <section className="py-32 bg-gradient-to-r from-purple-400/90 to-pink-400/90 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h1 className="text-4xl md:text-5xl font-bold mb-8 text-center font-heading">
-            How It Works
+            Event Organizers
           </h1>
           <p className="text-xl text-white/90 text-center max-w-3xl mx-auto">
-            Hooked makes it easy to see who&apos;s single nearby — at the same party, wedding, conference, or any other event.
+            Give your guests a reason to mingle and make your event unforgettable with Hooked.
           </p>
         </div>
       </section>
 
-      {/* Section 2: The Hooked Experience */}
-      <section className="py-20 dark-mode-middle">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center mb-16">
-            {/* Left side - Large text */}
-            <div className="text-center lg:text-left">
-              <h2 className="text-4xl md:text-5xl font-bold mb-6 font-heading dark-mode-text">
-                The Hooked Experience
-              </h2>
-            </div>
-            
-            {/* Right side - 3-point list */}
-            <div className="space-y-6">
-              <div className="flex items-start">
-                <div className="bg-gradient-to-br from-purple-400 to-pink-400 w-12 h-12 rounded-full flex items-center justify-center mr-4 flex-shrink-0">
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V6a1 1 0 00-1-1H5a1 1 0 00-1 1v1a1 1 0 001 1zm12 0h2a1 1 0 001-1V6a1 1 0 00-1-1h-2a1 1 0 00-1 1v1a1 1 0 001 1zM5 20h2a1 1 0 001-1v-1a1 1 0 00-1-1H5a1 1 0 00-1 1v1a1 1 0 001 1z" />
-                  </svg>
-                </div>
-                <div>
-                  <h4 className="text-lg font-semibold dark-mode-text mb-1">
-                    Scan the QR code
-                  </h4>
-                  <p className="text-gray-600 dark:text-gray-300">
-                    Or join via a unique event code
-                  </p>
-                </div>
-              </div>
-              
-              <div className="flex items-start">
-                <div className="bg-gradient-to-br from-purple-400 to-pink-400 w-12 h-12 rounded-full flex items-center justify-center mr-4 flex-shrink-0">
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                  </svg>
-                </div>
-                <div>
-                  <h4 className="text-lg font-semibold dark-mode-text mb-1">
-                    See who&apos;s single & match
-                  </h4>
-                  <p className="text-gray-600 dark:text-gray-300">
-                    Send a like, match, and meet (if mutual)
-                  </p>
-                </div>
-              </div>
-              
-              <div className="flex items-start">
-                <div className="bg-gradient-to-br from-purple-400 to-pink-400 w-12 h-12 rounded-full flex items-center justify-center mr-4 flex-shrink-0">
-                  <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-                  </svg>
-                </div>
-                <div>
-                  <h4 className="text-lg font-semibold dark-mode-text mb-1">
-                    No strings attached
-                  </h4>
-                  <p className="text-gray-600 dark:text-gray-300">
-                    Everything expires after the event ends
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          {/* Collage of images */}
-          <div className="h-80 bg-gray-200 dark:bg-gray-700 rounded-xl p-4">
-            <Collage 
-              className="h-full" 
-              selectedImages={firstCollageImages}
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* Section 3: For Event Organizers */}
-      <section className="py-20 bg-gradient-to-r from-purple-400/90 to-pink-400/90 text-white">
+      {/* Section 2: For Event Organizers */}
+      <section className="py-20 bg-pink-50 dark:bg-pink-900/20 text-gray-900 dark:text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center mb-16">
             {/* Left side - 3 organizer points */}
             <div className="space-y-6 order-2 lg:order-1 flex flex-col items-center lg:items-end">
               <div className="flex items-start w-full max-w-sm">
-                <div className="bg-white/20 w-12 h-12 rounded-full flex items-center justify-center mr-4 flex-shrink-0">
+                <div className="bg-gradient-to-br from-purple-400 to-pink-400 w-12 h-12 rounded-full flex items-center justify-center mr-4 flex-shrink-0">
                   <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V6a1 1 0 00-1-1H5a1 1 0 00-1 1v1a1 1 0 001 1zm12 0h2a1 1 0 001-1V6a1 1 0 00-1-1h-2a1 1 0 00-1 1v1a1 1 0 001 1zM5 20h2a1 1 0 001-1v-1a1 1 0 00-1-1H5a1 1 0 00-1 1v1a1 1 0 001 1z" />
                   </svg>
@@ -144,14 +66,14 @@ export default function HowItWorks() {
                   <h4 className="text-lg font-semibold mb-1">
                     Private event space
                   </h4>
-                  <p className="text-white/80">
+                  <p className="text-gray-600 dark:text-gray-300">
                     We create a private event hub
                   </p>
                 </div>
               </div>
               
               <div className="flex items-start w-full max-w-sm">
-                <div className="bg-white/20 w-12 h-12 rounded-full flex items-center justify-center mr-4 flex-shrink-0">
+                <div className="bg-gradient-to-br from-purple-400 to-pink-400 w-12 h-12 rounded-full flex items-center justify-center mr-4 flex-shrink-0">
                   <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                   </svg>
@@ -160,14 +82,14 @@ export default function HowItWorks() {
                   <h4 className="text-lg font-semibold mb-1">
                     Guests join by scanning
                   </h4>
-                  <p className="text-white/80">
+                  <p className="text-gray-600 dark:text-gray-300">
                     Create a quick profile, and see who&apos;s single
                   </p>
                 </div>
               </div>
               
               <div className="flex items-start w-full max-w-sm">
-                <div className="bg-white/20 w-12 h-12 rounded-full flex items-center justify-center mr-4 flex-shrink-0">
+                <div className="bg-gradient-to-br from-purple-400 to-pink-400 w-12 h-12 rounded-full flex items-center justify-center mr-4 flex-shrink-0">
                   <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
@@ -177,7 +99,7 @@ export default function HowItWorks() {
                   <h4 className="text-lg font-semibold mb-1">
                     Event expires
                   </h4>
-                  <p className="text-white/80">
+                  <p className="text-gray-600 dark:text-gray-300">
                     Profiles and chats are deleted automatically
                   </p>
                 </div>
@@ -186,14 +108,14 @@ export default function HowItWorks() {
             
             {/* Right side - Large text */}
             <div className="text-center lg:text-right order-1 lg:order-2">
-              <h2 className="text-4xl md:text-5xl font-bold mb-6 font-heading">
-                For Event Organizers
+              <h2 className="text-4xl md:text-5xl font-bold mb-6 font-heading dark-mode-text">
+                How It Works
               </h2>
             </div>
           </div>
           
           {/* Collage of images */}
-          <div className="h-80 bg-white/10 rounded-xl p-4">
+          <div className="h-80 bg-gray-200 dark:bg-gray-700 rounded-xl p-4">
             <Collage 
               className="h-full" 
               selectedImages={secondCollageImages}
@@ -202,7 +124,7 @@ export default function HowItWorks() {
         </div>
       </section>
 
-      {/* Section 4: The Hooked Effect */}
+      {/* Section 3: The Hooked Effect */}
       <section className="py-20 bg-blue-50 dark:bg-gray-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center mb-16">
@@ -279,7 +201,7 @@ export default function HowItWorks() {
         </div>
       </section>
 
-      {/* Section 5: Ready to Get Hooked? - CTA */}
+      {/* Section 4: Ready to Get Hooked? - CTA */}
       <section className="py-16 bg-gradient-to-r from-purple-400/90 to-pink-400/90 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl md:text-4xl font-bold mb-6 font-heading">
@@ -296,7 +218,7 @@ export default function HowItWorks() {
               Host an Event
             </a>
             <a
-              href="/events"
+              href="/irl"
               className="border-2 border-white text-white px-8 py-3 rounded-lg font-semibold hover:bg-white hover:text-purple-600 transition-colors"
             >
               Find an Event

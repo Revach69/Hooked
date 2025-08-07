@@ -70,7 +70,7 @@ export default function Admin() {
     // Set admin email for display
     setAdminEmail(currentUser.email || '');
     
-    // Load events and stats
+    // Load events first, then stats
     await loadEvents();
     await loadAdminStats();
     setIsLoading(false);
@@ -97,6 +97,7 @@ export default function Admin() {
       const mutualLikes = allLikes.filter((like: any) => like.is_mutual);
       const now = new Date();
       
+      // Calculate event stats after events are loaded
       const activeEvents = events.filter(event => {
         const startDate = new Date(event.starts_at);
         const endDate = new Date(event.expires_at);
@@ -323,6 +324,17 @@ export default function Admin() {
               </View>
             </View>
 
+            {event.event_link && (
+              <View style={styles.eventSchedule}>
+                <Text style={styles.sectionTitle}>Event Link</Text>
+                <View style={styles.scheduleItem}>
+                  <Text style={[styles.eventDetailText, { color: '#3b82f6' }]} numberOfLines={1}>
+                    {event.event_link}
+                  </Text>
+                </View>
+              </View>
+            )}
+
             <View style={styles.eventActions}>
               <Text style={styles.sectionTitle}>Actions</Text>
               <View style={styles.actionButtons}>
@@ -344,7 +356,7 @@ export default function Admin() {
                 
                 <TouchableOpacity 
                   style={styles.actionButton}
-                  onPress={() => handleEventPress(event)}
+                  onPress={() => router.push(`/admin/edit-event?eventId=${event.id}`)}
                 >
                   <Edit size={16} color="#6b7280" />
                   <Text style={styles.actionButtonText}>Edit</Text>
@@ -644,7 +656,7 @@ export default function Admin() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#8b5cf6" />
           <Text style={styles.loadingText}>Loading admin dashboard...</Text>
@@ -656,7 +668,7 @@ export default function Admin() {
   const categorizedEvents = categorizeEvents();
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
       {/* Header */}
       <View style={styles.header}>
         <View>
@@ -730,13 +742,7 @@ export default function Admin() {
         <View style={styles.actionsSection}>
           <Text style={styles.sectionTitle}>Admin Actions</Text>
           
-          <TouchableOpacity 
-            style={styles.mainActionButton}
-            onPress={() => router.push('/errorInsights')}
-          >
-            <AlertTriangle size={20} color="#ef4444" />
-            <Text style={styles.actionText}>Error Insights</Text>
-          </TouchableOpacity>
+
           
           <TouchableOpacity 
             style={styles.mainActionButton}

@@ -49,7 +49,7 @@ export const useKickedUserCheck = () => {
         await KickedUserAPI.delete(kickedUserRecord.id);
       }
     } catch (error) {
-      console.error('Error checking for kicked user:', error);
+              // Error checking for kicked user
     } finally {
       setIsChecking(false);
     }

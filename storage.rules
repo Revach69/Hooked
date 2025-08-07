@@ -20,18 +20,18 @@ service firebase.storage {
     
     // ===== EVENT IMAGES =====
     // Allow public read access to event images
-    match /events/{eventId}/{fileName} {
+    match /events/{fileName} {
       allow read: if true;
       
-      // Allow authenticated users (admins) to upload event images
+      // Allow uploads for event images (web admin dashboard)
+      // This allows session-based uploads without strict Firebase Auth requirement
       allow write: if 
-        request.auth != null &&
         // Allow image files only
         request.resource.contentType.matches('image/.*') &&
         // File size limit (5MB for event images)
         request.resource.size < 5 * 1024 * 1024 &&
-        // File name must be safe
-        request.resource.name.matches('^events/[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+\\.[a-zA-Z0-9]+$');
+        // File name must be safe and follow the pattern: events/timestamp_randomstring.extension
+        request.resource.name.matches('^events/[0-9]+_[a-zA-Z0-9]+\\.[a-zA-Z0-9]+$');
     }
     
     // ===== ADMIN FILES =====

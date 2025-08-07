@@ -11,9 +11,10 @@ import {
   useColorScheme,
   Image,
   Dimensions,
+  TextInput,
 } from 'react-native';
-import { X, User, Flag, AlertTriangle, CheckCircle, XCircle, Ban } from 'lucide-react-native';
-import { ReportAPI, EventProfileAPI, type Report } from '../../lib/firebaseApi';
+import { X, User, Flag, AlertTriangle, CheckCircle, XCircle, Ban, ChevronDown, ChevronUp } from 'lucide-react-native';
+import { ReportAPI, EventProfileAPI, KickedUserAPI, type Report } from '../../lib/firebaseApi';
 
 interface ReportsModalProps {
   visible: boolean;
@@ -33,6 +34,13 @@ export default function ReportsModal({ visible, onClose, eventId, eventName }: R
   const [reports, setReports] = useState<ReportWithProfiles[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [processingReport, setProcessingReport] = useState<string | null>(null);
+  const [showOldReports, setShowOldReports] = useState(false);
+  const [showAdminNotesDialog, setShowAdminNotesDialog] = useState(false);
+  const [adminNotes, setAdminNotes] = useState('');
+  const [pendingAction, setPendingAction] = useState<{
+    type: 'accept' | 'reject';
+    report: ReportWithProfiles;
+  } | null>(null);
 
   useEffect(() => {
     if (visible) {
@@ -69,82 +77,82 @@ export default function ReportsModal({ visible, onClose, eventId, eventName }: R
 
       setReports(reportsWithProfiles);
     } catch (error) {
-      console.error('Error loading reports:', error);
+              // Error loading reports
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleAcceptReport = async (report: ReportWithProfiles) => {
+  const handleAcceptReport = (report: ReportWithProfiles) => {
     if (!report.reportedProfile) return;
     
-    Alert.alert(
-      'Remove User',
-      `Are you sure you want to remove ${report.reportedProfile.first_name} from this event? This action cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove User',
-          style: 'destructive',
-          onPress: async () => {
-            setProcessingReport(report.id);
-            try {
-              // Delete the reported user's profile
-              await EventProfileAPI.delete(report.reportedProfile.id);
-              
-              // Update report status to resolved
-              await ReportAPI.update(report.id, { 
-                status: 'resolved',
-                admin_notes: 'User removed from event due to report'
-              });
-              
-              // Reload reports
-              await loadReports();
-              
-              Alert.alert('Success', `${report.reportedProfile.first_name} has been removed from the event.`);
-            } catch (error) {
-              console.error('Error accepting report:', error);
-              Alert.alert('Error', 'Failed to remove user. Please try again.');
-            } finally {
-              setProcessingReport(null);
-            }
-          }
-        }
-      ]
-    );
+    setPendingAction({ type: 'accept', report });
+    setAdminNotes('');
+    setShowAdminNotesDialog(true);
   };
 
-  const handleRejectReport = async (report: ReportWithProfiles) => {
-    Alert.alert(
-      'Dismiss Report',
-      'Are you sure you want to dismiss this report? The reported user will remain in the event.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Dismiss Report',
-          onPress: async () => {
-            setProcessingReport(report.id);
-            try {
-              // Update report status to dismissed
-              await ReportAPI.update(report.id, { 
-                status: 'dismissed',
-                admin_notes: 'Report dismissed - false report or insufficient evidence'
-              });
-              
-              // Reload reports
-              await loadReports();
-              
-              Alert.alert('Success', 'Report has been dismissed.');
-            } catch (error) {
-              console.error('Error rejecting report:', error);
-              Alert.alert('Error', 'Failed to dismiss report. Please try again.');
-            } finally {
-              setProcessingReport(null);
-            }
-          }
+  const handleRejectReport = (report: ReportWithProfiles) => {
+    setPendingAction({ type: 'reject', report });
+    setAdminNotes('');
+    setShowAdminNotesDialog(true);
+  };
+
+  const handleConfirmAction = async () => {
+    if (!pendingAction) return;
+    
+    setProcessingReport(pendingAction.report.id);
+    setShowAdminNotesDialog(false);
+    
+    try {
+      if (pendingAction.type === 'accept') {
+        // Delete the reported user's profile
+        if (pendingAction.report.reportedProfile) {
+          await EventProfileAPI.delete(pendingAction.report.reportedProfile.id);
         }
-      ]
-    );
+        
+        // Create kicked user record
+        await KickedUserAPI.create({
+          event_id: pendingAction.report.event_id,
+          session_id: pendingAction.report.reported_session_id,
+          event_name: eventName,
+          admin_notes: adminNotes || 'User removed from event due to report'
+        });
+        
+        // Update report status to resolved
+        await ReportAPI.update(pendingAction.report.id, { 
+          status: 'resolved',
+          admin_notes: adminNotes || 'User removed from event due to report'
+        });
+      } else {
+        // Update report status to dismissed
+        await ReportAPI.update(pendingAction.report.id, { 
+          status: 'dismissed',
+          admin_notes: adminNotes || 'Report dismissed - false report or insufficient evidence'
+        });
+      }
+      
+      // Reload reports
+      await loadReports();
+      
+      Alert.alert('Success', 
+        pendingAction.type === 'accept' 
+          ? `${pendingAction.report.reportedProfile?.first_name} has been removed from the event.`
+          : 'Report has been dismissed.'
+      );
+    } catch (error) {
+              // Error processing report
+      Alert.alert('Error', 'Failed to process report. Please try again.');
+    } finally {
+      setProcessingReport(null);
+      setPendingAction(null);
+      setAdminNotes('');
+    }
+  };
+
+  const handleCancelAction = () => {
+    setShowAdminNotesDialog(false);
+    setPendingAction(null);
+    setAdminNotes('');
   };
 
   const getStatusColor = (status: string) => {
@@ -166,6 +174,10 @@ export default function ReportsModal({ visible, onClose, eventId, eventName }: R
       hour12: false
     });
   };
+
+  // Separate pending and old reports
+  const pendingReports = reports.filter(report => report.status === 'pending');
+  const oldReports = reports.filter(report => report.status !== 'pending');
 
   return (
     <Modal
@@ -221,176 +233,351 @@ export default function ReportsModal({ visible, onClose, eventId, eventName }: R
               </View>
             ) : (
               <View style={styles.reportsContainer}>
-                {reports.map((report) => (
-                  <View
-                    key={report.id}
-                    style={[styles.reportCard, { 
-                      backgroundColor: isDark ? '#374151' : '#f9fafb',
-                      borderColor: isDark ? '#4b5563' : '#e5e7eb'
-                    }]}
-                  >
-                    {/* Report Header */}
-                    <View style={styles.reportHeader}>
-                      <View style={styles.reportStatus}>
-                        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(report.status) + '20' }]}>
-                          <Text style={[styles.statusText, { color: getStatusColor(report.status) }]}>
-                            {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
-                          </Text>
-                        </View>
-                        <Text style={[styles.reportDate, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-                          {formatDate(report.created_at)}
-                        </Text>
-                      </View>
-                      {report.status === 'pending' && (
-                        <View style={styles.actionButtons}>
-                          <TouchableOpacity
-                            style={[styles.actionButton, styles.removeButton]}
-                            onPress={() => handleAcceptReport(report)}
-                            disabled={processingReport === report.id}
-                          >
-                            {processingReport === report.id ? (
-                              <ActivityIndicator size="small" color="white" />
-                            ) : (
-                              <Ban size={16} color="white" />
-                            )}
-                            <Text style={styles.actionButtonText}>Remove</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={[styles.actionButton, styles.dismissButton]}
-                            onPress={() => handleRejectReport(report)}
-                            disabled={processingReport === report.id}
-                          >
-                            {processingReport === report.id ? (
-                              <ActivityIndicator size="small" color="white" />
-                            ) : (
-                              <XCircle size={16} color="white" />
-                            )}
-                            <Text style={styles.actionButtonText}>Dismiss</Text>
-                          </TouchableOpacity>
-                        </View>
-                      )}
-                    </View>
-
-                    {/* Users Section */}
-                    <View style={styles.usersSection}>
-                      {/* Reporter */}
-                      <View style={[styles.userCard, { backgroundColor: isDark ? '#1e3a8a' : '#dbeafe' }]}>
-                        <View style={styles.userCardHeader}>
-                          <User size={16} color="#2563eb" />
-                          <Text style={[styles.userCardTitle, { color: isDark ? '#93c5fd' : '#1e40af' }]}>
-                            Reporter
-                          </Text>
-                        </View>
-                        {report.reporterProfile ? (
-                          <View style={styles.userInfo}>
-                            <View style={styles.userAvatar}>
-                              {report.reporterProfile.profile_photo_url ? (
-                                <Image
-                                  source={{ uri: report.reporterProfile.profile_photo_url }}
-                                  style={styles.avatarImage}
-                                />
-                              ) : (
-                                <View 
-                                  style={[styles.avatarFallback, { backgroundColor: report.reporterProfile.profile_color || '#8b5cf6' }]}
-                                >
-                                  <Text style={styles.avatarText}>
-                                    {report.reporterProfile.first_name[0]}
-                                  </Text>
-                                </View>
-                              )}
-                            </View>
-                            <View style={styles.userDetails}>
-                              <Text style={[styles.userName, { color: isDark ? '#ffffff' : '#1f2937' }]}>
-                                {report.reporterProfile.first_name}
-                              </Text>
-                              <Text style={[styles.userAge, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-                                {report.reporterProfile.age} years old
-                              </Text>
-                            </View>
-                          </View>
-                        ) : (
-                          <Text style={[styles.userNotFound, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-                            Profile not found
-                          </Text>
-                        )}
-                      </View>
-
-                      {/* Reported User */}
-                      <View style={[styles.userCard, { backgroundColor: isDark ? '#7f1d1d' : '#fef2f2' }]}>
-                        <View style={styles.userCardHeader}>
-                          <AlertTriangle size={16} color="#dc2626" />
-                          <Text style={[styles.userCardTitle, { color: isDark ? '#fca5a5' : '#991b1b' }]}>
-                            Reported User
-                          </Text>
-                        </View>
-                        {report.reportedProfile ? (
-                          <View style={styles.userInfo}>
-                            <View style={styles.userAvatar}>
-                              {report.reportedProfile.profile_photo_url ? (
-                                <Image
-                                  source={{ uri: report.reportedProfile.profile_photo_url }}
-                                  style={styles.avatarImage}
-                                />
-                              ) : (
-                                <View 
-                                  style={[styles.avatarFallback, { backgroundColor: report.reportedProfile.profile_color || '#8b5cf6' }]}
-                                >
-                                  <Text style={styles.avatarText}>
-                                    {report.reportedProfile.first_name[0]}
-                                  </Text>
-                                </View>
-                              )}
-                            </View>
-                            <View style={styles.userDetails}>
-                              <Text style={[styles.userName, { color: isDark ? '#ffffff' : '#1f2937' }]}>
-                                {report.reportedProfile.first_name}
-                              </Text>
-                              <Text style={[styles.userAge, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-                                {report.reportedProfile.age} years old
-                              </Text>
-                            </View>
-                          </View>
-                        ) : (
-                          <Text style={[styles.userNotFound, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-                            Profile not found
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-
-                    {/* Report Details */}
-                    <View style={[styles.detailsCard, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}>
-                      <Text style={[styles.detailsTitle, { color: isDark ? '#ffffff' : '#1f2937' }]}>
-                        Report Details
+                {/* Pending Reports Section */}
+                {pendingReports.length > 0 && (
+                  <View style={styles.sectionContainer}>
+                    <View style={styles.sectionHeader}>
+                      <View style={[styles.pendingIndicator, { backgroundColor: '#f59e0b' }]} />
+                      <Text style={[styles.sectionTitle, { color: isDark ? '#ffffff' : '#1f2937' }]}>
+                        Pending Reports ({pendingReports.length})
                       </Text>
-                      <View style={styles.detailsContent}>
-                        <View style={styles.detailRow}>
-                          <Text style={[styles.detailLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-                            Reason:
-                          </Text>
-                          <Text style={[styles.detailValue, { color: isDark ? '#ffffff' : '#1f2937' }]}>
-                            {report.reason.replace('_', ' ')}
-                          </Text>
-                        </View>
-                        {report.details && (
-                          <View style={styles.detailRow}>
-                            <Text style={[styles.detailLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-                              Details:
-                            </Text>
-                            <Text style={[styles.detailValue, { color: isDark ? '#ffffff' : '#1f2937' }]}>
-                              {report.details}
-                            </Text>
+                    </View>
+                    <View style={styles.reportsList}>
+                      {pendingReports.map((report) => (
+                        <View
+                          key={report.id}
+                          style={[styles.reportCard, { 
+                            backgroundColor: isDark ? '#374151' : '#f9fafb',
+                            borderColor: isDark ? '#4b5563' : '#e5e7eb'
+                          }]}
+                        >
+                          {/* Report Header */}
+                          <View style={styles.reportHeader}>
+                            <View style={styles.reportStatus}>
+                              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(report.status) + '20' }]}>
+                                <Text style={[styles.statusText, { color: getStatusColor(report.status) }]}>
+                                  {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
+                                </Text>
+                              </View>
+                              <Text style={[styles.reportDate, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                                {formatDate(report.created_at)}
+                              </Text>
+                            </View>
+                            <View style={styles.actionButtons}>
+                              <TouchableOpacity
+                                style={[styles.actionButton, styles.removeButton]}
+                                onPress={() => handleAcceptReport(report)}
+                                disabled={processingReport === report.id}
+                              >
+                                {processingReport === report.id ? (
+                                  <ActivityIndicator size="small" color="white" />
+                                ) : (
+                                  <Ban size={16} color="white" />
+                                )}
+                                <Text style={styles.actionButtonText}>Remove</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={[styles.actionButton, styles.dismissButton]}
+                                onPress={() => handleRejectReport(report)}
+                                disabled={processingReport === report.id}
+                              >
+                                {processingReport === report.id ? (
+                                  <ActivityIndicator size="small" color="white" />
+                                ) : (
+                                  <XCircle size={16} color="white" />
+                                )}
+                                <Text style={styles.actionButtonText}>Dismiss</Text>
+                              </TouchableOpacity>
+                            </View>
                           </View>
-                        )}
-                      </View>
+
+                          {/* Users Section */}
+                          <View style={styles.usersSection}>
+                            {/* Reporter */}
+                            <View style={[styles.userCard, { backgroundColor: isDark ? '#1e3a8a' : '#dbeafe' }]}>
+                              <View style={styles.userCardHeader}>
+                                <User size={16} color="#2563eb" />
+                                <Text style={[styles.userCardTitle, { color: isDark ? '#93c5fd' : '#1e40af' }]}>
+                                  Reporter
+                                </Text>
+                              </View>
+                              {report.reporterProfile ? (
+                                <View style={styles.userInfo}>
+                                  <View style={styles.userAvatar}>
+                                    {report.reporterProfile.profile_photo_url ? (
+                                      <Image
+                                        source={{ uri: report.reporterProfile.profile_photo_url }}
+                                        style={styles.avatarImage}
+                                      />
+                                    ) : (
+                                      <View 
+                                        style={[styles.avatarFallback, { backgroundColor: report.reporterProfile.profile_color || '#8b5cf6' }]}
+                                      >
+                                        <Text style={styles.avatarText}>
+                                          {report.reporterProfile.first_name[0]}
+                                        </Text>
+                                      </View>
+                                    )}
+                                  </View>
+                                  <View style={styles.userDetails}>
+                                    <Text style={[styles.userName, { color: isDark ? '#ffffff' : '#1f2937' }]}>
+                                      {report.reporterProfile.first_name}
+                                    </Text>
+                                    <Text style={[styles.userAge, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                                      {report.reporterProfile.age} years old
+                                    </Text>
+                                  </View>
+                                </View>
+                              ) : (
+                                <Text style={[styles.userNotFound, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                                  Profile not found
+                                </Text>
+                              )}
+                            </View>
+
+                            {/* Reported User */}
+                            <View style={[styles.userCard, { backgroundColor: isDark ? '#7f1d1d' : '#fef2f2' }]}>
+                              <View style={styles.userCardHeader}>
+                                <AlertTriangle size={16} color="#dc2626" />
+                                <Text style={[styles.userCardTitle, { color: isDark ? '#fca5a5' : '#991b1b' }]}>
+                                  Reported User
+                                </Text>
+                              </View>
+                              {report.reportedProfile ? (
+                                <View style={styles.userInfo}>
+                                  <View style={styles.userAvatar}>
+                                    {report.reportedProfile.profile_photo_url ? (
+                                      <Image
+                                        source={{ uri: report.reportedProfile.profile_photo_url }}
+                                        style={styles.avatarImage}
+                                      />
+                                    ) : (
+                                      <View 
+                                        style={[styles.avatarFallback, { backgroundColor: report.reportedProfile.profile_color || '#8b5cf6' }]}
+                                      >
+                                        <Text style={styles.avatarText}>
+                                          {report.reportedProfile.first_name[0]}
+                                        </Text>
+                                      </View>
+                                    )}
+                                  </View>
+                                  <View style={styles.userDetails}>
+                                    <Text style={[styles.userName, { color: isDark ? '#ffffff' : '#1f2937' }]}>
+                                      {report.reportedProfile.first_name}
+                                    </Text>
+                                    <Text style={[styles.userAge, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                                      {report.reportedProfile.age} years old
+                                    </Text>
+                                  </View>
+                                </View>
+                              ) : (
+                                <Text style={[styles.userNotFound, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                                  Profile not found
+                                </Text>
+                              )}
+                            </View>
+                          </View>
+
+                          {/* Report Details */}
+                          <View style={[styles.detailsCard, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}>
+                            <Text style={[styles.detailsTitle, { color: isDark ? '#ffffff' : '#1f2937' }]}>
+                              Report Details
+                            </Text>
+                            <View style={styles.detailsContent}>
+                              <View style={styles.detailRow}>
+                                <Text style={[styles.detailLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                                  Reason:
+                                </Text>
+                                <Text style={[styles.detailValue, { color: isDark ? '#ffffff' : '#1f2937' }]}>
+                                  {report.reason.replace('_', ' ')}
+                                </Text>
+                              </View>
+                              {report.details && (
+                                <View style={styles.detailRow}>
+                                  <Text style={[styles.detailLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                                    Details:
+                                  </Text>
+                                  <Text style={[styles.detailValue, { color: isDark ? '#ffffff' : '#1f2937' }]}>
+                                    {report.details}
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
+                          </View>
+                        </View>
+                      ))}
                     </View>
                   </View>
-                ))}
+                )}
+                
+                {/* Old Reports Section */}
+                {oldReports.length > 0 && (
+                  <View style={styles.sectionContainer}>
+                    <TouchableOpacity
+                      style={styles.sectionHeader}
+                      onPress={() => setShowOldReports(!showOldReports)}
+                    >
+                      <Text style={[styles.sectionTitle, { color: isDark ? '#ffffff' : '#1f2937' }]}>
+                        Old Reports ({oldReports.length})
+                      </Text>
+                      {showOldReports ? (
+                        <ChevronUp size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+                      ) : (
+                        <ChevronDown size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+                      )}
+                    </TouchableOpacity>
+                    
+                    {showOldReports && (
+                      <View style={styles.reportsList}>
+                        {oldReports.map((report) => (
+                          <View
+                            key={report.id}
+                            style={[styles.reportCard, { 
+                              backgroundColor: isDark ? '#374151' : '#f9fafb',
+                              borderColor: isDark ? '#4b5563' : '#e5e7eb'
+                            }]}
+                          >
+                            <View style={styles.reportHeader}>
+                              <View style={styles.reportStatus}>
+                                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(report.status) + '20' }]}>
+                                  <Text style={[styles.statusText, { color: getStatusColor(report.status) }]}>
+                                    {report.status === 'resolved' ? 'Approved' : 'Rejected'}
+                                  </Text>
+                                </View>
+                                <Text style={[styles.reportDate, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                                  {formatDate(report.created_at)}
+                                </Text>
+                              </View>
+                            </View>
+                            
+                            <View style={[styles.detailsCard, { backgroundColor: isDark ? '#4b5563' : '#f3f4f6' }]}>
+                              <View style={styles.detailsContent}>
+                                <View style={styles.detailRow}>
+                                  <Text style={[styles.detailLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                                    Reporter:
+                                  </Text>
+                                  <Text style={[styles.detailValue, { color: isDark ? '#ffffff' : '#1f2937' }]}>
+                                    {report.reporterProfile?.first_name || 'Unknown'}
+                                  </Text>
+                                </View>
+                                <View style={styles.detailRow}>
+                                  <Text style={[styles.detailLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                                    Reported:
+                                  </Text>
+                                  <Text style={[styles.detailValue, { color: isDark ? '#ffffff' : '#1f2937' }]}>
+                                    {report.reportedProfile?.first_name || 'Unknown'}
+                                  </Text>
+                                </View>
+                                <View style={styles.detailRow}>
+                                  <Text style={[styles.detailLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                                    Reason:
+                                  </Text>
+                                  <Text style={[styles.detailValue, { color: isDark ? '#ffffff' : '#1f2937' }]}>
+                                    {report.reason.replace('_', ' ')}
+                                  </Text>
+                                </View>
+                                {report.details && (
+                                  <View style={styles.detailRow}>
+                                    <Text style={[styles.detailLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                                      Details:
+                                    </Text>
+                                    <Text style={[styles.detailValue, { color: isDark ? '#ffffff' : '#1f2937' }]}>
+                                      {report.details}
+                                    </Text>
+                                  </View>
+                                )}
+                                {report.admin_notes && (
+                                  <View style={styles.detailRow}>
+                                    <Text style={[styles.detailLabel, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                                      Admin Notes:
+                                    </Text>
+                                    <Text style={[styles.detailValue, { color: isDark ? '#ffffff' : '#1f2937', fontSize: 12 }]}>
+                                      {report.admin_notes}
+                                    </Text>
+                                  </View>
+                                )}
+                              </View>
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                )}
               </View>
             )}
           </ScrollView>
         </View>
       </View>
+
+      {/* Admin Notes Dialog */}
+      {showAdminNotesDialog && pendingAction && (
+        <Modal
+          visible={showAdminNotesDialog}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={handleCancelAction}
+        >
+          <View style={styles.dialogOverlay}>
+            <View style={[styles.dialogContent, { backgroundColor: isDark ? '#2d2d2d' : 'white' }]}>
+              <Text style={[styles.dialogTitle, { color: isDark ? '#ffffff' : '#1f2937' }]}>
+                {pendingAction.type === 'accept' ? 'Remove User' : 'Dismiss Report'}
+              </Text>
+              
+              <Text style={[styles.dialogDescription, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                {pendingAction.type === 'accept' 
+                  ? 'You are about to remove the reported user from this event. Please add any notes about this action.'
+                  : 'You are about to dismiss this report. Please add any notes about why it was dismissed.'
+                }
+              </Text>
+              
+              <Text style={[styles.inputLabel, { color: isDark ? '#ffffff' : '#1f2937' }]}>
+                Admin Notes (Optional)
+              </Text>
+              <TextInput
+                value={adminNotes}
+                onChangeText={setAdminNotes}
+                placeholder={pendingAction.type === 'accept' 
+                  ? 'e.g., User removed due to inappropriate behavior'
+                  : 'e.g., Report dismissed - insufficient evidence'
+                }
+                placeholderTextColor={isDark ? '#6b7280' : '#9ca3af'}
+                style={[styles.textInput, { 
+                  backgroundColor: isDark ? '#374151' : '#f9fafb',
+                  color: isDark ? '#ffffff' : '#1f2937',
+                  borderColor: isDark ? '#4b5563' : '#d1d5db'
+                }]}
+                multiline
+                numberOfLines={3}
+              />
+              
+              <View style={styles.dialogButtons}>
+                <TouchableOpacity
+                  style={[styles.dialogButton, styles.cancelButton, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
+                  onPress={handleCancelAction}
+                >
+                  <Text style={[styles.dialogButtonText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                    Cancel
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.dialogButton, pendingAction.type === 'accept' ? styles.removeButton : styles.dismissButton]}
+                  onPress={handleConfirmAction}
+                  disabled={processingReport === pendingAction.report.id}
+                >
+                  {processingReport === pendingAction.report.id ? (
+                    <ActivityIndicator size="small" color="white" />
+                  ) : (
+                    <Text style={styles.dialogButtonText}>
+                      {pendingAction.type === 'accept' ? 'Remove User' : 'Dismiss Report'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
     </Modal>
   );
 }
@@ -404,8 +591,8 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalContent: {
-    width: Math.min(Dimensions.get('window').width * 0.9, 500), // Responsive width: 90% of screen width, max 500px
-    maxHeight: Dimensions.get('window').height * 0.8, // 80% of screen height
+    width: Math.min(Dimensions.get('window').width * 0.9, 500),
+    maxHeight: Dimensions.get('window').height * 0.8,
     borderRadius: 16,
     overflow: 'hidden',
   },
@@ -444,7 +631,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   contentContainer: {
-    paddingBottom: 20, // Add some padding at the bottom for the last item
+    paddingBottom: 20,
   },
   loadingContainer: {
     flex: 1,
@@ -473,6 +660,28 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   reportsContainer: {
+    gap: 24,
+  },
+  sectionContainer: {
+    gap: 16,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  pendingIndicator: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 8,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    flex: 1,
+  },
+  reportsList: {
     gap: 16,
   },
   reportCard: {
@@ -606,10 +815,62 @@ const styles = StyleSheet.create({
   detailLabel: {
     fontSize: 14,
     fontWeight: '500',
-    minWidth: 60,
+    minWidth: 80,
   },
   detailValue: {
     fontSize: 14,
     flex: 1,
+  },
+  dialogOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  dialogContent: {
+    width: Math.min(Dimensions.get('window').width * 0.9, 400),
+    borderRadius: 16,
+    padding: 24,
+    gap: 16,
+  },
+  dialogTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  dialogDescription: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  textInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    textAlignVertical: 'top',
+  },
+  dialogButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  dialogButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelButton: {
+    // Styled in the component
+  },
+  dialogButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'white',
   },
 }); 

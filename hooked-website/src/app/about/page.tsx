@@ -140,13 +140,13 @@ export default function About() {
       </section>
 
       {/* Section 3: Why We're Here */}
-      <section className="py-16 md:py-16 pb-20 md:pb-16 bg-gray-50 dark:bg-gray-600">
+      <section className="py-12 md:py-12 pb-16 md:pb-12 bg-gray-50 dark:bg-gray-600">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h2 className="text-4xl font-bold dark-mode-text mb-8 font-heading">
+            <h2 className="text-4xl font-bold dark-mode-text mb-6 font-heading">
               Why We&apos;re Here
             </h2>
-            <div className="space-y-4 text-lg text-gray-600 dark:text-gray-300 leading-relaxed">
+            <div className="space-y-2 text-lg text-gray-600 dark:text-gray-300 leading-tight">
               <p>People want to meet — they&apos;re just afraid to make a move.</p>
               <p>Afraid to approach.</p>
               <p>Afraid to be rejected.</p>
@@ -163,20 +163,10 @@ export default function About() {
           <h2 className="text-4xl font-bold dark-mode-text mb-12 text-center font-heading">
             Our Values
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="text-center">
               <div className="bg-purple-100 dark:bg-purple-900 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                 <span className="text-2xl font-bold text-purple-600 dark:text-purple-300">01</span>
-              </div>
-              <h3 className="text-xl font-semibold dark-mode-text mb-2">Clarity</h3>
-              <p className="text-gray-600 dark:text-gray-300">
-                We show you who&apos;s open — so you can stop overthinking and start connecting.
-              </p>
-            </div>
-            
-            <div className="text-center">
-              <div className="bg-purple-100 dark:bg-purple-900 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl font-bold text-purple-600 dark:text-purple-300">02</span>
               </div>
               <h3 className="text-xl font-semibold dark-mode-text mb-2">Simplicity</h3>
               <p className="text-gray-600 dark:text-gray-300">
@@ -186,7 +176,7 @@ export default function About() {
             
             <div className="text-center">
               <div className="bg-purple-100 dark:bg-purple-900 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl font-bold text-purple-600 dark:text-purple-300">03</span>
+                <span className="text-2xl font-bold text-purple-600 dark:text-purple-300">02</span>
               </div>
               <h3 className="text-xl font-semibold dark-mode-text mb-2">Courage</h3>
               <p className="text-gray-600 dark:text-gray-300">
@@ -196,7 +186,7 @@ export default function About() {
             
             <div className="text-center">
               <div className="bg-purple-100 dark:bg-purple-900 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl font-bold text-purple-600 dark:text-purple-300">04</span>
+                <span className="text-2xl font-bold text-purple-600 dark:text-purple-300">03</span>
               </div>
               <h3 className="text-xl font-semibold dark-mode-text mb-2">In-Person</h3>
               <p className="text-gray-600 dark:text-gray-300">
@@ -208,12 +198,12 @@ export default function About() {
       </section>
 
       {/* Section 5: The World We Want */}
-      <section className="py-16 bg-gradient-to-r from-purple-400/90 to-pink-400/90 text-white">
+      <section className="py-12 bg-gradient-to-r from-purple-400/90 to-pink-400/90 text-white">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-4xl font-bold mb-8 font-heading">
+          <h2 className="text-4xl font-bold mb-6 font-heading">
             The World We Want
           </h2>
-          <div className="space-y-3 text-lg leading-relaxed">
+          <div className="space-y-2 text-lg leading-tight">
             <p>We imagine a world where people talk again.</p>
             <p>Where you don&apos;t need a swipe to start something.</p>
             <p>Where &quot;we met at that event&quot; becomes the norm — not the exception.</p>

@@ -24,6 +24,7 @@ export interface Event {
   organizer_email?: string;
   event_type?: string;
   image_url?: string; // Added for event images
+  event_link?: string; // Added for event link
   created_at: string;
   updated_at: string;
 }

@@ -2,6 +2,7 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { doc, setDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db, auth } from './firebaseConfig';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface NotificationData {
   title: string;
@@ -10,35 +11,73 @@ export interface NotificationData {
 }
 
 /**
- * Send push notification to a specific user (client-side implementation)
- * Note: This is a simplified version. In production, you'd use Firebase Cloud Functions
+ * Store push token for a session
  */
-export async function sendPushNotificationToUser(
-  userId: string,
+export async function storePushToken(sessionId: string, token: string): Promise<void> {
+  try {
+    const tokenData = {
+      token,
+      platform: Platform.OS,
+      sessionId,
+      createdAt: new Date().toISOString(),
+    };
+
+    // Store in Firestore
+    await setDoc(doc(db, 'push_tokens', `${sessionId}_${Platform.OS}`), tokenData);
+    
+    // Also store locally for backup
+    await AsyncStorage.setItem(`pushToken_${sessionId}`, token);
+  } catch (error) {
+    // Error storing push token
+  }
+}
+
+/**
+ * Get push token for a session
+ */
+export async function getPushToken(sessionId: string): Promise<string | null> {
+  try {
+    // Try to get from local storage first
+    const localToken = await AsyncStorage.getItem(`pushToken_${sessionId}`);
+    if (localToken) {
+      return localToken;
+    }
+
+    // Fallback to Firestore
+    const tokenDoc = await getDoc(doc(db, 'push_tokens', `${sessionId}_${Platform.OS}`));
+    if (tokenDoc.exists()) {
+      const tokenData = tokenDoc.data();
+      return tokenData.token;
+    }
+
+    return null;
+  } catch (error) {
+    // Error getting push token
+    return null;
+  }
+}
+
+/**
+ * Send push notification to a specific session (client-side implementation)
+ */
+export async function sendPushNotificationToSession(
+  sessionId: string,
   notification: NotificationData
 ): Promise<boolean> {
   try {
-    // Get user's push tokens from Firestore
-    const tokens = await getUserPushTokens(userId);
+    // Get push token for the session
+    const token = await getPushToken(sessionId);
     
-    if (tokens.length === 0) {
-      // No push tokens found for user
+    if (!token) {
+      // No push token found for session
       return false;
     }
 
-    // Send notification to all user's devices
-    const results = await Promise.allSettled(
-      tokens.map(token => sendPushNotification(token.token, notification))
-    );
-
-    const successCount = results.filter(
-      result => result.status === 'fulfilled' && result.value
-    ).length;
-
-          // Sent notification to devices
-    return successCount > 0;
+    // Send notification to the device
+    const success = await sendPushNotification(token, notification);
+    return success;
   } catch (error) {
-    console.error('Error sending push notification to user:', error);
+    // Error sending push notification to session
     return false;
   }
 }
@@ -57,6 +96,7 @@ async function sendPushNotification(
       title: notification.title,
       body: notification.body,
       data: notification.data || {},
+      priority: 'high',
     };
 
     const response = await fetch('https://exp.host/--/api/v2/push/send', {
@@ -71,7 +111,7 @@ async function sendPushNotification(
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`Failed to send push notification: ${response.status} - ${errorText}`);
+      // Failed to send push notification
       return false;
     }
 
@@ -79,14 +119,14 @@ async function sendPushNotification(
     
     // Check if the notification was sent successfully
     if (result.data && result.data.status === 'error') {
-      console.error(`Push notification error: ${result.data.message}`);
+      // Push notification error
       return false;
     }
 
-          // Push notification sent successfully
+    // Push notification sent successfully
     return true;
   } catch (error) {
-    console.error('Error sending push notification:', error);
+    // Error sending push notification
     return false;
   }
 }
@@ -98,7 +138,7 @@ async function sendPushNotification(
 async function getUserPushTokens(userId: string): Promise<Array<{ token: string; platform: string }>> {
   // Push tokens are not supported in the session-based version
   // since they require Firebase Auth and the app doesn't use authentication
-        // Push tokens not supported in session-based app
+  // Push tokens not supported in session-based app
   return [];
 }
 
@@ -106,45 +146,66 @@ async function getUserPushTokens(userId: string): Promise<Array<{ token: string;
  * Send match notification
  */
 export async function sendMatchNotification(
-  userId: string,
+  sessionId: string,
   matchedUserName: string
 ): Promise<boolean> {
   const notification: NotificationData = {
-    title: "It's a match!",
-    body: `You're hooked up with ${matchedUserName}`,
+    title: "You got Hooked!",
+    body: `You matched with ${matchedUserName}`,
     data: {
       type: 'match',
       matchedUserName,
     },
   };
 
-  return await sendPushNotificationToUser(userId, notification);
+  return await sendPushNotificationToSession(sessionId, notification);
 }
 
 /**
  * Send like notification (when someone likes you back)
+ * Only shows notification if user has been away for more than 10 minutes
  */
 export async function sendLikeNotification(
-  userId: string,
+  sessionId: string,
   likerName: string
 ): Promise<boolean> {
-  const notification: NotificationData = {
-    title: "Someone liked you! ❤️",
-    body: `${likerName} liked your profile`,
-    data: {
-      type: 'like',
-      likerName,
-    },
-  };
+  try {
+    // Check if user has been away for more than 10 minutes
+    const lastActivityKey = `lastActivity_${sessionId}`;
+    const lastActivity = await AsyncStorage.getItem(lastActivityKey);
+    
+    if (lastActivity) {
+      const lastActivityTime = new Date(lastActivity).getTime();
+      const now = Date.now();
+      const tenMinutes = 10 * 60 * 1000; // 10 minutes in milliseconds
+      
+      // If user was active less than 10 minutes ago, don't send notification
+      if ((now - lastActivityTime) < tenMinutes) {
+        return false;
+      }
+    }
+    
+    const notification: NotificationData = {
+      title: "Someone liked you! ❤️",
+      body: "", // Empty body to not reveal the name
+      data: {
+        type: 'like',
+        likerName,
+      },
+    };
 
-  return await sendPushNotificationToUser(userId, notification);
+    return await sendPushNotificationToSession(sessionId, notification);
+  } catch (error) {
+    // Error sending like notification
+    return false;
+  }
 }
 
 /**
  * Send message notification
  */
 export async function sendMessageNotification(
-  userId: string,
+  sessionId: string,
   senderName: string,
   messagePreview: string,
   isDeviceLocked: boolean = false
@@ -159,14 +220,14 @@ export async function sendMessageNotification(
     },
   };
 
-  return await sendPushNotificationToUser(userId, notification);
+  return await sendPushNotificationToSession(sessionId, notification);
 }
 
 /**
  * Send generic notification
  */
 export async function sendGenericNotification(
-  userId: string,
+  sessionId: string,
   title: string,
   body: string,
   data?: Record<string, any>
@@ -177,7 +238,7 @@ export async function sendGenericNotification(
     data,
   };
 
-  return await sendPushNotificationToUser(userId, notification);
+  return await sendPushNotificationToSession(sessionId, notification);
 }
 
 /**
@@ -199,10 +260,10 @@ export async function scheduleLocalNotification(
       trigger,
     });
     
-          // Local notification scheduled
+    // Local notification scheduled
     return identifier;
   } catch (error) {
-    console.error('Error scheduling local notification:', error);
+    // Error scheduling local notification
     return null;
   }
 }
@@ -213,9 +274,9 @@ export async function scheduleLocalNotification(
 export async function cancelScheduledNotification(identifier: string): Promise<void> {
   try {
     await Notifications.cancelScheduledNotificationAsync(identifier);
-          // Cancelled scheduled notification
+    // Cancelled scheduled notification
   } catch (error) {
-    console.error('Error cancelling scheduled notification:', error);
+    // Error cancelling scheduled notification
   }
 }
 
@@ -225,9 +286,9 @@ export async function cancelScheduledNotification(identifier: string): Promise<v
 export async function cancelAllScheduledNotifications(): Promise<void> {
   try {
     await Notifications.cancelAllScheduledNotificationsAsync();
-          // Cancelled all scheduled notifications
+    // Cancelled all scheduled notifications
   } catch (error) {
-    console.error('Error cancelling all scheduled notifications:', error);
+    // Error cancelling all scheduled notifications
   }
 }
 
@@ -239,7 +300,7 @@ export async function getAllScheduledNotifications(): Promise<Notifications.Noti
     const notifications = await Notifications.getAllScheduledNotificationsAsync();
     return notifications;
   } catch (error) {
-    console.error('Error getting scheduled notifications:', error);
+    // Error getting scheduled notifications
     return [];
   }
 } 
