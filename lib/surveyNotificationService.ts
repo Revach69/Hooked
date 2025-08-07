@@ -123,7 +123,7 @@ export class SurveyNotificationService {
   }
 
   /**
-   * Check if survey should be shown (either from notification or manual app open)
+   * Check if survey should be shown (either from notification response or app load within survey timeframe)
    */
   static async shouldShowSurvey(): Promise<SurveyData | null> {
     try {
@@ -136,16 +136,18 @@ export class SurveyNotificationService {
       // Get all events from history
       const eventHistory = await this.getEventHistory();
       
-      // Find any event that's within the 26-hour window (2h delay + 24h survey window)
+      // Find any event that's within the survey visibility window (2h delay + 24h survey window)
       const now = Date.now();
-      const twentySixHours = 26 * 60 * 60 * 1000;
+      const twoHours = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
+      const twentySixHours = 26 * 60 * 60 * 1000; // 26 hours in milliseconds
 
       for (const event of eventHistory) {
         const eventEndTime = new Date(event.expiresAt).getTime();
         const timeSinceEventEnd = now - eventEndTime;
         
-        // Check if event ended within last 26 hours (2h delay + 24h survey window)
-        if (timeSinceEventEnd >= 0 && timeSinceEventEnd <= twentySixHours) {
+        // Check if event ended between 2 hours ago and 26 hours ago
+        // This creates the survey visibility window: from 2h after expiry to 26h after expiry
+        if (timeSinceEventEnd >= twoHours && timeSinceEventEnd <= twentySixHours) {
           return event; // Return the first eligible event
         }
       }
@@ -166,6 +168,8 @@ export class SurveyNotificationService {
     // Cancel all pending survey notifications
     await this.cancelAllSurveyNotifications();
   }
+
+
 
   /**
    * Cancel survey notification for an event

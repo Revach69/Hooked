@@ -423,8 +423,6 @@ export async function handleNewMessageNotification(
   senderName: string
 ): Promise<void> {
   try {
-
-    
     // Get the recipient's session ID
     const recipientProfile = await import('./firebaseApi').then(api => 
       api.EventProfileAPI.get(toProfileId)
@@ -436,16 +434,12 @@ export async function handleNewMessageNotification(
     }
     
     const recipientSessionId = recipientProfile.session_id;
-
     
     // Check if recipient is currently in the app
     const isRecipientInApp = await checkIfUserIsInApp(recipientSessionId);
-
     
     if (isRecipientInApp) {
       // User is in app - show toast notification
-
-      
       // Get sender's session ID for navigation
       const senderProfile = await import('./firebaseApi').then(api => 
         api.EventProfileAPI.get(fromProfileId)
@@ -459,7 +453,6 @@ export async function handleNewMessageNotification(
       }
     } else {
       // User is not in app - send push notification
-
       await sendPushNotificationForMessage(recipientSessionId, senderName);
     }
     
@@ -482,11 +475,9 @@ async function checkIfUserIsInApp(sessionId: string): Promise<boolean> {
   try {
     // Get current user's session ID
     const currentSessionId = await AsyncStorage.getItem('currentSessionId');
-
     
     // If it's the same session ID, user is in app
     if (currentSessionId === sessionId) {
-
       return true;
     }
     
@@ -498,17 +489,15 @@ async function checkIfUserIsInApp(sessionId: string): Promise<boolean> {
       const lastActivityTime = new Date(lastActivity).getTime();
       const now = new Date().getTime();
       
-      // More lenient timeout for iOS (3 minutes) vs Android (1 minute)
-      const timeoutMinutes = Platform.OS === 'ios' ? 3 : 1;
+      // Shorter timeout to be more accurate about app state
+      const timeoutMinutes = 2; // 2 minutes for both platforms
       const timeoutAgo = now - (timeoutMinutes * 60 * 1000);
       
       const isRecentlyActive = lastActivityTime > timeoutAgo;
-
       
       // If user was active recently, consider them "in app"
       return isRecentlyActive;
     }
-    
     
     return false;
   } catch (error) {

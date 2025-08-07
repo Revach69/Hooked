@@ -95,7 +95,7 @@ export default function Home() {
       // Simple initialization without complex async operations
       setIsInitialized(true);
       
-      // Check for survey with delay
+      // Check for survey with delay (only shows if within survey visibility timeframe)
       setTimeout(async () => {
         if (MemoryManager.isComponentMounted(componentId)) {
           await checkForSurvey();
@@ -122,7 +122,7 @@ export default function Home() {
                 eventId: surveyData.eventId,
                 eventName: surveyData.eventName,
                 sessionId: surveyData.sessionId,
-                source: 'manual'
+                source: 'app_load'
               }
             });
           }

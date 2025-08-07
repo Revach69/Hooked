@@ -163,24 +163,33 @@ export async function sendMatchNotification(
 
 /**
  * Send like notification (when someone likes you back)
- * Only shows notification if user has been away for more than 10 minutes
+ * Only sends push notification if user is not in app
  */
 export async function sendLikeNotification(
   sessionId: string,
   likerName: string
 ): Promise<boolean> {
   try {
-    // Check if user has been away for more than 10 minutes
+    // Check if user is currently in the app
+    const currentSessionId = await AsyncStorage.getItem('currentSessionId');
+    const isUserInApp = currentSessionId === sessionId;
+    
+    // If user is in app, don't send push notification (toast will be shown instead)
+    if (isUserInApp) {
+      return false;
+    }
+    
+    // Additional check: look for recent activity timestamp
     const lastActivityKey = `lastActivity_${sessionId}`;
     const lastActivity = await AsyncStorage.getItem(lastActivityKey);
     
     if (lastActivity) {
       const lastActivityTime = new Date(lastActivity).getTime();
       const now = Date.now();
-      const tenMinutes = 10 * 60 * 1000; // 10 minutes in milliseconds
+      const fiveMinutes = 5 * 60 * 1000; // 5 minutes in milliseconds
       
-      // If user was active less than 10 minutes ago, don't send notification
-      if ((now - lastActivityTime) < tenMinutes) {
+      // If user was active less than 5 minutes ago, don't send notification
+      if ((now - lastActivityTime) < fiveMinutes) {
         return false;
       }
     }

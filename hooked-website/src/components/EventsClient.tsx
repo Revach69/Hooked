@@ -113,7 +113,7 @@ export default function EventsClient() {
               {filteredEvents.map((event) => {
                 const status = EventAPI.getEventStatus(event);
                 return (
-                  <div key={event.id} className="dark-mode-card border dark-mode-border rounded-lg shadow-sm hover:shadow-md transition-shadow">
+                  <div key={event.id} className="dark-mode-card border dark-mode-border rounded-lg shadow-sm hover:shadow-md transition-shadow flex flex-col h-full">
                     {/* Event Image */}
                     <div className="relative">
                       {event.image_url ? (
@@ -164,7 +164,7 @@ export default function EventsClient() {
                     </div>
 
                     {/* Event Content */}
-                    <div className="p-6">
+                    <div className="p-6 flex flex-col flex-grow">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm text-gray-500 dark:text-gray-400">{EventAPI.formatDate(event.starts_at)}</span>
                         <span className="text-sm text-gray-500 dark:text-gray-400">{EventAPI.formatTime(event.starts_at)}</span>
@@ -174,28 +174,30 @@ export default function EventsClient() {
                         {event.name}
                       </h3>
                       
-                      <p className="text-gray-600 dark:text-gray-300 mb-4 line-clamp-2 whitespace-pre-wrap">
+                      <p className="text-gray-600 dark:text-gray-300 mb-4 line-clamp-2 whitespace-pre-wrap flex-grow">
                         {event.description || 'No description available'}
                       </p>
 
                       {/* CTA Button */}
-                      {event.event_link ? (
-                        <a 
-                          href={event.event_link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="btn-primary w-full text-center"
-                        >
-                          Join Event
-                        </a>
-                      ) : (
-                        <button 
-                          onClick={() => openEventModal(event)}
-                          className="btn-primary w-full"
-                        >
-                          Learn More
-                        </button>
-                      )}
+                      <div className="mt-auto">
+                        {event.event_link ? (
+                          <a 
+                            href={event.event_link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn-primary w-full text-center"
+                          >
+                            Join Event
+                          </a>
+                        ) : (
+                          <button 
+                            onClick={() => openEventModal(event)}
+                            className="btn-primary w-full"
+                          >
+                            Learn More
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );

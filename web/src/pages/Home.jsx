@@ -8,6 +8,7 @@ import QRScanner from "../components/QRScanner";
 import EventCodeEntry from "../components/EventCodeEntry";
 import { SurveyNotificationService } from "../lib/surveyNotificationService";
 
+
 export default function Home() {
   const navigate = useNavigate();
   const [activeModal, setActiveModal] = useState(null);
@@ -23,7 +24,7 @@ export default function Home() {
       if (surveyData) {
         // Add delay to avoid interrupting immediate user actions
         setTimeout(() => {
-          navigate(`/Survey?eventId=${surveyData.eventId}&eventName=${encodeURIComponent(surveyData.eventName)}&sessionId=${surveyData.sessionId}&source=manual`);
+          navigate(`/Survey?eventId=${surveyData.eventId}&eventName=${encodeURIComponent(surveyData.eventName)}&sessionId=${surveyData.sessionId}&source=app_load`);
         }, 3000); // 3 second delay
       }
     } catch (error) {
