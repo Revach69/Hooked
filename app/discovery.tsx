@@ -162,52 +162,6 @@ export default function Discovery() {
           const { hasUnseenMessages } = await import('../lib/messageNotificationHelper');
           const hasUnseen = await hasUnseenMessages(currentEvent.id, currentSessionId);
           setHasUnreadMessages(hasUnseen);
-          
-          // Commented out toast logic since we now have a global listener in layout
-          /*
-          // Check for new messages and show toast notifications
-          const newMessages = snapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() } as any))
-            .filter(msg => msg.to_profile_id === currentUserProfile.id);
-          
-          
-          
-          // Get the latest new message
-          if (newMessages.length > 0) {
-            const latestMessage = newMessages[newMessages.length - 1];
-
-            
-            const messageTime = typeof latestMessage.created_at === 'string' 
-              ? new Date(latestMessage.created_at).getTime() 
-              : latestMessage.created_at.toDate().getTime();
-            const now = new Date().getTime();
-            const tenSecondsAgo = now - (10 * 1000);
-            
-
-            
-            // Show toast for recent messages (within last 10 seconds)
-            if (messageTime > tenSecondsAgo) {
-  
-              
-              // Get sender's profile to get their name
-              const { EventProfileAPI } = await import('../lib/firebaseApi');
-              const senderProfile = await EventProfileAPI.get(latestMessage.from_profile_id);
-              
-              if (senderProfile) {
-    
-                // Show toast directly since we're the recipient
-                const { showInAppMessageToast } = await import('../lib/messageNotificationHelper');
-                showInAppMessageToast(senderProfile.first_name);
-              } else {
-    
-              }
-            } else {
-  
-            }
-          } else {
-
-          }
-          */
         } catch (error) {
           // Error checking unseen messages from real-time listener
         }
@@ -215,7 +169,7 @@ export default function Discovery() {
 
       return () => unsubscribe();
     } catch (error) {
-              // Error setting up real-time message listener
+      // Error setting up real-time message listener
     }
   }, [currentEvent?.id, currentSessionId, currentUserProfile?.id]);
 
@@ -403,7 +357,7 @@ export default function Discovery() {
               if (otherProfiles.length > 0) {
                 const otherProfile = otherProfiles[0];
                 
-                // Use centralized match alert service to prevent duplicates
+                // Show alert for the match (this is mainly for cases where match was created from another device)
                 await showMatchAlert({
                   matchedUserName: otherProfile.first_name,
                   matchId: match.id,
@@ -685,26 +639,38 @@ export default function Discovery() {
         // Track match metric
         await trackCustomMetric('matches_count', 1);
         
-        // 🎉 SEND PUSH NOTIFICATIONS TO BOTH USERS (for users not in the app)
+        // 🎉 CORRECTED LOGIC: 
+        // - First liker (User B) gets toast/push notification
+        // - Second liker (User A, match creator) gets alert
+        
+        // Send push notification to the first liker (User B) if they're not in the app
         try {
-          await trackAsyncOperation('send_match_notifications', async () => {
-            return await Promise.all([
-              sendMatchNotification(likerSessionId, likedProfile.first_name),
-              sendMatchNotification(likedProfile.session_id, currentUserProfile.first_name)
-            ]);
+          await trackAsyncOperation('send_match_notification_to_first_liker', async () => {
+            return await sendMatchNotification(likedProfile.session_id, currentUserProfile.first_name);
           });
         } catch (notificationError) {
           // Handle notification error silently
         }
 
-        // Show immediate toast for the current user (who just created the match)
-        await showMatchToast(likedProfile.first_name);
+        // Show immediate alert for the current user (User A, match creator)
+        await showMatchAlert({
+          matchedUserName: likedProfile.first_name,
+          matchId: newLike.id,
+          isLiker: true,
+          currentEventId: eventId!,
+          currentSessionId: currentSessionId!
+        });
 
-        // Mark as notified for the current user
-        await trackAsyncOperation('mark_like_notified', async () => {
-          return await LikeAPI.update(newLike.id, { 
-            liker_notified_of_match: true
-          });
+        // Mark both as notified
+        await trackAsyncOperation('mark_both_likes_notified', async () => {
+          return await Promise.all([
+            LikeAPI.update(newLike.id, { 
+              liker_notified_of_match: true
+            }),
+            LikeAPI.update(theirLikeRecord.id, { 
+              liked_notified_of_match: true
+            })
+          ]);
         });
       }
     } catch (error) {

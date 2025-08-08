@@ -4,6 +4,53 @@ import { doc, setDoc, getDoc, collection, query, where, getDocs } from 'firebase
 import { db, auth } from './firebaseConfig';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+/**
+ * Initialize notification channels for Android
+ */
+export async function initializeNotificationChannels(): Promise<void> {
+  if (Platform.OS === 'android') {
+    try {
+      // Create notification channel for messages
+      await Notifications.setNotificationChannelAsync('messages', {
+        name: 'Messages',
+        description: 'Notifications for new messages and matches',
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#FF231F7C',
+        sound: 'default',
+        enableVibrate: true,
+        showBadge: true,
+      });
+
+      // Create notification channel for matches
+      await Notifications.setNotificationChannelAsync('matches', {
+        name: 'Matches',
+        description: 'Notifications for new matches',
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#FF231F7C',
+        sound: 'default',
+        enableVibrate: true,
+        showBadge: true,
+      });
+
+      // Create notification channel for likes
+      await Notifications.setNotificationChannelAsync('likes', {
+        name: 'Likes',
+        description: 'Notifications for new likes',
+        importance: Notifications.AndroidImportance.DEFAULT,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#FF231F7C',
+        sound: 'default',
+        enableVibrate: true,
+        showBadge: true,
+      });
+    } catch (error) {
+      // Error creating notification channels
+    }
+  }
+}
+
 export interface NotificationData {
   title: string;
   body: string;
@@ -158,6 +205,24 @@ export async function sendMatchNotification(
     },
   };
 
+  // For Android, use local notification
+  if (Platform.OS === 'android') {
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: notification.title,
+          body: notification.body,
+          data: notification.data,
+          sound: 'default',
+        },
+        trigger: null, // Send immediately
+      });
+      return true;
+    } catch (error) {
+      // Fallback to push notification
+    }
+  }
+
   return await sendPushNotificationToSession(sessionId, notification);
 }
 
@@ -219,17 +284,47 @@ export async function sendMessageNotification(
   messagePreview: string,
   isDeviceLocked: boolean = false
 ): Promise<boolean> {
-  const notification: NotificationData = {
-    title: isDeviceLocked ? "New Message" : `New message from ${senderName}`,
-    body: isDeviceLocked ? "You got a new message" : messagePreview,
-    data: {
-      type: 'message',
-      senderName,
-      messagePreview,
-    },
-  };
+  try {
+    // Check if user has push notification permissions
+    const { status } = await Notifications.getPermissionsAsync();
+    
+    if (status !== 'granted') {
+      return false;
+    }
+    
+    const notification: NotificationData = {
+      title: isDeviceLocked ? "New Message" : `New message from ${senderName}`,
+      body: isDeviceLocked ? "You got a new message" : messagePreview,
+      data: {
+        type: 'message',
+        senderName,
+        messagePreview,
+      },
+    };
 
-  return await sendPushNotificationToSession(sessionId, notification);
+    // For Android, use local notification
+    if (Platform.OS === 'android') {
+      try {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: notification.title,
+            body: notification.body,
+            data: notification.data,
+            sound: 'default',
+          },
+          trigger: null, // Send immediately
+        });
+        return true;
+      } catch (error) {
+        // Fallback to push notification
+      }
+    }
+
+    return await sendPushNotificationToSession(sessionId, notification);
+  } catch (error) {
+    // Error sending message notification
+    return false;
+  }
 }
 
 /**

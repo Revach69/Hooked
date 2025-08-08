@@ -14,6 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { checkPendingMessageNotifications, updateUserActivity } from '../lib/messageNotificationHelper';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebaseConfig';
+import { initializeNotificationChannels } from '../lib/notificationService';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -162,7 +163,7 @@ export default function RootLayout() {
       </TouchableOpacity>
     ),
   } : {
-    // Android-specific toast config
+    // Android-specific toast config with improved visibility
     success: ({ text1, text2, onPress }: any) => (
       <TouchableOpacity 
         style={{
@@ -172,14 +173,14 @@ export default function RootLayout() {
           borderRadius: 12,
           padding: 16,
           marginHorizontal: 16,
-          marginTop: 50,
+          marginTop: Platform.OS === 'android' ? 40 : 50,
           flexDirection: 'row',
           alignItems: 'center',
           shadowColor: '#000',
           shadowOffset: { width: 0, height: 4 },
           shadowOpacity: 0.15,
           shadowRadius: 8,
-          elevation: 8,
+          elevation: 12,
           zIndex: 9999,
         }}
         onPress={onPress}
@@ -216,14 +217,14 @@ export default function RootLayout() {
           borderRadius: 12,
           padding: 16,
           marginHorizontal: 16,
-          marginTop: 50,
+          marginTop: Platform.OS === 'android' ? 40 : 50,
           flexDirection: 'row',
           alignItems: 'center',
           shadowColor: '#000',
           shadowOffset: { width: 0, height: 4 },
           shadowOpacity: 0.15,
           shadowRadius: 8,
-          elevation: 8,
+          elevation: 12,
           zIndex: 9999,
         }}
         onPress={onPress}
@@ -260,14 +261,14 @@ export default function RootLayout() {
           borderRadius: 12,
           padding: 16,
           marginHorizontal: 16,
-          marginTop: 50,
+          marginTop: Platform.OS === 'android' ? 40 : 50,
           flexDirection: 'row',
           alignItems: 'center',
           shadowColor: '#000',
           shadowOffset: { width: 0, height: 4 },
           shadowOpacity: 0.15,
           shadowRadius: 8,
-          elevation: 8,
+          elevation: 12,
           zIndex: 9999,
         }}
         onPress={onPress}
@@ -351,6 +352,9 @@ export default function RootLayout() {
             };
           },
         });
+
+        // Initialize Android notification channels
+        await initializeNotificationChannels();
 
         // Register for push notifications and get token
         try {
@@ -618,7 +622,7 @@ export default function RootLayout() {
         <Toast 
           config={toastConfig} 
           position="top"
-          topOffset={Platform.OS === 'ios' ? 60 : 50}
+          topOffset={Platform.OS === 'ios' ? 60 : 40}
           visibilityTime={Platform.OS === 'ios' ? 5000 : 4000}
           autoHide={true}
         />

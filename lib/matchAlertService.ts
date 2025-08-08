@@ -13,6 +13,8 @@ interface MatchAlertOptions {
 
 // Track active alerts to prevent duplicates
 const activeAlerts = new Set<string>();
+const recentMatchNotifications = new Map<string, number>();
+const MATCH_NOTIFICATION_COOLDOWN = 5000; // 5 seconds cooldown
 
 /**
  * Show a match alert with two options: "Continue Browsing" and "See Match"
@@ -26,6 +28,25 @@ export async function showMatchAlert(options: MatchAlertOptions): Promise<void> 
   // Prevent duplicate alerts
   if (activeAlerts.has(alertKey)) {
     return;
+  }
+  
+  // Check for recent match notifications to prevent spam
+  const notificationKey = `match_${matchedUserName}_${currentSessionId}`;
+  const now = Date.now();
+  const lastNotification = recentMatchNotifications.get(notificationKey);
+  
+  if (lastNotification && (now - lastNotification) < MATCH_NOTIFICATION_COOLDOWN) {
+    return; // Skip if too recent
+  }
+  
+  // Update recent notifications
+  recentMatchNotifications.set(notificationKey, now);
+  
+  // Clean up old entries (older than 30 seconds)
+  for (const [key, timestamp] of recentMatchNotifications.entries()) {
+    if (now - timestamp > 30000) {
+      recentMatchNotifications.delete(key);
+    }
   }
   
   // Add to active alerts
@@ -62,6 +83,25 @@ export async function showMatchAlert(options: MatchAlertOptions): Promise<void> 
  * Show a toast notification for matches (used in discovery page)
  */
 export async function showMatchToast(matchedUserName: string): Promise<void> {
+  // Check for recent match notifications to prevent spam
+  const notificationKey = `match_toast_${matchedUserName}`;
+  const now = Date.now();
+  const lastNotification = recentMatchNotifications.get(notificationKey);
+  
+  if (lastNotification && (now - lastNotification) < MATCH_NOTIFICATION_COOLDOWN) {
+    return; // Skip if too recent
+  }
+  
+  // Update recent notifications
+  recentMatchNotifications.set(notificationKey, now);
+  
+  // Clean up old entries (older than 30 seconds)
+  for (const [key, timestamp] of recentMatchNotifications.entries()) {
+    if (now - timestamp > 30000) {
+      recentMatchNotifications.delete(key);
+    }
+  }
+  
   Toast.show({
     type: 'success',
     text1: "You got Hooked!",

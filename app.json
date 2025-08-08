@@ -35,7 +35,9 @@
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.VIBRATE",
         "android.permission.INTERNET",
-        "android.permission.POST_NOTIFICATIONS"
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.WAKE_LOCK",
+        "android.permission.RECEIVE_BOOT_COMPLETED"
       ]
     },
     "web": {
@@ -47,7 +49,16 @@
         "expo-notifications",
         {
           "icon": "./assets/icon.png",
-          "color": "#ffffff"
+          "color": "#ffffff",
+          "androidMode": "default",
+          "androidCollapsedTitle": "New Message",
+          "androidChannelId": "messages",
+          "androidChannelName": "Messages",
+          "androidChannelDescription": "Notifications for new messages and matches",
+          "androidChannelImportance": "high",
+          "androidShowBadge": true,
+          "androidVibrate": true,
+          "androidSound": "default"
         }
       ]
     ],

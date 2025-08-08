@@ -5,6 +5,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
+// Track recent notifications to prevent duplicates
+const recentNotifications = new Map<string, number>();
+const NOTIFICATION_COOLDOWN = 3000; // 3 seconds cooldown
+
 // Platform-specific toast configuration
 const getToastConfig = () => {
   if (Platform.OS === 'ios') {
@@ -19,7 +23,7 @@ const getToastConfig = () => {
       position: 'top' as const,
       visibilityTime: 4000,
       autoHide: true,
-      topOffset: 50,
+      topOffset: 40,
     };
   }
 };
@@ -27,6 +31,25 @@ const getToastConfig = () => {
 // Show in-app message toast with navigation
 export function showInAppMessageToast(senderName: string, senderSessionId: string): void {
   try {
+    // Check for recent notification to prevent duplicates
+    const notificationKey = `message_${senderName}_${senderSessionId}`;
+    const now = Date.now();
+    const lastNotification = recentNotifications.get(notificationKey);
+    
+    if (lastNotification && (now - lastNotification) < NOTIFICATION_COOLDOWN) {
+      return; // Skip if too recent
+    }
+    
+    // Update recent notifications
+    recentNotifications.set(notificationKey, now);
+    
+    // Clean up old entries (older than 10 seconds)
+    for (const [key, timestamp] of recentNotifications.entries()) {
+      if (now - timestamp > 10000) {
+        recentNotifications.delete(key);
+      }
+    }
+    
     // Platform-specific configurations
     const config = Platform.OS === 'ios' ? {
       delay: 200,
@@ -34,7 +57,7 @@ export function showInAppMessageToast(senderName: string, senderSessionId: strin
       visibilityTime: 5000,
     } : {
       delay: 0,
-      topOffset: 50,
+      topOffset: 40,
       visibilityTime: 4000,
     };
     
@@ -65,6 +88,18 @@ export function showInAppMessageToast(senderName: string, senderSessionId: strin
 // Show match notification toast
 export function showMatchToast(matchName: string): void {
   try {
+    // Check for recent notification to prevent duplicates
+    const notificationKey = `match_${matchName}`;
+    const now = Date.now();
+    const lastNotification = recentNotifications.get(notificationKey);
+    
+    if (lastNotification && (now - lastNotification) < NOTIFICATION_COOLDOWN) {
+      return; // Skip if too recent
+    }
+    
+    // Update recent notifications
+    recentNotifications.set(notificationKey, now);
+    
     // Platform-specific configurations
     const config = Platform.OS === 'ios' ? {
       delay: 200,
@@ -72,7 +107,7 @@ export function showMatchToast(matchName: string): void {
       visibilityTime: 5000,
     } : {
       delay: 0,
-      topOffset: 50,
+      topOffset: 40,
       visibilityTime: 4000,
     };
     
@@ -146,7 +181,7 @@ async function storePendingMessageNotification(recipientSessionId: string, sende
     
     await AsyncStorage.setItem(pendingNotificationsKey, JSON.stringify(notifications));
   } catch (error) {
-            // Error storing pending message notification
+    // Error storing pending message notification
   }
 }
 
@@ -181,7 +216,7 @@ export async function checkPendingMessageNotifications(): Promise<void> {
       }
     }
   } catch (error) {
-            // Error checking pending message notifications
+    // Error checking pending message notifications
   }
 }
 
@@ -193,7 +228,7 @@ export async function updateUserActivity(sessionId: string): Promise<void> {
     const lastActivityKey = `lastActivity_${sessionId}`;
     await AsyncStorage.setItem(lastActivityKey, new Date().toISOString());
   } catch (error) {
-            // Error updating user activity
+    // Error updating user activity
   }
 }
 
@@ -202,8 +237,6 @@ export async function updateUserActivity(sessionId: string): Promise<void> {
  */
 export async function markMessagesAsRead(eventId: string, fromSessionId: string, toSessionId: string): Promise<void> {
   try {
-
-    
     // Get the current user's profile ID
     const { EventProfileAPI } = await import('./firebaseApi');
     const currentUserProfiles = await EventProfileAPI.filter({
@@ -212,7 +245,6 @@ export async function markMessagesAsRead(eventId: string, fromSessionId: string,
     });
     
     if (currentUserProfiles.length === 0) {
-      console.error('Current user profile not found');
       return;
     }
     
@@ -225,7 +257,6 @@ export async function markMessagesAsRead(eventId: string, fromSessionId: string,
     });
     
     if (senderProfiles.length === 0) {
-      console.error('Sender profile not found');
       return;
     }
     
@@ -242,13 +273,10 @@ export async function markMessagesAsRead(eventId: string, fromSessionId: string,
     // Filter for unread messages only
     const unreadMessages = allMessages.filter(message => !message.is_read);
     
-
-    
     // Update each unread message to mark as read
     for (const message of unreadMessages) {
       try {
         await MessageAPI.update(message.id, { is_read: true });
-
       } catch (error) {
         // Error marking message as read
       }
@@ -262,7 +290,6 @@ export async function markMessagesAsRead(eventId: string, fromSessionId: string,
       const unreadChatsSet = new Set(JSON.parse(unreadChats));
       unreadChatsSet.delete(fromSessionId);
       await AsyncStorage.setItem(unreadChatsKey, JSON.stringify(Array.from(unreadChatsSet)));
-
     }
     
   } catch (error) {
@@ -275,8 +302,6 @@ export async function markMessagesAsRead(eventId: string, fromSessionId: string,
  */
 export async function markMessagesAsSeen(eventId: string, fromSessionId: string, toSessionId: string): Promise<void> {
   try {
-
-    
     // Get the current user's profile ID
     const { EventProfileAPI } = await import('./firebaseApi');
     const currentUserProfiles = await EventProfileAPI.filter({
@@ -285,7 +310,6 @@ export async function markMessagesAsSeen(eventId: string, fromSessionId: string,
     });
     
     if (currentUserProfiles.length === 0) {
-      console.error('Current user profile not found');
       return;
     }
     
@@ -298,7 +322,6 @@ export async function markMessagesAsSeen(eventId: string, fromSessionId: string,
     });
     
     if (senderProfiles.length === 0) {
-      console.error('Sender profile not found');
       return;
     }
     
@@ -315,8 +338,6 @@ export async function markMessagesAsSeen(eventId: string, fromSessionId: string,
     // Filter for unseen messages only
     const unseenMessages = allMessages.filter(message => !message.seen);
     
-
-    
     // Update each unseen message to mark as seen
     for (const message of unseenMessages) {
       try {
@@ -324,7 +345,6 @@ export async function markMessagesAsSeen(eventId: string, fromSessionId: string,
           seen: true, 
           seen_at: new Date().toISOString() 
         });
-
       } catch (error) {
         // Error marking message as seen
       }
@@ -363,8 +383,6 @@ export async function hasUnreadMessages(eventId: string, sessionId: string): Pro
     // Filter for messages that are not marked as read
     const unreadMessages = allMessages.filter(message => !message.is_read);
     
-
-    
     return unreadMessages.length > 0;
   } catch (error) {
     // Error checking unread messages
@@ -386,12 +404,10 @@ export async function hasUnseenMessages(eventId: string, sessionId: string): Pro
     });
     
     if (currentUserProfiles.length === 0) {
-  
       return false;
     }
     
     const currentUserProfileId = currentUserProfiles[0].id;
-
     
     // Check for unseen messages (messages sent TO the current user that are not marked as seen)
     const allMessages = await MessageAPI.filter({
@@ -402,14 +418,12 @@ export async function hasUnseenMessages(eventId: string, sessionId: string): Pro
     // Filter for messages that are not marked as seen
     const unseenMessages = allMessages.filter(message => !message.seen);
     
-
-    
     return unseenMessages.length > 0;
   } catch (error) {
     // Error checking unseen messages
     return false;
   }
-} 
+}
 
 /**
  * Send notification when a new message is created

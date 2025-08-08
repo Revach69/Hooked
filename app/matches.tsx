@@ -113,54 +113,51 @@ export default function Matches() {
   }, [currentEvent?.id, currentSessionId, currentUserProfile?.id]);
   */
 
-  // Real-time message listener for unread indicators
+  // Real-time message listener for unread indicators only (no toasts)
   useEffect(() => {
     if (!currentEvent?.id || !currentUserProfile?.id) return;
 
     const setupMessageListener = async () => {
       try {
-        const { onSnapshot, collection, query, where, orderBy, limit } = await import('firebase/firestore');
+        const { onSnapshot, collection, query, where } = await import('firebase/firestore');
         const { db } = await import('../lib/firebaseConfig');
 
         const messagesQuery = query(
           collection(db, 'messages'),
           where('event_id', '==', currentEvent.id),
-          where('to_profile_id', '==', currentUserProfile.id),
-          orderBy('created_at', 'desc'),
-          limit(50)
+          where('to_profile_id', '==', currentUserProfile.id)
         );
 
-        const unsubscribe = onSnapshot(messagesQuery, async (snapshot) => {
+        const unsubscribe = onSnapshot(messagesQuery, async () => {
+          // Only update unread status, don't show toasts (handled by global listener)
           try {
-            const newMessages = snapshot.docs.map(doc => ({
-              id: doc.id,
-              ...doc.data()
-            } as any));
-
-            if (newMessages.length > 0) {
-              const latestMessage = newMessages[0];
-              
-              // Check if this is a recent message (within last 5 minutes)
-              const messageTime = new Date(latestMessage.created_at).getTime();
-              const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
-              
-              if (messageTime > fiveMinutesAgo && !latestMessage.seen) {
-                // Get sender profile for toast
-                const { EventProfileAPI } = await import('../lib/firebaseApi');
-                const senderProfiles = await EventProfileAPI.filter({
-                  event_id: currentEvent.id,
-                  id: latestMessage.from_profile_id
-                });
-
-                if (senderProfiles.length > 0) {
-                  const senderProfile = senderProfiles[0];
-                  const { showInAppMessageToast } = await import('../lib/messageNotificationHelper');
-                  showInAppMessageToast(senderProfile.first_name, senderProfile.session_id);
-                }
+            // Manual check for unseen messages
+            const { MessageAPI, EventProfileAPI } = await import('../lib/firebaseApi');
+            const allMessages = await MessageAPI.filter({
+              event_id: currentEvent.id,
+              to_profile_id: currentUserProfile.id
+            });
+            
+            // Filter for unseen messages only
+            const unseenMessages = allMessages.filter(message => !message.seen);
+            
+            // Create a set of session IDs that have sent unseen messages
+            const unseenSessionIds = new Set<string>();
+            for (const message of unseenMessages) {
+              // Get the sender's session ID
+              const senderProfiles = await EventProfileAPI.filter({
+                id: message.from_profile_id,
+                event_id: currentEvent.id
+              });
+              if (senderProfiles.length > 0) {
+                unseenSessionIds.add(senderProfiles[0].session_id);
               }
             }
+            
+            setUnreadMessages(unseenSessionIds);
+            setHasUnreadMessages(unseenSessionIds.size > 0);
           } catch (error) {
-            // Error processing real-time messages
+            // Error refreshing unread messages
           }
         });
 
@@ -605,7 +602,7 @@ export default function Matches() {
               if (otherProfiles.length > 0) {
                 const otherProfile = otherProfiles[0];
                 
-                // Use centralized match alert service to prevent duplicates
+                // Show alert for the match (this is mainly for cases where match was created from another device)
                 await showMatchAlert({
                   matchedUserName: otherProfile.first_name,
                   matchId: match.id,
@@ -621,9 +618,9 @@ export default function Matches() {
               }
             }
           }
-                  } catch (error) {
-            // Error in mutual matches listener
-          }
+        } catch (error) {
+          // Error in mutual matches listener
+        }
       }, (error) => {
         // Handle Firestore listener errors gracefully
         if (error.code === 'permission-denied') {
@@ -804,25 +801,42 @@ export default function Matches() {
         // Update both records for mutual match
         await LikeAPI.update(newLike.id, { 
           is_mutual: true,
-          liker_notified_of_match: true
+          liker_notified_of_match: false // Don't mark as notified yet, let the listener handle it
         });
         await LikeAPI.update(theirLikeRecord.id, { 
           is_mutual: true,
-          liked_notified_of_match: true 
+          liked_notified_of_match: false // Don't mark as notified yet, let the listener handle it
         });
         
-        // 🎉 SEND PUSH NOTIFICATIONS TO BOTH USERS (for users not in the app)
+        // 🎉 CORRECTED LOGIC: 
+        // - First liker (User B) gets toast/push notification
+        // - Second liker (User A, match creator) gets alert
+        
+        // Send push notification to the first liker (User B) if they're not in the app
         try {
-          await Promise.all([
-            sendMatchNotification(likerSessionId, likedProfile.first_name),
-            sendMatchNotification(likedProfile.session_id, currentUserProfile.first_name)
-          ]);
+          await sendMatchNotification(likedProfile.session_id, currentUserProfile.first_name);
         } catch (notificationError) {
           // Handle notification error silently
         }
 
-        // Note: Native popup will be shown by the real-time mutual matches listener
-        // Match created! Native popup will be shown by real-time listener.
+        // Show immediate alert for the current user (User A, match creator)
+        await showMatchAlert({
+          matchedUserName: likedProfile.first_name,
+          matchId: newLike.id,
+          isLiker: true,
+          currentEventId: eventId!,
+          currentSessionId: currentSessionId!
+        });
+
+        // Mark both as notified
+        await Promise.all([
+          LikeAPI.update(newLike.id, { 
+            liker_notified_of_match: true
+          }),
+          LikeAPI.update(theirLikeRecord.id, { 
+            liked_notified_of_match: true
+          })
+        ]);
       }
           } catch (error) {
         // Error creating like

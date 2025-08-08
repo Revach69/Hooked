@@ -344,8 +344,22 @@ export default function Chat() {
         seen: false
       };
       
-      await MessageAPI.create(messageData);
+      const newMessageDoc = await MessageAPI.create(messageData);
       setNewMessage('');
+      
+      // Trigger notification for the new message
+      try {
+        const { handleNewMessageNotification } = await import('../lib/messageNotificationHelper');
+        await handleNewMessageNotification(
+          currentEventId,
+          currentUserProfile.id,
+          matchProfile.id,
+          newMessage.trim(),
+          currentUserProfile.first_name
+        );
+      } catch (notificationError) {
+        // Error handling notification - don't block message sending
+      }
     } catch (error) {
               // Error sending message
       Alert.alert('Error', 'Failed to send message');
