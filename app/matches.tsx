@@ -960,16 +960,23 @@ export default function Matches() {
                 key={match.id}
                 style={[
                   styles.matchCard,
-                  unreadMessages.has(match.session_id) && {
-                    borderWidth: 3,
-                    borderColor: isDark ? '#A855F7' : '#7C3AED',
-                    backgroundColor: isDark ? '#2d1b1b' : '#fdf2f8',
-                    shadowColor: isDark ? '#A855F7' : '#7C3AED',
-                    shadowOffset: { width: 0, height: 0 },
-                    shadowOpacity: 0.3,
-                    shadowRadius: 8,
-                    elevation: 8,
-                  }
+                  unreadMessages.has(match.session_id) && Platform.select({
+                    ios: {
+                      borderWidth: 3,
+                      borderColor: isDark ? '#A855F7' : '#7C3AED',
+                      backgroundColor: isDark ? '#2d1b1b' : '#fdf2f8',
+                      shadowColor: isDark ? '#A855F7' : '#7C3AED',
+                      shadowOffset: { width: 0, height: 0 },
+                      shadowOpacity: 0.3,
+                      shadowRadius: 8,
+                    },
+                    android: {
+                      borderWidth: 3,
+                      borderColor: isDark ? '#A855F7' : '#7C3AED',
+                      backgroundColor: isDark ? '#2d1b1b' : '#fdf2f8',
+                      elevation: 8,
+                    }
+                  })
                 ]}
                 onPress={() => {
                   // Navigate to chat without marking messages as seen
