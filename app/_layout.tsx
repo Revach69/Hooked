@@ -315,11 +315,13 @@ export default function RootLayout() {
         // Always request permission if not granted
         if (existingStatus !== 'granted') {
           try {
+            console.log('Requesting notification permissions...');
             const { status } = await Notifications.requestPermissionsAsync({
               ios: {
                 allowAlert: true,
                 allowBadge: true,
                 allowSound: true,
+                allowCriticalAlerts: false,
               },
               android: {
                 allowAlert: true,
@@ -328,16 +330,22 @@ export default function RootLayout() {
               }
             });
             finalStatus = status;
+            console.log('Notification permission request result:', status);
     
           } catch (error) {
             // Error requesting notification permission
+            console.log('Error requesting notification permission:', error);
           }
+        } else {
+          console.log('Notification permissions already granted');
         }
         
         if (finalStatus !== 'granted') {
-          // Notification permission not granted
+          // Notification permission not granted - this is expected for some users
+          console.log('Notification permission not granted - user may have denied or not yet decided');
         } else {
           // Notification permission granted
+          console.log('Notification permission granted successfully');
         }
         
         // Enhanced notification handler setup
@@ -576,6 +584,111 @@ export default function RootLayout() {
       unsubscribe.then(unsub => unsub?.());
     };
   }, [currentEvent?.id, currentUserProfile?.id]);
+
+  // Global match listener - works across all pages
+  useEffect(() => {
+    if (!currentEvent?.id || !currentSessionId) return;
+
+    const setupMatchListener = async () => {
+      try {
+        const { onSnapshot, collection, query, where } = await import('firebase/firestore');
+        const { db } = await import('../lib/firebaseConfig');
+        const { showMatchNotification } = await import('../lib/matchAlertService');
+        const { EventProfileAPI, LikeAPI } = await import('../lib/firebaseApi');
+
+        // Mutual matches listener - for real-time match notifications
+        const mutualMatchesQuery = query(
+          collection(db, 'likes'),
+          where('event_id', '==', currentEvent.id),
+          where('is_mutual', '==', true)
+        );
+
+        const unsubscribe = onSnapshot(mutualMatchesQuery, async (snapshot) => {
+          try {
+            const mutualLikes = snapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            })) as any[];
+
+            // Filter to only include matches where this user is involved
+            const userMatches = mutualLikes.filter(like => 
+              like.liker_session_id === currentSessionId || like.liked_session_id === currentSessionId
+            );
+
+            // Group matches by the pair of users to avoid duplicate processing
+            const processedPairs = new Set<string>();
+
+            // Check for new matches that haven't been notified yet
+            for (const match of userMatches) {
+              // Create a unique identifier for this user pair (always in same order)
+              const userPair = [match.liker_session_id, match.liked_session_id].sort().join('_');
+              
+              // Skip if we've already processed this pair
+              if (processedPairs.has(userPair)) {
+                continue;
+              }
+              processedPairs.add(userPair);
+              
+              const isLiker = match.liker_session_id === currentSessionId;
+              const shouldNotify = isLiker ? !match.liker_notified_of_match : !match.liked_notified_of_match;
+              
+              if (shouldNotify) {
+                // Get the other person's profile
+                const otherSessionId = isLiker ? match.liked_session_id : match.liker_session_id;
+                const otherProfiles = await EventProfileAPI.filter({
+                  session_id: otherSessionId,
+                  event_id: currentEvent.id
+                });
+                
+                if (otherProfiles.length > 0) {
+                  const otherProfile = otherProfiles[0];
+                  
+                  // Find both like records for this mutual match to determine who liked first
+                  const bothRecords = mutualLikes.filter(like => 
+                    (like.liker_session_id === match.liker_session_id && like.liked_session_id === match.liked_session_id) ||
+                    (like.liker_session_id === match.liked_session_id && like.liked_session_id === match.liker_session_id)
+                  );
+                  
+                  // Find which record has the current user as the liker (they liked first)
+                  const currentUserAsLiker = bothRecords.find(record => record.liker_session_id === currentSessionId);
+                  
+                  // Mark both records as notified to prevent duplicate processing
+                  await Promise.all(bothRecords.map(record => 
+                    LikeAPI.update(record.id, {
+                      liker_notified_of_match: true,
+                      liked_notified_of_match: true
+                    })
+                  ));
+                  
+                  // Show match notification using the global service
+                  await showMatchNotification({
+                    matchedUserName: otherProfile.first_name,
+                    matchId: match.id,
+                    isLiker: !!currentUserAsLiker,
+                    currentEventId: currentEvent.id,
+                    currentSessionId
+                  });
+                }
+              }
+            }
+          } catch (error) {
+            // Error in global match listener
+            console.error('Error in global match listener:', error);
+          }
+        });
+
+        return unsubscribe;
+      } catch (error) {
+        // Error setting up global match listener
+        console.error('Error setting up global match listener:', error);
+      }
+    };
+
+    const unsubscribe = setupMatchListener();
+    return () => {
+      unsubscribe.then(unsub => unsub?.());
+    };
+  }, [currentEvent?.id, currentSessionId]);
 
   if (!appIsReady) {
     return (

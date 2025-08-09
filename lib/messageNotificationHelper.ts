@@ -498,7 +498,7 @@ export async function handleNewMessageNotification(
         showInAppMessageToast(senderName, '');
       }
     } else {
-      // User is not in app - send push notification
+      // User is not in app - send push notification to the RECEIVER (recipientSessionId)
       try {
         await sendPushNotificationForMessage(recipientSessionId, senderName);
       } catch (pushError) {
@@ -528,8 +528,8 @@ async function checkIfUserIsInApp(sessionId: string): Promise<boolean> {
     // Get current user's session ID
     const currentSessionId = await AsyncStorage.getItem('currentSessionId');
     
-    // Only consider user "in app" if their session ID matches the current session ID
-    // This is more accurate than checking recent activity timestamps
+    // If session IDs match, the user is in the same app instance
+    // This is the most reliable way to determine if someone is "in the app"
     return currentSessionId === sessionId;
   } catch (error) {
     // Error checking if user is in app

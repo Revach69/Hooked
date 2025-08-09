@@ -27,7 +27,6 @@ import UserProfileModal from '../lib/UserProfileModal';
 import Toast from 'react-native-toast-message';
 import { updateUserActivity } from '../lib/messageNotificationHelper';
 import { usePerformanceMonitoring } from '../lib/hooks/usePerformanceMonitoring';
-import { showMatchAlert, showMatchToast, clearActiveAlerts, isAlertActive, showMatchNotification } from '../lib/matchAlertService';
 
 const { width } = Dimensions.get('window');
 const gap = 8;
@@ -93,7 +92,6 @@ export default function Discovery() {
   useEffect(() => {
     return () => {
       cleanupAllListeners();
-      clearActiveAlerts();
     };
   }, []);
 
@@ -321,7 +319,7 @@ export default function Discovery() {
 
       listenersRef.current.likes = likesUnsubscribe;
 
-      // 4. Mutual matches listener - for real-time match notifications
+      // 4. Mutual matches listener - for real-time match notifications (handled globally in _layout.tsx)
       const mutualMatchesQuery = query(
         collection(db, 'likes'),
         where('event_id', '==', currentEvent.id),
@@ -329,81 +327,8 @@ export default function Discovery() {
       );
 
       const mutualMatchesUnsubscribe = onSnapshot(mutualMatchesQuery, async (snapshot) => {
-        try {
-          const mutualLikes = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          })) as any[];
-
-          // Filter to only include matches where this user is involved
-          const userMatches = mutualLikes.filter(like => 
-            like.liker_session_id === currentSessionId || like.liked_session_id === currentSessionId
-          );
-
-          // Group matches by the pair of users to avoid duplicate processing
-          // For each mutual match, there are 2 records (A→B and B→A), but we should process only once
-          const processedPairs = new Set<string>();
-
-          // Check for new matches that haven't been notified yet
-          for (const match of userMatches) {
-            // Create a unique identifier for this user pair (always in same order)
-            const userPair = [match.liker_session_id, match.liked_session_id].sort().join('_');
-            
-            // Skip if we've already processed this pair
-            if (processedPairs.has(userPair)) {
-              continue;
-            }
-            processedPairs.add(userPair);
-            const isLiker = match.liker_session_id === currentSessionId;
-            const shouldNotify = isLiker ? !match.liker_notified_of_match : !match.liked_notified_of_match;
-            
-            // Don't show alerts if already active
-            if (shouldNotify && !isAlertActive(match.id, currentSessionId)) {
-              // Get the other person's profile
-              const otherSessionId = isLiker ? match.liked_session_id : match.liker_session_id;
-              const otherProfiles = await EventProfileAPI.filter({
-                session_id: otherSessionId,
-                event_id: currentEvent.id
-              });
-              
-              if (otherProfiles.length > 0) {
-                const otherProfile = otherProfiles[0];
-                
-                // FIXED MATCH NOTIFICATION LOGIC:
-                // Now that we're processing only one record per user pair, we can determine
-                // the correct notification type based on who is the current user:
-                
-                // Find both like records for this mutual match to determine who liked first
-                const bothRecords = mutualLikes.filter(like => 
-                  (like.liker_session_id === match.liker_session_id && like.liked_session_id === match.liked_session_id) ||
-                  (like.liker_session_id === match.liked_session_id && like.liked_session_id === match.liker_session_id)
-                );
-                
-                // Find which record has the current user as the liker (they liked first)
-                const currentUserAsLiker = bothRecords.find(record => record.liker_session_id === currentSessionId);
-                
-                // Mark both records as notified to prevent duplicate processing
-                await Promise.all(bothRecords.map(record => 
-                  LikeAPI.update(record.id, {
-                    liker_notified_of_match: true,
-                    liked_notified_of_match: true
-                  })
-                ));
-                
-                // Use platform-specific notification logic
-                await showMatchNotification({
-                  matchedUserName: otherProfile.first_name,
-                  matchId: match.id,
-                  isLiker: !!currentUserAsLiker,
-                  currentEventId: currentEvent.id,
-                  currentSessionId
-                });
-              }
-            }
-          }
-        } catch (error) {
-          // Error in mutual matches listener
-        }
+        // Match notifications are now handled globally in _layout.tsx
+        // This listener is kept for any future local match-related functionality
       }, (error) => {
         // Handle Firestore listener errors gracefully
         if (error.code === 'permission-denied') {

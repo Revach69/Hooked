@@ -1,4 +1,4 @@
-import { Alert } from 'react-native';
+import { Alert, AppState } from 'react-native';
 import { router } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -22,7 +22,10 @@ const MATCH_NOTIFICATION_COOLDOWN = 5000; // 5 seconds cooldown
 async function isUserInApp(sessionId: string): Promise<boolean> {
   try {
     const currentSessionId = await AsyncStorage.getItem('currentSessionId');
-    return currentSessionId === sessionId;
+    const isSessionMatch = currentSessionId === sessionId;
+    const isAppActive = AppState.currentState === 'active';
+    
+    return isSessionMatch && isAppActive;
   } catch (error) {
     return false;
   }

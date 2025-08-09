@@ -1,8 +1,0 @@
-2025-08-05 12:15:46.297 xcodebuild[65812:3595031]  DVTDeveloperAccountManager: Failed to load credentials for idan.katom@icloud.com: Error Domain=DVTDeveloperAccountCredentialsError Code=0 "Invalid credentials in keychain for idan.katom@icloud.com, missing Xcode-Token" UserInfo={NSLocalizedDescription=Invalid credentials in keychain for idan.katom@icloud.com, missing Xcode-Token}
-** BUILD FAILED **
-
-
-The following build commands failed:
-	CompileAssetCatalogVariant thinned /Users/roirevach/Library/Developer/Xcode/DerivedData/Hooked-dxdrjmtyuuwueadiewiaptdsvnrh/Build/Products/Debug-iphonesimulator/Hooked.app /Users/roirevach/Desktop/Hooked/ios/Hooked/Images.xcassets (in target 'Hooked' from project 'Hooked')
-	Building workspace Hooked with scheme Hooked and configuration Debug
-(2 failures)

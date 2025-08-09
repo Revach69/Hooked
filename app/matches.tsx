@@ -22,7 +22,6 @@ import { db } from '../lib/firebaseConfig';
 import UserProfileModal from '../lib/UserProfileModal';
 import { sendMatchNotification, sendLikeNotification } from '../lib/notificationService';
 import { updateUserActivity } from '../lib/messageNotificationHelper';
-import { showMatchAlert, clearActiveAlerts, isAlertActive, showMatchNotification } from '../lib/matchAlertService';
 
 export default function Matches() {
   const colorScheme = useColorScheme();
@@ -65,7 +64,6 @@ export default function Matches() {
   useEffect(() => {
     return () => {
       cleanupAllListeners();
-      clearActiveAlerts();
     };
   }, []);
 
@@ -128,34 +126,41 @@ export default function Matches() {
           where('to_profile_id', '==', currentUserProfile.id)
         );
 
-        const unsubscribe = onSnapshot(messagesQuery, async () => {
+        const unsubscribe = onSnapshot(messagesQuery, async (snapshot) => {
           // Only update unread status, don't show toasts (handled by global listener)
           try {
-            // Manual check for unseen messages
-            const { MessageAPI, EventProfileAPI } = await import('../lib/firebaseApi');
-            const allMessages = await MessageAPI.filter({
-              event_id: currentEvent.id,
-              to_profile_id: currentUserProfile.id
-            });
+            // Process snapshot data directly for better performance
+            const unseenMessages = snapshot.docs
+              .map(doc => ({ id: doc.id, ...doc.data() }))
+              .filter((message: any) => !message.seen);
             
-            // Filter for unseen messages only
-            const unseenMessages = allMessages.filter(message => !message.seen);
-            
-            // Create a set of session IDs that have sent unseen messages
-            const unseenSessionIds = new Set<string>();
-            for (const message of unseenMessages) {
-              // Get the sender's session ID
-              const senderProfiles = await EventProfileAPI.filter({
-                id: message.from_profile_id,
-                event_id: currentEvent.id
+            if (unseenMessages.length > 0) {
+              // Create a set of session IDs that have sent unseen messages
+              const unseenSessionIds = new Set<string>();
+              
+              // Use Promise.all for concurrent processing
+              const senderPromises = unseenMessages.map(async (message: any) => {
+                const { EventProfileAPI } = await import('../lib/firebaseApi');
+                const senderProfiles = await EventProfileAPI.filter({
+                  id: message.from_profile_id,
+                  event_id: currentEvent.id
+                });
+                return senderProfiles.length > 0 ? senderProfiles[0].session_id : null;
               });
-              if (senderProfiles.length > 0) {
-                unseenSessionIds.add(senderProfiles[0].session_id);
-              }
+              
+              const senderSessionIds = await Promise.all(senderPromises);
+              senderSessionIds.forEach(sessionId => {
+                if (sessionId) {
+                  unseenSessionIds.add(sessionId);
+                }
+              });
+              
+              setUnreadMessages(unseenSessionIds);
+              setHasUnreadMessages(unseenSessionIds.size > 0);
+            } else {
+              setUnreadMessages(new Set());
+              setHasUnreadMessages(false);
             }
-            
-            setUnreadMessages(unseenSessionIds);
-            setHasUnreadMessages(unseenSessionIds.size > 0);
           } catch (error) {
             // Error refreshing unread messages
           }
@@ -387,39 +392,9 @@ export default function Matches() {
             like.liker_session_id === currentSessionId || like.liked_session_id === currentSessionId
           );
 
-          // Check for new matches that haven't been notified yet
-          for (const match of userMatches) {
-            const isLiker = match.liker_session_id === currentSessionId;
-            const shouldNotify = isLiker ? !match.liker_notified_of_match : !match.liked_notified_of_match;
-            
-            // Don't show alerts when user is already on matches page
-            if (shouldNotify && !isAlertActive(match.id, currentSessionId)) {
-              // Get the other person's profile
-              const otherSessionId = isLiker ? match.liked_session_id : match.liker_session_id;
-              const otherProfiles = await EventProfileAPI.filter({
-                session_id: otherSessionId,
-                event_id: currentEvent.id
-              });
-              
-              if (otherProfiles.length > 0) {
-                const otherProfile = otherProfiles[0];
-                
-                // Use platform-specific notification logic
-                await showMatchNotification({
-                  matchedUserName: otherProfile.first_name,
-                  matchId: match.id,
-                  isLiker,
-                  currentEventId: currentEvent.id,
-                  currentSessionId
-                });
-
-                // Mark as notified
-                await LikeAPI.update(match.id, {
-                  [isLiker ? 'liker_notified_of_match' : 'liked_notified_of_match']: true
-                });
-              }
-            }
-          }
+          // Note: Notifications are now handled globally in _layout.tsx
+          // This listener only updates the matches list for display purposes
+          
         } catch (error) {
           // Error in mutual matches listener
         }
@@ -614,21 +589,8 @@ export default function Matches() {
         // - First liker (User B) gets toast/push notification
         // - Second liker (User A, match creator) gets alert
         
-        // Send push notification to the first liker (User B) if they're not in the app
-        try {
-          await sendMatchNotification(likedProfile.session_id, currentUserProfile.first_name, true);
-        } catch (notificationError) {
-          // Handle notification error silently
-        }
-
-        // Show immediate alert for the current user (User A, match creator)
-        await showMatchNotification({
-          matchedUserName: likedProfile.first_name,
-          matchId: newLike.id,
-          isLiker: true,
-          currentEventId: eventId!,
-          currentSessionId: currentSessionId!
-        });
+        // Note: Match notifications will be handled by the mutual matches listener
+        // This prevents duplicate notifications when both discovery and matches pages are active
 
         // Mark both as notified
         await Promise.all([
@@ -963,17 +925,17 @@ export default function Matches() {
                   unreadMessages.has(match.session_id) && Platform.select({
                     ios: {
                       borderWidth: 3,
-                      borderColor: isDark ? '#A855F7' : '#7C3AED',
-                      backgroundColor: isDark ? '#2d1b1b' : '#fdf2f8',
-                      shadowColor: isDark ? '#A855F7' : '#7C3AED',
+                      borderColor: '#ef4444',
+                      backgroundColor: isDark ? '#1f1f1f' : '#fef2f2',
+                      shadowColor: '#ef4444',
                       shadowOffset: { width: 0, height: 0 },
-                      shadowOpacity: 0.3,
+                      shadowOpacity: 0.4,
                       shadowRadius: 8,
                     },
                     android: {
                       borderWidth: 3,
-                      borderColor: isDark ? '#A855F7' : '#7C3AED',
-                      backgroundColor: isDark ? '#2d1b1b' : '#fdf2f8',
+                      borderColor: '#ef4444',
+                      backgroundColor: isDark ? '#1f1f1f' : '#fef2f2',
                       elevation: 8,
                     }
                   })
@@ -1013,6 +975,11 @@ export default function Matches() {
                         alignItems: 'center',
                         borderWidth: 2,
                         borderColor: isDark ? '#1a1a1a' : '#ffffff',
+                        shadowColor: '#ef4444',
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.3,
+                        shadowRadius: 4,
+                        elevation: 4,
                       }}>
                         <View style={{
                           width: 8,

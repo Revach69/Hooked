@@ -322,30 +322,8 @@ export async function sendMessageNotification(
       },
     };
 
-    // For Android and iOS, try local notification first
-    try {
-      // Ensure notification channels are initialized (Android only)
-      if (Platform.OS === 'android') {
-        await initializeNotificationChannels();
-      }
-      
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: notification.title,
-          body: notification.body,
-          data: notification.data,
-          sound: 'default',
-          priority: Platform.OS === 'android' ? Notifications.AndroidNotificationPriority.HIGH : undefined,
-        },
-        trigger: null, // Send immediately
-      });
-      return true;
-    } catch (error) {
-      // If local notification fails, try push notification as fallback
-      console.error('Local notification failed:', error);
-    }
-
-    // Fallback to push notification if local notification fails
+    // For cross-device communication, always use push notifications
+    // Local notifications are only for the current device, which is not what we want here
     return await sendPushNotificationToSession(sessionId, notification);
   } catch (error) {
     // Error sending message notification

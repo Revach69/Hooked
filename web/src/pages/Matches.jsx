@@ -242,7 +242,19 @@ export default function Matches() {
           {matches.map((match) => (
             <Card 
               key={match.id} 
-              className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-white dark:bg-gray-800 cursor-pointer"
+              className={`border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-white dark:bg-gray-800 cursor-pointer ${
+                match.unreadCount > 0 
+                  ? 'ring-2 ring-red-500 ring-opacity-50' 
+                  : ''
+              }`}
+              style={{
+                ...(match.unreadCount > 0 && {
+                  borderWidth: '3px',
+                  borderColor: '#ef4444',
+                  backgroundColor: document.documentElement.classList.contains('dark') ? 'rgba(239, 68, 68, 0.1)' : '#fef2f2',
+                  boxShadow: '0 10px 15px -3px rgba(239, 68, 68, 0.3), 0 4px 6px -2px rgba(239, 68, 68, 0.15)'
+                })
+              }}
               onClick={async () => {
                 // Mark messages as read when entering chat
                 if (match.unreadCount > 0 && eventId && currentSessionId) {

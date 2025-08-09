@@ -1,4 +1,0 @@
-node_modules/**/android
-node_modules/**/build.gradle
-node_modules/**/build.gradle.kts
-node_modules/**/.settings
