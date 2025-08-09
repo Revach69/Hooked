@@ -22,8 +22,9 @@ import { AuthAPI, EventProfileAPI, EventAPI, StorageAPI } from '../lib/firebaseA
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User as UserIcon, Camera, Upload, ArrowLeft } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { SurveyNotificationService } from '../lib/surveyNotificationService';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { SurveyService } from '../lib/surveyService';
+import { SurveyNotificationScheduler } from '../lib/surveyNotificationScheduler';
 
 // Simple UUID v4 generator function
 function generateUUID() {
@@ -405,16 +406,21 @@ export default function Consent() {
       await AsyncStorage.setItem('currentProfilePhotoUrl', formData.profile_photo_url);
       await AsyncStorage.setItem('currentProfileColor', validColor);
       
-      // Schedule survey notification for after event ends
-      await SurveyNotificationService.scheduleSurveyNotification(
+      // Add event to user's history for survey purposes
+      await SurveyService.addEventToHistory(
         event.id,
         event.name,
-        event.expires_at,
         sessionId,
-        2 // 2 hours after event ends
+        event.expires_at
       );
-      
 
+      // Schedule survey notification for expires_at + 2 hours
+      await SurveyNotificationScheduler.scheduleSurveyNotification(
+        event.id,
+        event.name,
+        sessionId,
+        event.expires_at
+      );
       
       router.replace('/discovery');
     } catch (err) {

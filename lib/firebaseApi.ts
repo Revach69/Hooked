@@ -105,6 +105,7 @@ export interface Event {
   image_url?: string; // Added for event images
   event_type?: string; // Added for event type filtering
   event_link?: string; // Added for event link
+  is_private?: boolean; // Added for private events
   created_at: string;
   updated_at: string;
 }
@@ -511,6 +512,25 @@ export const EventFeedbackAPI = {
         created_at: new Date().toISOString()
       };
     }, { operation: 'Create event feedback' });
+  },
+
+  async filter(filters: Partial<EventFeedback> = {}): Promise<EventFeedback[]> {
+    return firebaseRetry(async () => {
+      let q: any = collection(db, 'event_feedback');
+      
+      if (filters.event_id) {
+        q = query(q, where('event_id', '==', filters.event_id));
+      }
+      if (filters.profile_id) {
+        q = query(q, where('profile_id', '==', filters.profile_id));
+      }
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...(doc.data() as any)
+      })) as EventFeedback[];
+    }, { operation: 'Filter event feedback' });
   }
 };
 

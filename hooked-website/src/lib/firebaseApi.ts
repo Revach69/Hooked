@@ -23,6 +23,7 @@ export interface FirestoreEvent {
   image_url?: string; // Added for event images
   event_type?: string; // Added back for event type filtering
   event_link?: string; // Added for event link
+  is_private?: boolean; // Added for private events
   created_at: string;
   updated_at: string;
 }

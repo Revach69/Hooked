@@ -289,7 +289,11 @@ export async function sendMessageNotification(
     const { status } = await Notifications.getPermissionsAsync();
     
     if (status !== 'granted') {
-      return false;
+      // Try to request permissions if not granted
+      const { status: newStatus } = await Notifications.requestPermissionsAsync();
+      if (newStatus !== 'granted') {
+        return false;
+      }
     }
     
     const notification: NotificationData = {
@@ -302,27 +306,34 @@ export async function sendMessageNotification(
       },
     };
 
-    // For Android, use local notification
-    if (Platform.OS === 'android') {
-      try {
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: notification.title,
-            body: notification.body,
-            data: notification.data,
-            sound: 'default',
-          },
-          trigger: null, // Send immediately
-        });
-        return true;
-      } catch (error) {
-        // Fallback to push notification
+    // For Android and iOS, try local notification first
+    try {
+      // Ensure notification channels are initialized (Android only)
+      if (Platform.OS === 'android') {
+        await initializeNotificationChannels();
       }
+      
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: notification.title,
+          body: notification.body,
+          data: notification.data,
+          sound: 'default',
+          priority: Platform.OS === 'android' ? Notifications.AndroidNotificationPriority.HIGH : undefined,
+        },
+        trigger: null, // Send immediately
+      });
+      return true;
+    } catch (error) {
+      // If local notification fails, try push notification as fallback
+      console.error('Local notification failed:', error);
     }
 
+    // Fallback to push notification if local notification fails
     return await sendPushNotificationToSession(sessionId, notification);
   } catch (error) {
     // Error sending message notification
+    console.error('Error sending message notification:', error);
     return false;
   }
 }

@@ -41,6 +41,7 @@ export default function CreateEvent() {
     event_link: '',
     starts_at: new Date(),
     expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours from now
+    is_private: false,
   });
   
   const [isLoading, setIsLoading] = useState(false);
@@ -157,6 +158,7 @@ export default function CreateEvent() {
         organizer_email: AuthAPI.getCurrentUser()?.email || '',
         is_active: true, // Set events as active by default
         image_url: imageUrl, // Add image URL if uploaded
+        is_private: formData.is_private, // Add is_private field
       });
 
       Alert.alert('Success', 'Event created successfully!', [
@@ -383,6 +385,36 @@ export default function CreateEvent() {
       color: '#8b5cf6',
       marginLeft: 5,
     },
+    checkboxContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: 8,
+    },
+    checkbox: {
+      width: 20,
+      height: 20,
+      borderRadius: 4,
+      borderWidth: 1,
+      borderColor: isDark ? '#404040' : '#d1d5db',
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: isDark ? '#404040' : 'white',
+      marginRight: 10,
+    },
+    checkboxChecked: {
+      backgroundColor: '#8b5cf6',
+      borderColor: '#8b5cf6',
+    },
+    checkboxText: {
+      color: 'white',
+      fontSize: 14,
+      fontWeight: 'bold',
+    },
+    checkboxLabel: {
+      fontSize: 14,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      flex: 1,
+    },
   });
 
   return (
@@ -546,6 +578,24 @@ export default function CreateEvent() {
             >
               <Calendar size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
               <Text style={styles.dateButtonText}>{formatDate(formData.expires_at)}</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Private Event Checkbox */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Private Event</Text>
+            <TouchableOpacity
+              style={styles.checkboxContainer}
+              onPress={() => setFormData(prev => ({ ...prev, is_private: !prev.is_private }))}
+            >
+              <View style={[styles.checkbox, formData.is_private && styles.checkboxChecked]}>
+                {formData.is_private && (
+                  <Text style={styles.checkboxText}>✓</Text>
+                )}
+              </View>
+              <Text style={styles.checkboxLabel}>
+                Make this event private (won't be displayed on the IRL page)
+              </Text>
             </TouchableOpacity>
           </View>
         </View>

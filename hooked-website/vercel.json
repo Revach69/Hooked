@@ -1,24 +1,9 @@
 {
-  "projects": [
-    {
-      "name": "hooked-admin-dashboard",
-      "rootDirectory": "web-admin-hooked",
-      "buildCommand": "npm run build",
-      "outputDirectory": ".next",
-      "framework": "nextjs",
-      "installCommand": "npm install",
-      "devCommand": "npm run dev"
-    },
-    {
-      "name": "hooked-website",
-      "rootDirectory": "hooked-website",
-      "buildCommand": "npm run build",
-      "outputDirectory": ".next",
-      "framework": "nextjs",
-      "installCommand": "npm install",
-      "devCommand": "npm run dev"
-    }
-  ],
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "framework": "nextjs",
+  "installCommand": "npm install",
+  "devCommand": "npm run dev",
   "headers": [
     {
       "source": "/(.*)",
@@ -54,19 +39,9 @@
       ]
     }
   ],
-  "redirects": [
-    {
-      "source": "/admin",
-      "destination": "/admin/login",
-      "permanent": false
-    }
-  ],
   "functions": {
     "app/api/**/*.ts": {
       "maxDuration": 30
     }
-  },
-  "env": {
-    "NODE_ENV": "production"
   }
-} 
+}

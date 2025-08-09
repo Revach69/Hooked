@@ -1,6 +1,5 @@
-import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { EventFeedbackAPI, EventProfileAPI } from './firebaseApi';
+import { EventFeedbackAPI } from './firebaseApi';
 
 export interface SurveyData {
   eventId: string;
@@ -17,13 +16,12 @@ export interface SurveyFeedback {
   improvements?: string;
 }
 
-export class SurveyNotificationService {
+export class SurveyService {
   private static readonly SURVEY_FILLED_KEY = 'surveyFilledLifetime';
   private static readonly EVENT_HISTORY_PREFIX = 'eventHistory_';
 
   /**
-   * Check if survey should be shown for a user who was at a specific event
-   * Survey is only available between expires_at + 2 hours and expires_at + 26 hours
+   * Check if survey should be shown (only during 2-26 hour window after event ends)
    */
   static async shouldShowSurvey(): Promise<SurveyData | null> {
     try {
@@ -203,7 +201,7 @@ export class SurveyNotificationService {
   /**
    * Check if survey is still valid (within 26h window)
    */
-  static async isSurveyNotificationValid(eventId: string): Promise<boolean> {
+  static async isSurveyValid(eventId: string): Promise<boolean> {
     try {
       const eventHistory = await this.getEventHistory();
       const event = eventHistory.find(e => e.eventId === eventId);
@@ -212,15 +210,14 @@ export class SurveyNotificationService {
 
       const eventEndTime = new Date(event.expiresAt).getTime();
       const now = Date.now();
-      const twoHours = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
       const twentySixHours = 26 * 60 * 60 * 1000; // 26 hours in milliseconds
 
       const timeSinceEventEnd = now - eventEndTime;
       
-      // Check if event ended between 2 hours ago and 26 hours ago
-      return timeSinceEventEnd >= twoHours && timeSinceEventEnd <= twentySixHours;
+      // Check if event ended within the last 26 hours
+      return timeSinceEventEnd <= twentySixHours;
     } catch (error) {
-      // Error checking survey notification validity
+      // Error checking survey validity
       return false;
     }
   }
@@ -239,27 +236,22 @@ export class SurveyNotificationService {
   }
 
   /**
-   * Clear all survey-related data
+   * Clear all survey data (for testing or user logout)
    */
   static async clearAllSurveyData(): Promise<void> {
     try {
-      const keys = await AsyncStorage.getAllKeys();
-      const surveyKeys = keys.filter(key => 
-        key === this.SURVEY_FILLED_KEY ||
-        key === 'eventHistory' ||
-        key === 'filledSurveys'
-      );
-      
-      if (surveyKeys.length > 0) {
-        await AsyncStorage.multiRemove(surveyKeys);
-      }
+      await AsyncStorage.multiRemove([
+        'eventHistory',
+        'filledSurveys',
+        this.SURVEY_FILLED_KEY
+      ]);
     } catch (error) {
       // Error clearing survey data
     }
   }
 
   /**
-   * Submit survey feedback
+   * Submit survey feedback for an event
    */
   static async submitSurveyFeedback(
     eventId: string,
@@ -267,12 +259,15 @@ export class SurveyNotificationService {
     feedback: SurveyFeedback
   ): Promise<void> {
     try {
-      // Create feedback record in database
+      // Submit feedback to database
       await EventFeedbackAPI.create({
         event_id: eventId,
         profile_id: sessionId,
-        rating: feedback.eventSatisfaction,
-        feedback: JSON.stringify(feedback)
+        ease_of_use: feedback.easeOfUse,
+        matched_with_others: feedback.matchedWithOthers,
+        would_use_again: feedback.wouldUseAgain,
+        event_satisfaction: feedback.eventSatisfaction,
+        improvements: feedback.improvements || '',
       });
 
       // Mark survey as filled for this specific event
@@ -282,4 +277,4 @@ export class SurveyNotificationService {
       throw error;
     }
   }
-} 
+}

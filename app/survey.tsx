@@ -12,10 +12,13 @@ import {
   Platform,
   Keyboard,
   TouchableWithoutFeedback,
+  ActivityIndicator,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
-import { SurveyNotificationService } from '../lib/surveyNotificationService';
+import { SurveyService } from '../lib/surveyService';
+import { SurveyNotificationScheduler } from '../lib/surveyNotificationScheduler';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { EventFeedbackAPI } from '../lib/firebaseApi';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -44,11 +47,11 @@ export default function SurveyScreen() {
   useEffect(() => {
     // Check if survey is still valid
     if (eventId) {
-      SurveyNotificationService.isSurveyNotificationValid(eventId).then(isValid => {
+      SurveyService.isSurveyValid(eventId).then((isValid: boolean) => {
         if (!isValid) {
           Alert.alert(
             'Survey Expired',
-            'The feedback period for this event has ended.',
+            'This survey is no longer available. Surveys are only available between 2-26 hours after an event ends.',
             [{ text: 'OK', onPress: () => router.replace('/home') }]
           );
         }
@@ -87,21 +90,21 @@ export default function SurveyScreen() {
 
     setIsSubmitting(true);
     try {
-      await EventFeedbackAPI.create({
-        event_id: eventId,
-        profile_id: sessionId,
-        rating: formData.eventSatisfaction, // Use event satisfaction as main rating
-        feedback: JSON.stringify({
+      // Use the new survey service to submit feedback
+      await SurveyService.submitSurveyFeedback(
+        eventId,
+        sessionId,
+        {
           easeOfUse: formData.easeOfUse,
           matchedWithOthers: formData.matchedWithOthers,
           wouldUseAgain: formData.wouldUseAgain,
           eventSatisfaction: formData.eventSatisfaction,
           improvements: formData.improvements.trim()
-        })
-      });
+        }
+      );
 
-      // Mark survey as filled for lifetime
-      await SurveyNotificationService.markSurveyFilled();
+      // Cancel the scheduled survey notification since feedback has been submitted
+      await SurveyNotificationScheduler.cancelSurveyNotification(eventId, sessionId);
 
       Alert.alert(
         'Thank You! 💘',
@@ -109,7 +112,7 @@ export default function SurveyScreen() {
         [{ text: 'OK', onPress: () => router.replace('/home') }]
       );
     } catch (error) {
-              // Failed to submit feedback
+      // Failed to submit feedback
       Alert.alert('Error', 'Failed to submit feedback. Please try again.');
     } finally {
       setIsSubmitting(false);
@@ -126,8 +129,12 @@ export default function SurveyScreen() {
           text: 'Exit', 
           style: 'destructive',
           onPress: async () => {
-            // Mark survey as filled even if user exits (so it never shows again)
-            await SurveyNotificationService.markSurveyFilled();
+            // Mark survey as filled for this specific event even if user exits
+            await SurveyService.markSurveyFilledForEvent(eventId, sessionId);
+            
+            // Cancel the scheduled survey notification since user is exiting
+            await SurveyNotificationScheduler.cancelSurveyNotification(eventId, sessionId);
+            
             router.replace('/home');
           }
         }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { EventAPI, FirestoreEvent } from '../lib/firebaseApi';
 
 const eventTypes = [
@@ -28,6 +28,8 @@ export default function EventsClient() {
   const [selectedLocation, setSelectedLocation] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<FirestoreEvent | null>(null);
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+  const descriptionRef = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
     loadEvents();
@@ -37,7 +39,9 @@ export default function EventsClient() {
     try {
       setLoading(true);
       const eventsData = await EventAPI.getAllEvents();
-      setEvents(eventsData);
+      // Filter out private events - they should not be displayed on the IRL page
+      const publicEvents = eventsData.filter(event => !event.is_private);
+      setEvents(publicEvents);
     } catch (error) {
       console.error('Error loading events:', error);
     } finally {
@@ -48,11 +52,24 @@ export default function EventsClient() {
   const openEventModal = (event: FirestoreEvent) => {
     setSelectedEvent(event);
     setIsModalOpen(true);
+    setIsDescriptionExpanded(false);
   };
 
   const closeEventModal = () => {
     setIsModalOpen(false);
     setSelectedEvent(null);
+    setIsDescriptionExpanded(false);
+  };
+
+  const toggleDescription = () => {
+    setIsDescriptionExpanded(!isDescriptionExpanded);
+  };
+
+  // Check if description needs truncation
+  const needsTruncation = () => {
+    if (!selectedEvent?.description) return false;
+    // Estimate if description is likely to be longer than 3 lines (approximately 120 characters)
+    return selectedEvent.description.length > 120 || selectedEvent.description.split('\n').length > 3;
   };
 
   const filteredEvents = events.filter(event => {
@@ -113,7 +130,11 @@ export default function EventsClient() {
               {filteredEvents.map((event) => {
                 const status = EventAPI.getEventStatus(event);
                 return (
-                  <div key={event.id} className="dark-mode-card border dark-mode-border rounded-lg shadow-sm hover:shadow-md transition-shadow flex flex-col h-full">
+                  <div 
+                    key={event.id} 
+                    className="dark-mode-card border dark-mode-border rounded-lg shadow-sm hover:shadow-md transition-shadow flex flex-col h-full cursor-pointer group"
+                    onClick={() => openEventModal(event)}
+                  >
                     {/* Event Image */}
                     <div className="relative">
                       {event.image_url ? (
@@ -185,14 +206,29 @@ export default function EventsClient() {
                             href={event.event_link}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="btn-primary w-full text-center"
+                            className="btn-primary w-full h-12 flex items-center justify-center text-center"
+                            style={{ 
+                              textDecoration: 'none', 
+                              display: 'flex',
+                              padding: '0 28px',
+                              height: '48px'
+                            }}
+                            onClick={(e) => e.stopPropagation()}
                           >
                             Join Event
                           </a>
                         ) : (
                           <button 
-                            onClick={() => openEventModal(event)}
-                            className="btn-primary w-full"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEventModal(event);
+                            }}
+                            className="btn-primary w-full h-12 flex items-center justify-center text-center"
+                            style={{ 
+                              display: 'flex',
+                              padding: '0 28px',
+                              height: '48px'
+                            }}
                           >
                             Learn More
                           </button>
@@ -300,7 +336,41 @@ export default function EventsClient() {
                 {selectedEvent.description && (
                   <div>
                     <h3 className="text-lg font-semibold dark-mode-text mb-2">Description</h3>
-                    <p className="text-gray-600 dark:text-gray-300 whitespace-pre-wrap">{selectedEvent.description}</p>
+                    <div className="relative">
+                      <p 
+                        ref={descriptionRef}
+                        className={`text-gray-600 dark:text-gray-300 whitespace-pre-wrap transition-all duration-300 ease-in-out ${
+                          isDescriptionExpanded ? 'max-h-none' : 'max-h-28 overflow-hidden'
+                        }`}
+                      >
+                        {selectedEvent.description}
+                      </p>
+                      {!isDescriptionExpanded && needsTruncation() && (
+                        <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-white dark:from-gray-900 via-white/80 dark:via-gray-900/80 to-transparent pointer-events-none"></div>
+                      )}
+                      {needsTruncation() && (
+                        <button
+                          onClick={toggleDescription}
+                          className="mt-2 text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 text-sm font-medium flex items-center gap-1 transition-colors"
+                        >
+                          {isDescriptionExpanded ? (
+                            <>
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                              </svg>
+                              Show Less
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                              Read More
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
 

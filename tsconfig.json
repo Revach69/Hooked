@@ -26,6 +26,10 @@
   "exclude": [
     "node_modules",
     "web-admin-hooked/**/*",
-    "hooked-website/**/*"
+    "hooked-website/**/*",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx"
   ]
 }

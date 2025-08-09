@@ -340,8 +340,20 @@ export default function Discovery() {
             like.liker_session_id === currentSessionId || like.liked_session_id === currentSessionId
           );
 
+          // Group matches by the pair of users to avoid duplicate processing
+          // For each mutual match, there are 2 records (A→B and B→A), but we should process only once
+          const processedPairs = new Set<string>();
+
           // Check for new matches that haven't been notified yet
           for (const match of userMatches) {
+            // Create a unique identifier for this user pair (always in same order)
+            const userPair = [match.liker_session_id, match.liked_session_id].sort().join('_');
+            
+            // Skip if we've already processed this pair
+            if (processedPairs.has(userPair)) {
+              continue;
+            }
+            processedPairs.add(userPair);
             const isLiker = match.liker_session_id === currentSessionId;
             const shouldNotify = isLiker ? !match.liker_notified_of_match : !match.liked_notified_of_match;
             
@@ -357,19 +369,40 @@ export default function Discovery() {
               if (otherProfiles.length > 0) {
                 const otherProfile = otherProfiles[0];
                 
-                // Show alert for the match (this is mainly for cases where match was created from another device)
-                await showMatchAlert({
-                  matchedUserName: otherProfile.first_name,
-                  matchId: match.id,
-                  isLiker,
-                  currentEventId: currentEvent.id,
-                  currentSessionId
-                });
-
-                // Mark as notified
-                await LikeAPI.update(match.id, {
-                  [isLiker ? 'liker_notified_of_match' : 'liked_notified_of_match']: true
-                });
+                // FIXED MATCH NOTIFICATION LOGIC:
+                // Now that we're processing only one record per user pair, we can determine
+                // the correct notification type based on who is the current user:
+                
+                // Find both like records for this mutual match to determine who liked first
+                const bothRecords = mutualLikes.filter(like => 
+                  (like.liker_session_id === match.liker_session_id && like.liked_session_id === match.liked_session_id) ||
+                  (like.liker_session_id === match.liked_session_id && like.liked_session_id === match.liker_session_id)
+                );
+                
+                // Find which record has the current user as the liker (they liked first)
+                const currentUserAsLiker = bothRecords.find(record => record.liker_session_id === currentSessionId);
+                
+                // Mark both records as notified to prevent duplicate processing
+                await Promise.all(bothRecords.map(record => 
+                  LikeAPI.update(record.id, {
+                    liker_notified_of_match: true,
+                    liked_notified_of_match: true
+                  })
+                ));
+                
+                if (currentUserAsLiker) {
+                  // Current user liked first → they get TOAST when the other person likes back
+                  await showMatchToast(otherProfile.first_name);
+                } else {
+                  // Current user liked second (liked back) → they get ALERT when they create the match
+                  await showMatchAlert({
+                    matchedUserName: otherProfile.first_name,
+                    matchId: match.id,
+                    isLiker: false,
+                    currentEventId: currentEvent.id,
+                    currentSessionId
+                  });
+                }
               }
             }
           }
@@ -652,26 +685,9 @@ export default function Discovery() {
           // Handle notification error silently
         }
 
-        // Show immediate alert for the current user (User A, match creator)
-        await showMatchAlert({
-          matchedUserName: likedProfile.first_name,
-          matchId: newLike.id,
-          isLiker: true,
-          currentEventId: eventId!,
-          currentSessionId: currentSessionId!
-        });
-
-        // Mark both as notified
-        await trackAsyncOperation('mark_both_likes_notified', async () => {
-          return await Promise.all([
-            LikeAPI.update(newLike.id, { 
-              liker_notified_of_match: true
-            }),
-            LikeAPI.update(theirLikeRecord.id, { 
-              liked_notified_of_match: true
-            })
-          ]);
-        });
+        // Note: All match notifications (toast/alert) will be handled by the mutual matches listener
+        // This prevents duplicate notifications and ensures correct timing
+        // The listener will determine who gets toast vs alert based on liker/liked roles
       }
     } catch (error) {
               // Error creating like

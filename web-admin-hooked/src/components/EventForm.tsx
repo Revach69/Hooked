@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { Event } from '@/lib/firebaseApi';
-import { X, Save, Plus, Camera, Upload } from 'lucide-react';
+import { X, Save, Plus, Camera, Upload, Edit3 } from 'lucide-react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/lib/firebaseConfig';
+import ImageEditor from './ImageEditor';
 
 interface EventFormProps {
   event?: Event | null;
@@ -27,7 +28,8 @@ export default function EventForm({
     end_date: '',
     description: '',
     event_type: '',
-    event_link: ''
+    event_link: '',
+    is_private: false
   });
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -36,20 +38,40 @@ export default function EventForm({
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [showImageEditor, setShowImageEditor] = useState(false);
+  const [cropData, setCropData] = useState<any>(null);
 
   const isEditing = !!event;
 
   useEffect(() => {
+    // Reset all image-related state first
+    setSelectedImage(null);
+    setExistingImageUrl(null);
+    setImagePreview(null);
+    setUploadingImage(false);
+    setIsDragOver(false);
+    
     if (event) {
+      // Convert UTC dates to local time for the form
+      const formatDateForInput = (dateString: string) => {
+        const date = new Date(dateString);
+        // Get the local timezone offset in minutes
+        const offset = date.getTimezoneOffset();
+        // Create a new date that represents the local time
+        const localDate = new Date(date.getTime() - (offset * 60 * 1000));
+        return localDate.toISOString().slice(0, 16);
+      };
+
       setFormData({
         name: event.name || '',
         event_code: event.event_code || '',
         location: event.location || '',
-        start_date: event.starts_at ? new Date(event.starts_at).toISOString().slice(0, 16) : '',
-        end_date: event.expires_at ? new Date(event.expires_at).toISOString().slice(0, 16) : '',
+        start_date: event.starts_at ? formatDateForInput(event.starts_at) : '',
+        end_date: event.expires_at ? formatDateForInput(event.expires_at) : '',
         description: event.description || '',
         event_type: event.event_type || '',
-        event_link: event.event_link || ''
+        event_link: event.event_link || '',
+        is_private: event.is_private || false
       });
       
       // Load existing image if available
@@ -66,11 +88,9 @@ export default function EventForm({
         end_date: '',
         description: '',
         event_type: '',
-        event_link: ''
+        event_link: '',
+        is_private: false
       });
-      setSelectedImage(null);
-      setExistingImageUrl(null);
-      setImagePreview(null);
     }
     setErrors({});
   }, [event, isOpen]);
@@ -80,6 +100,8 @@ export default function EventForm({
     if (file) {
       processImageFile(file);
     }
+    // Reset the input value to allow selecting the same file again
+    e.target.value = '';
   };
 
   const processImageFile = (file: File) => {
@@ -119,6 +141,25 @@ export default function EventForm({
     setSelectedImage(null);
     setExistingImageUrl(null);
     setImagePreview(null);
+    setCropData(null);
+  };
+
+  const handleEditImage = () => {
+    if (imagePreview) {
+      console.log('Opening image editor with URL:', imagePreview);
+      setShowImageEditor(true);
+    }
+  };
+
+  const handleImageEditorSave = (positionedImageUrl: string, positionData: any) => {
+    console.log('ImageEditor save called with:', { positionedImageUrl: positionedImageUrl.substring(0, 50) + '...', positionData });
+    setImagePreview(positionedImageUrl);
+    setCropData(positionData);
+    setShowImageEditor(false);
+  };
+
+  const handleImageEditorCancel = () => {
+    setShowImageEditor(false);
   };
 
   const uploadImage = async (file: File): Promise<string | null> => {
@@ -198,9 +239,18 @@ export default function EventForm({
 
     setIsLoading(true);
     try {
-      // Handle image upload if new image selected
-      let imageUrl: string | undefined = undefined;
+      // Handle image upload and management
+      let imageUrl: string | null = null;
+      
+      console.log('Image processing state:', { 
+        selectedImage: !!selectedImage, 
+        imagePreview: imagePreview ? imagePreview.substring(0, 50) + '...' : null,
+        existingImageUrl: existingImageUrl ? existingImageUrl.substring(0, 50) + '...' : null 
+      });
+      
       if (selectedImage) {
+        // New image selected - upload it
+        console.log('Uploading new selected image...');
         const uploadedUrl = await uploadImage(selectedImage);
         if (!uploadedUrl) {
           setErrors({ submit: 'Failed to upload image. Please try again.' });
@@ -208,19 +258,120 @@ export default function EventForm({
           return;
         }
         imageUrl = uploadedUrl;
-      } else if (existingImageUrl) {
-        // Keep existing image if no new image selected
+        console.log('New image uploaded successfully');
+      } else if (imagePreview && imagePreview !== existingImageUrl) {
+        // Cropped image from editor - check if we have blob data or need to fetch it
+        console.log('Using cropped image from editor');
+        if (imagePreview.startsWith('blob:')) {
+          // Check if we have blob data in cropData
+          if (cropData && cropData.blob) {
+            console.log('Using blob data from cropData');
+                         try {
+               const file = new File([cropData.blob], 'processed-image.png', { type: 'image/png' });
+              const uploadedUrl = await uploadImage(file);
+              if (!uploadedUrl) {
+                setErrors({ submit: 'Failed to upload processed image. Please try again.' });
+                setIsLoading(false);
+                return;
+              }
+              imageUrl = uploadedUrl;
+              console.log('Processed image uploaded successfully');
+            } catch (error) {
+              console.error('Error uploading blob data:', error);
+              setErrors({ submit: 'Failed to process image. Please try again.' });
+              setIsLoading(false);
+              return;
+            }
+          } else {
+            // Fallback: try to fetch the blob URL (may fail due to CSP)
+            console.log('No blob data, trying to fetch blob URL...');
+            try {
+              // Create a temporary image element to get the blob data
+              const img = new Image();
+              img.crossOrigin = 'anonymous';
+              
+              const canvas = document.createElement('canvas');
+              const ctx = canvas.getContext('2d');
+              
+              await new Promise((resolve, reject) => {
+                img.onload = () => {
+                  try {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx?.drawImage(img, 0, 0);
+                                         canvas.toBlob((blob) => {
+                       if (blob) {
+                         const file = new File([blob], 'processed-image.jpg', { type: 'image/jpeg' });
+                         uploadImage(file).then(uploadedUrl => {
+                           if (uploadedUrl) {
+                             imageUrl = uploadedUrl;
+                             console.log('Processed image uploaded successfully via canvas');
+                             resolve(uploadedUrl);
+                           } else {
+                             reject(new Error('Failed to upload image'));
+                           }
+                         }).catch(reject);
+                       } else {
+                         reject(new Error('Failed to create blob from canvas'));
+                       }
+                     }, 'image/png', 1.0); // Use PNG for lossless quality
+                  } catch (error) {
+                    reject(error);
+                  }
+                };
+                img.onerror = reject;
+                img.src = imagePreview;
+              });
+            } catch (error) {
+              console.error('Error converting blob to file via canvas:', error);
+              setErrors({ submit: 'Failed to process image. Please try again.' });
+              setIsLoading(false);
+              return;
+            }
+          }
+        } else {
+          // Not a blob URL, use as is
+          imageUrl = imagePreview;
+        }
+      } else if (existingImageUrl && imagePreview === existingImageUrl) {
+        // Keep existing image if it's still being displayed (not removed)
+        console.log('Keeping existing image');
         imageUrl = existingImageUrl;
+      } else {
+        console.log('No image to save');
       }
+      // If imagePreview is null, it means the image was removed, so imageUrl stays null
 
-      const eventData = {
+      const eventData: any = {
         ...formData,
-        starts_at: new Date(formData.start_date).toISOString(),
-        expires_at: new Date(formData.end_date).toISOString(),
+        starts_at: (() => {
+          // Create a date object from the local datetime string
+          const localDate = new Date(formData.start_date);
+          // Convert to UTC by adding the timezone offset
+          const offset = localDate.getTimezoneOffset();
+          const utcDate = new Date(localDate.getTime() + (offset * 60 * 1000));
+          return utcDate.toISOString();
+        })(),
+        expires_at: (() => {
+          // Create a date object from the local datetime string
+          const localDate = new Date(formData.end_date);
+          // Convert to UTC by adding the timezone offset
+          const offset = localDate.getTimezoneOffset();
+          const utcDate = new Date(localDate.getTime() + (offset * 60 * 1000));
+          return utcDate.toISOString();
+        })(),
         event_type: formData.event_type,
         event_link: formData.event_link,
-        image_url: imageUrl, // Add image URL if uploaded or existing
+        is_private: formData.is_private,
       };
+
+      // Handle image_url field
+      if (imageUrl !== null) {
+        eventData.image_url = imageUrl;
+      } else {
+        // No image - set to null to remove the field
+        eventData.image_url = null;
+      }
 
       await onSave(eventData);
       onClose();
@@ -237,7 +388,18 @@ export default function EventForm({
     }
   };
 
-  const handleInputChange = (field: string, value: string) => {
+  const handleClose = () => {
+    // Reset all form state when closing
+    setSelectedImage(null);
+    setExistingImageUrl(null);
+    setImagePreview(null);
+    setUploadingImage(false);
+    setIsDragOver(false);
+    setErrors({});
+    onClose();
+  };
+
+  const handleInputChange = (field: string, value: string | boolean) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
@@ -255,7 +417,7 @@ export default function EventForm({
             {isEditing ? 'Edit Event' : 'Create Event'}
           </h2>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
           >
             <X size={24} />
@@ -425,6 +587,20 @@ export default function EventForm({
             </p>
           </div>
 
+          {/* Private Event Checkbox */}
+          <div className="flex items-center space-x-3 p-4 border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700">
+            <input
+              type="checkbox"
+              id="is_private"
+              checked={formData.is_private}
+              onChange={(e) => handleInputChange('is_private', e.target.checked)}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded dark:bg-gray-700 dark:border-gray-600 dark:focus:ring-blue-600 dark:checked:bg-blue-600"
+            />
+            <label htmlFor="is_private" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Make this event private (won't be displayed on the IRL page)
+            </label>
+          </div>
+
           {/* Image Upload */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -441,13 +617,24 @@ export default function EventForm({
                       className="max-w-full max-h-full object-contain"
                     />
                   </div>
-                  <button
-                    type="button"
-                    onClick={removeImage}
-                    className="absolute top-2 right-2 bg-red-600 text-white rounded-full p-1 hover:bg-red-700 transition-colors"
-                  >
-                    <X size={16} />
-                  </button>
+                  <div className="absolute top-2 right-2 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handleEditImage}
+                      className="bg-blue-600 text-white rounded-full p-1 hover:bg-blue-700 transition-colors"
+                      title="Edit image"
+                    >
+                      <Edit3 size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={removeImage}
+                      className="bg-red-600 text-white rounded-full p-1 hover:bg-red-700 transition-colors"
+                      title="Remove image"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
                 </div>
               )}
               
@@ -506,7 +693,7 @@ export default function EventForm({
           <div className="flex justify-end gap-3 pt-4">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="px-6 py-3 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             >
               Cancel
@@ -531,6 +718,16 @@ export default function EventForm({
           </div>
         </form>
       </div>
+
+      {/* Image Editor Modal */}
+      {showImageEditor && imagePreview && (
+        <ImageEditor
+          imageUrl={imagePreview}
+          onSave={handleImageEditorSave}
+          onCancel={handleImageEditorCancel}
+          aspectRatio={2.08} // Event card aspect ratio (width:height = 2.08:1)
+        />
+      )}
     </div>
   );
 } 

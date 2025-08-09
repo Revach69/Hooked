@@ -15,7 +15,6 @@ import { EventAPI, EventProfileAPI } from '../lib/firebaseApi';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMobileAsyncOperation } from '../lib/hooks/useMobileErrorHandling';
 import MobileOfflineStatusBar from '../lib/components/MobileOfflineStatusBar';
-import { SurveyNotificationService } from '../lib/surveyNotificationService';
 
 export default function JoinPage() {
   const { code } = useLocalSearchParams<{ code: string }>();

@@ -218,8 +218,6 @@ export default function Matches() {
           // Check for unseen messages after user profile is loaded
           const checkUnseenMessages = async () => {
             try {
-              
-              
               // Manual check for unseen messages
               const { MessageAPI, EventProfileAPI } = await import('../lib/firebaseApi');
               const allMessages = await MessageAPI.filter({
@@ -227,12 +225,8 @@ export default function Matches() {
                 to_profile_id: userProfile.id
               });
               
-              
-              
               // Filter for unseen messages only
               const unseenMessages = allMessages.filter(message => !message.seen);
-              
-              
               
               // Create a set of session IDs that have sent unseen messages
               const unseenSessionIds = new Set<string>();
@@ -244,117 +238,18 @@ export default function Matches() {
                 });
                 if (senderProfiles.length > 0) {
                   unseenSessionIds.add(senderProfiles[0].session_id);
-          
-                } else {
-          
                 }
               }
               
-      
               setUnreadMessages(unseenSessionIds);
               setHasUnreadMessages(unseenSessionIds.size > 0);
-              
-              // Also run the original hasUnseenMessages check for comparison
-              const { hasUnseenMessages } = await import('../lib/messageNotificationHelper');
-              const hasUnseen = await hasUnseenMessages(currentEvent.id, currentSessionId);
-      
-              
-                    } catch (error) {
-        // Error checking unseen messages
-      }
+            } catch (error) {
+              // Error checking unseen messages
+            }
           };
           
           checkUnseenMessages();
           
-          // Set up real-time message listener to update unseen messages
-          const messagesQuery = query(
-            collection(db, 'messages'),
-            where('event_id', '==', currentEvent.id),
-            where('to_profile_id', '==', userProfile.id)
-          );
-
-          const messagesUnsubscribe = onSnapshot(messagesQuery, async (snapshot) => {
-            try {
-              
-              
-              // Manual check for unseen messages
-              const { MessageAPI, EventProfileAPI } = await import('../lib/firebaseApi');
-              const allMessages = await MessageAPI.filter({
-                event_id: currentEvent.id,
-                to_profile_id: userProfile.id
-              });
-              
-              // Filter for unseen messages only
-              const unseenMessages = allMessages.filter(message => !message.seen);
-              
-              
-              
-              // Create a set of session IDs that have sent unseen messages
-              const unseenSessionIds = new Set<string>();
-              for (const message of unseenMessages) {
-                // Get the sender's session ID
-                const senderProfiles = await EventProfileAPI.filter({
-                  id: message.from_profile_id,
-                  event_id: currentEvent.id
-                });
-                if (senderProfiles.length > 0) {
-                  unseenSessionIds.add(senderProfiles[0].session_id);
-          
-                }
-              }
-              
-      
-              setUnreadMessages(unseenSessionIds);
-              setHasUnreadMessages(unseenSessionIds.size > 0);
-              
-                      } catch (error) {
-            // Error in real-time message listener
-          }
-          });
-
-          listenersRef.current.messages = messagesUnsubscribe;
-
-          // Set up periodic check for unseen messages (every 5 seconds)
-          const periodicCheck = setInterval(async () => {
-            try {
-              
-              
-              // Manual check for unseen messages
-              const { MessageAPI, EventProfileAPI } = await import('../lib/firebaseApi');
-              const allMessages = await MessageAPI.filter({
-                event_id: currentEvent.id,
-                to_profile_id: userProfile.id
-              });
-              
-              // Filter for unseen messages only
-              const unseenMessages = allMessages.filter(message => !message.seen);
-              
-              
-              
-              // Create a set of session IDs that have sent unseen messages
-              const unseenSessionIds = new Set<string>();
-              for (const message of unseenMessages) {
-                // Get the sender's session ID
-                const senderProfiles = await EventProfileAPI.filter({
-                  id: message.from_profile_id,
-                  event_id: currentEvent.id
-                });
-                if (senderProfiles.length > 0) {
-                  unseenSessionIds.add(senderProfiles[0].session_id);
-          
-                }
-              }
-              
-      
-              setUnreadMessages(unseenSessionIds);
-              setHasUnreadMessages(unseenSessionIds.size > 0);
-              
-                      } catch (error) {
-            // Error in periodic check
-          }
-          }, 5000);
-          
-          listenersRef.current.periodicCheck = periodicCheck;
         } catch (error) {
           // Handle error silently
         }
@@ -385,99 +280,6 @@ export default function Matches() {
 
     return () => clearInterval(activityInterval);
   }, [currentSessionId, isAppActive]);
-
-  // Check for unseen messages periodically
-  useEffect(() => {
-    if (!currentEvent?.id || !currentSessionId || !currentUserProfile?.id) return;
-
-    const checkUnseenInterval = setInterval(async () => {
-      try {
-        const { hasUnseenMessages } = await import('../lib/messageNotificationHelper');
-        const hasUnseen = await hasUnseenMessages(currentEvent.id, currentSessionId);
-        
-        if (hasUnseen) {
-          // Get all messages sent TO the current user
-          const { MessageAPI, EventProfileAPI } = await import('../lib/firebaseApi');
-          const allMessages = await MessageAPI.filter({
-            event_id: currentEvent.id,
-            to_profile_id: currentUserProfile.id
-          });
-          
-          // Filter for unseen messages only
-          const unseenMessages = allMessages.filter(message => !message.seen);
-          
-          // Create a set of session IDs that have sent unseen messages
-          const unseenSessionIds = new Set<string>();
-          for (const message of unseenMessages) {
-            // Get the sender's session ID
-            const senderProfiles = await EventProfileAPI.filter({
-              id: message.from_profile_id,
-              event_id: currentEvent.id
-            });
-            if (senderProfiles.length > 0) {
-              unseenSessionIds.add(senderProfiles[0].session_id);
-            }
-          }
-          
-          setUnreadMessages(unseenSessionIds);
-          setHasUnreadMessages(unseenSessionIds.size > 0);
-        } else {
-          setUnreadMessages(new Set());
-          setHasUnreadMessages(false);
-        }
-                } catch (error) {
-            // Error in periodic unseen messages check
-          }
-    }, 5000); // Check every 5 seconds
-
-    return () => clearInterval(checkUnseenInterval);
-  }, [currentEvent?.id, currentSessionId, currentUserProfile?.id]);
-
-  // Force refresh unread messages when component mounts or user navigates to matches
-  useEffect(() => {
-    if (currentEvent?.id && currentSessionId && currentUserProfile?.id) {
-      
-      
-      const refreshUnreadMessages = async () => {
-        try {
-          // Manual check for unseen messages
-          const { MessageAPI, EventProfileAPI } = await import('../lib/firebaseApi');
-          const allMessages = await MessageAPI.filter({
-            event_id: currentEvent.id,
-            to_profile_id: currentUserProfile.id
-          });
-          
-          // Filter for unseen messages only
-          const unseenMessages = allMessages.filter(message => !message.seen);
-          
-  
-          
-          // Create a set of session IDs that have sent unseen messages
-          const unseenSessionIds = new Set<string>();
-          for (const message of unseenMessages) {
-            // Get the sender's session ID
-            const senderProfiles = await EventProfileAPI.filter({
-              id: message.from_profile_id,
-              event_id: currentEvent.id
-            });
-            if (senderProfiles.length > 0) {
-              unseenSessionIds.add(senderProfiles[0].session_id);
-      
-            }
-          }
-          
-  
-          setUnreadMessages(unseenSessionIds);
-          setHasUnreadMessages(unseenSessionIds.size > 0);
-          
-        } catch (error) {
-          // Error in force refresh
-        }
-      };
-      
-      refreshUnreadMessages();
-    }
-  }, [currentEvent?.id, currentSessionId, currentUserProfile?.id]);
 
   const setupMatchesListener = () => {
     if (!currentEvent?.id || !currentSessionId) return;

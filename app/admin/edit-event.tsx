@@ -42,6 +42,7 @@ export default function EditEvent() {
     event_link: '',
     starts_at: new Date(),
     expires_at: new Date(),
+    is_private: false,
   });
   
   const [isLoading, setIsLoading] = useState(true);
@@ -75,6 +76,7 @@ export default function EditEvent() {
         event_link: eventData.event_link || '',
         starts_at: new Date(eventData.starts_at),
         expires_at: new Date(eventData.expires_at),
+        is_private: eventData.is_private || false,
       });
 
       // Load existing image if available
@@ -192,6 +194,7 @@ export default function EditEvent() {
         starts_at: formData.starts_at.toISOString(),
         expires_at: formData.expires_at.toISOString(),
         image_url: imageUrl, // Add image URL if uploaded or existing
+        is_private: formData.is_private,
       });
 
       Alert.alert('Success', 'Event updated successfully!', [
@@ -416,6 +419,36 @@ export default function EditEvent() {
       color: '#8b5cf6',
       marginLeft: 5,
     },
+    checkboxContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: 8,
+    },
+    checkbox: {
+      width: 24,
+      height: 24,
+      borderRadius: 6,
+      borderWidth: 1,
+      borderColor: isDark ? '#404040' : '#d1d5db',
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: isDark ? '#404040' : 'white',
+      marginRight: 10,
+    },
+    checkboxChecked: {
+      backgroundColor: '#8b5cf6',
+      borderColor: '#8b5cf6',
+    },
+    checkboxText: {
+      color: 'white',
+      fontSize: 16,
+      fontWeight: 'bold',
+    },
+    checkboxLabel: {
+      fontSize: 14,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      flex: 1,
+    },
   });
 
   if (isLoading) {
@@ -586,6 +619,24 @@ export default function EditEvent() {
             >
               <Calendar size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
               <Text style={styles.dateButtonText}>{formatDate(formData.expires_at)}</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Private Event Checkbox */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Private Event</Text>
+            <TouchableOpacity
+              style={styles.checkboxContainer}
+              onPress={() => setFormData(prev => ({ ...prev, is_private: !prev.is_private }))}
+            >
+              <View style={[styles.checkbox, formData.is_private && styles.checkboxChecked]}>
+                {formData.is_private && (
+                  <Text style={styles.checkboxText}>✓</Text>
+                )}
+              </View>
+              <Text style={styles.checkboxLabel}>
+                Make this event private (won't be displayed on the IRL page)
+              </Text>
             </TouchableOpacity>
           </View>
         </View>

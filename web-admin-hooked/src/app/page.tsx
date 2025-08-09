@@ -646,6 +646,7 @@ export default function AdminDashboard() {
 
       {/* Modals */}
       <EventForm
+        key={editingEvent?.id || 'new-event'}
         event={editingEvent}
         isOpen={showEventForm}
         onClose={() => setShowEventForm(false)}

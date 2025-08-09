@@ -19,8 +19,12 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.hookedapp.app",
       "associatedDomains": [
+        "applinks:www.hooked-app.com",
         "applinks:www.hooked-app.com"
-      ]
+      ],
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {

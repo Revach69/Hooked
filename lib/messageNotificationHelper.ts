@@ -61,6 +61,9 @@ export function showInAppMessageToast(senderName: string, senderSessionId: strin
       visibilityTime: 4000,
     };
     
+    // Use a shorter delay for Android to ensure toast shows immediately
+    const delay = Platform.OS === 'android' ? 100 : config.delay;
+    
     setTimeout(() => {
       Toast.show({
         type: 'info',
@@ -71,17 +74,36 @@ export function showInAppMessageToast(senderName: string, senderSessionId: strin
         autoHide: true,
         topOffset: config.topOffset,
         onPress: () => {
+          Toast.hide();
           if (senderSessionId) {
-            const chatUrl = `/chat?sessionId=${senderSessionId}`;
-            router.push(chatUrl);
+            // Navigate to chat with the specific match
+            router.push(`/chat?matchId=${senderSessionId}&matchName=${senderName}`);
           } else {
             router.push('/matches');
           }
         }
       });
-    }, config.delay);
+    }, delay);
   } catch (error) {
-    // Error showing message toast
+    // Error showing message toast - try to show a basic toast as fallback
+    try {
+      Toast.show({
+        type: 'info',
+        text1: 'New message received',
+        text2: 'Tap to view',
+        position: 'top',
+        visibilityTime: 4000,
+        autoHide: true,
+        topOffset: Platform.OS === 'ios' ? 60 : 40,
+        onPress: () => {
+          Toast.hide();
+          router.push('/matches');
+        }
+      });
+    } catch (fallbackError) {
+      // If even the fallback fails, just log the error
+      console.error('Failed to show message toast:', error);
+    }
   }
 }
 
@@ -140,15 +162,25 @@ async function sendPushNotificationForMessage(recipientSessionId: string, sender
     
     if (status === 'granted') {
       // Send push notification using session-based system
-      await sendMessageNotification(
+      const success = await sendMessageNotification(
         recipientSessionId,
         senderName,
         `${senderName} sent you a message!`,
         false
       );
+      
+      if (!success) {
+        // If push notification fails, store for later
+        await storePendingMessageNotification(recipientSessionId, senderName);
+      }
+    } else {
+      // If permissions not granted, store notification for later
+      await storePendingMessageNotification(recipientSessionId, senderName);
     }
   } catch (error) {
-    // Error sending push notification for message
+    // Error sending push notification for message - store for later
+    console.error('Error sending push notification for message:', error);
+    await storePendingMessageNotification(recipientSessionId, senderName);
   }
 }
 
@@ -467,7 +499,12 @@ export async function handleNewMessageNotification(
       }
     } else {
       // User is not in app - send push notification
-      await sendPushNotificationForMessage(recipientSessionId, senderName);
+      try {
+        await sendPushNotificationForMessage(recipientSessionId, senderName);
+      } catch (pushError) {
+        // If push notification fails, store for later
+        console.error('Push notification failed:', pushError);
+      }
     }
     
     // Store notification for when user returns to app (if they don't have push permissions)
@@ -479,6 +516,7 @@ export async function handleNewMessageNotification(
     
   } catch (error) {
     // Error handling new message notification
+    console.error('Error handling new message notification:', error);
   }
 }
 
@@ -490,30 +528,9 @@ async function checkIfUserIsInApp(sessionId: string): Promise<boolean> {
     // Get current user's session ID
     const currentSessionId = await AsyncStorage.getItem('currentSessionId');
     
-    // If it's the same session ID, user is in app
-    if (currentSessionId === sessionId) {
-      return true;
-    }
-    
-    // Additional check: look for recent activity timestamp
-    const lastActivityKey = `lastActivity_${sessionId}`;
-    const lastActivity = await AsyncStorage.getItem(lastActivityKey);
-    
-    if (lastActivity) {
-      const lastActivityTime = new Date(lastActivity).getTime();
-      const now = new Date().getTime();
-      
-      // Shorter timeout to be more accurate about app state
-      const timeoutMinutes = 2; // 2 minutes for both platforms
-      const timeoutAgo = now - (timeoutMinutes * 60 * 1000);
-      
-      const isRecentlyActive = lastActivityTime > timeoutAgo;
-      
-      // If user was active recently, consider them "in app"
-      return isRecentlyActive;
-    }
-    
-    return false;
+    // Only consider user "in app" if their session ID matches the current session ID
+    // This is more accurate than checking recent activity timestamps
+    return currentSessionId === sessionId;
   } catch (error) {
     // Error checking if user is in app
     return false;

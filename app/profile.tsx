@@ -28,7 +28,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useMobileAsyncOperation } from '../lib/hooks/useMobileErrorHandling';
 import MobileOfflineStatusBar from '../lib/components/MobileOfflineStatusBar';
-import { SurveyNotificationService } from '../lib/surveyNotificationService';
 import { MemoryManager, checkNetworkConnectivityWithTimeout, checkSimpleNetworkConnectivity } from '../lib/utils';
 
 
@@ -487,6 +486,16 @@ export default function Profile() {
               // Delete profile from backend
               if (profile?.id) {
                 await EventProfileAPI.delete(profile.id);
+              }
+
+              // Cancel any scheduled survey notifications for this event
+              if (eventId && sessionId) {
+                try {
+                  const { SurveyNotificationScheduler } = await import('../lib/surveyNotificationScheduler');
+                  await SurveyNotificationScheduler.cancelSurveyNotification(eventId, sessionId);
+                } catch (error) {
+                  // Error cancelling survey notification - continue with logout
+                }
               }
               
               // Clear all session data

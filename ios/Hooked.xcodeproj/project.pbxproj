@@ -8,25 +8,25 @@
 
 /* Begin PBXBuildFile section */
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
+		2A097D461469A436067A47AE /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = D826B78334549480B611C119 /* ExpoModulesProvider.swift */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		41373D8D37D02C3AC13B4EC5 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 4FD353959F1993921089D3FE /* PrivacyInfo.xcprivacy */; };
-		62EE979BC998CD9C6893FCF0 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35918322E08F9B7EE07722B4 /* ExpoModulesProvider.swift */; };
-		6D9C229661CC3F52527D96D7 /* libPods-Hooked.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 0E1B7F2A183717975A3A6761 /* libPods-Hooked.a */; };
+		B70B21BB4E029205EA5C2636 /* libPods-Hooked.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 3F188717E4C87C4F1B13669B /* libPods-Hooked.a */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
+		E112EDF77CD40D8F53FF9546 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = CE3EBE893C7D336F7BB6504E /* PrivacyInfo.xcprivacy */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		0E1B7F2A183717975A3A6761 /* libPods-Hooked.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Hooked.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		1345A2393773C0AA49B864E2 /* Pods-Hooked.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Hooked.debug.xcconfig"; path = "Target Support Files/Pods-Hooked/Pods-Hooked.debug.xcconfig"; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* Hooked.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Hooked.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = Hooked/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = Hooked/Info.plist; sourceTree = "<group>"; };
-		35918322E08F9B7EE07722B4 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-Hooked/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
-		43E0A5A826D0CB676FE61866 /* Pods-Hooked.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Hooked.debug.xcconfig"; path = "Target Support Files/Pods-Hooked/Pods-Hooked.debug.xcconfig"; sourceTree = "<group>"; };
-		4FD353959F1993921089D3FE /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = Hooked/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		683C6759299B050DD76BFED3 /* Pods-Hooked.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Hooked.release.xcconfig"; path = "Target Support Files/Pods-Hooked/Pods-Hooked.release.xcconfig"; sourceTree = "<group>"; };
+		3F188717E4C87C4F1B13669B /* libPods-Hooked.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Hooked.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		94FEFA09C22FBC36889272C4 /* Pods-Hooked.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Hooked.release.xcconfig"; path = "Target Support Files/Pods-Hooked/Pods-Hooked.release.xcconfig"; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = Hooked/SplashScreen.storyboard; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
+		CE3EBE893C7D336F7BB6504E /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = Hooked/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		D826B78334549480B611C119 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-Hooked/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = Hooked/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* Hooked-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "Hooked-Bridging-Header.h"; path = "Hooked/Hooked-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -37,7 +37,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				6D9C229661CC3F52527D96D7 /* libPods-Hooked.a in Frameworks */,
+				B70B21BB4E029205EA5C2636 /* libPods-Hooked.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -53,34 +53,26 @@
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				4FD353959F1993921089D3FE /* PrivacyInfo.xcprivacy */,
+				CE3EBE893C7D336F7BB6504E /* PrivacyInfo.xcprivacy */,
 			);
 			name = Hooked;
-			sourceTree = "<group>";
-		};
-		2145926AEF2FB5AD1BCA5098 /* ExpoModulesProviders */ = {
-			isa = PBXGroup;
-			children = (
-				3757ACA7E99ECBEAE79AB4A0 /* Hooked */,
-			);
-			name = ExpoModulesProviders;
 			sourceTree = "<group>";
 		};
 		2D16E6871FA4F8E400B85C8A /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				0E1B7F2A183717975A3A6761 /* libPods-Hooked.a */,
+				3F188717E4C87C4F1B13669B /* libPods-Hooked.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		3757ACA7E99ECBEAE79AB4A0 /* Hooked */ = {
+		71DE1B09E9B80516B928D88D /* ExpoModulesProviders */ = {
 			isa = PBXGroup;
 			children = (
-				35918322E08F9B7EE07722B4 /* ExpoModulesProvider.swift */,
+				B24730FE8595D7650A17D562 /* Hooked */,
 			);
-			name = Hooked;
+			name = ExpoModulesProviders;
 			sourceTree = "<group>";
 		};
 		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
@@ -97,8 +89,8 @@
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
-				9EC1119EF13BAB2ED5AC7527 /* Pods */,
-				2145926AEF2FB5AD1BCA5098 /* ExpoModulesProviders */,
+				FA2C56FE00CDAC71FFBCF614 /* Pods */,
+				71DE1B09E9B80516B928D88D /* ExpoModulesProviders */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -113,14 +105,12 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		9EC1119EF13BAB2ED5AC7527 /* Pods */ = {
+		B24730FE8595D7650A17D562 /* Hooked */ = {
 			isa = PBXGroup;
 			children = (
-				43E0A5A826D0CB676FE61866 /* Pods-Hooked.debug.xcconfig */,
-				683C6759299B050DD76BFED3 /* Pods-Hooked.release.xcconfig */,
+				D826B78334549480B611C119 /* ExpoModulesProvider.swift */,
 			);
-			name = Pods;
-			path = Pods;
+			name = Hooked;
 			sourceTree = "<group>";
 		};
 		BB2F792B24A3F905000567C9 /* Supporting */ = {
@@ -132,6 +122,16 @@
 			path = Hooked/Supporting;
 			sourceTree = "<group>";
 		};
+		FA2C56FE00CDAC71FFBCF614 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				1345A2393773C0AA49B864E2 /* Pods-Hooked.debug.xcconfig */,
+				94FEFA09C22FBC36889272C4 /* Pods-Hooked.release.xcconfig */,
+			);
+			name = Pods;
+			path = Pods;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -140,13 +140,13 @@
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "Hooked" */;
 			buildPhases = (
 				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
-				87110F5C23CF185EA40C14A0 /* [Expo] Configure project */,
+				A76B60197C571AD4F8E565A4 /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
-				37B3CB2FEA63F555E4AA9B4F /* [CP] Embed Pods Frameworks */,
+				774095F74DF1907AAA3D649C /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -196,7 +196,7 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				41373D8D37D02C3AC13B4EC5 /* PrivacyInfo.xcprivacy in Resources */,
+				E112EDF77CD40D8F53FF9546 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -240,7 +240,7 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
-		37B3CB2FEA63F555E4AA9B4F /* [CP] Embed Pods Frameworks */ = {
+		774095F74DF1907AAA3D649C /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -306,7 +306,7 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Hooked/Pods-Hooked-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		87110F5C23CF185EA40C14A0 /* [Expo] Configure project */ = {
+		A76B60197C571AD4F8E565A4 /* [Expo] Configure project */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -333,7 +333,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-				62EE979BC998CD9C6893FCF0 /* ExpoModulesProvider.swift in Sources */,
+				2A097D461469A436067A47AE /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -342,7 +342,7 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 43E0A5A826D0CB676FE61866 /* Pods-Hooked.debug.xcconfig */;
+			baseConfigurationReference = 1345A2393773C0AA49B864E2 /* Pods-Hooked.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -378,7 +378,7 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 683C6759299B050DD76BFED3 /* Pods-Hooked.release.xcconfig */;
+			baseConfigurationReference = 94FEFA09C22FBC36889272C4 /* Pods-Hooked.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;

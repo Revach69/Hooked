@@ -10,6 +10,7 @@ import {
   query,
   where,
   serverTimestamp,
+  deleteField,
 } from 'firebase/firestore';
 
 // Types matching the mobile app
@@ -25,6 +26,7 @@ export interface Event {
   event_type?: string;
   image_url?: string; // Added for event images
   event_link?: string; // Added for event link
+  is_private?: boolean; // Added for private events
   created_at: string;
   updated_at: string;
 }
@@ -133,10 +135,18 @@ export const EventAPI = {
   },
 
   async update(id: string, data: Partial<Event>): Promise<void> {
-    await updateDoc(doc(db, 'events', id), {
+    // Process the data to handle null values properly
+    const updateData: any = {
       ...data,
       updated_at: serverTimestamp(),
-    });
+    };
+
+    // If image_url is explicitly null, use deleteField to remove it
+    if (data.image_url === null) {
+      updateData.image_url = deleteField();
+    }
+
+    await updateDoc(doc(db, 'events', id), updateData);
   },
 
   async delete(id: string): Promise<void> {

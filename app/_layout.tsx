@@ -7,9 +7,8 @@ import { router } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import CustomSplashScreen from '../lib/components/SplashScreen';
 import ErrorBoundary from '../lib/components/ErrorBoundary';
-import { SurveyNotificationService } from '../lib/surveyNotificationService';
 import { initSentry } from '../lib/sentryConfig';
-import { Heart } from 'lucide-react-native';
+import { Heart, MessageCircle } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { checkPendingMessageNotifications, updateUserActivity } from '../lib/messageNotificationHelper';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
@@ -140,7 +139,7 @@ export default function RootLayout() {
         onPress={onPress}
         activeOpacity={0.8}
       >
-        <Heart size={24} color="#3b82f6" style={{ marginRight: 12 }} />
+        <MessageCircle size={24} color="#3b82f6" style={{ marginRight: 12 }} />
         <View style={{ flex: 1 }}>
           <Text style={{
             fontSize: 18,
@@ -163,7 +162,7 @@ export default function RootLayout() {
       </TouchableOpacity>
     ),
   } : {
-    // Android-specific toast config with improved visibility
+    // Android-specific toast config
     success: ({ text1, text2, onPress }: any) => (
       <TouchableOpacity 
         style={{
@@ -173,14 +172,14 @@ export default function RootLayout() {
           borderRadius: 12,
           padding: 16,
           marginHorizontal: 16,
-          marginTop: Platform.OS === 'android' ? 40 : 50,
+          marginTop: 40,
           flexDirection: 'row',
           alignItems: 'center',
           shadowColor: '#000',
           shadowOffset: { width: 0, height: 4 },
           shadowOpacity: 0.15,
           shadowRadius: 8,
-          elevation: 12,
+          elevation: 8,
           zIndex: 9999,
         }}
         onPress={onPress}
@@ -217,14 +216,14 @@ export default function RootLayout() {
           borderRadius: 12,
           padding: 16,
           marginHorizontal: 16,
-          marginTop: Platform.OS === 'android' ? 40 : 50,
+          marginTop: 40,
           flexDirection: 'row',
           alignItems: 'center',
           shadowColor: '#000',
           shadowOffset: { width: 0, height: 4 },
           shadowOpacity: 0.15,
           shadowRadius: 8,
-          elevation: 12,
+          elevation: 8,
           zIndex: 9999,
         }}
         onPress={onPress}
@@ -261,20 +260,20 @@ export default function RootLayout() {
           borderRadius: 12,
           padding: 16,
           marginHorizontal: 16,
-          marginTop: Platform.OS === 'android' ? 40 : 50,
+          marginTop: 40,
           flexDirection: 'row',
           alignItems: 'center',
           shadowColor: '#000',
           shadowOffset: { width: 0, height: 4 },
           shadowOpacity: 0.15,
           shadowRadius: 8,
-          elevation: 12,
+          elevation: 8,
           zIndex: 9999,
         }}
         onPress={onPress}
         activeOpacity={0.8}
       >
-        <Heart size={24} color="#3b82f6" style={{ marginRight: 12 }} />
+        <MessageCircle size={24} color="#3b82f6" style={{ marginRight: 12 }} />
         <View style={{ flex: 1 }}>
           <Text style={{
             fontSize: 18,
@@ -356,6 +355,14 @@ export default function RootLayout() {
         // Initialize Android notification channels
         await initializeNotificationChannels();
 
+        // Clean up expired survey notifications
+        try {
+          const { SurveyNotificationScheduler } = await import('../lib/surveyNotificationScheduler');
+          await SurveyNotificationScheduler.cleanupExpiredNotifications();
+        } catch (error) {
+          // Error cleaning up expired notifications
+        }
+
         // Register for push notifications and get token
         try {
           const token = await Notifications.getExpoPushTokenAsync({
@@ -378,21 +385,14 @@ export default function RootLayout() {
           
           try {
             const data = response.notification.request.content.data as any;
-            const { type, eventId, eventName, sessionId } = data;
+            const { type } = data;
             
-            if (type === 'survey_request') {
-              // Simple navigation without complex validation
+            if (type === 'survey_reminder') {
+              // Navigate to homepage for survey reminder notifications
+              // The existing survey logic will handle showing the survey if it's available
               setTimeout(() => {
                 if (isMounted) {
-                  router.push({
-                    pathname: '/survey',
-                    params: { 
-                      eventId, 
-                      eventName, 
-                      sessionId,
-                      source: 'notification'
-                    }
-                  });
+                  router.push('/home');
                 }
               }, 1000);
             } else if (type === 'match') {
@@ -573,6 +573,7 @@ export default function RootLayout() {
 
               if (senderProfiles.length > 0) {
                 const senderProfile = senderProfiles[0];
+                // Show toast notification for new message
                 showInAppMessageToast(senderProfile.first_name, senderProfile.session_id);
               }
             }
@@ -582,6 +583,7 @@ export default function RootLayout() {
         return unsubscribe;
       } catch (error) {
         // Error setting up global message listener
+        console.error('Error setting up message listener:', error);
       }
     };
 

@@ -23,7 +23,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useMobileAsyncOperation } from '../lib/hooks/useMobileErrorHandling';
 import MobileOfflineStatusBar from '../lib/components/MobileOfflineStatusBar';
-import { SurveyNotificationService } from '../lib/surveyNotificationService';
+import { SurveyService } from '../lib/surveyService';
 import { MemoryManager } from '../lib/utils';
 import { useKickedUserCheck } from '../lib/hooks/useKickedUserCheck';
 import KickedUserModal from './KickedUserModal';
@@ -111,7 +111,7 @@ export default function Home() {
     if (!MemoryManager.isComponentMounted(componentId)) return;
     
     try {
-      const surveyData = await SurveyNotificationService.shouldShowSurvey();
+      const surveyData = await SurveyService.shouldShowSurvey();
       if (surveyData && MemoryManager.isComponentMounted(componentId)) {
         // Add delay to avoid interrupting immediate user actions
         setTimeout(() => {
