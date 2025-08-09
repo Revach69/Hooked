@@ -259,15 +259,18 @@ export class SurveyService {
     feedback: SurveyFeedback
   ): Promise<void> {
     try {
+      // Combine all feedback into a single feedback string
+      const feedbackText = `Ease of Use: ${feedback.easeOfUse}/5, Matched with Others: ${feedback.matchedWithOthers}, Would Use Again: ${feedback.wouldUseAgain}, Event Satisfaction: ${feedback.eventSatisfaction}/5${feedback.improvements ? `, Improvements: ${feedback.improvements}` : ''}`;
+      
+      // Calculate overall rating (average of ease of use and event satisfaction)
+      const overallRating = Math.round((feedback.easeOfUse + feedback.eventSatisfaction) / 2);
+      
       // Submit feedback to database
       await EventFeedbackAPI.create({
         event_id: eventId,
         profile_id: sessionId,
-        ease_of_use: feedback.easeOfUse,
-        matched_with_others: feedback.matchedWithOthers,
-        would_use_again: feedback.wouldUseAgain,
-        event_satisfaction: feedback.eventSatisfaction,
-        improvements: feedback.improvements || '',
+        rating: overallRating,
+        feedback: feedbackText,
       });
 
       // Mark survey as filled for this specific event

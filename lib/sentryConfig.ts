@@ -2,12 +2,19 @@ import * as Sentry from '@sentry/react-native';
 
 export function initSentry() {
   if (__DEV__) {
+    console.log('Sentry disabled in development mode');
     return; // Don't initialize Sentry in development
   }
 
   try {
+    const dsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
+    if (!dsn) {
+      console.warn('Sentry DSN not found in environment variables');
+      return;
+    }
+
     Sentry.init({
-      dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+      dsn,
       debug: false,
       enableAutoSessionTracking: true,
       // Remove ReactNativeTracing as it doesn't exist in this version
@@ -19,8 +26,10 @@ export function initSentry() {
         return event;
       },
     });
+    
+    console.log('Sentry initialized successfully for mobile app');
   } catch (error) {
-            // Failed to initialize Sentry
+    console.error('Failed to initialize Sentry:', error);
   }
 }
 

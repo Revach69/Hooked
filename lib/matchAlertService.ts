@@ -17,6 +17,18 @@ const recentMatchNotifications = new Map<string, number>();
 const MATCH_NOTIFICATION_COOLDOWN = 5000; // 5 seconds cooldown
 
 /**
+ * Check if user is currently in the app
+ */
+async function isUserInApp(sessionId: string): Promise<boolean> {
+  try {
+    const currentSessionId = await AsyncStorage.getItem('currentSessionId');
+    return currentSessionId === sessionId;
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
  * Show a match alert with two options: "Continue Browsing" and "See Match"
  */
 export async function showMatchAlert(options: MatchAlertOptions): Promise<void> {
@@ -115,6 +127,32 @@ export async function showMatchToast(matchedUserName: string): Promise<void> {
       router.push('/matches');
     }
   });
+}
+
+/**
+ * Show the appropriate notification based on platform and scenario
+ */
+export async function showMatchNotification(options: MatchAlertOptions): Promise<void> {
+  const { matchedUserName, matchId, isLiker, currentEventId, currentSessionId } = options;
+  
+  if (isLiker) {
+    // First liker - check if they're in the app
+    const userInApp = await isUserInApp(currentSessionId);
+    
+    if (!userInApp) {
+      // First liker is not in app, send push notification
+      const { sendMatchNotification } = await import('./notificationService');
+      await sendMatchNotification(currentSessionId, matchedUserName, isLiker);
+      return;
+    }
+    
+    // First liker is in app, show toast
+    await showMatchToast(matchedUserName);
+  } else {
+    // Second liker - they're always in app since they just performed the action
+    // Show alert for second liker
+    await showMatchAlert(options);
+  }
 }
 
 /**

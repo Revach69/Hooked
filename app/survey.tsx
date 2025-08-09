@@ -17,7 +17,6 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import { SurveyService } from '../lib/surveyService';
-import { SurveyNotificationScheduler } from '../lib/surveyNotificationScheduler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { EventFeedbackAPI } from '../lib/firebaseApi';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -103,9 +102,6 @@ export default function SurveyScreen() {
         }
       );
 
-      // Cancel the scheduled survey notification since feedback has been submitted
-      await SurveyNotificationScheduler.cancelSurveyNotification(eventId, sessionId);
-
       Alert.alert(
         'Thank You! 💘',
         'Your feedback helps us improve Hooked for everyone!',
@@ -131,9 +127,6 @@ export default function SurveyScreen() {
           onPress: async () => {
             // Mark survey as filled for this specific event even if user exits
             await SurveyService.markSurveyFilledForEvent(eventId, sessionId);
-            
-            // Cancel the scheduled survey notification since user is exiting
-            await SurveyNotificationScheduler.cancelSurveyNotification(eventId, sessionId);
             
             router.replace('/home');
           }

@@ -355,14 +355,6 @@ export default function RootLayout() {
         // Initialize Android notification channels
         await initializeNotificationChannels();
 
-        // Clean up expired survey notifications
-        try {
-          const { SurveyNotificationScheduler } = await import('../lib/surveyNotificationScheduler');
-          await SurveyNotificationScheduler.cleanupExpiredNotifications();
-        } catch (error) {
-          // Error cleaning up expired notifications
-        }
-
         // Register for push notifications and get token
         try {
           const token = await Notifications.getExpoPushTokenAsync({
@@ -387,15 +379,7 @@ export default function RootLayout() {
             const data = response.notification.request.content.data as any;
             const { type } = data;
             
-            if (type === 'survey_reminder') {
-              // Navigate to homepage for survey reminder notifications
-              // The existing survey logic will handle showing the survey if it's available
-              setTimeout(() => {
-                if (isMounted) {
-                  router.push('/home');
-                }
-              }, 1000);
-            } else if (type === 'match') {
+            if (type === 'match') {
               // Navigate to matches page for match notifications
               setTimeout(() => {
                 if (isMounted) {

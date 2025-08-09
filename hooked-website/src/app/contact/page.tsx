@@ -8,11 +8,7 @@ export default function Contact() {
     fullName: '',
     email: '',
     phone: '',
-    message: '',
-    isOrganizer: false,
-    eventType: '',
-    eventDate: '',
-    expectedAttendees: ''
+    message: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -47,11 +43,7 @@ export default function Contact() {
           fullName: '', 
           email: '', 
           phone: '', 
-          message: '', 
-          isOrganizer: false,
-          eventType: '', 
-          eventDate: '', 
-          expectedAttendees: ''
+          message: ''
         });
       } else {
         const errorData = await response.json();
@@ -207,83 +199,6 @@ export default function Contact() {
                 placeholder="Your phone number"
               />
             </div>
-
-            {/* Organizer Checkbox */}
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="isOrganizer"
-                name="isOrganizer"
-                checked={formData.isOrganizer}
-                onChange={handleChange}
-                className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
-              />
-              <label htmlFor="isOrganizer" className="ml-2 block text-sm dark-mode-text">
-                I&apos;m an event organizer
-              </label>
-            </div>
-
-            {/* Organizer Fields */}
-            {formData.isOrganizer && (
-              <div className="space-y-6 border-l-4 border-purple-500 pl-4 bg-purple-50 dark:bg-purple-900/20 rounded-r-lg p-4">
-                {/* Event Type */}
-                <div>
-                  <label htmlFor="eventType" className="block text-sm font-medium dark-mode-text mb-2">
-                    Event Type *
-                  </label>
-                  <select
-                    id="eventType"
-                    name="eventType"
-                    value={formData.eventType}
-                    onChange={handleChange}
-                    required
-                    className="w-full px-4 py-3 border dark-mode-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark-mode-bg dark-mode-text"
-                  >
-                    <option value="">Select an event type</option>
-                    <option value="party">Party</option>
-                    <option value="conference">Conference & Meetup</option>
-                    <option value="wedding">Wedding</option>
-                    <option value="private">Private Event</option>
-                    <option value="bar">Bar & Lounge</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
-
-                {/* Event Date */}
-                <div>
-                  <label htmlFor="eventDate" className="block text-sm font-medium dark-mode-text mb-2">
-                    Event Date *
-                  </label>
-                  <input
-                    type="date"
-                    id="eventDate"
-                    name="eventDate"
-                    value={formData.eventDate}
-                    onChange={handleChange}
-                    required
-                    className="w-full px-4 py-3 border dark-mode-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark-mode-bg dark-mode-text"
-                  />
-                </div>
-
-                {/* Attendees */}
-                <div>
-                  <label htmlFor="expectedAttendees" className="block text-sm font-medium dark-mode-text mb-2">
-                    Expected Attendees *
-                  </label>
-                  <input
-                    type="number"
-                    id="expectedAttendees"
-                    name="expectedAttendees"
-                    value={formData.expectedAttendees}
-                    onChange={handleChange}
-                    required
-                    className="w-full px-4 py-3 border dark-mode-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark-mode-bg dark-mode-text"
-                    placeholder="Number of attendees"
-                    min="1"
-                  />
-                </div>
-              </div>
-            )}
 
             {/* Message */}
             <div>

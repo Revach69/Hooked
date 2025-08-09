@@ -22,7 +22,7 @@ import { db } from '../lib/firebaseConfig';
 import UserProfileModal from '../lib/UserProfileModal';
 import { sendMatchNotification, sendLikeNotification } from '../lib/notificationService';
 import { updateUserActivity } from '../lib/messageNotificationHelper';
-import { showMatchAlert, clearActiveAlerts, isAlertActive } from '../lib/matchAlertService';
+import { showMatchAlert, clearActiveAlerts, isAlertActive, showMatchNotification } from '../lib/matchAlertService';
 
 export default function Matches() {
   const colorScheme = useColorScheme();
@@ -404,8 +404,8 @@ export default function Matches() {
               if (otherProfiles.length > 0) {
                 const otherProfile = otherProfiles[0];
                 
-                // Show alert for the match (this is mainly for cases where match was created from another device)
-                await showMatchAlert({
+                // Use platform-specific notification logic
+                await showMatchNotification({
                   matchedUserName: otherProfile.first_name,
                   matchId: match.id,
                   isLiker,
@@ -616,13 +616,13 @@ export default function Matches() {
         
         // Send push notification to the first liker (User B) if they're not in the app
         try {
-          await sendMatchNotification(likedProfile.session_id, currentUserProfile.first_name);
+          await sendMatchNotification(likedProfile.session_id, currentUserProfile.first_name, true);
         } catch (notificationError) {
           // Handle notification error silently
         }
 
         // Show immediate alert for the current user (User A, match creator)
-        await showMatchAlert({
+        await showMatchNotification({
           matchedUserName: likedProfile.first_name,
           matchId: newLike.id,
           isLiker: true,

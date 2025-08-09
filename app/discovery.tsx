@@ -27,7 +27,7 @@ import UserProfileModal from '../lib/UserProfileModal';
 import Toast from 'react-native-toast-message';
 import { updateUserActivity } from '../lib/messageNotificationHelper';
 import { usePerformanceMonitoring } from '../lib/hooks/usePerformanceMonitoring';
-import { showMatchAlert, showMatchToast, clearActiveAlerts, isAlertActive } from '../lib/matchAlertService';
+import { showMatchAlert, showMatchToast, clearActiveAlerts, isAlertActive, showMatchNotification } from '../lib/matchAlertService';
 
 const { width } = Dimensions.get('window');
 const gap = 8;
@@ -390,19 +390,14 @@ export default function Discovery() {
                   })
                 ));
                 
-                if (currentUserAsLiker) {
-                  // Current user liked first → they get TOAST when the other person likes back
-                  await showMatchToast(otherProfile.first_name);
-                } else {
-                  // Current user liked second (liked back) → they get ALERT when they create the match
-                  await showMatchAlert({
-                    matchedUserName: otherProfile.first_name,
-                    matchId: match.id,
-                    isLiker: false,
-                    currentEventId: currentEvent.id,
-                    currentSessionId
-                  });
-                }
+                // Use platform-specific notification logic
+                await showMatchNotification({
+                  matchedUserName: otherProfile.first_name,
+                  matchId: match.id,
+                  isLiker: !!currentUserAsLiker,
+                  currentEventId: currentEvent.id,
+                  currentSessionId
+                });
               }
             }
           }
@@ -679,7 +674,7 @@ export default function Discovery() {
         // Send push notification to the first liker (User B) if they're not in the app
         try {
           await trackAsyncOperation('send_match_notification_to_first_liker', async () => {
-            return await sendMatchNotification(likedProfile.session_id, currentUserProfile.first_name);
+            return await sendMatchNotification(likedProfile.session_id, currentUserProfile.first_name, true);
           });
         } catch (notificationError) {
           // Handle notification error silently

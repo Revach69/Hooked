@@ -24,7 +24,6 @@ import { User as UserIcon, Camera, Upload, ArrowLeft } from 'lucide-react-native
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { SurveyService } from '../lib/surveyService';
-import { SurveyNotificationScheduler } from '../lib/surveyNotificationScheduler';
 
 // Simple UUID v4 generator function
 function generateUUID() {
@@ -408,14 +407,6 @@ export default function Consent() {
       
       // Add event to user's history for survey purposes
       await SurveyService.addEventToHistory(
-        event.id,
-        event.name,
-        sessionId,
-        event.expires_at
-      );
-
-      // Schedule survey notification for expires_at + 2 hours
-      await SurveyNotificationScheduler.scheduleSurveyNotification(
         event.id,
         event.name,
         sessionId,

@@ -2,6 +2,12 @@ import * as Sentry from '@sentry/react';
 
 // Initialize Sentry with console.warn capture
 export const initSentry = () => {
+  // Disabled for web version - only using Sentry for mobile apps
+  console.log('Sentry disabled for web version - only configured for mobile apps');
+  return;
+  
+  // Commented out web Sentry configuration
+  /*
   Sentry.init({
     dsn: import.meta.env.VITE_SENTRY_DSN || 'YOUR_SENTRY_DSN_HERE',
     debug: false, // Disabled for production
@@ -67,37 +73,19 @@ export const initSentry = () => {
   };
 
   console.log('Sentry initialized with console.warn capture enabled');
+  */
 };
 
 // Helper function to manually send warnings
 export const sendWarning = (message, extra = {}) => {
-  Sentry.captureMessage(message, {
-    level: 'warning',
-    tags: {
-      source: 'manual',
-      environment: import.meta.env.MODE,
-    },
-    extra: {
-      ...extra,
-      timestamp: new Date().toISOString(),
-      userAgent: navigator.userAgent,
-      url: window.location.href,
-    },
-  });
+  // Disabled for web version - only using Sentry for mobile apps
+  console.log('Sentry sendWarning disabled for web version');
+  return;
 };
 
 // Helper function to send errors
 export const sendError = (error, extra = {}) => {
-  Sentry.captureException(error, {
-    tags: {
-      source: 'manual',
-      environment: import.meta.env.MODE,
-    },
-    extra: {
-      ...extra,
-      timestamp: new Date().toISOString(),
-      userAgent: navigator.userAgent,
-      url: window.location.href,
-    },
-  });
+  // Disabled for web version - only using Sentry for mobile apps
+  console.log('Sentry sendError disabled for web version');
+  return;
 }; 

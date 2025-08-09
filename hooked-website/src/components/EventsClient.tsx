@@ -5,21 +5,33 @@ import { EventAPI, FirestoreEvent } from '../lib/firebaseApi';
 
 const eventTypes = [
   { id: 'all', name: 'All Events' },
-  { id: 'party', name: 'Parties' },
-  { id: 'conference', name: 'Conferences & Meetups' },
-  { id: 'wedding', name: 'Weddings' },
+  { id: 'parties', name: 'Parties' },
+  { id: 'conferences', name: 'Conferences & Meetups' },
   { id: 'private', name: 'Private Events' },
-  { id: 'bar', name: 'Bars & Lounges' }
+  { id: 'bars', name: 'Bars & Lounges' }
 ];
 
 const locations = [
   { id: 'all', name: 'All Locations' },
-  { id: 'nyc', name: 'New York City' },
-  { id: 'la', name: 'Los Angeles' },
-  { id: 'chicago', name: 'Chicago' },
-  { id: 'miami', name: 'Miami' },
-  { id: 'austin', name: 'Austin' }
+  { id: 'tel-aviv', name: 'Tel-Aviv' }
 ];
+
+// Helper function to capitalize event types
+const capitalizeEventType = (eventType: string): string => {
+  if (!eventType) return '';
+  
+  // First check if it's in our predefined types
+  const predefinedType = eventTypes.find(type => type.id === eventType);
+  if (predefinedType) {
+    return predefinedType.name;
+  }
+  
+  // If not found, capitalize the first letter of each word
+  return eventType
+    .split('-')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+};
 
 export default function EventsClient() {
   const [events, setEvents] = useState<FirestoreEvent[]>([]);
@@ -178,7 +190,7 @@ export default function EventsClient() {
                       {event.event_type && (
                         <div className="absolute top-4 right-4">
                           <span className="dark-mode-card text-gray-600 dark:text-gray-300 px-2 py-1 rounded-full text-xs font-medium shadow-sm border dark-mode-border">
-                            {eventTypes.find(type => type.id === event.event_type)?.name || event.event_type}
+                            {capitalizeEventType(event.event_type)}
                           </span>
                         </div>
                       )}
@@ -201,38 +213,20 @@ export default function EventsClient() {
 
                       {/* CTA Button */}
                       <div className="mt-auto">
-                        {event.event_link ? (
-                          <a 
-                            href={event.event_link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="btn-primary w-full h-12 flex items-center justify-center text-center"
-                            style={{ 
-                              textDecoration: 'none', 
-                              display: 'flex',
-                              padding: '0 28px',
-                              height: '48px'
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            Join Event
-                          </a>
-                        ) : (
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openEventModal(event);
-                            }}
-                            className="btn-primary w-full h-12 flex items-center justify-center text-center"
-                            style={{ 
-                              display: 'flex',
-                              padding: '0 28px',
-                              height: '48px'
-                            }}
-                          >
-                            Learn More
-                          </button>
-                        )}
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEventModal(event);
+                          }}
+                          className="btn-primary w-full h-12 flex items-center justify-center text-center"
+                          style={{ 
+                            display: 'flex',
+                            padding: '0 28px',
+                            height: '48px'
+                          }}
+                        >
+                          Read More
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -305,7 +299,7 @@ export default function EventsClient() {
                 {selectedEvent.event_type && (
                   <div className="absolute top-4 right-4">
                     <span className="dark-mode-card text-gray-600 dark:text-gray-300 px-3 py-1 rounded-full text-sm font-medium shadow-sm border dark-mode-border">
-                      {eventTypes.find(type => type.id === selectedEvent.event_type)?.name || selectedEvent.event_type}
+                      {capitalizeEventType(selectedEvent.event_type)}
                     </span>
                   </div>
                 )}
@@ -351,7 +345,7 @@ export default function EventsClient() {
                       {needsTruncation() && (
                         <button
                           onClick={toggleDescription}
-                          className="mt-2 text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 text-sm font-medium flex items-center gap-1 transition-colors"
+                          className="mt-2 text-purple-600 dark:text-purple-300 hover:text-purple-700 dark:hover:text-purple-200 text-sm font-medium flex items-center gap-1 transition-colors bg-white/80 dark:bg-gray-800/80 px-3 py-1 rounded-md hover:bg-white dark:hover:bg-gray-800"
                         >
                           {isDescriptionExpanded ? (
                             <>

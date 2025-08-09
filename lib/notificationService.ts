@@ -194,14 +194,30 @@ async function getUserPushTokens(userId: string): Promise<Array<{ token: string;
  */
 export async function sendMatchNotification(
   sessionId: string,
-  matchedUserName: string
+  matchedUserName: string,
+  isLiker: boolean = false
 ): Promise<boolean> {
+  // Determine notification content based on role
+  let title: string;
+  let body: string;
+  
+  if (isLiker) {
+    // First liker - more casual notification
+    title = "You got Hooked!";
+    body = `You matched with ${matchedUserName}`;
+  } else {
+    // Second liker - more prominent notification
+    title = "You got Hooked!";
+    body = `You and ${matchedUserName} liked each other!`;
+  }
+
   const notification: NotificationData = {
-    title: "You got Hooked!",
-    body: `You matched with ${matchedUserName}`,
+    title,
+    body,
     data: {
       type: 'match',
       matchedUserName,
+      isLiker,
     },
   };
 

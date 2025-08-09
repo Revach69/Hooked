@@ -149,7 +149,7 @@ export default function Home() {
           {/* Mobile Layout - Stacked vertically */}
           <div className="lg:hidden space-y-8">
             {/* Title */}
-            <div className={`transition-all duration-1000 ease-out ${
+            <div className={`transition-all duration-600 ease-out ${
               sectionVisible && showHeadline ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
             }`}>
               <h2 className="text-4xl md:text-5xl font-bold dark-mode-text font-heading text-center">

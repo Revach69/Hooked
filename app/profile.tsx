@@ -488,16 +488,6 @@ export default function Profile() {
                 await EventProfileAPI.delete(profile.id);
               }
 
-              // Cancel any scheduled survey notifications for this event
-              if (eventId && sessionId) {
-                try {
-                  const { SurveyNotificationScheduler } = await import('../lib/surveyNotificationScheduler');
-                  await SurveyNotificationScheduler.cancelSurveyNotification(eventId, sessionId);
-                } catch (error) {
-                  // Error cancelling survey notification - continue with logout
-                }
-              }
-              
               // Clear all session data
               await AsyncStorage.multiRemove([
                 'currentEventId',

@@ -44,9 +44,6 @@ export default function IRL() {
           <h2 className="text-3xl font-bold mb-4">
             Host Your Event with Hooked
           </h2>
-          <p className="text-xl mb-8 max-w-2xl mx-auto">
-            Want to enhance your event with our networking platform? Get in touch to learn how Hooked can help your attendees connect.
-          </p>
           <div className="flex justify-center">
             <Link 
               href="/contact" 
