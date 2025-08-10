@@ -1,6 +1,6 @@
 // Enhanced Mobile Error Handling System with Offline Queue and Retry Mechanisms
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AsyncStorageUtils } from './asyncStorageUtils';
 import NetInfo from '@react-native-community/netinfo';
 import { Platform } from 'react-native';
 import { logFirebaseError } from './errorMonitoring';
@@ -33,7 +33,7 @@ if (!(global as any).eventEmitter) {
           callbacks.forEach((callback: Function) => {
             try {
               callback(...args);
-            } catch (error) {
+            } catch {
               // Event emitter error
             }
           });
@@ -180,7 +180,7 @@ class MobileErrorHandler {
         if (this.isFirebaseConnectionError(error) && shouldAttemptFirebaseRecovery()) {
           // Attempting Firebase recovery due to connection error
           try {
-            const recoverySuccess = await attemptFirebaseRecovery(operationName);
+            const recoverySuccess = await attemptFirebaseRecovery();
             if (recoverySuccess) {
               // Firebase recovery successful, retrying operation
               // Try the operation again after successful recovery
@@ -192,7 +192,7 @@ class MobileErrorHandler {
                 lastError = retryError;
               }
             }
-          } catch (recoveryError) {
+          } catch {
             // Firebase recovery failed
           }
         }
@@ -245,7 +245,7 @@ class MobileErrorHandler {
   }
 
   // Determine if an error should be retried
-  shouldRetryError(error: any, attempt: number): boolean {
+  shouldRetryError(error: any): boolean {
     // Don't retry on certain Firebase errors
     if (this.config.nonRetryableErrors.some(code => 
       error.code === code || error.message?.includes(code)
@@ -326,7 +326,7 @@ class MobileErrorHandler {
           // Failed to process offline action
 
           // Re-queue if it's still a retryable error and hasn't exceeded max retries
-          if (this.shouldRetryError(error, action.retryCount + 1) && 
+          if (this.shouldRetryError(error) && 
               action.retryCount < action.maxRetries) {
             action.retryCount++;
             this.offlineQueue.push(action);
@@ -348,8 +348,8 @@ class MobileErrorHandler {
         action: null // Remove function as it can't be serialized
       }));
 
-      await AsyncStorage.setItem('hooked_mobile_offline_queue', JSON.stringify(serializableQueue));
-    } catch (error) {
+      await AsyncStorageUtils.setItem('hooked_mobile_offline_queue', serializableQueue);
+    } catch {
               // Failed to save offline queue
     }
   }
@@ -357,14 +357,13 @@ class MobileErrorHandler {
   // Load offline queue from AsyncStorage
   private async loadOfflineQueue(): Promise<void> {
     try {
-      const saved = await AsyncStorage.getItem('hooked_mobile_offline_queue');
+      const saved = await AsyncStorageUtils.getItem<any[]>('hooked_mobile_offline_queue');
       if (saved) {
-        const parsedQueue = JSON.parse(saved);
         // Loaded offline actions
         // Note: We can't restore the actual action functions, so we'll just track the count
         this.offlineQueue = [];
       }
-    } catch (error) {
+    } catch {
               // Failed to load offline queue
       this.offlineQueue = [];
     }
@@ -376,7 +375,7 @@ class MobileErrorHandler {
       const netInfo = await NetInfo.fetch();
       this.isOnline = netInfo.isConnected ?? false;
       return this.isOnline;
-    } catch (error) {
+    } catch {
       this.isOnline = false;
       return false;
     }
@@ -425,17 +424,7 @@ class MobileErrorHandler {
 
   // Log error with enhanced context
   private logError(error: any, context: Record<string, any> = {}): void {
-    const errorInfo = {
-      message: error.message,
-      code: error.code,
-      stack: error.stack,
-      timestamp: new Date().toISOString(),
-      isOnline: this.isOnline,
-      platform: Platform.OS,
-      ...context
-    };
-
-            // Mobile error occurred
+    // Mobile error occurred
 
     // Use existing error monitoring
     logFirebaseError(error, context.operation || 'Unknown', {

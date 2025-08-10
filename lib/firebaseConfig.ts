@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore, connectFirestoreEmulator, collection, query, limit, getDocs } from 'firebase/firestore';
-import { getAuth, connectAuthEmulator } from 'firebase/auth';
-import { getStorage, connectStorageEmulator } from 'firebase/storage';
+import { getFirestore, collection, query, limit, getDocs } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
+import { getStorage } from 'firebase/storage';
 import NetInfo from '@react-native-community/netinfo';
 
 // Firebase configuration with fallbacks
@@ -25,7 +25,7 @@ try {
   db = getFirestore(app);
   auth = getAuth(app);
   storage = getStorage(app);
-} catch (error) {
+} catch {
           // Failed to initialize Firebase
 }
 
@@ -53,7 +53,7 @@ class FirebaseReconnectionManager {
       this.reconnectAttempts = 0;
       this.isReconnecting = false;
       return true;
-    } catch (error) {
+    } catch {
       this.isReconnecting = false;
       
       if (this.reconnectAttempts < this.maxReconnectAttempts) {
@@ -87,8 +87,8 @@ export const checkFirebaseStatus = async (): Promise<{ isConnected: boolean; err
     await getDocs(q);
     
     return { isConnected: true };
-  } catch (error: any) {
-    return { isConnected: false, error: error.message };
+  } catch {
+    return { isConnected: false, error: 'Firebase connection failed' };
   }
 };
 

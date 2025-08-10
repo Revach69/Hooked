@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   StyleSheet,
   useColorScheme,
   KeyboardAvoidingView,
@@ -16,7 +15,7 @@ import { Eye, EyeOff, Lock, Mail, Check } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthAPI } from '../lib/firebaseApi';
 import { AdminUtils } from '../lib/adminUtils';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 
 export default function AdminLogin() {
   const [email, setEmail] = useState('');
@@ -29,16 +28,11 @@ export default function AdminLogin() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
-  // Check for saved credentials on component mount
-  useEffect(() => {
-    checkSavedCredentials();
-  }, []);
-
-  const checkSavedCredentials = async () => {
+  const checkSavedCredentials = useCallback(async () => {
     try {
-      const savedEmail = await AsyncStorage.getItem('adminSavedEmail');
-      const savedPassword = await AsyncStorage.getItem('adminSavedPassword');
-      const rememberMeEnabled = await AsyncStorage.getItem('adminRememberMe');
+      const savedEmail = await AsyncStorageUtils.getItem<string>('adminSavedEmail');
+      const savedPassword = await AsyncStorageUtils.getItem<string>('adminSavedPassword');
+      const rememberMeEnabled = await AsyncStorageUtils.getItem<string>('adminRememberMe');
       
       if (savedEmail && savedPassword && rememberMeEnabled === 'true') {
         setEmail(savedEmail);
@@ -48,12 +42,17 @@ export default function AdminLogin() {
         // Auto-login with saved credentials
         await handleAutoLogin(savedEmail, savedPassword);
       }
-    } catch (error) {
+    } catch {
       // Handle error silently
     } finally {
       setIsCheckingSavedCredentials(false);
     }
-  };
+  }, []);
+
+  // Check for saved credentials on component mount
+  useEffect(() => {
+    checkSavedCredentials();
+  }, [checkSavedCredentials]);
 
   const handleAutoLogin = async (savedEmail: string, savedPassword: string) => {
     setIsLoading(true);
@@ -69,7 +68,7 @@ export default function AdminLogin() {
         if (isAdmin) {
           // Set admin session
           await AdminUtils.setAdminSession(user.email || '');
-          await AsyncStorage.setItem('adminUid', user.uid);
+          await AsyncStorageUtils.setItem('adminUid', user.uid);
           
           // Navigate to admin dashboard
           router.replace('/admin');
@@ -79,9 +78,9 @@ export default function AdminLogin() {
           setError('Access denied. You do not have admin privileges.');
         }
       }
-    } catch (error: any) {
+    } catch {
       // Clear saved credentials if auto-login fails
-      await AsyncStorage.multiRemove(['adminSavedEmail', 'adminSavedPassword', 'adminRememberMe']);
+      await AsyncStorageUtils.multiRemove(['adminSavedEmail', 'adminSavedPassword', 'adminRememberMe']);
       setRememberMe(false);
       setPassword('');
     } finally {
@@ -108,16 +107,16 @@ export default function AdminLogin() {
         if (isAdmin) {
           // Set admin session
           await AdminUtils.setAdminSession(user.email || '');
-          await AsyncStorage.setItem('adminUid', user.uid);
+          await AsyncStorageUtils.setItem('adminUid', user.uid);
           
           // Save credentials if "Remember Me" is checked
           if (rememberMe) {
-            await AsyncStorage.setItem('adminSavedEmail', email.trim());
-            await AsyncStorage.setItem('adminSavedPassword', password);
-            await AsyncStorage.setItem('adminRememberMe', 'true');
+            await AsyncStorageUtils.setItem('adminSavedEmail', email.trim());
+            await AsyncStorageUtils.setItem('adminSavedPassword', password);
+            await AsyncStorageUtils.setItem('adminRememberMe', 'true');
           } else {
             // Clear saved credentials if "Remember Me" is unchecked
-            await AsyncStorage.multiRemove(['adminSavedEmail', 'adminSavedPassword', 'adminRememberMe']);
+            await AsyncStorageUtils.multiRemove(['adminSavedEmail', 'adminSavedPassword', 'adminRememberMe']);
           }
           
           // Navigate to admin dashboard

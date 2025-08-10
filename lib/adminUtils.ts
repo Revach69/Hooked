@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AsyncStorageUtils } from './asyncStorageUtils';
 import { AuthAPI } from './firebaseApi';
 
 export const AdminUtils = {
@@ -12,8 +12,8 @@ export const AdminUtils = {
       }
 
       // Check admin session from AsyncStorage for performance
-      const adminSession = await AsyncStorage.getItem('isAdmin');
-      const adminAccessTime = await AsyncStorage.getItem('adminAccessTime');
+      const adminSession = await AsyncStorageUtils.getItem<string>('isAdmin');
+      const adminAccessTime = await AsyncStorageUtils.getItem<string>('adminAccessTime');
       
       if (adminSession === 'true' && adminAccessTime) {
         const accessTime = new Date(adminAccessTime);
@@ -33,7 +33,7 @@ export const AdminUtils = {
       }
       
       return false;
-    } catch (error) {
+    } catch {
               // Error checking admin status
       return false;
     }
@@ -42,10 +42,10 @@ export const AdminUtils = {
   // Set admin session
   async setAdminSession(email: string): Promise<void> {
     try {
-      await AsyncStorage.setItem('isAdmin', 'true');
-      await AsyncStorage.setItem('adminAccessTime', new Date().toISOString());
-      await AsyncStorage.setItem('adminEmail', email);
-    } catch (error) {
+      await AsyncStorageUtils.setItem('isAdmin', 'true');
+      await AsyncStorageUtils.setItem('adminAccessTime', new Date().toISOString());
+      await AsyncStorageUtils.setItem('adminEmail', email);
+    } catch {
               // Error setting admin session
     }
   },
@@ -53,13 +53,13 @@ export const AdminUtils = {
   // Clear admin session
   async clearAdminSession(): Promise<void> {
     try {
-      await AsyncStorage.multiRemove([
+      await AsyncStorageUtils.multiRemove([
         'isAdmin',
         'adminAccessTime',
         'adminEmail',
         'adminUid'
       ]);
-    } catch (error) {
+    } catch {
               // Error clearing admin session
     }
   },
@@ -67,8 +67,8 @@ export const AdminUtils = {
   // Get admin email
   async getAdminEmail(): Promise<string | null> {
     try {
-      return await AsyncStorage.getItem('adminEmail');
-    } catch (error) {
+      return await AsyncStorageUtils.getItem<string>('adminEmail');
+    } catch {
               // Error getting admin email
       return null;
     }

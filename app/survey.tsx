@@ -12,19 +12,17 @@ import {
   Platform,
   Keyboard,
   TouchableWithoutFeedback,
-  ActivityIndicator,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import { SurveyService } from '../lib/surveyService';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { EventFeedbackAPI } from '../lib/firebaseApi';
+
+
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function SurveyScreen() {
-  const { eventId, eventName, sessionId, source } = useLocalSearchParams<{
+  const { eventId, sessionId, source } = useLocalSearchParams<{
     eventId: string;
-    eventName: string;
     sessionId: string;
     source: string;
   }>();
@@ -107,7 +105,7 @@ export default function SurveyScreen() {
         'Your feedback helps us improve Hooked for everyone!',
         [{ text: 'OK', onPress: () => router.replace('/home') }]
       );
-    } catch (error) {
+    } catch {
       // Failed to submit feedback
       Alert.alert('Error', 'Failed to submit feedback. Please try again.');
     } finally {
@@ -142,7 +140,7 @@ export default function SurveyScreen() {
     label 
   }: { 
     value: number; 
-    onChange: (rating: number) => void; 
+    onChange: (value: number) => void; 
     error?: string;
     label: string;
   }) => (

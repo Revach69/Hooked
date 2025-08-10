@@ -1,7 +1,7 @@
 import { Alert, AppState } from 'react-native';
 import { router } from 'expo-router';
 import Toast from 'react-native-toast-message';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AsyncStorageUtils } from './asyncStorageUtils';
 
 interface MatchAlertOptions {
   matchedUserName: string;
@@ -21,12 +21,12 @@ const MATCH_NOTIFICATION_COOLDOWN = 5000; // 5 seconds cooldown
  */
 async function isUserInApp(sessionId: string): Promise<boolean> {
   try {
-    const currentSessionId = await AsyncStorage.getItem('currentSessionId');
+    const currentSessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
     const isSessionMatch = currentSessionId === sessionId;
     const isAppActive = AppState.currentState === 'active';
     
     return isSessionMatch && isAppActive;
-  } catch (error) {
+  } catch {
     return false;
   }
 }
@@ -35,7 +35,7 @@ async function isUserInApp(sessionId: string): Promise<boolean> {
  * Show a match alert with two options: "Continue Browsing" and "See Match"
  */
 export async function showMatchAlert(options: MatchAlertOptions): Promise<void> {
-  const { matchedUserName, matchId, isLiker, currentEventId, currentSessionId } = options;
+  const { matchedUserName, matchId, currentSessionId } = options;
   
   // Create a unique key for this match alert
   const alertKey = `${matchId}_${currentSessionId}`;
@@ -136,7 +136,7 @@ export async function showMatchToast(matchedUserName: string): Promise<void> {
  * Show the appropriate notification based on platform and scenario
  */
 export async function showMatchNotification(options: MatchAlertOptions): Promise<void> {
-  const { matchedUserName, matchId, isLiker, currentEventId, currentSessionId } = options;
+  const { matchedUserName, isLiker, currentSessionId } = options;
   
   if (isLiker) {
     // First liker - check if they're in the app

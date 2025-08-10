@@ -9,11 +9,9 @@ import {
   query, 
   where, 
   orderBy, 
-  limit,
-  serverTimestamp,
-  Timestamp
+  serverTimestamp
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, getDownloadURL } from 'firebase/storage';
 import { 
   signInWithEmailAndPassword, 
   signOut as firebaseSignOut, 
@@ -22,7 +20,7 @@ import {
 } from 'firebase/auth';
 import { db, storage, auth } from './firebaseConfig';
 import { trace } from './firebasePerformance';
-import NetInfo from '@react-native-community/netinfo';
+
 
 // Enhanced retry mechanism with network connectivity checks and memory safety
 export async function firebaseRetry<T>(
@@ -799,50 +797,35 @@ export interface SavedProfile {
 
 export const SavedProfileAPI = {
   async saveProfileLocally(profileData: SavedProfile['profile_data']): Promise<void> {
-    try {
-      const savedProfiles = await this.getLocalProfiles();
-      const newProfile: SavedProfile = {
-        id: Date.now().toString(),
-        user_id: 'local',
-        profile_data: profileData,
-        created_at: new Date().toISOString()
-      };
-      
-      savedProfiles.push(newProfile);
-      // Removed AsyncStorage as it's no longer needed for local storage
-      // await AsyncStorage.setItem('saved_profiles', JSON.stringify(savedProfiles));
-    } catch (error) {
-              // Error saving profile locally
-      throw error;
-    }
+    const savedProfiles = await this.getLocalProfiles();
+    const newProfile: SavedProfile = {
+      id: Date.now().toString(),
+      user_id: 'local',
+      profile_data: profileData,
+      created_at: new Date().toISOString()
+    };
+    
+    savedProfiles.push(newProfile);
+    // Removed AsyncStorage as it's no longer needed for local storage
+    // await AsyncStorage.setItem('saved_profiles', JSON.stringify(savedProfiles));
   },
 
   async getLocalProfiles(): Promise<SavedProfile[]> {
-    try {
-      // Removed AsyncStorage as it's no longer needed for local storage
-      // const saved = await AsyncStorage.getItem('saved_profiles');
-      // return saved ? JSON.parse(saved) : [];
-              // getLocalProfiles operation is deprecated as local storage is no longer used
-      return []; // Placeholder
-    } catch (error) {
-              // Error getting local profiles
-      return [];
-    }
+    // Removed AsyncStorage as it's no longer needed for local storage
+    // const saved = await AsyncStorage.getItem('saved_profiles');
+    // return saved ? JSON.parse(saved) : [];
+    // getLocalProfiles operation is deprecated as local storage is no longer used
+    return []; // Placeholder
   },
 
-  async deleteLocalProfile(profileId: string): Promise<void> {
-    try {
-      // Removed AsyncStorage as it's no longer needed for local storage
-      // const savedProfiles = await this.getLocalProfiles();
-      // const filtered = savedProfiles.filter(p => p.id !== profileId);
-      // await AsyncStorage.setItem('saved_profiles', JSON.stringify(filtered));
-    } catch (error) {
-              // Error deleting local profile
-      throw error;
-    }
+  async deleteLocalProfile(): Promise<void> {
+    // Removed AsyncStorage as it's no longer needed for local storage
+    // const savedProfiles = await this.getLocalProfiles();
+    // const filtered = savedProfiles.filter(p => p.id !== profileId);
+    // await AsyncStorage.setItem('saved_profiles', JSON.stringify(filtered));
   },
 
-  async saveProfileToCloud(profileData: SavedProfile['profile_data']): Promise<string> {
+  async saveProfileToCloud(): Promise<string> {
     return firebaseRetry(async () => {
       // Removed addDoc as it requires authentication
       // const docRef = await addDoc(collection(db, 'user_saved_profiles'), {
@@ -877,7 +860,7 @@ export const SavedProfileAPI = {
     }, { operation: 'Get cloud profiles' });
   },
 
-  async deleteCloudProfile(profileId: string): Promise<void> {
+  async deleteCloudProfile(): Promise<void> {
     return firebaseRetry(async () => {
       // Removed deleteDoc as it requires authentication
       // const docRef = doc(db, 'user_saved_profiles', profileId);

@@ -1,7 +1,7 @@
-import { db, reconnectionManager } from './firebaseConfig';
+import { db } from './firebaseConfig';
 import { enableNetwork, disableNetwork, doc, getDoc } from 'firebase/firestore';
 import NetInfo from '@react-native-community/netinfo';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AsyncStorageUtils } from './asyncStorageUtils';
 
 export interface RecoveryAction {
   id: string;
@@ -30,7 +30,7 @@ class FirebaseRecoveryManager {
   }
 
   // Attempt to recover from Firebase connection issues
-  async attemptRecovery(operationName: string = 'Unknown operation'): Promise<boolean> {
+  async attemptRecovery(): Promise<boolean> {
     if (this.isRecovering) {
       // Recovery already in progress, skipping
       return false;
@@ -84,7 +84,7 @@ class FirebaseRecoveryManager {
       const testDoc = doc(db, '_connection_test', 'test');
       await getDoc(testDoc);
       return true;
-    } catch (error) {
+    } catch {
               // Firebase connection test failed
       return false;
     }
@@ -94,11 +94,11 @@ class FirebaseRecoveryManager {
   private async clearProblematicCache(): Promise<void> {
     try {
       // Clear any stored connection state
-      await AsyncStorage.removeItem('firebase_connection_state');
-      await AsyncStorage.removeItem('firebase_last_error');
+      await AsyncStorageUtils.removeItem('firebase_connection_state');
+      await AsyncStorageUtils.removeItem('firebase_last_error');
       
       // Cleared problematic cache data
-    } catch (error) {
+    } catch {
               // Failed to clear cache
     }
   }
@@ -131,8 +131,8 @@ class FirebaseRecoveryManager {
   // Save recovery history to AsyncStorage
   private async saveRecoveryHistory(): Promise<void> {
     try {
-      await AsyncStorage.setItem('firebase_recovery_history', JSON.stringify(this.recoveryHistory));
-    } catch (error) {
+      await AsyncStorageUtils.setItem('firebase_recovery_history', this.recoveryHistory);
+    } catch {
               // Failed to save recovery history
     }
   }
@@ -140,11 +140,11 @@ class FirebaseRecoveryManager {
   // Load recovery history from AsyncStorage
   private async loadRecoveryHistory(): Promise<void> {
     try {
-      const saved = await AsyncStorage.getItem('firebase_recovery_history');
+      const saved = await AsyncStorageUtils.getItem<RecoveryAction[]>('firebase_recovery_history');
       if (saved) {
-        this.recoveryHistory = JSON.parse(saved);
+        this.recoveryHistory = saved;
       }
-    } catch (error) {
+    } catch {
               // Failed to load recovery history
       this.recoveryHistory = [];
     }
@@ -214,8 +214,8 @@ class FirebaseRecoveryManager {
 const firebaseRecoveryManager = FirebaseRecoveryManager.getInstance();
 
 // Export utility functions
-export const attemptFirebaseRecovery = (operationName?: string): Promise<boolean> => {
-  return firebaseRecoveryManager.attemptRecovery(operationName);
+export const attemptFirebaseRecovery = (): Promise<boolean> => {
+  return firebaseRecoveryManager.attemptRecovery();
 };
 
 export const getFirebaseRecoveryStats = () => {

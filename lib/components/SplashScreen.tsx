@@ -1,12 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, useColorScheme, Image } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 
-interface SplashScreenProps {
-  progress?: number; // Keep for backward compatibility but won't be used
-}
 
-export default function SplashScreen({ progress = 0 }: SplashScreenProps) {
+
+
+export default function SplashScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 

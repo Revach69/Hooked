@@ -68,3 +68,5 @@ web-build/
 
 # Flipper
 ios/Pods/
+
+.env.local

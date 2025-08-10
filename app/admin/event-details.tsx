@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,6 @@ import {
   useColorScheme,
   SafeAreaView,
   Share,
-  Linking,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { 
@@ -21,17 +20,14 @@ import {
   MessageCircle, 
   Edit, 
   Download, 
-  QrCode, 
   Trash2,
   MapPin,
   Calendar,
   Clock,
   Share2,
-  Copy,
-  UserMinus
+  Copy
 } from 'lucide-react-native';
 import { EventAPI, EventProfileAPI, LikeAPI, MessageAPI, type Event } from '../../lib/firebaseApi';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import QRCode from 'react-native-qrcode-svg';
 
 export default function EventDetails() {
@@ -49,13 +45,7 @@ export default function EventDetails() {
   const [isLoading, setIsLoading] = useState(true);
   const [qrCodeValue, setQrCodeValue] = useState('');
 
-  useEffect(() => {
-    if (eventId) {
-      loadEventDetails();
-    }
-  }, [eventId]);
-
-  const loadEventDetails = async () => {
+  const loadEventDetails = useCallback(async () => {
     try {
       setIsLoading(true);
       
@@ -88,13 +78,18 @@ export default function EventDetails() {
         totalMatches: mutualLikes.length,
         totalMessages: messages.length,
       });
-    } catch (error) {
-              // Error loading event details
+    } catch {
       Alert.alert('Error', 'Failed to load event details');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [eventId]);
+
+  useEffect(() => {
+    if (eventId) {
+      loadEventDetails();
+    }
+  }, [eventId, loadEventDetails]);
 
   const handleBack = () => {
     router.back();
@@ -138,7 +133,7 @@ export default function EventDetails() {
               await EventAPI.delete(eventId);
               Alert.alert('Success', 'Event deleted successfully');
               router.back();
-            } catch (error) {
+            } catch {
               // Error deleting event
               Alert.alert('Error', 'Failed to delete event');
             }
@@ -158,7 +153,7 @@ export default function EventDetails() {
         message: `Join ${event.name} on Hooked!\n\nEvent Code: ${event.event_code}\nJoin Link: ${joinUrl}`,
         title: event.name,
       });
-    } catch (error) {
+    } catch {
               // Error sharing event
     }
   };
@@ -172,7 +167,7 @@ export default function EventDetails() {
       // For React Native, you might need to use a clipboard library
       // For now, we'll just show the URL
       Alert.alert('Join URL', joinUrl);
-    } catch (error) {
+    } catch {
               // Error copying URL
     }
   };

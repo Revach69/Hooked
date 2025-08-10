@@ -15,15 +15,12 @@ import {
 import { router } from 'expo-router';
 import { 
   ArrowLeft, 
-  Save,
   Calendar,
-  MapPin,
   Hash,
   Camera,
   X
 } from 'lucide-react-native';
 import { EventAPI, AuthAPI } from '../../lib/firebaseApi';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -71,8 +68,7 @@ export default function CreateEvent() {
       if (!result.canceled && result.assets[0]) {
         setSelectedImage(result.assets[0].uri);
       }
-    } catch (error) {
-              // Error picking image
+    } catch {
       Alert.alert('Error', 'Failed to pick image. Please try again.');
     }
   };
@@ -95,8 +91,7 @@ export default function CreateEvent() {
       // Get download URL
       const downloadURL = await getDownloadURL(storageRef);
       return downloadURL;
-    } catch (error) {
-              // Error uploading image
+    } catch {
       Alert.alert('Error', 'Failed to upload image. Please try again.');
       return null;
     } finally {
@@ -167,8 +162,7 @@ export default function CreateEvent() {
           onPress: () => router.back()
         }
       ]);
-    } catch (error) {
-              // Error creating event
+    } catch {
       Alert.alert('Error', 'Failed to create event. Please try again.');
     } finally {
       setIsLoading(false);
@@ -523,7 +517,7 @@ export default function CreateEvent() {
               keyboardType="url"
             />
             <Text style={[styles.label, { fontSize: 12, color: isDark ? '#9ca3af' : '#6b7280', marginTop: 4 }]}>
-              This link will be used for the "Join Event" button on the website
+              This link will be used for the &quot;Join Event&quot; button on the website
             </Text>
           </View>
 
@@ -594,7 +588,7 @@ export default function CreateEvent() {
                 )}
               </View>
               <Text style={styles.checkboxLabel}>
-                Make this event private (won't be displayed on the IRL page)
+                Make this event private (won&apos;t be displayed on the IRL page)
               </Text>
             </TouchableOpacity>
           </View>

@@ -1,4 +1,4 @@
-import { showMatchAlert, showMatchToast, clearActiveAlerts, isAlertActive } from './matchAlertService';
+import { showMatchAlert, clearActiveAlerts, isAlertActive } from './matchAlertService';
 
 // Mock React Native Alert
 jest.mock('react-native', () => ({

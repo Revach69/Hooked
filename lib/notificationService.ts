@@ -1,8 +1,8 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-import { doc, setDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { db, auth } from './firebaseConfig';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { db } from './firebaseConfig';
+import { AsyncStorageUtils } from './asyncStorageUtils';
 
 /**
  * Initialize notification channels for Android
@@ -45,7 +45,7 @@ export async function initializeNotificationChannels(): Promise<void> {
         enableVibrate: true,
         showBadge: true,
       });
-    } catch (error) {
+    } catch {
       // Error creating notification channels
     }
   }
@@ -73,8 +73,8 @@ export async function storePushToken(sessionId: string, token: string): Promise<
     await setDoc(doc(db, 'push_tokens', `${sessionId}_${Platform.OS}`), tokenData);
     
     // Also store locally for backup
-    await AsyncStorage.setItem(`pushToken_${sessionId}`, token);
-  } catch (error) {
+    await AsyncStorageUtils.setItem(`pushToken_${sessionId}`, token);
+  } catch {
     // Error storing push token
   }
 }
@@ -85,7 +85,7 @@ export async function storePushToken(sessionId: string, token: string): Promise<
 export async function getPushToken(sessionId: string): Promise<string | null> {
   try {
     // Try to get from local storage first
-    const localToken = await AsyncStorage.getItem(`pushToken_${sessionId}`);
+    const localToken = await AsyncStorageUtils.getItem<string>(`pushToken_${sessionId}`);
     if (localToken) {
       return localToken;
     }
@@ -98,7 +98,7 @@ export async function getPushToken(sessionId: string): Promise<string | null> {
     }
 
     return null;
-  } catch (error) {
+  } catch {
     // Error getting push token
     return null;
   }
@@ -123,7 +123,7 @@ export async function sendPushNotificationToSession(
     // Send notification to the device
     const success = await sendPushNotification(token, notification);
     return success;
-  } catch (error) {
+  } catch {
     // Error sending push notification to session
     return false;
   }
@@ -157,7 +157,6 @@ async function sendPushNotification(
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
       // Failed to send push notification
       return false;
     }
@@ -172,22 +171,13 @@ async function sendPushNotification(
 
     // Push notification sent successfully
     return true;
-  } catch (error) {
+  } catch {
     // Error sending push notification
     return false;
   }
 }
 
-/**
- * Get all push tokens for a user from Firestore
- * NOTE: This is disabled for the session-based app since it requires Firebase Auth
- */
-async function getUserPushTokens(userId: string): Promise<Array<{ token: string; platform: string }>> {
-  // Push tokens are not supported in the session-based version
-  // since they require Firebase Auth and the app doesn't use authentication
-  // Push tokens not supported in session-based app
-  return [];
-}
+
 
 /**
  * Send match notification
@@ -234,7 +224,7 @@ export async function sendMatchNotification(
         trigger: null, // Send immediately
       });
       return true;
-    } catch (error) {
+    } catch {
       // Fallback to push notification
     }
   }
@@ -252,7 +242,7 @@ export async function sendLikeNotification(
 ): Promise<boolean> {
   try {
     // Check if user is currently in the app
-    const currentSessionId = await AsyncStorage.getItem('currentSessionId');
+    const currentSessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
     const isUserInApp = currentSessionId === sessionId;
     
     // If user is in app, don't send push notification (toast will be shown instead)
@@ -262,7 +252,7 @@ export async function sendLikeNotification(
     
     // Additional check: look for recent activity timestamp
     const lastActivityKey = `lastActivity_${sessionId}`;
-    const lastActivity = await AsyncStorage.getItem(lastActivityKey);
+    const lastActivity = await AsyncStorageUtils.getItem<string>(lastActivityKey);
     
     if (lastActivity) {
       const lastActivityTime = new Date(lastActivity).getTime();
@@ -285,7 +275,7 @@ export async function sendLikeNotification(
     };
 
     return await sendPushNotificationToSession(sessionId, notification);
-  } catch (error) {
+  } catch {
     // Error sending like notification
     return false;
   }
@@ -325,9 +315,8 @@ export async function sendMessageNotification(
     // For cross-device communication, always use push notifications
     // Local notifications are only for the current device, which is not what we want here
     return await sendPushNotificationToSession(sessionId, notification);
-  } catch (error) {
+  } catch {
     // Error sending message notification
-    console.error('Error sending message notification:', error);
     return false;
   }
 }
@@ -371,7 +360,7 @@ export async function scheduleLocalNotification(
     
     // Local notification scheduled
     return identifier;
-  } catch (error) {
+  } catch {
     // Error scheduling local notification
     return null;
   }
@@ -384,7 +373,7 @@ export async function cancelScheduledNotification(identifier: string): Promise<v
   try {
     await Notifications.cancelScheduledNotificationAsync(identifier);
     // Cancelled scheduled notification
-  } catch (error) {
+  } catch {
     // Error cancelling scheduled notification
   }
 }
@@ -396,7 +385,7 @@ export async function cancelAllScheduledNotifications(): Promise<void> {
   try {
     await Notifications.cancelAllScheduledNotificationsAsync();
     // Cancelled all scheduled notifications
-  } catch (error) {
+  } catch {
     // Error cancelling all scheduled notifications
   }
 }
@@ -408,7 +397,7 @@ export async function getAllScheduledNotifications(): Promise<Notifications.Noti
   try {
     const notifications = await Notifications.getAllScheduledNotificationsAsync();
     return notifications;
-  } catch (error) {
+  } catch {
     // Error getting scheduled notifications
     return [];
   }

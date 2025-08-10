@@ -17,12 +17,11 @@ import {
 } from 'react-native';
 import { ArrowLeft, Send, Flag, X } from 'lucide-react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '../lib/firebaseConfig';
 import { EventProfileAPI, MessageAPI, ReportAPI } from '../lib/firebaseApi';
-import { markMessagesAsSeen } from '../lib/messageNotificationHelper';
 import UserProfileModal from '../lib/UserProfileModal';
 import { formatTime } from '../lib/utils';
 
@@ -59,9 +58,65 @@ export default function Chat() {
   // Single ref to hold unsubscribe function
   const listenerRef = useRef<(() => void) | null>(null);
 
+  const initializeChat = async () => {
+    try {
+      const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
+      const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
+      
+      if (!sessionId || !eventId || !matchId) {
+        Alert.alert('Error', 'Missing session information');
+        router.back();
+        return;
+      }
+
+      setCurrentSessionId(sessionId);
+      setCurrentEventId(eventId);
+
+      // Verify that the current user's profile exists
+      const currentUserProfiles = await EventProfileAPI.filter({
+        session_id: sessionId,
+        event_id: eventId
+      });
+      
+      if (currentUserProfiles.length === 0) {
+        // User profile doesn't exist (user left event and deleted profile)
+        // Clear all AsyncStorage data and redirect to home
+        await AsyncStorageUtils.multiRemove([
+          'currentEventId',
+          'currentSessionId',
+          'currentEventCode',
+          'currentProfileColor',
+          'currentProfilePhotoUrl'
+        ]);
+        router.replace('/home');
+        return;
+      }
+
+      // Get match profile - don't filter by visibility for matches
+      const matchProfiles = await EventProfileAPI.filter({
+        session_id: matchId as string,
+        event_id: eventId
+      });
+      
+      if (matchProfiles.length > 0) {
+        setMatchProfile(matchProfiles[0]);
+      } else {
+        // If profile not found, it might be invisible - try to get it directly
+        Alert.alert('Error', 'Match profile not found');
+        router.back();
+        return;
+      }
+
+      setIsLoading(false);
+    } catch {
+      Alert.alert('Error', 'Failed to load chat');
+      router.back();
+    }
+  };
+
   useEffect(() => {
     initializeChat();
-  }, []);
+  }, [initializeChat]);
 
   // Mark messages as seen when entering chat
   useEffect(() => {
@@ -71,7 +126,7 @@ export default function Chat() {
           const { markMessagesAsSeen } = await import('../lib/messageNotificationHelper');
           await markMessagesAsSeen(currentEventId, matchId as string, currentSessionId);
       
-        } catch (error) {
+        } catch {
           // Error marking messages as seen
         }
       };
@@ -226,16 +281,16 @@ export default function Chat() {
             });
           }
 
-        } catch (error) {
+        } catch {
           // Handle error silently
         }
-              }, (error) => {
+              }, () => {
           // Handle error silently
         });
 
       listenerRef.current = unsubscribe;
 
-    } catch (error) {
+    } catch {
       // Handle error silently
     }
 
@@ -247,61 +302,7 @@ export default function Chat() {
     };
   }, [currentEventId, currentSessionId, matchId]);
 
-  const initializeChat = async () => {
-    try {
-      const sessionId = await AsyncStorage.getItem('currentSessionId');
-      const eventId = await AsyncStorage.getItem('currentEventId');
-      
-      if (!sessionId || !eventId || !matchId) {
-        Alert.alert('Error', 'Missing session information');
-        router.back();
-        return;
-      }
 
-      setCurrentSessionId(sessionId);
-      setCurrentEventId(eventId);
-
-      // Verify that the current user's profile exists
-      const currentUserProfiles = await EventProfileAPI.filter({
-        session_id: sessionId,
-        event_id: eventId
-      });
-      
-      if (currentUserProfiles.length === 0) {
-        // User profile doesn't exist (user left event and deleted profile)
-        // Clear all AsyncStorage data and redirect to home
-        await AsyncStorage.multiRemove([
-          'currentEventId',
-          'currentSessionId',
-          'currentEventCode',
-          'currentProfileColor',
-          'currentProfilePhotoUrl'
-        ]);
-        router.replace('/home');
-        return;
-      }
-
-      // Get match profile - don't filter by visibility for matches
-      const matchProfiles = await EventProfileAPI.filter({
-        session_id: matchId as string,
-        event_id: eventId
-      });
-      
-      if (matchProfiles.length > 0) {
-        setMatchProfile(matchProfiles[0]);
-      } else {
-        // If profile not found, it might be invisible - try to get it directly
-        Alert.alert('Error', 'Match profile not found');
-        router.back();
-        return;
-      }
-
-      setIsLoading(false);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to load chat');
-      router.back();
-    }
-  };
 
   const sendMessage = async () => {
     if (!newMessage.trim() || !currentEventId || !currentSessionId || !matchId) return;
@@ -344,7 +345,7 @@ export default function Chat() {
         seen: false
       };
       
-      const newMessageDoc = await MessageAPI.create(messageData);
+      await MessageAPI.create(messageData);
       setNewMessage('');
       
       // Trigger notification for the new message
@@ -357,11 +358,10 @@ export default function Chat() {
           newMessage.trim(),
           currentUserProfile.first_name
         );
-      } catch (notificationError) {
+      } catch {
         // Error handling notification - don't block message sending
       }
-    } catch (error) {
-              // Error sending message
+    } catch {
       Alert.alert('Error', 'Failed to send message');
     } finally {
       setIsSending(false);
@@ -401,8 +401,7 @@ export default function Chat() {
       
       setShowReportModal(false);
       setReportReason('');
-    } catch (error) {
-              // Error submitting report
+    } catch {
       Alert.alert('Error', 'Failed to submit report');
     } finally {
       setIsSubmittingReport(false);

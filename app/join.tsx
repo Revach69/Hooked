@@ -1,17 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   ActivityIndicator,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   useColorScheme,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { AlertCircle } from 'lucide-react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { EventAPI, EventProfileAPI } from '../lib/firebaseApi';
+import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
+import { EventAPI } from '../lib/firebaseApi';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMobileAsyncOperation } from '../lib/hooks/useMobileErrorHandling';
 import MobileOfflineStatusBar from '../lib/components/MobileOfflineStatusBar';
@@ -23,13 +22,9 @@ export default function JoinPage() {
   const [isRetrying, setIsRetrying] = useState(false);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const { executeOperationWithOfflineFallback, showErrorAlert } = useMobileAsyncOperation();
+  const { executeOperationWithOfflineFallback } = useMobileAsyncOperation();
 
-  useEffect(() => {
-    handleEventJoin();
-  }, []);
-
-  const handleEventJoin = async () => {
+  const handleEventJoin = useCallback(async () => {
     try {
       if (!code) {
         setError("No event code provided.");
@@ -80,8 +75,7 @@ export default function JoinPage() {
         return;
       }
       
-      // Check if event is active using UTC time comparison
-      const isActive = foundEvent.starts_at <= nowUTC && nowUTC < foundEvent.expires_at;
+
       
       if (nowUTC < foundEvent.starts_at) {
         setError("This event hasn't started yet. Try again soon!");
@@ -98,12 +92,16 @@ export default function JoinPage() {
       // Event is valid and active, proceed to create profile
       await createEventProfile(foundEvent);
     } catch (error: any) {
-              // Event join failed
+      // Event join failed
       const errorMessage = error.message || 'Failed to join event. Please try again.';
       setError(errorMessage);
       setIsLoading(false);
     }
-  };
+  }, [code, executeOperationWithOfflineFallback]);
+
+  useEffect(() => {
+    handleEventJoin();
+  }, [handleEventJoin]);
 
   const createEventProfile = async (event: any) => {
     try {
@@ -111,9 +109,9 @@ export default function JoinPage() {
       const sessionId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
       
       // Store event and session info
-      await AsyncStorage.setItem('currentEventId', event.id);
-      await AsyncStorage.setItem('currentSessionId', sessionId);
-      await AsyncStorage.setItem('currentEventCode', event.event_code);
+      await AsyncStorageUtils.setItem('currentEventId', event.id);
+      await AsyncStorageUtils.setItem('currentSessionId', sessionId);
+      await AsyncStorageUtils.setItem('currentEventCode', event.event_code);
 
       // Register for push notifications
       try {
@@ -126,13 +124,13 @@ export default function JoinPage() {
           const { storePushToken } = await import('../lib/notificationService');
           await storePushToken(sessionId, token.data);
         }
-      } catch (error) {
+      } catch {
         // Error registering push token - continue without it
       }
 
       // Navigate to consent page
       router.replace('/consent');
-    } catch (error) {
+    } catch {
       // Failed to create event profile
       setError("Failed to set up your event session. Please try again.");
       setIsLoading(false);
@@ -145,8 +143,8 @@ export default function JoinPage() {
     
     try {
       await handleEventJoin();
-    } catch (error) {
-              // Retry failed
+    } catch {
+      // Retry failed
       setError("Retry failed. Please check your connection and try again.");
     } finally {
       setIsRetrying(false);

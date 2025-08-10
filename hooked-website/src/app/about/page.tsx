@@ -2,6 +2,7 @@
 
 import Header from "../../components/Header";
 import AnimatedArrow from "../../components/AnimatedArrow";
+import FadeInImage from "../../components/FadeInImage";
 import { useEffect, useState, useRef } from "react";
 
 export default function About() {
@@ -34,13 +35,14 @@ export default function About() {
       }
     );
 
-    if (sectionRef.current) {
-      observer.observe(sectionRef.current);
+    const currentSectionRef = sectionRef.current;
+    if (currentSectionRef) {
+      observer.observe(currentSectionRef);
     }
 
     return () => {
-      if (sectionRef.current) {
-        observer.unobserve(sectionRef.current);
+      if (currentSectionRef) {
+        observer.unobserve(currentSectionRef);
       }
     };
   }, []);
@@ -62,11 +64,17 @@ export default function About() {
             
             {/* Right side - hero image */}
             <div className="flex justify-center lg:justify-end">
-              <div className="w-full max-w-md h-96 rounded-2xl overflow-hidden">
-                <img 
+              <div className="relative w-[300px] h-[384px] md:w-[400px] md:h-[384px]">
+                <FadeInImage 
                   src="/about - hero.JPG" 
                   alt="Hooked - Meet in the moment" 
-                  className="w-full h-full object-cover"
+                  fill
+                  className="rounded-lg shadow-2xl object-cover filter drop-shadow-lg"
+                  style={{
+                    boxShadow: '0 20px 40px rgba(147, 51, 234, 0.15), 0 10px 20px rgba(236, 72, 153, 0.1)'
+                  }}
+                  priority
+                  fadeInDuration={50}
                 />
               </div>
             </div>

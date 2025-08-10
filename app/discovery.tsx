@@ -11,20 +11,19 @@ import {
   Dimensions,
   AppState,
   Modal,
-  FlatList,
   useColorScheme,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Heart, Filter, Users, User, MessageCircle, X } from 'lucide-react-native';
 import { EventProfileAPI, LikeAPI, EventAPI } from '../lib/firebaseApi';
 import { sendMatchNotification, sendLikeNotification } from '../lib/notificationService';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Slider from '@react-native-community/slider';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebaseConfig';
 import UserProfileModal from '../lib/UserProfileModal';
-import Toast from 'react-native-toast-message';
+
 import { updateUserActivity } from '../lib/messageNotificationHelper';
 import { usePerformanceMonitoring } from '../lib/hooks/usePerformanceMonitoring';
 
@@ -40,7 +39,7 @@ const EXTENDED_INTERESTS = [
   'yoga', 'gaming', 'comedy', 'startups', 'fashion', 'spirituality', 'volunteering', 'crypto', 'cocktails', 'politics', 'hiking', 'design', 'podcasts', 'pets', 'wellness'
 ];
 
-const ALL_INTERESTS = [...BASIC_INTERESTS, ...EXTENDED_INTERESTS];
+
 
 export default function Discovery() {
   const colorScheme = useColorScheme();
@@ -49,10 +48,8 @@ export default function Discovery() {
   // Performance monitoring
   const { 
     trackUserInteraction, 
-    stopUserInteraction, 
     trackAsyncOperation,
-    trackCustomMetric,
-    trackCustomAttribute 
+    trackCustomMetric
   } = usePerformanceMonitoring({ 
     screenName: 'discovery',
     enableScreenTracking: true,
@@ -131,7 +128,7 @@ export default function Discovery() {
         const { hasUnseenMessages } = await import('../lib/messageNotificationHelper');
         const hasUnseen = await hasUnseenMessages(currentEvent.id, currentSessionId);
         setHasUnreadMessages(hasUnseen);
-      } catch (error) {
+      } catch {
         // Error checking unseen messages
       }
     };
@@ -154,19 +151,19 @@ export default function Discovery() {
         where('to_profile_id', '==', currentUserProfile.id)
       );
 
-      const unsubscribe = onSnapshot(messagesQuery, async (snapshot) => {
+      const unsubscribe = onSnapshot(messagesQuery, async () => {
         // When messages change, immediately check unseen status
         try {
           const { hasUnseenMessages } = await import('../lib/messageNotificationHelper');
           const hasUnseen = await hasUnseenMessages(currentEvent.id, currentSessionId);
           setHasUnreadMessages(hasUnseen);
-        } catch (error) {
+        } catch {
           // Error checking unseen messages from real-time listener
         }
       });
 
       return () => unsubscribe();
-    } catch (error) {
+    } catch {
       // Error setting up real-time message listener
     }
   }, [currentEvent?.id, currentSessionId, currentUserProfile?.id]);
@@ -199,7 +196,7 @@ export default function Discovery() {
           setCurrentUserProfile(userProfile);
 
           if (!userProfile) {
-            AsyncStorage.multiRemove([
+            AsyncStorageUtils.multiRemove([
               'currentEventId',
               'currentSessionId',
               'currentEventCode',
@@ -230,16 +227,16 @@ export default function Discovery() {
               setupOtherListeners();
             }
           }
-        } catch (error) {
+        } catch {
           // Handle error silently
         }
-      }, (error) => {
+      }, () => {
         // Handle error silently
       });
 
       listenersRef.current.userProfile = userProfileUnsubscribe;
 
-    } catch (error) {
+    } catch {
       // Handle error silently
     }
 
@@ -272,7 +269,7 @@ export default function Discovery() {
           })) as any[];
           const otherUsersProfiles = allVisibleProfiles.filter(p => p.session_id !== currentSessionId);
           setProfiles(otherUsersProfiles);
-        } catch (error) {
+        } catch {
           // Error in other profiles listener
         }
               }, (error) => {
@@ -303,7 +300,7 @@ export default function Discovery() {
           })) as any[];
           
           setLikedProfiles(new Set(likes.map(like => like.liked_session_id)));
-        } catch (error) {
+        } catch {
           // Error in likes listener
         }
               }, (error) => {
@@ -326,7 +323,7 @@ export default function Discovery() {
         where('is_mutual', '==', true)
       );
 
-      const mutualMatchesUnsubscribe = onSnapshot(mutualMatchesQuery, async (snapshot) => {
+      const mutualMatchesUnsubscribe = onSnapshot(mutualMatchesQuery, async () => {
         // Match notifications are now handled globally in _layout.tsx
         // This listener is kept for any future local match-related functionality
       }, (error) => {
@@ -342,7 +339,7 @@ export default function Discovery() {
 
       listenersRef.current.mutualMatches = mutualMatchesUnsubscribe;
 
-    } catch (error) {
+    } catch {
       // Error setting up other listeners
     }
   };
@@ -353,7 +350,7 @@ export default function Discovery() {
       if (listenersRef.current.userProfile) {
         try {
           listenersRef.current.userProfile();
-        } catch (error) {
+        } catch {
           // Handle error silently
         }
         listenersRef.current.userProfile = undefined;
@@ -363,7 +360,7 @@ export default function Discovery() {
       if (listenersRef.current.otherProfiles) {
         try {
           listenersRef.current.otherProfiles();
-        } catch (error) {
+        } catch {
           // Handle error silently
         }
         listenersRef.current.otherProfiles = undefined;
@@ -373,7 +370,7 @@ export default function Discovery() {
       if (listenersRef.current.likes) {
         try {
           listenersRef.current.likes();
-        } catch (error) {
+        } catch {
           // Handle error silently
         }
         listenersRef.current.likes = undefined;
@@ -383,12 +380,12 @@ export default function Discovery() {
       if (listenersRef.current.mutualMatches) {
         try {
           listenersRef.current.mutualMatches();
-        } catch (error) {
+        } catch {
           // Handle error silently
         }
         listenersRef.current.mutualMatches = undefined;
       }
-    } catch (error) {
+    } catch {
       // Handle error silently
     }
   };
@@ -399,9 +396,9 @@ export default function Discovery() {
   }, [profiles, currentUserProfile, filters]);
 
   const initializeSession = async () => {
-    const eventId = await AsyncStorage.getItem('currentEventId');
-    const sessionId = await AsyncStorage.getItem('currentSessionId');
-    const profilePhotoUrl = await AsyncStorage.getItem('currentProfilePhotoUrl');
+          const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
+      const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
+      const profilePhotoUrl = await AsyncStorageUtils.getItem<string>('currentProfilePhotoUrl');
     
     if (!eventId || !sessionId) {
       router.replace('/home');
@@ -416,7 +413,7 @@ export default function Discovery() {
         setCurrentEvent(events[0]);
       } else {
         // Event doesn't exist, clear all data and redirect to home
-        await AsyncStorage.multiRemove([
+        await AsyncStorageUtils.multiRemove([
           'currentEventId',
           'currentSessionId',
           'currentEventCode',
@@ -436,7 +433,7 @@ export default function Discovery() {
       if (userProfiles.length === 0) {
         // Profile doesn't exist in database (user left event and deleted profile)
         // Clear all AsyncStorage data and redirect to home
-        await AsyncStorage.multiRemove([
+        await AsyncStorageUtils.multiRemove([
           'currentEventId',
           'currentSessionId',
           'currentEventCode',
@@ -455,9 +452,9 @@ export default function Discovery() {
       }
 
       // Likes are now handled by real-time listener
-    } catch (error) {
+    } catch {
       // Handle error silently - if there's an error, clear data and redirect to home
-      await AsyncStorage.multiRemove([
+      await AsyncStorageUtils.multiRemove([
         'currentEventId',
         'currentSessionId',
         'currentEventCode',
@@ -515,7 +512,7 @@ export default function Discovery() {
   const handleLike = async (likedProfile: any) => {
     if (likedProfiles.has(likedProfile.session_id) || !currentUserProfile) return;
 
-    const eventId = await AsyncStorage.getItem('currentEventId');
+    const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
     const likerSessionId = currentUserProfile.session_id;
 
     if (!eventId) return;
@@ -558,7 +555,7 @@ export default function Discovery() {
         await trackAsyncOperation('send_like_notification', async () => {
           return await sendLikeNotification(likedProfile.session_id, currentUserProfile.first_name);
         });
-      } catch (notificationError) {
+      } catch {
         // Handle notification error silently
       }
 
@@ -601,7 +598,7 @@ export default function Discovery() {
           await trackAsyncOperation('send_match_notification_to_first_liker', async () => {
             return await sendMatchNotification(likedProfile.session_id, currentUserProfile.first_name, true);
           });
-        } catch (notificationError) {
+        } catch {
           // Handle notification error silently
         }
 
@@ -609,7 +606,7 @@ export default function Discovery() {
         // This prevents duplicate notifications and ensures correct timing
         // The listener will determine who gets toast vs alert based on liker/liked roles
       }
-    } catch (error) {
+    } catch {
               // Error creating like
       // Revert optimistic update on error
       setLikedProfiles(prev => {

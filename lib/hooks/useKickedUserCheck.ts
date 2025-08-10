@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AsyncStorageUtils } from '../asyncStorageUtils';
 import { KickedUserAPI } from '../firebaseApi';
 import { router } from 'expo-router';
 
@@ -16,8 +16,8 @@ export const useKickedUserCheck = () => {
 
   const checkForKickedUser = async () => {
     try {
-      const sessionId = await AsyncStorage.getItem('currentSessionId');
-      const eventId = await AsyncStorage.getItem('currentEventId');
+      const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
+      const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
       
       if (!sessionId || !eventId) {
         setIsChecking(false);
@@ -38,7 +38,7 @@ export const useKickedUserCheck = () => {
         });
 
         // Clear user session data
-        await AsyncStorage.multiRemove([
+        await AsyncStorageUtils.multiRemove([
           'currentEventId',
           'currentSessionId',
           'currentEventCode',
@@ -48,7 +48,7 @@ export const useKickedUserCheck = () => {
         // Delete the kicked user record to prevent showing the popup again
         await KickedUserAPI.delete(kickedUserRecord.id);
       }
-    } catch (error) {
+    } catch {
               // Error checking for kicked user
     } finally {
       setIsChecking(false);

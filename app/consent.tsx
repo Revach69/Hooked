@@ -15,12 +15,11 @@ import {
   useColorScheme,
   Switch,
   Linking,
-  I18nManager,
 } from 'react-native';
 import { router } from 'expo-router';
-import { AuthAPI, EventProfileAPI, EventAPI, StorageAPI } from '../lib/firebaseApi';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { User as UserIcon, Camera, Upload, ArrowLeft } from 'lucide-react-native';
+import { EventProfileAPI, EventAPI, StorageAPI } from '../lib/firebaseApi';
+import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
+import { Upload, ArrowLeft } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { SurveyService } from '../lib/surveyService';
@@ -58,21 +57,16 @@ export default function Consent() {
 
   // Helper function to re-upload saved photo for new event
   const reuploadSavedPhoto = async (photoUrl: string): Promise<string> => {
-    try {
-      // Create a file object for the remote URL
-      const fileObject = {
-        uri: photoUrl,
-        name: `saved-profile-photo-${Date.now()}.jpg`,
-        type: 'image/jpeg'
-      };
+    // Create a file object for the remote URL
+    const fileObject = {
+      uri: photoUrl,
+      name: `saved-profile-photo-${Date.now()}.jpg`,
+      type: 'image/jpeg'
+    };
 
-      // Upload to Firebase Storage for the new event
-      const { file_url } = await StorageAPI.uploadFile(fileObject);
-      return file_url;
-    } catch (error) {
-              // Error re-uploading photo
-      throw error;
-    }
+    // Upload to Firebase Storage for the new event
+    const { file_url } = await StorageAPI.uploadFile(fileObject);
+    return file_url;
   };
 
 
@@ -90,7 +84,7 @@ export default function Consent() {
 
   useEffect(() => {
     const fetchEvent = async () => {
-      const eventId = await AsyncStorage.getItem('currentEventId');
+      const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
       if (!eventId) {
         router.replace('/home');
         return;
@@ -101,7 +95,7 @@ export default function Consent() {
           const foundEvent = events[0];
           setEvent(foundEvent);
         }
-      } catch (err) {
+      } catch {
         // Handle error silently
       }
     };
@@ -112,8 +106,8 @@ export default function Consent() {
   useEffect(() => {
     const loadSavedProfile = async () => {
       try {
-        const savedProfile = await AsyncStorage.getItem('savedProfileData');
-        const savedPhotoUrl = await AsyncStorage.getItem('savedProfilePhotoUrl');
+        const savedProfile = await AsyncStorageUtils.getItem<string>('savedProfileData');
+        const savedPhotoUrl = await AsyncStorageUtils.getItem<string>('savedProfilePhotoUrl');
         
         if (savedProfile) {
           const parsedProfile = JSON.parse(savedProfile);
@@ -127,7 +121,7 @@ export default function Consent() {
                 ...parsedProfile,
                 profile_photo_url: newPhotoUrl
               });
-            } catch (photoError) {
+            } catch {
               // If photo re-upload fails, load data without photo
               setFormData({
                 ...parsedProfile,
@@ -147,7 +141,7 @@ export default function Consent() {
           // Set the remember profile toggle to true if we have saved data
           setRememberProfile(true);
         }
-      } catch (error) {
+      } catch {
         // Error loading saved profile
       }
     };
@@ -175,7 +169,7 @@ export default function Consent() {
           }
         ]
       );
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "Failed to open photo options. Please try again.");
     }
   };
@@ -208,8 +202,7 @@ export default function Consent() {
       if (!result.canceled && result.assets && result.assets[0]) {
         await processImageAsset(result.assets[0]);
       }
-    } catch (error) {
-              // Camera capture error
+    } catch {
       Alert.alert("Error", "Failed to capture photo. Please try again.");
     }
   };
@@ -242,8 +235,7 @@ export default function Consent() {
       if (!result.canceled && result.assets && result.assets[0]) {
         await processImageAsset(result.assets[0]);
       }
-    } catch (error) {
-              // Gallery pick error
+    } catch {
       Alert.alert("Error", "Failed to pick image. Please try again.");
     }
   };
@@ -290,7 +282,7 @@ export default function Consent() {
 
           // Save photo URL locally if "remember profile" is checked
           if (rememberProfile) {
-            await AsyncStorage.setItem('savedProfilePhotoUrl', file_url);
+            await AsyncStorageUtils.setItem('savedProfilePhotoUrl', file_url);
           }
           
           // Success - break out of retry loop
@@ -369,17 +361,17 @@ export default function Consent() {
           // Validate that we have the required data before saving
           if (profileDataToSave.first_name && profileDataToSave.age && 
               profileDataToSave.gender_identity && profileDataToSave.interested_in) {
-            await AsyncStorage.setItem('savedProfileData', JSON.stringify(profileDataToSave));
+            await AsyncStorageUtils.setItem('savedProfileData', JSON.stringify(profileDataToSave));
           }
-        } catch (error) {
+        } catch {
           // Error saving profile data
         }
       } else {
         // Clear saved profile data if not checked
         try {
-          await AsyncStorage.removeItem('savedProfileData');
-          await AsyncStorage.removeItem('savedProfilePhotoUrl');
-        } catch (error) {
+          await AsyncStorageUtils.removeItem('savedProfileData');
+          await AsyncStorageUtils.removeItem('savedProfilePhotoUrl');
+        } catch {
           // Error clearing profile data
         }
       }
@@ -401,9 +393,9 @@ export default function Consent() {
       await EventProfileAPI.create(profileData);
 
       // Save session and profile data to AsyncStorage
-      await AsyncStorage.setItem('currentSessionId', sessionId);
-      await AsyncStorage.setItem('currentProfilePhotoUrl', formData.profile_photo_url);
-      await AsyncStorage.setItem('currentProfileColor', validColor);
+      await AsyncStorageUtils.setItem('currentSessionId', sessionId);
+      await AsyncStorageUtils.setItem('currentProfilePhotoUrl', formData.profile_photo_url);
+      await AsyncStorageUtils.setItem('currentProfileColor', validColor);
       
       // Add event to user's history for survey purposes
       await SurveyService.addEventToHistory(
@@ -414,7 +406,7 @@ export default function Consent() {
       );
       
       router.replace('/discovery');
-    } catch (err) {
+    } catch {
       setError("Failed to create profile. Please try again.");
       setIsSubmitting(false);
     }
@@ -1008,7 +1000,7 @@ export default function Consent() {
 
           {/* Interest Selection */}
           <View style={styles.selectionSection}>
-            <Text style={styles.sectionTitle}>I'm interested in... *</Text>
+            <Text style={styles.sectionTitle}>I&apos;m interested in... *</Text>
             <View style={styles.selectionButtons}>
               <TouchableOpacity
                 style={[

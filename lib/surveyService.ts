@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AsyncStorageUtils } from './asyncStorageUtils';
 import { EventFeedbackAPI } from './firebaseApi';
 
 export interface SurveyData {
@@ -26,14 +26,14 @@ export class SurveyService {
   static async shouldShowSurvey(): Promise<SurveyData | null> {
     try {
       // Check if user has already filled survey in their lifetime
-      const surveyFilled = await AsyncStorage.getItem(this.SURVEY_FILLED_KEY);
+      const surveyFilled = await AsyncStorageUtils.getItem<string>(this.SURVEY_FILLED_KEY);
       if (surveyFilled === 'true') {
         return null;
       }
 
       // Get current session info
-      const currentEventId = await AsyncStorage.getItem('currentEventId');
-      const currentSessionId = await AsyncStorage.getItem('currentSessionId');
+      const currentEventId = await AsyncStorageUtils.getItem<string>('currentEventId');
+      const currentSessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
 
       // Get all events from user's history
       const eventHistory = await this.getEventHistory();
@@ -64,7 +64,7 @@ export class SurveyService {
       }
 
       return null;
-    } catch (error) {
+    } catch {
       // Error checking if survey should be shown
       return null;
     }
@@ -78,7 +78,7 @@ export class SurveyService {
       // Check if there's already feedback for this event and session
       const feedback = await EventFeedbackAPI.filter({ event_id: eventId, profile_id: sessionId });
       return feedback.length > 0;
-    } catch (error) {
+    } catch {
       // Error checking if user has filled survey
       return false;
     }
@@ -120,8 +120,8 @@ export class SurveyService {
       // Keep only last 10 events to prevent storage bloat
       const trimmedHistory = eventHistory.slice(0, 10);
       
-      await AsyncStorage.setItem('eventHistory', JSON.stringify(trimmedHistory));
-    } catch (error) {
+      await AsyncStorageUtils.setItem('eventHistory', trimmedHistory);
+    } catch {
       // Error adding event to history
     }
   }
@@ -131,9 +131,9 @@ export class SurveyService {
    */
   private static async getEventHistory(): Promise<SurveyData[]> {
     try {
-      const historyData = await AsyncStorage.getItem('eventHistory');
-      return historyData ? JSON.parse(historyData) : [];
-    } catch (error) {
+      const historyData = await AsyncStorageUtils.getItem<SurveyData[]>('eventHistory');
+      return historyData || [];
+    } catch {
       // Error getting event history
       return [];
     }
@@ -143,7 +143,7 @@ export class SurveyService {
    * Mark survey as filled for lifetime
    */
   static async markSurveyFilled(): Promise<void> {
-    await AsyncStorage.setItem(this.SURVEY_FILLED_KEY, 'true');
+    await AsyncStorageUtils.setItem(this.SURVEY_FILLED_KEY, 'true');
   }
 
   /**
@@ -154,8 +154,8 @@ export class SurveyService {
       // Store that this user has filled the survey for this specific event
       const filledSurveys = await this.getFilledSurveys();
       filledSurveys.push(`${eventId}_${sessionId}`);
-      await AsyncStorage.setItem('filledSurveys', JSON.stringify(filledSurveys));
-    } catch (error) {
+      await AsyncStorageUtils.setItem('filledSurveys', filledSurveys);
+    } catch {
       // Error marking survey as filled for event
     }
   }
@@ -165,9 +165,9 @@ export class SurveyService {
    */
   private static async getFilledSurveys(): Promise<string[]> {
     try {
-      const filledSurveysData = await AsyncStorage.getItem('filledSurveys');
-      return filledSurveysData ? JSON.parse(filledSurveysData) : [];
-    } catch (error) {
+      const filledSurveysData = await AsyncStorageUtils.getItem<string[]>('filledSurveys');
+      return filledSurveysData || [];
+    } catch {
       // Error getting filled surveys
       return [];
     }
@@ -192,7 +192,7 @@ export class SurveyService {
       
       // Check if event ended between 2 hours ago and 26 hours ago
       return timeSinceEventEnd >= twoHours && timeSinceEventEnd <= twentySixHours;
-    } catch (error) {
+    } catch {
       // Error checking survey availability
       return false;
     }
@@ -216,7 +216,7 @@ export class SurveyService {
       
       // Check if event ended within the last 26 hours
       return timeSinceEventEnd <= twentySixHours;
-    } catch (error) {
+    } catch {
       // Error checking survey validity
       return false;
     }
@@ -229,7 +229,7 @@ export class SurveyService {
     try {
       const eventHistory = await this.getEventHistory();
       return eventHistory.find(e => e.eventId === eventId) || null;
-    } catch (error) {
+    } catch {
       // Error getting survey data
       return null;
     }
@@ -240,12 +240,12 @@ export class SurveyService {
    */
   static async clearAllSurveyData(): Promise<void> {
     try {
-      await AsyncStorage.multiRemove([
+      await AsyncStorageUtils.multiRemove([
         'eventHistory',
         'filledSurveys',
         this.SURVEY_FILLED_KEY
       ]);
-    } catch (error) {
+    } catch {
       // Error clearing survey data
     }
   }
@@ -258,26 +258,21 @@ export class SurveyService {
     sessionId: string,
     feedback: SurveyFeedback
   ): Promise<void> {
-    try {
-      // Combine all feedback into a single feedback string
-      const feedbackText = `Ease of Use: ${feedback.easeOfUse}/5, Matched with Others: ${feedback.matchedWithOthers}, Would Use Again: ${feedback.wouldUseAgain}, Event Satisfaction: ${feedback.eventSatisfaction}/5${feedback.improvements ? `, Improvements: ${feedback.improvements}` : ''}`;
-      
-      // Calculate overall rating (average of ease of use and event satisfaction)
-      const overallRating = Math.round((feedback.easeOfUse + feedback.eventSatisfaction) / 2);
-      
-      // Submit feedback to database
-      await EventFeedbackAPI.create({
-        event_id: eventId,
-        profile_id: sessionId,
-        rating: overallRating,
-        feedback: feedbackText,
-      });
+    // Combine all feedback into a single feedback string
+    const feedbackText = `Ease of Use: ${feedback.easeOfUse}/5, Matched with Others: ${feedback.matchedWithOthers}, Would Use Again: ${feedback.wouldUseAgain}, Event Satisfaction: ${feedback.eventSatisfaction}/5${feedback.improvements ? `, Improvements: ${feedback.improvements}` : ''}`;
+    
+    // Calculate overall rating (average of ease of use and event satisfaction)
+    const overallRating = Math.round((feedback.easeOfUse + feedback.eventSatisfaction) / 2);
+    
+    // Submit feedback to database
+    await EventFeedbackAPI.create({
+      event_id: eventId,
+      profile_id: sessionId,
+      rating: overallRating,
+      feedback: feedbackText,
+    });
 
-      // Mark survey as filled for this specific event
-      await this.markSurveyFilledForEvent(eventId, sessionId);
-    } catch (error) {
-      // Error submitting survey feedback
-      throw error;
-    }
+    // Mark survey as filled for this specific event
+    await this.markSurveyFilledForEvent(eventId, sessionId);
   }
 }

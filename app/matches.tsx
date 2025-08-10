@@ -13,15 +13,16 @@ import {
   Platform,
 } from 'react-native';
 import { router } from 'expo-router';
-import { Heart, MessageCircle, Users, User, ArrowLeft, Flag } from 'lucide-react-native';
+import { Heart, MessageCircle, Users, User } from 'lucide-react-native';
 import { EventProfileAPI, LikeAPI, EventAPI } from '../lib/firebaseApi';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebaseConfig';
 import UserProfileModal from '../lib/UserProfileModal';
-import { sendMatchNotification, sendLikeNotification } from '../lib/notificationService';
+
 import { updateUserActivity } from '../lib/messageNotificationHelper';
+import { sendLikeNotification } from '../lib/notificationService';
 
 export default function Matches() {
   const colorScheme = useColorScheme();
@@ -161,13 +162,13 @@ export default function Matches() {
               setUnreadMessages(new Set());
               setHasUnreadMessages(false);
             }
-          } catch (error) {
+          } catch {
             // Error refreshing unread messages
           }
         });
 
         listenersRef.current.messages = unsubscribe;
-      } catch (error) {
+      } catch {
         // Error setting up message listener
       }
     };
@@ -205,7 +206,7 @@ export default function Matches() {
 
           if (!userProfile) {
     
-            await AsyncStorage.multiRemove([
+            await AsyncStorageUtils.multiRemove([
               'currentEventId',
               'currentSessionId',
               'currentEventCode',
@@ -248,23 +249,23 @@ export default function Matches() {
               
               setUnreadMessages(unseenSessionIds);
               setHasUnreadMessages(unseenSessionIds.size > 0);
-            } catch (error) {
+            } catch {
               // Error checking unseen messages
             }
           };
           
           checkUnseenMessages();
           
-        } catch (error) {
+        } catch {
           // Handle error silently
         }
-              }, (error) => {
+              }, () => {
           // Handle error silently
         });
 
       listenersRef.current.userProfile = userProfileUnsubscribe;
 
-    } catch (error) {
+    } catch {
       // Handle error silently
     }
 
@@ -326,7 +327,7 @@ export default function Matches() {
           }
 
           setMatches(matchedProfiles);
-                  } catch (error) {
+                  } catch {
             // Error in matches listener
           }
               }, (error) => {
@@ -357,7 +358,7 @@ export default function Matches() {
           })) as any[];
           
           setLikedProfiles(new Set(likes.map(like => like.liked_session_id)));
-                  } catch (error) {
+                  } catch {
             // Error in likes listener
           }
       }, (error) => {
@@ -380,22 +381,12 @@ export default function Matches() {
         where('is_mutual', '==', true)
       );
 
-      const mutualMatchesUnsubscribe = onSnapshot(mutualMatchesQuery, async (snapshot) => {
+      const mutualMatchesUnsubscribe = onSnapshot(mutualMatchesQuery, async () => {
         try {
-          const mutualLikes = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          })) as any[];
-
-          // Filter to only include matches where this user is involved
-          const userMatches = mutualLikes.filter(like => 
-            like.liker_session_id === currentSessionId || like.liked_session_id === currentSessionId
-          );
-
           // Note: Notifications are now handled globally in _layout.tsx
           // This listener only updates the matches list for display purposes
           
-        } catch (error) {
+        } catch {
           // Error in mutual matches listener
         }
       }, (error) => {
@@ -411,7 +402,7 @@ export default function Matches() {
 
       listenersRef.current.mutualMatches = mutualMatchesUnsubscribe;
 
-    } catch (error) {
+    } catch {
       // Error setting up matches listener
     }
   };
@@ -442,7 +433,7 @@ export default function Matches() {
         clearInterval(listenersRef.current.periodicCheck);
         listenersRef.current.periodicCheck = undefined;
       }
-    } catch (error) {
+    } catch {
       // Handle error silently
     }
   };
@@ -450,8 +441,8 @@ export default function Matches() {
   const initializeSession = async () => {
     try {
       setIsLoading(true);
-      const eventId = await AsyncStorage.getItem('currentEventId');
-      const sessionId = await AsyncStorage.getItem('currentSessionId');
+      const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
+      const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
       
       if (!eventId || !sessionId) {
 
@@ -467,7 +458,7 @@ export default function Matches() {
       } else {
         // Event doesn't exist, clear all data and redirect to home
 
-        await AsyncStorage.multiRemove([
+        await AsyncStorageUtils.multiRemove([
           'currentEventId',
           'currentSessionId',
           'currentEventCode',
@@ -488,7 +479,7 @@ export default function Matches() {
         // Profile doesn't exist in database (user left event and deleted profile)
         // Clear all AsyncStorage data and redirect to home
 
-        await AsyncStorage.multiRemove([
+        await AsyncStorageUtils.multiRemove([
           'currentEventId',
           'currentSessionId',
           'currentEventCode',
@@ -500,10 +491,10 @@ export default function Matches() {
       }
 
       // Matches are now handled by real-time listener
-    } catch (error) {
+    } catch {
       // Error initializing matches session
       // Clear data and redirect to home on error
-      await AsyncStorage.multiRemove([
+      await AsyncStorageUtils.multiRemove([
         'currentEventId',
         'currentSessionId',
         'currentEventCode',
@@ -525,7 +516,7 @@ export default function Matches() {
   const handleLike = async (likedProfile: any) => {
     if (likedProfiles.has(likedProfile.session_id) || !currentUserProfile) return;
 
-    const eventId = await AsyncStorage.getItem('currentEventId');
+    const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
     const likerSessionId = currentUserProfile.session_id;
 
     if (!eventId) return;
@@ -560,7 +551,7 @@ export default function Matches() {
       // Send notification to the person being liked (they get notified that someone liked them)
       try {
         await sendLikeNotification(likedProfile.session_id, currentUserProfile.first_name);
-      } catch (notificationError) {
+      } catch {
         // Handle notification error silently
       }
 
@@ -602,7 +593,7 @@ export default function Matches() {
           })
         ]);
       }
-          } catch (error) {
+          } catch {
         // Error creating like
       // Revert optimistic update on error
       setLikedProfiles(prev => {
@@ -901,7 +892,7 @@ export default function Matches() {
           <View style={styles.hiddenNoticeContent}>
             <User size={20} color="#f59e0b" />
             <Text style={styles.hiddenNoticeText}>
-              Your profile is hidden. You can still chat with your matches, but you won't see new people in discovery.
+              Your profile is hidden. You can still chat with your matches, but you won&apos;t see new people in discovery.
             </Text>
             <TouchableOpacity
               style={styles.makeVisibleButton}

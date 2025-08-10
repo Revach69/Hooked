@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import FadeInImage from "../components/FadeInImage";
 import { useEffect, useState, useRef } from "react";
 import AnimatedArrow from "../components/AnimatedArrow";
 import Header from "../components/Header";
@@ -54,13 +55,14 @@ export default function Home() {
       }
     );
 
-    if (sectionRef.current) {
-      observer.observe(sectionRef.current);
+    const currentSectionRef = sectionRef.current;
+    if (currentSectionRef) {
+      observer.observe(currentSectionRef);
     }
 
     return () => {
-      if (sectionRef.current) {
-        observer.unobserve(sectionRef.current);
+      if (currentSectionRef) {
+        observer.unobserve(currentSectionRef);
       }
     };
   }, []);
@@ -101,14 +103,19 @@ export default function Home() {
             
             {/* Right Side - Visual Content */}
             <div className="relative flex justify-center lg:justify-end">
-              <img
-                src="/Site Image.png"
-                alt="Hooked - One scan shows you who's single"
-                className="rounded-lg shadow-2xl max-w-[300px] mx-auto filter drop-shadow-lg"
-                style={{
-                  boxShadow: '0 20px 40px rgba(147, 51, 234, 0.15), 0 10px 20px rgba(236, 72, 153, 0.1)'
-                }}
-              />
+              <div className="relative w-[250px] h-[350px] md:w-[300px] md:h-[400px]">
+                <FadeInImage
+                  src="/Site Image.png"
+                  alt="Hooked - One scan shows you who's single"
+                  fill
+                  className="rounded-lg shadow-2xl object-cover filter drop-shadow-lg"
+                  style={{
+                    boxShadow: '0 20px 40px rgba(147, 51, 234, 0.15), 0 10px 20px rgba(236, 72, 153, 0.1)'
+                  }}
+                  priority
+                  fadeInDuration={50}
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -268,27 +275,62 @@ export default function Home() {
           {/* Mobile Layout - 2x3 grid with centered fifth item */}
           <div className="grid grid-cols-2 gap-12 md:hidden">
             <div className="text-center">
-              <img src="/party.png" alt="Colorful party icon representing social events and celebrations" className="w-16 h-16 mx-auto mb-4 rounded-lg" />
+              <FadeInImage 
+                src="/party.png" 
+                alt="Colorful party icon representing social events and celebrations" 
+                width={64}
+                height={64}
+                className="w-16 h-16 mx-auto mb-4 rounded-lg" 
+                fadeInDuration={50}
+              />
               <h3 className="text-lg font-semibold dark-mode-text font-heading">Parties</h3>
             </div>
             
             <div className="text-center">
-              <img src="/private events.png" alt="Private event icon for exclusive gatherings and special occasions" className="w-16 h-16 mx-auto mb-4 rounded-lg" />
+              <FadeInImage 
+                src="/private events.png" 
+                alt="Private event icon for exclusive gatherings and special occasions" 
+                width={64}
+                height={64}
+                className="w-16 h-16 mx-auto mb-4 rounded-lg" 
+                fadeInDuration={50}
+              />
               <h3 className="text-lg font-semibold dark-mode-text font-heading">Private Events</h3>
             </div>
             
             <div className="text-center">
-              <img src="/conference.png" alt="Conference icon for business meetings and professional networking" className="w-16 h-16 mx-auto mb-4 rounded-lg" />
+              <FadeInImage 
+                src="/conference.png" 
+                alt="Conference icon for business meetings and professional networking" 
+                width={64}
+                height={64}
+                className="w-16 h-16 mx-auto mb-4 rounded-lg" 
+                fadeInDuration={50}
+              />
               <h3 className="text-lg font-semibold dark-mode-text font-heading">Conferences</h3>
             </div>
             
             <div className="text-center">
-              <img src="/ring.png" alt="Wedding ring icon for wedding events and ceremonies" className="w-16 h-16 mx-auto mb-4 rounded-lg" />
+              <FadeInImage 
+                src="/ring.png" 
+                alt="Wedding ring icon for wedding events and ceremonies" 
+                width={64}
+                height={64}
+                className="w-16 h-16 mx-auto mb-4 rounded-lg" 
+                fadeInDuration={50}
+              />
               <h3 className="text-lg font-semibold dark-mode-text font-heading">Weddings</h3>
             </div>
             
             <div className="text-center col-span-2">
-              <img src="/bars & lounges.png" alt="Bar and lounge icon for nightlife and social venues" className="w-16 h-16 mx-auto mb-4 rounded-lg" />
+              <FadeInImage 
+                src="/bars & lounges.png" 
+                alt="Bar and lounge icon for nightlife and social venues" 
+                width={64}
+                height={64}
+                className="w-16 h-16 mx-auto mb-4 rounded-lg" 
+                fadeInDuration={50}
+              />
               <h3 className="text-lg font-semibold dark-mode-text font-heading">Bars & Lounges</h3>
             </div>
           </div>
@@ -296,27 +338,62 @@ export default function Home() {
           {/* Desktop Layout - All icons in a single row */}
           <div className="hidden md:flex justify-center items-center gap-20">
             <div className="text-center">
-              <img src="/party.png" alt="Colorful party icon representing social events and celebrations" className="w-16 h-16 mx-auto mb-4 rounded-lg" />
+              <FadeInImage 
+                src="/party.png" 
+                alt="Colorful party icon representing social events and celebrations" 
+                width={64}
+                height={64}
+                className="w-16 h-16 mx-auto mb-4 rounded-lg" 
+                fadeInDuration={50}
+              />
               <h3 className="text-lg font-semibold dark-mode-text font-heading">Parties</h3>
             </div>
             
             <div className="text-center">
-              <img src="/private events.png" alt="Private event icon for exclusive gatherings and special occasions" className="w-16 h-16 mx-auto mb-4 rounded-lg" />
+              <FadeInImage 
+                src="/private events.png" 
+                alt="Private event icon for exclusive gatherings and special occasions" 
+                width={64}
+                height={64}
+                className="w-16 h-16 mx-auto mb-4 rounded-lg" 
+                fadeInDuration={50}
+              />
               <h3 className="text-lg font-semibold dark-mode-text font-heading">Private Events</h3>
             </div>
             
             <div className="text-center">
-              <img src="/conference.png" alt="Conference icon for business meetings and professional networking" className="w-16 h-16 mx-auto mb-4 rounded-lg" />
+              <FadeInImage 
+                src="/conference.png" 
+                alt="Conference icon for business meetings and professional networking" 
+                width={64}
+                height={64}
+                className="w-16 h-16 mx-auto mb-4 rounded-lg" 
+                fadeInDuration={50}
+              />
               <h3 className="text-lg font-semibold dark-mode-text font-heading">Conferences</h3>
             </div>
             
             <div className="text-center">
-              <img src="/ring.png" alt="Wedding ring icon for wedding events and ceremonies" className="w-16 h-16 mx-auto mb-4 rounded-lg" />
+              <FadeInImage 
+                src="/ring.png" 
+                alt="Wedding ring icon for wedding events and ceremonies" 
+                width={64}
+                height={64}
+                className="w-16 h-16 mx-auto mb-4 rounded-lg" 
+                fadeInDuration={50}
+              />
               <h3 className="text-lg font-semibold dark-mode-text font-heading">Weddings</h3>
             </div>
             
             <div className="text-center">
-              <img src="/bars & lounges.png" alt="Bar and lounge icon for nightlife and social venues" className="w-16 h-16 mx-auto mb-4 rounded-lg" />
+              <FadeInImage 
+                src="/bars & lounges.png" 
+                alt="Bar and lounge icon for nightlife and social venues" 
+                width={64}
+                height={64}
+                className="w-16 h-16 mx-auto mb-4 rounded-lg" 
+                fadeInDuration={50}
+              />
               <h3 className="text-lg font-semibold dark-mode-text font-heading">Bars & Lounges</h3>
             </div>
           </div>

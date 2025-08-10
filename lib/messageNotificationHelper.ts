@@ -1,7 +1,7 @@
 import { sendMessageNotification } from './notificationService';
 import Toast from 'react-native-toast-message';
 import { router } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AsyncStorageUtils } from './asyncStorageUtils';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
@@ -9,24 +9,7 @@ import { Platform } from 'react-native';
 const recentNotifications = new Map<string, number>();
 const NOTIFICATION_COOLDOWN = 3000; // 3 seconds cooldown
 
-// Platform-specific toast configuration
-const getToastConfig = () => {
-  if (Platform.OS === 'ios') {
-    return {
-      position: 'top' as const,
-      visibilityTime: 5000,
-      autoHide: true,
-      topOffset: 60,
-    };
-  } else {
-    return {
-      position: 'top' as const,
-      visibilityTime: 4000,
-      autoHide: true,
-      topOffset: 40,
-    };
-  }
-};
+
 
 // Show in-app message toast with navigation
 export function showInAppMessageToast(senderName: string, senderSessionId: string): void {
@@ -84,7 +67,7 @@ export function showInAppMessageToast(senderName: string, senderSessionId: strin
         }
       });
     }, delay);
-  } catch (error) {
+  } catch {
     // Error showing message toast - try to show a basic toast as fallback
     try {
       Toast.show({
@@ -100,9 +83,8 @@ export function showInAppMessageToast(senderName: string, senderSessionId: strin
           router.push('/matches');
         }
       });
-    } catch (fallbackError) {
+    } catch {
       // If even the fallback fails, just log the error
-      console.error('Failed to show message toast:', error);
     }
   }
 }
@@ -147,7 +129,7 @@ export function showMatchToast(matchName: string): void {
         }
       });
     }, config.delay);
-  } catch (error) {
+  } catch {
     // Error showing match toast
   }
 }
@@ -190,7 +172,7 @@ async function sendPushNotificationForMessage(recipientSessionId: string, sender
 async function storePendingMessageNotification(recipientSessionId: string, senderName: string, senderSessionId?: string): Promise<void> {
   try {
     const pendingNotificationsKey = `pendingMessageNotifications_${recipientSessionId}`;
-    const existingNotifications = await AsyncStorage.getItem(pendingNotificationsKey);
+    const existingNotifications = await AsyncStorageUtils.getItem<any[]>(pendingNotificationsKey);
     
     const newNotification = {
       id: Date.now().toString(),
@@ -200,9 +182,7 @@ async function storePendingMessageNotification(recipientSessionId: string, sende
       type: 'message'
     };
     
-    const notifications = existingNotifications 
-      ? JSON.parse(existingNotifications) 
-      : [];
+    const notifications = existingNotifications || [];
     
     notifications.push(newNotification);
     
@@ -211,8 +191,8 @@ async function storePendingMessageNotification(recipientSessionId: string, sende
       notifications.splice(0, notifications.length - 10);
     }
     
-    await AsyncStorage.setItem(pendingNotificationsKey, JSON.stringify(notifications));
-  } catch (error) {
+    await AsyncStorageUtils.setItem(pendingNotificationsKey, notifications);
+  } catch {
     // Error storing pending message notification
   }
 }
@@ -222,17 +202,17 @@ async function storePendingMessageNotification(recipientSessionId: string, sende
  */
 export async function checkPendingMessageNotifications(): Promise<void> {
   try {
-    const currentSessionId = await AsyncStorage.getItem('currentSessionId');
+    const currentSessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
     
     if (!currentSessionId) {
       return;
     }
     
     const pendingNotificationsKey = `pendingMessageNotifications_${currentSessionId}`;
-    const pendingNotifications = await AsyncStorage.getItem(pendingNotificationsKey);
+    const pendingNotifications = await AsyncStorageUtils.getItem<any[]>(pendingNotificationsKey);
     
-    if (pendingNotifications) {
-      const notifications = JSON.parse(pendingNotifications);
+    if (pendingNotifications && pendingNotifications.length > 0) {
+      const notifications = pendingNotifications;
       
       if (notifications.length > 0) {
         // Show the most recent notification
@@ -244,10 +224,10 @@ export async function checkPendingMessageNotifications(): Promise<void> {
         }
         
         // Clear the pending notifications
-        await AsyncStorage.removeItem(pendingNotificationsKey);
+        await AsyncStorageUtils.removeItem(pendingNotificationsKey);
       }
     }
-  } catch (error) {
+  } catch {
     // Error checking pending message notifications
   }
 }
@@ -258,8 +238,8 @@ export async function checkPendingMessageNotifications(): Promise<void> {
 export async function updateUserActivity(sessionId: string): Promise<void> {
   try {
     const lastActivityKey = `lastActivity_${sessionId}`;
-    await AsyncStorage.setItem(lastActivityKey, new Date().toISOString());
-  } catch (error) {
+    await AsyncStorageUtils.setItem(lastActivityKey, new Date().toISOString());
+  } catch {
     // Error updating user activity
   }
 }
@@ -309,22 +289,22 @@ export async function markMessagesAsRead(eventId: string, fromSessionId: string,
     for (const message of unreadMessages) {
       try {
         await MessageAPI.update(message.id, { is_read: true });
-      } catch (error) {
+      } catch {
         // Error marking message as read
       }
     }
     
     // Clear the unread status for this specific chat
     const unreadChatsKey = `unreadChats_${toSessionId}`;
-    const unreadChats = await AsyncStorage.getItem(unreadChatsKey);
+    const unreadChats = await AsyncStorageUtils.getItem<string[]>(unreadChatsKey);
     
     if (unreadChats) {
-      const unreadChatsSet = new Set(JSON.parse(unreadChats));
+      const unreadChatsSet = new Set(unreadChats);
       unreadChatsSet.delete(fromSessionId);
-      await AsyncStorage.setItem(unreadChatsKey, JSON.stringify(Array.from(unreadChatsSet)));
+      await AsyncStorageUtils.setItem(unreadChatsKey, Array.from(unreadChatsSet));
     }
     
-  } catch (error) {
+  } catch {
     // Error marking messages as read
   }
 }
@@ -377,12 +357,12 @@ export async function markMessagesAsSeen(eventId: string, fromSessionId: string,
           seen: true, 
           seen_at: new Date().toISOString() 
         });
-      } catch (error) {
+      } catch {
         // Error marking message as seen
       }
     }
     
-  } catch (error) {
+  } catch {
     // Error marking messages as seen
   }
 }
@@ -416,7 +396,7 @@ export async function hasUnreadMessages(eventId: string, sessionId: string): Pro
     const unreadMessages = allMessages.filter(message => !message.is_read);
     
     return unreadMessages.length > 0;
-  } catch (error) {
+  } catch {
     // Error checking unread messages
     return false;
   }
@@ -451,7 +431,7 @@ export async function hasUnseenMessages(eventId: string, sessionId: string): Pro
     const unseenMessages = allMessages.filter(message => !message.seen);
     
     return unseenMessages.length > 0;
-  } catch (error) {
+  } catch {
     // Error checking unseen messages
     return false;
   }
@@ -526,12 +506,12 @@ export async function handleNewMessageNotification(
 async function checkIfUserIsInApp(sessionId: string): Promise<boolean> {
   try {
     // Get current user's session ID
-    const currentSessionId = await AsyncStorage.getItem('currentSessionId');
+    const currentSessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
     
     // If session IDs match, the user is in the same app instance
     // This is the most reliable way to determine if someone is "in the app"
     return currentSessionId === sessionId;
-  } catch (error) {
+  } catch {
     // Error checking if user is in app
     return false;
   }

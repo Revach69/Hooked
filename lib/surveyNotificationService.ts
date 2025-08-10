@@ -1,6 +1,5 @@
-import * as Notifications from 'expo-notifications';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { EventFeedbackAPI, EventProfileAPI } from './firebaseApi';
+import { AsyncStorageUtils } from './asyncStorageUtils';
+import { EventFeedbackAPI } from './firebaseApi';
 
 export interface SurveyData {
   eventId: string;
@@ -28,14 +27,14 @@ export class SurveyNotificationService {
   static async shouldShowSurvey(): Promise<SurveyData | null> {
     try {
       // Check if user has already filled survey in their lifetime
-      const surveyFilled = await AsyncStorage.getItem(this.SURVEY_FILLED_KEY);
+      const surveyFilled = await AsyncStorageUtils.getItem<string>(this.SURVEY_FILLED_KEY);
       if (surveyFilled === 'true') {
         return null;
       }
 
       // Get current session info
-      const currentEventId = await AsyncStorage.getItem('currentEventId');
-      const currentSessionId = await AsyncStorage.getItem('currentSessionId');
+      const currentEventId = await AsyncStorageUtils.getItem<string>('currentEventId');
+      const currentSessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
 
       // Get all events from user's history
       const eventHistory = await this.getEventHistory();
@@ -66,7 +65,7 @@ export class SurveyNotificationService {
       }
 
       return null;
-    } catch (error) {
+    } catch {
       // Error checking if survey should be shown
       return null;
     }
@@ -80,7 +79,7 @@ export class SurveyNotificationService {
       // Check if there's already feedback for this event and session
       const feedback = await EventFeedbackAPI.filter({ event_id: eventId, profile_id: sessionId });
       return feedback.length > 0;
-    } catch (error) {
+    } catch {
       // Error checking if user has filled survey
       return false;
     }
@@ -122,8 +121,8 @@ export class SurveyNotificationService {
       // Keep only last 10 events to prevent storage bloat
       const trimmedHistory = eventHistory.slice(0, 10);
       
-      await AsyncStorage.setItem('eventHistory', JSON.stringify(trimmedHistory));
-    } catch (error) {
+      await AsyncStorageUtils.setItem('eventHistory', trimmedHistory);
+    } catch {
       // Error adding event to history
     }
   }
@@ -133,9 +132,9 @@ export class SurveyNotificationService {
    */
   private static async getEventHistory(): Promise<SurveyData[]> {
     try {
-      const historyData = await AsyncStorage.getItem('eventHistory');
-      return historyData ? JSON.parse(historyData) : [];
-    } catch (error) {
+      const historyData = await AsyncStorageUtils.getItem<SurveyData[]>('eventHistory');
+      return historyData || [];
+    } catch {
       // Error getting event history
       return [];
     }
@@ -145,7 +144,7 @@ export class SurveyNotificationService {
    * Mark survey as filled for lifetime
    */
   static async markSurveyFilled(): Promise<void> {
-    await AsyncStorage.setItem(this.SURVEY_FILLED_KEY, 'true');
+    await AsyncStorageUtils.setItem(this.SURVEY_FILLED_KEY, 'true');
   }
 
   /**
@@ -156,8 +155,8 @@ export class SurveyNotificationService {
       // Store that this user has filled the survey for this specific event
       const filledSurveys = await this.getFilledSurveys();
       filledSurveys.push(`${eventId}_${sessionId}`);
-      await AsyncStorage.setItem('filledSurveys', JSON.stringify(filledSurveys));
-    } catch (error) {
+      await AsyncStorageUtils.setItem('filledSurveys', filledSurveys);
+    } catch {
       // Error marking survey as filled for event
     }
   }
@@ -167,9 +166,9 @@ export class SurveyNotificationService {
    */
   private static async getFilledSurveys(): Promise<string[]> {
     try {
-      const filledSurveysData = await AsyncStorage.getItem('filledSurveys');
-      return filledSurveysData ? JSON.parse(filledSurveysData) : [];
-    } catch (error) {
+      const filledSurveysData = await AsyncStorageUtils.getItem<string[]>('filledSurveys');
+      return filledSurveysData || [];
+    } catch {
       // Error getting filled surveys
       return [];
     }
@@ -194,7 +193,7 @@ export class SurveyNotificationService {
       
       // Check if event ended between 2 hours ago and 26 hours ago
       return timeSinceEventEnd >= twoHours && timeSinceEventEnd <= twentySixHours;
-    } catch (error) {
+    } catch {
       // Error checking survey availability
       return false;
     }
@@ -219,7 +218,7 @@ export class SurveyNotificationService {
       
       // Check if event ended between 2 hours ago and 26 hours ago
       return timeSinceEventEnd >= twoHours && timeSinceEventEnd <= twentySixHours;
-    } catch (error) {
+    } catch {
       // Error checking survey notification validity
       return false;
     }
@@ -232,7 +231,7 @@ export class SurveyNotificationService {
     try {
       const eventHistory = await this.getEventHistory();
       return eventHistory.find(e => e.eventId === eventId) || null;
-    } catch (error) {
+    } catch {
       // Error getting survey data
       return null;
     }
@@ -243,17 +242,17 @@ export class SurveyNotificationService {
    */
   static async clearAllSurveyData(): Promise<void> {
     try {
-      const keys = await AsyncStorage.getAllKeys();
-      const surveyKeys = keys.filter(key => 
+      const keys = await AsyncStorageUtils.getAllKeys();
+      const surveyKeys = keys.filter((key: string) => 
         key === this.SURVEY_FILLED_KEY ||
         key === 'eventHistory' ||
         key === 'filledSurveys'
       );
       
       if (surveyKeys.length > 0) {
-        await AsyncStorage.multiRemove(surveyKeys);
+        await AsyncStorageUtils.multiRemove(surveyKeys);
       }
-    } catch (error) {
+    } catch {
       // Error clearing survey data
     }
   }
@@ -266,20 +265,15 @@ export class SurveyNotificationService {
     sessionId: string,
     feedback: SurveyFeedback
   ): Promise<void> {
-    try {
-      // Create feedback record in database
-      await EventFeedbackAPI.create({
-        event_id: eventId,
-        profile_id: sessionId,
-        rating: feedback.eventSatisfaction,
-        feedback: JSON.stringify(feedback)
-      });
+    // Create feedback record in database
+    await EventFeedbackAPI.create({
+      event_id: eventId,
+      profile_id: sessionId,
+      rating: feedback.eventSatisfaction,
+      feedback: JSON.stringify(feedback)
+    });
 
-      // Mark survey as filled for this specific event
-      await this.markSurveyFilledForEvent(eventId, sessionId);
-    } catch (error) {
-      // Error submitting survey feedback
-      throw error;
-    }
+    // Mark survey as filled for this specific event
+    await this.markSurveyFilledForEvent(eventId, sessionId);
   }
 } 

@@ -52,7 +52,7 @@ export default function EventForm() {
     setSubmitStatus('idle');
 
     // Validate required fields
-    const requiredFields = ['fullName', 'email', 'phone', 'eventAddress', 'venueName', 'eventType', 'expectedAttendees', 'eventName', 'posterPreference', 'eventVisibility', 'socialMedia'];
+    const requiredFields = ['fullName', 'email', 'phone', 'eventAddress', 'venueName', 'eventType', 'expectedAttendees', 'eventName', 'posterPreference', 'eventVisibility'];
     const missingFields = requiredFields.filter(field => !formData[field as keyof EventFormData]);
     
     // Check if "Other" event type is selected but no specification provided
@@ -115,7 +115,7 @@ export default function EventForm() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <h1 className="text-4xl font-bold mb-4">
-              Event organizer form
+              Event Organizer Form
             </h1>
           </div>
         </div>
@@ -133,7 +133,7 @@ export default function EventForm() {
               {/* Full Name */}
               <div>
                 <label htmlFor="fullName" className="block text-sm font-medium dark-mode-text mb-2">
-                  Full Name *
+                  Full Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -150,7 +150,7 @@ export default function EventForm() {
               {/* Email Address */}
               <div>
                 <label htmlFor="email" className="block text-sm font-medium dark-mode-text mb-2">
-                  Email Address *
+                  Email Address <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="email"
@@ -167,7 +167,7 @@ export default function EventForm() {
               {/* Phone Number */}
               <div>
                 <label htmlFor="phone" className="block text-sm font-medium dark-mode-text mb-2">
-                  Phone Number *
+                  Phone Number <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="tel"
@@ -200,7 +200,7 @@ export default function EventForm() {
               {/* Event Address */}
               <div>
                 <label htmlFor="eventAddress" className="block text-sm font-medium dark-mode-text mb-2">
-                  Event Address *
+                  Event Address <span className="text-red-500">*</span>
                 </label>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                   Please include street, city, state/province, and country
@@ -220,7 +220,7 @@ export default function EventForm() {
               {/* Venue Name */}
               <div>
                 <label htmlFor="venueName" className="block text-sm font-medium dark-mode-text mb-2">
-                  Venue Name *
+                  Venue Name <span className="text-red-500">*</span>
                 </label>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                   If your event is at a private residence, write &quot;Private Residence&quot;
@@ -240,7 +240,7 @@ export default function EventForm() {
               {/* Type of Event */}
               <div>
                 <label htmlFor="eventType" className="block text-sm font-medium dark-mode-text mb-2">
-                  Type of Event *
+                  Type of Event <span className="text-red-500">*</span>
                 </label>
                 <select
                   id="eventType"
@@ -267,7 +267,7 @@ export default function EventForm() {
               {formData.eventType === 'Other' && (
                 <div>
                   <label htmlFor="otherEventType" className="block text-sm font-medium dark-mode-text mb-2">
-                    Please specify event type *
+                    Please specify event type <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -285,7 +285,7 @@ export default function EventForm() {
               {/* Expected # of Attendees */}
               <div>
                 <label htmlFor="expectedAttendees" className="block text-sm font-medium dark-mode-text mb-2">
-                  Expected # of Attendees *
+                  Expected # of Attendees <span className="text-red-500">*</span>
                 </label>
                 <select
                   id="expectedAttendees"
@@ -307,7 +307,7 @@ export default function EventForm() {
               {/* Name of the Event */}
               <div>
                 <label htmlFor="eventName" className="block text-sm font-medium dark-mode-text mb-2">
-                  Name of the Event *
+                  Name of the Event <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -324,7 +324,7 @@ export default function EventForm() {
               {/* Poster Preference */}
               <div>
                 <label htmlFor="posterPreference" className="block text-sm font-medium dark-mode-text mb-2">
-                  Do you want posters for the event or just a text ahead of time? *
+                  Do you want posters for the event or just a text ahead of time? <span className="text-red-500">*</span>
                 </label>
                 <select
                   id="posterPreference"
@@ -344,7 +344,7 @@ export default function EventForm() {
               {/* Event Visibility */}
               <div>
                 <label htmlFor="eventVisibility" className="block text-sm font-medium dark-mode-text mb-2">
-                  Is your event private or public? *
+                  Is your event private or public? <span className="text-red-500">*</span>
                 </label>
                 <select
                   id="eventVisibility"
@@ -363,7 +363,7 @@ export default function EventForm() {
               {/* Social Media */}
               <div>
                 <label htmlFor="socialMedia" className="block text-sm font-medium dark-mode-text mb-2">
-                  Social Media (Instagram Handle to Feature/Tag) *
+                  Social Media (Instagram Handle to Feature/Tag)
                 </label>
                 <input
                   type="text"
@@ -371,7 +371,6 @@ export default function EventForm() {
                   name="socialMedia"
                   value={formData.socialMedia}
                   onChange={handleChange}
-                  required
                   className="w-full px-4 py-3 border dark-mode-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark-mode-bg dark-mode-text"
                   placeholder="@yourinstagramhandle"
                 />

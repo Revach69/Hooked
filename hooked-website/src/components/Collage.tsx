@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from 'react';
+import FadeInImage from './FadeInImage';
 
 interface CollageProps {
   className?: string;
@@ -9,7 +10,7 @@ interface CollageProps {
 
 export default function Collage({ className = "", selectedImages }: CollageProps) {
   const [isVisible, setIsVisible] = useState(false);
-  const [imagesLoaded, setImagesLoaded] = useState(false);
+  const [loadedImages, setLoadedImages] = useState<Set<number>>(new Set());
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -25,19 +26,20 @@ export default function Collage({ className = "", selectedImages }: CollageProps
       }
     );
 
-    if (containerRef.current) {
-      observer.observe(containerRef.current);
+    const currentContainerRef = containerRef.current;
+    if (currentContainerRef) {
+      observer.observe(currentContainerRef);
     }
 
     return () => {
-      if (containerRef.current) {
-        observer.unobserve(containerRef.current);
+      if (currentContainerRef) {
+        observer.unobserve(currentContainerRef);
       }
     };
   }, []);
 
-  const handleImageLoad = () => {
-    setImagesLoaded(true);
+  const handleImageLoad = (index: number) => {
+    setLoadedImages(prev => new Set([...prev, index]));
   };
 
   
@@ -56,15 +58,17 @@ export default function Collage({ className = "", selectedImages }: CollageProps
         <div 
           key={`${image}-${index}`} 
           className={`overflow-hidden rounded-lg h-full transition-all duration-700 ${
-            isVisible && imagesLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
+            isVisible && loadedImages.has(index) ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
           }`}
           style={{ transitionDelay: `${index * 200}ms` }}
         >
-          <img 
+          <FadeInImage 
             src={image} 
             alt={`People enjoying a Hooked event - real connections being made`}
-            className="w-full h-full object-cover"
-            onLoad={handleImageLoad}
+            fill
+            className="object-cover"
+            onLoad={() => handleImageLoad(index)}
+            fadeInDuration={50}
           />
         </div>
       ))}

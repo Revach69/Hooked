@@ -4,7 +4,6 @@ import mobileErrorHandler, {
   withErrorHandling, 
   queueOfflineAction, 
   getErrorMessage, 
-  isOnline, 
   getOfflineQueueLength 
 } from '../mobileErrorHandler';
 
@@ -14,11 +13,6 @@ export const useMobileErrorHandling = () => {
   const [isProcessingQueue, setIsProcessingQueue] = useState(false);
 
   useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      setIsProcessingQueue(true);
-    };
-
     const handleOffline = () => {
       setIsOnline(false);
     };
@@ -159,7 +153,7 @@ export const useMobileOfflineStatus = () => {
     if (!isOnline) {
       return {
         type: 'offline',
-        message: 'You\'re offline. Some features may be limited.',
+        message: "You're offline. Some features may be limited.",
         icon: '📴'
       };
     }
@@ -175,7 +169,7 @@ export const useMobileOfflineStatus = () => {
     if (offlineQueueLength > 0) {
       return {
         type: 'queued',
-        message: `${offlineQueueLength} action${offlineQueueLength > 1 ? 's' : ''} queued for when you\'re back online.`,
+        message: `${offlineQueueLength} action${offlineQueueLength > 1 ? 's' : ''} queued for when you're back online.`,
         icon: '📝'
       };
     }

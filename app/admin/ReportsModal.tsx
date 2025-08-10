@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import {
   Dimensions,
   TextInput,
 } from 'react-native';
-import { X, User, Flag, AlertTriangle, CheckCircle, XCircle, Ban, ChevronDown, ChevronUp } from 'lucide-react-native';
+import { X, User, Flag, AlertTriangle, XCircle, Ban, ChevronDown, ChevronUp } from 'lucide-react-native';
 import { ReportAPI, EventProfileAPI, KickedUserAPI, type Report } from '../../lib/firebaseApi';
 
 interface ReportsModalProps {
@@ -42,13 +42,7 @@ export default function ReportsModal({ visible, onClose, eventId, eventName }: R
     report: ReportWithProfiles;
   } | null>(null);
 
-  useEffect(() => {
-    if (visible) {
-      loadReports();
-    }
-  }, [visible, eventId]);
-
-  const loadReports = async () => {
+  const loadReports = useCallback(async () => {
     setIsLoading(true);
     try {
       const eventReports = await ReportAPI.filter({ event_id: eventId });
@@ -76,12 +70,18 @@ export default function ReportsModal({ visible, onClose, eventId, eventName }: R
       );
 
       setReports(reportsWithProfiles);
-    } catch (error) {
+    } catch {
               // Error loading reports
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [eventId]);
+
+  useEffect(() => {
+    if (visible) {
+      loadReports();
+    }
+  }, [visible, loadReports]);
 
   const handleAcceptReport = (report: ReportWithProfiles) => {
     if (!report.reportedProfile) return;
@@ -139,7 +139,7 @@ export default function ReportsModal({ visible, onClose, eventId, eventName }: R
           ? `${pendingAction.report.reportedProfile?.first_name} has been removed from the event.`
           : 'Report has been dismissed.'
       );
-    } catch (error) {
+    } catch {
               // Error processing report
       Alert.alert('Error', 'Failed to process report. Please try again.');
     } finally {

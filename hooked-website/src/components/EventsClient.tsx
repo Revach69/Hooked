@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import FadeInImage from './FadeInImage';
 import { EventAPI, FirestoreEvent } from '../lib/firebaseApi';
 
 const eventTypes = [
@@ -150,29 +151,14 @@ export default function EventsClient() {
                     {/* Event Image */}
                     <div className="relative">
                       {event.image_url ? (
-                        <div className="w-full h-48 bg-gray-100 dark:bg-gray-800 rounded-t-lg flex items-center justify-center overflow-hidden">
-                          <img 
+                        <div className="w-full h-48 bg-gray-100 dark:bg-gray-800 rounded-t-lg flex items-center justify-center overflow-hidden relative">
+                          <FadeInImage 
                             src={event.image_url} 
                             alt={event.name}
-                            className="max-w-full max-h-full object-contain"
-                            loading="lazy"
-                            onError={(e) => {
-                              // Fallback to placeholder if image fails to load
-                              const target = e.target as HTMLImageElement;
-                              target.style.display = 'none';
-                              target.nextElementSibling?.classList.remove('hidden');
-                            }}
-                            onLoad={(e) => {
-                              // Ensure image is properly displayed
-                              const target = e.target as HTMLImageElement;
-                              target.style.display = 'block';
-                            }}
+                            fill
+                            className="object-contain"
+                            fadeInDuration={50}
                           />
-                          <div className="w-full h-48 bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900 dark:to-pink-900 rounded-t-lg flex items-center justify-center hidden">
-                            <svg className="w-16 h-16 text-purple-400 dark:text-purple-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                            </svg>
-                          </div>
                         </div>
                       ) : (
                         <div className="w-full h-48 bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900 dark:to-pink-900 rounded-t-lg flex items-center justify-center">
@@ -259,29 +245,14 @@ export default function EventsClient() {
               {/* Event Image */}
               <div className="relative mb-6">
                 {selectedEvent.image_url ? (
-                  <div className="w-full h-48 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center overflow-hidden">
-                    <img 
+                  <div className="w-full h-48 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center overflow-hidden relative">
+                    <FadeInImage 
                       src={selectedEvent.image_url} 
                       alt={selectedEvent.name}
-                      className="max-w-full max-h-full object-contain"
-                      loading="lazy"
-                      onError={(e) => {
-                        // Fallback to placeholder if image fails to load
-                        const target = e.target as HTMLImageElement;
-                        target.style.display = 'none';
-                        target.nextElementSibling?.classList.remove('hidden');
-                      }}
-                      onLoad={(e) => {
-                        // Ensure image is properly displayed
-                        const target = e.target as HTMLImageElement;
-                        target.style.display = 'block';
-                      }}
+                      fill
+                      className="object-contain"
+                      fadeInDuration={50}
                     />
-                    <div className="w-full h-48 bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900 dark:to-pink-900 rounded-lg flex items-center justify-center hidden">
-                      <svg className="w-16 h-16 text-purple-400 dark:text-purple-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                      </svg>
-                    </div>
                   </div>
                 ) : (
                   <div className="w-full h-48 bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900 dark:to-pink-900 rounded-lg flex items-center justify-center">

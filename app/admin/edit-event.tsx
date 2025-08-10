@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -15,15 +15,12 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { 
   ArrowLeft, 
-  Save,
   Calendar,
-  MapPin,
   Hash,
   Camera,
   X
 } from 'lucide-react-native';
-import { EventAPI, AuthAPI } from '../../lib/firebaseApi';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { EventAPI } from '../../lib/firebaseApi';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -53,13 +50,7 @@ export default function EditEvent() {
   const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
 
-  useEffect(() => {
-    if (eventId) {
-      loadEvent();
-    }
-  }, [eventId]);
-
-  const loadEvent = async () => {
+  const loadEvent = useCallback(async () => {
     try {
       const eventData = await EventAPI.get(eventId);
       if (!eventData) {
@@ -83,14 +74,19 @@ export default function EditEvent() {
       if (eventData.image_url) {
         setExistingImageUrl(eventData.image_url);
       }
-    } catch (error) {
-              // Error loading event
+    } catch {
       Alert.alert('Error', 'Failed to load event');
       router.back();
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [eventId]);
+
+  useEffect(() => {
+    if (eventId) {
+      loadEvent();
+    }
+  }, [eventId, loadEvent]);
 
   const pickImage = async () => {
     try {
@@ -104,8 +100,7 @@ export default function EditEvent() {
       if (!result.canceled && result.assets[0]) {
         setSelectedImage(result.assets[0].uri);
       }
-    } catch (error) {
-              // Error picking image
+    } catch {
       Alert.alert('Error', 'Failed to pick image. Please try again.');
     }
   };
@@ -128,8 +123,7 @@ export default function EditEvent() {
       // Get download URL
       const downloadURL = await getDownloadURL(storageRef);
       return downloadURL;
-    } catch (error) {
-              // Error uploading image
+    } catch {
       Alert.alert('Error', 'Failed to upload image. Please try again.');
       return null;
     } finally {
@@ -203,8 +197,7 @@ export default function EditEvent() {
           onPress: () => router.back()
         }
       ]);
-    } catch (error) {
-              // Error updating event
+    } catch {
       Alert.alert('Error', 'Failed to update event. Please try again.');
     } finally {
       setIsSaving(false);
@@ -571,7 +564,7 @@ export default function EditEvent() {
               keyboardType="url"
             />
             <Text style={[styles.label, { fontSize: 12, color: isDark ? '#9ca3af' : '#6b7280', marginTop: 4 }]}>
-              This link will be used for the "Join Event" button on the website
+              This link will be used for the &quot;Join Event&quot; button on the website
             </Text>
           </View>
 
@@ -635,7 +628,7 @@ export default function EditEvent() {
                 )}
               </View>
               <Text style={styles.checkboxLabel}>
-                Make this event private (won't be displayed on the IRL page)
+                Make this event private (won&apos;t be displayed on the IRL page)
               </Text>
             </TouchableOpacity>
           </View>

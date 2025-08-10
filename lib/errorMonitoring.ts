@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AsyncStorageUtils } from './asyncStorageUtils';
 import NetInfo from '@react-native-community/netinfo';
 import { Platform } from 'react-native';
 import { onSnapshot } from 'firebase/firestore';
@@ -89,13 +89,13 @@ class ErrorMonitor {
         existingLogs.splice(this.maxLogs);
       }
 
-      await AsyncStorage.setItem(this.storageKey, JSON.stringify(existingLogs));
+      await AsyncStorageUtils.setItem(this.storageKey, existingLogs);
       
       // Log to console in development only if not a recursive error
       if (__DEV__ && !error.message?.includes('Global error caught')) {
         // Error logged
       }
-    } catch (storageError) {
+    } catch {
       // Don't log storage errors to prevent infinite loops
       if (__DEV__) {
         // Failed to log error to storage (silenced to prevent loops)
@@ -105,9 +105,9 @@ class ErrorMonitor {
 
   async getLogs(): Promise<ErrorLog[]> {
     try {
-      const logs = await AsyncStorage.getItem(this.storageKey);
-      return logs ? JSON.parse(logs) : [];
-    } catch (error) {
+      const logs = await AsyncStorageUtils.getItem<ErrorLog[]>(this.storageKey);
+      return logs || [];
+    } catch {
               // Failed to retrieve error logs
       return [];
     }
@@ -145,9 +145,9 @@ class ErrorMonitor {
 
   async clearLogs(): Promise<void> {
     try {
-      await AsyncStorage.removeItem(this.storageKey);
+      await AsyncStorageUtils.removeItem(this.storageKey);
               // Error logs cleared
-    } catch (error) {
+    } catch {
               // Failed to clear error logs
     }
   }
@@ -302,8 +302,8 @@ export async function logFirebaseError(error: any, operation: string, context: P
       };
       
       // Store in AsyncStorage for debugging
-      const existingLogs = await AsyncStorage.getItem('firebase_critical_errors');
-      const logs = existingLogs ? JSON.parse(existingLogs) : [];
+      const existingLogs = await AsyncStorageUtils.getItem<any[]>('firebase_critical_errors');
+      const logs = existingLogs || [];
       logs.push(errorLog);
       
       // Keep only last 10 critical errors
@@ -311,9 +311,9 @@ export async function logFirebaseError(error: any, operation: string, context: P
         logs.splice(0, logs.length - 10);
       }
       
-      await AsyncStorage.setItem('firebase_critical_errors', JSON.stringify(logs));
+      await AsyncStorageUtils.setItem('firebase_critical_errors', logs);
               // Internal assertion error logged to storage
-    } catch (logError) {
+    } catch {
               // Failed to log internal assertion error
     }
 

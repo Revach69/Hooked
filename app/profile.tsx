@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,21 +14,17 @@ import {
   Keyboard,
   ScrollView,
   FlatList,
-  RefreshControl,
   Platform,
   Switch,
   KeyboardAvoidingView
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { Heart, QrCode, Hash, Shield, Clock, Users, X, Camera, Settings, LogOut, Flag, Edit3, Eye, EyeOff, Edit, User, AlertCircle, MessageCircle } from 'lucide-react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { EventProfileAPI, EventAPI, AuthAPI, ReportAPI, StorageAPI, LikeAPI, MessageAPI } from '../lib/firebaseApi';
+import { Clock, Users, Camera, LogOut, Edit, User, AlertCircle, MessageCircle } from 'lucide-react-native';
+import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
+import { EventProfileAPI, EventAPI, ReportAPI, StorageAPI, LikeAPI, MessageAPI } from '../lib/firebaseApi';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useMobileAsyncOperation } from '../lib/hooks/useMobileErrorHandling';
-import MobileOfflineStatusBar from '../lib/components/MobileOfflineStatusBar';
-import { MemoryManager, checkNetworkConnectivityWithTimeout, checkSimpleNetworkConnectivity } from '../lib/utils';
+import { checkSimpleNetworkConnectivity } from '../lib/utils';
 
 
 export default function Profile() {
@@ -56,7 +52,7 @@ export default function Profile() {
     'yoga', 'gaming', 'comedy', 'startups', 'fashion', 'spirituality', 'volunteering', 'crypto', 'cocktails', 'politics', 'hiking', 'design', 'podcasts', 'pets', 'wellness'
   ];
   
-  const ALL_INTERESTS = [...BASIC_INTERESTS, ...EXTENDED_INTERESTS];
+
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportStep, setReportStep] = useState<'select' | 'form'>('select');
   const [selectedUserToReport, setSelectedUserToReport] = useState<any>(null);
@@ -80,7 +76,7 @@ export default function Profile() {
         const { hasUnseenMessages } = await import('../lib/messageNotificationHelper');
         const hasUnseen = await hasUnseenMessages(currentEvent.id, profile.session_id);
         setHasUnreadMessages(hasUnseen);
-      } catch (error) {
+      } catch {
         // Error checking unseen messages in profile
       }
     };
@@ -109,7 +105,7 @@ export default function Profile() {
           if (updatedProfile) {
             setProfile(updatedProfile);
           }
-        }).catch((error) => {
+        }).catch(() => {
           // Handle error silently
         });
       }
@@ -117,8 +113,8 @@ export default function Profile() {
   );
 
   const initializeSession = async () => {
-    const eventId = await AsyncStorage.getItem('currentEventId');
-    const sessionId = await AsyncStorage.getItem('currentSessionId');
+    const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
+    const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
     
     if (!eventId || !sessionId) {
       router.replace('/home');
@@ -131,7 +127,7 @@ export default function Profile() {
         setCurrentEvent(events[0]);
       } else {
         // Event doesn't exist, clear all data and redirect to home
-        await AsyncStorage.multiRemove([
+        await AsyncStorageUtils.multiRemove([
           'currentEventId',
           'currentSessionId',
           'currentEventCode',
@@ -152,7 +148,7 @@ export default function Profile() {
       } else {
         // Profile doesn't exist in database (user left event and deleted profile)
         // Clear all AsyncStorage data and redirect to home
-        await AsyncStorage.multiRemove([
+        await AsyncStorageUtils.multiRemove([
           'currentEventId',
           'currentSessionId',
           'currentEventCode',
@@ -162,9 +158,9 @@ export default function Profile() {
         router.replace('/home');
         return;
       }
-    } catch (error) {
+    } catch {
       // Clear data and redirect to home on error
-      await AsyncStorage.multiRemove([
+      await AsyncStorageUtils.multiRemove([
         'currentEventId',
         'currentSessionId',
         'currentEventCode',
@@ -235,22 +231,22 @@ export default function Profile() {
           // Update profile with new photo
           await EventProfileAPI.update(profile.id, { profile_photo_url: file_url });
           setProfile((prev: any) => ({ ...prev, profile_photo_url: file_url }));
-          await AsyncStorage.setItem('currentProfilePhotoUrl', file_url);
-        } catch (err) {
+          await AsyncStorageUtils.setItem('currentProfilePhotoUrl', file_url);
+        } catch {
           Alert.alert("Upload Failed", "Failed to upload photo. Please try again.");
         } finally {
           setIsUploadingPhoto(false);
         }
       }
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "Failed to pick image. Please try again.");
     }
   };
 
   const loadAllUsers = async () => {
     try {
-      const eventId = await AsyncStorage.getItem('currentEventId');
-      const sessionId = await AsyncStorage.getItem('currentSessionId');
+      const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
+      const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
       if (!eventId || !sessionId) return;
 
       // Get current user's profile first
@@ -295,7 +291,7 @@ export default function Profile() {
       });
 
       setAllUsers(filteredUsers);
-    } catch (error) {
+    } catch {
               // Error loading users for report
       // Handle error silently
     }
@@ -329,7 +325,7 @@ export default function Profile() {
       try {
         isConnected = await checkSimpleNetworkConnectivity();
 
-      } catch (error) {
+      } catch {
         
         isConnected = true; // Proceed even if network check fails
       }
@@ -342,8 +338,8 @@ export default function Profile() {
 
 
 
-      const eventId = await AsyncStorage.getItem('currentEventId');
-      const sessionId = await AsyncStorage.getItem('currentSessionId');
+      const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
+      const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
       
 
       
@@ -356,27 +352,20 @@ export default function Profile() {
       
       let reportResult;
       
-      try {
-        reportResult = await ReportAPI.create({
-          event_id: eventId,
-          reporter_session_id: sessionId,
-          reported_session_id: selectedUserToReport.session_id,
-          reason: 'Inappropriate behavior',
-          details: reportExplanation.trim(),
-          status: 'pending'
-        });
-        
+      reportResult = await ReportAPI.create({
+        event_id: eventId,
+        reporter_session_id: sessionId,
+        reported_session_id: selectedUserToReport.session_id,
+        reason: 'Inappropriate behavior',
+        details: reportExplanation.trim(),
+        status: 'pending'
+      });
+      
 
-        
-        // Verify the report was created successfully
-        if (!reportResult || !reportResult.id) {
-          throw new Error('Report creation failed - no ID returned');
-        }
-        
-
-      } catch (reportError) {
-        // ReportAPI.create failed
-        throw reportError; // Re-throw to be caught by the outer catch block
+      
+      // Verify the report was created successfully
+      if (!reportResult || !reportResult.id) {
+        throw new Error('Report creation failed - no ID returned');
       }
 
       Alert.alert(
@@ -442,8 +431,8 @@ export default function Profile() {
           style: "destructive",
           onPress: async () => {
             try {
-              const eventId = await AsyncStorage.getItem('currentEventId');
-              const sessionId = await AsyncStorage.getItem('currentSessionId');
+              const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
+              const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
               
               if (eventId && sessionId) {
                 // Delete all likes where this user is the liker
@@ -489,7 +478,7 @@ export default function Profile() {
               }
 
               // Clear all session data
-              await AsyncStorage.multiRemove([
+              await AsyncStorageUtils.multiRemove([
                 'currentEventId',
                 'currentSessionId',
                 'currentEventCode',
@@ -498,7 +487,7 @@ export default function Profile() {
               ]);
               
               router.replace('/home');
-            } catch (error) {
+            } catch {
               // Error deleting profile
               Alert.alert("Error", "Failed to delete profile. Please try again.");
             }
@@ -553,7 +542,7 @@ export default function Profile() {
           : "Your profile is now hidden. You won't see other users in discovery, but you can still access your matches and chat with them."
       );
       
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "Failed to update visibility. Please try again.");
       // Revert the toggle if update failed
       setEventVisible(!value);

@@ -1,6 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 import { auth } from './firebaseConfig';
 
@@ -50,7 +50,7 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
       granted: status === 'granted',
       canAskAgain,
     };
-  } catch (error) {
+  } catch {
             // Error requesting notification permission
     return {
       granted: false,
@@ -69,7 +69,7 @@ export async function getPushToken(): Promise<string | null> {
       projectId: '7a1de260-e3cb-4cbb-863c-1557213d69f0'
     });
     return token.data;
-  } catch (error) {
+  } catch {
             // Error getting push token
     return null;
   }
@@ -95,7 +95,7 @@ export async function savePushTokenToFirestore(token: string): Promise<boolean> 
 
     await setDoc(doc(db, 'users', user.uid, 'pushTokens', token), tokenData);
     return true;
-  } catch (error) {
+  } catch {
             // Error saving push token to Firestore
     return false;
   }
@@ -115,7 +115,7 @@ export async function removePushTokenFromFirestore(token: string): Promise<boole
     const tokenRef = doc(db, 'users', user.uid, 'pushTokens', token);
     await setDoc(tokenRef, { deleted: true, deletedAt: new Date() });
     return true;
-  } catch (error) {
+  } catch {
             // Error removing push token from Firestore
     return false;
   }
@@ -158,7 +158,7 @@ export async function initializeNotifications(): Promise<{
       permissionGranted: true,
       tokenSaved,
     };
-  } catch (error) {
+  } catch {
             // Error initializing notifications
     return { permissionGranted: false, tokenSaved: false };
   }
@@ -183,7 +183,7 @@ export async function requestAndInitializeNotifications(): Promise<{
 
     // Initialize notifications with the granted permission
     return await initializeNotifications();
-  } catch (error) {
+  } catch {
             // Error requesting and initializing notifications
     return { permissionGranted: false, tokenSaved: false };
   }
@@ -193,7 +193,7 @@ export async function requestAndInitializeNotifications(): Promise<{
  * Get all push tokens for a user
  * NOTE: This is disabled for the session-based app since it requires Firebase Auth
  */
-export async function getUserPushTokens(userId: string): Promise<PushTokenData[]> {
+export async function getUserPushTokens(): Promise<PushTokenData[]> {
   // Push tokens are not supported in the session-based version
   // since they require Firebase Auth and the app doesn't use authentication
         // Push tokens not supported in session-based app

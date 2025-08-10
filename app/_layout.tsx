@@ -2,17 +2,13 @@ import { Stack } from 'expo-router';
 import { useColorScheme, View, Text, AppState, TouchableOpacity, Platform } from 'react-native';
 import { useEffect, useState, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
-import { Alert } from 'react-native';
 import { router } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import CustomSplashScreen from '../lib/components/SplashScreen';
 import ErrorBoundary from '../lib/components/ErrorBoundary';
-import { initSentry } from '../lib/sentryConfig';
 import { Heart, MessageCircle } from 'lucide-react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { checkPendingMessageNotifications, updateUserActivity } from '../lib/messageNotificationHelper';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
-import { db } from '../lib/firebaseConfig';
 import { initializeNotificationChannels } from '../lib/notificationService';
 
 export default function RootLayout() {
@@ -305,9 +301,6 @@ export default function RootLayout() {
     
     async function prepare() {
       try {
-        // Initialize Sentry first
-        initSentry();
-        
         // Request notification permissions with proper iOS configuration
         const { status: existingStatus } = await Notifications.getPermissionsAsync();
         let finalStatus = existingStatus;
@@ -350,7 +343,7 @@ export default function RootLayout() {
         
         // Enhanced notification handler setup
         Notifications.setNotificationHandler({
-          handleNotification: async (notification) => {
+          handleNotification: async () => {
             return {
               shouldPlaySound: true,
               shouldSetBadge: false,
@@ -370,12 +363,12 @@ export default function RootLayout() {
           });
           
           // Store the token when we have a session
-          const currentSessionId = await AsyncStorage.getItem('currentSessionId');
+          const currentSessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
           if (currentSessionId && token.data) {
             const { storePushToken } = await import('../lib/notificationService');
             await storePushToken(currentSessionId, token.data);
           }
-        } catch (error) {
+        } catch {
           // Error registering for push notifications
         }
 
@@ -402,7 +395,7 @@ export default function RootLayout() {
                 }
               }, 1000);
             }
-          } catch (error) {
+          } catch {
             // Error processing notification response
           }
         });
@@ -421,7 +414,7 @@ export default function RootLayout() {
         if (isMounted) {
           await new Promise(resolve => setTimeout(resolve, 200));
         }
-      } catch (e) {
+      } catch {
         // Error during app preparation
       } finally {
         // Tell the application to render only if still mounted
@@ -440,7 +433,7 @@ export default function RootLayout() {
         try {
           notificationSubscriptionRef.current.remove();
           notificationSubscriptionRef.current = null;
-        } catch (error) {
+        } catch {
           // Error removing notification subscription
         }
       }
@@ -456,11 +449,11 @@ export default function RootLayout() {
           await checkPendingMessageNotifications();
           
           // Update user activity
-          const currentSessionId = await AsyncStorage.getItem('currentSessionId');
+          const currentSessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
           if (currentSessionId) {
             await updateUserActivity(currentSessionId);
           }
-        } catch (error) {
+        } catch {
           // Error handling app state change
         }
       }
@@ -475,8 +468,8 @@ export default function RootLayout() {
     const loadUserData = async () => {
       try {
         const [sessionId, eventId] = await Promise.all([
-          AsyncStorage.getItem('currentSessionId'),
-          AsyncStorage.getItem('currentEventId')
+          AsyncStorageUtils.getItem<string>('currentSessionId'),
+          AsyncStorageUtils.getItem<string>('currentEventId')
         ]);
         
     
@@ -488,7 +481,7 @@ export default function RootLayout() {
           setCurrentEvent({ id: eventId });
   
         }
-      } catch (error) {
+      } catch {
         // Error loading user data for global message listener
       }
     };
@@ -512,10 +505,8 @@ export default function RootLayout() {
         if (userProfiles.length > 0) {
           setCurrentUserProfile(userProfiles[0]);
 
-        } else {
-
         }
-      } catch (error) {
+      } catch {
         // Error loading user profile
       }
     };
@@ -693,7 +684,7 @@ export default function RootLayout() {
   if (!appIsReady) {
     return (
       <ErrorBoundary>
-        <CustomSplashScreen progress={progress} />
+        <CustomSplashScreen />
       </ErrorBoundary>
     );
   }
@@ -728,4 +719,4 @@ export default function RootLayout() {
       </View>
     </ErrorBoundary>
   );
-} 
+}

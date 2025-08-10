@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,15 +13,13 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { 
   ArrowLeft, 
-  Users, 
   UserMinus, 
   Heart, 
   MessageCircle,
   Calendar,
   MapPin
 } from 'lucide-react-native';
-import { EventAPI, EventProfileAPI, LikeAPI, MessageAPI, type Event, type EventProfile } from '../../lib/firebaseApi';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { EventAPI, EventProfileAPI, LikeAPI, MessageAPI, type EventProfile } from '../../lib/firebaseApi';
 
 interface UserWithStats extends EventProfile {
   likesGiven: number;
@@ -38,15 +36,8 @@ export default function ManageUsers() {
   
   const [users, setUsers] = useState<UserWithStats[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [event, setEvent] = useState<Event | null>(null);
 
-  useEffect(() => {
-    if (eventId) {
-      loadUsers();
-    }
-  }, [eventId]);
-
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     try {
       setIsLoading(true);
       
@@ -57,7 +48,7 @@ export default function ManageUsers() {
         router.back();
         return;
       }
-      setEvent(eventData);
+      // Event data loaded successfully
       
       // Load all profiles for this event
       const profiles = await EventProfileAPI.filter({ event_id: eventId });
@@ -85,13 +76,18 @@ export default function ManageUsers() {
       });
 
       setUsers(usersWithStats);
-    } catch (error) {
-              // Error loading users
+    } catch {
       Alert.alert('Error', 'Failed to load users');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [eventId]);
+
+  useEffect(() => {
+    if (eventId) {
+      loadUsers();
+    }
+  }, [eventId, loadUsers]);
 
   const handleBack = () => {
     router.back();
@@ -146,7 +142,7 @@ export default function ManageUsers() {
               
               Alert.alert('Success', 'User deleted successfully');
               loadUsers(); // Reload the list
-            } catch (error) {
+            } catch {
               // Error deleting user
               Alert.alert('Error', 'Failed to delete user');
             }

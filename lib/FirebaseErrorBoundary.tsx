@@ -8,7 +8,7 @@ import {
   useColorScheme,
 } from 'react-native';
 import { AlertTriangle, RefreshCw, Wifi, WifiOff } from 'lucide-react-native';
-import { attemptFirebaseRecovery, getFirebaseRecoveryStatus } from './firebaseRecovery';
+import { attemptFirebaseRecovery } from './firebaseRecovery';
 import { getErrorMessage } from './mobileErrorHandler';
 import NetInfo from '@react-native-community/netinfo';
 
@@ -65,7 +65,7 @@ class FirebaseErrorBoundary extends Component<Props, State> {
 
     // Check if this is a Firebase-related error
     if (this.isFirebaseError(error)) {
-      this.handleFirebaseError(error);
+      this.handleFirebaseError();
     }
   }
 
@@ -87,7 +87,7 @@ class FirebaseErrorBoundary extends Component<Props, State> {
     );
   }
 
-  private async handleFirebaseError(error: Error) {
+  private async handleFirebaseError() {
           // Handling Firebase error in error boundary
     
     // Check network status
@@ -103,7 +103,7 @@ class FirebaseErrorBoundary extends Component<Props, State> {
     this.setState({ isRecovering: true });
     
     try {
-      const recoverySuccess = await attemptFirebaseRecovery('Error Boundary Recovery');
+      const recoverySuccess = await attemptFirebaseRecovery();
       
       if (recoverySuccess) {
         // Firebase recovery successful, resetting error boundary
@@ -154,7 +154,7 @@ class FirebaseErrorBoundary extends Component<Props, State> {
       }
 
       // Attempt Firebase recovery
-      const recoverySuccess = await attemptFirebaseRecovery('Manual Retry');
+      const recoverySuccess = await attemptFirebaseRecovery();
       
       if (recoverySuccess) {
         this.resetErrorBoundary();

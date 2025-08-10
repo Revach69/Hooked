@@ -18,11 +18,11 @@ const firebaseConfig = {
 let app;
 try {
   app = initializeApp(firebaseConfig);
-} catch (error: unknown) {
+} catch {
   // Create a fallback app with a different name if initialization fails
   try {
     app = initializeApp(firebaseConfig, 'fallback-app');
-  } catch (fallbackError: unknown) {
+  } catch {
     throw new Error('Firebase initialization failed completely');
   }
 }

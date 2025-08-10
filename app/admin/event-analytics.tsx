@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,18 +12,9 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { 
-  ArrowLeft, 
-  BarChart3, 
-  Users, 
-  Heart, 
-  MessageCircle,
-  Calendar,
-  TrendingUp,
-  TrendingDown,
-  Activity
+  ArrowLeft
 } from 'lucide-react-native';
-import { EventAPI, EventProfileAPI, LikeAPI, MessageAPI, type Event } from '../../lib/firebaseApi';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { EventAPI, EventProfileAPI, LikeAPI, MessageAPI } from '../../lib/firebaseApi';
 
 interface AnalyticsData {
   totalProfiles: number;
@@ -56,15 +47,8 @@ export default function EventAnalytics() {
   
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [event, setEvent] = useState<Event | null>(null);
 
-  useEffect(() => {
-    if (eventId) {
-      loadAnalytics();
-    }
-  }, [eventId]);
-
-  const loadAnalytics = async () => {
+  const loadAnalytics = useCallback(async () => {
     try {
       setIsLoading(true);
       
@@ -75,7 +59,7 @@ export default function EventAnalytics() {
         router.back();
         return;
       }
-      setEvent(eventData);
+      // Event data loaded successfully
       
       // Load all data for this event
       const [profiles, likes, messages] = await Promise.all([
@@ -139,13 +123,18 @@ export default function EventAnalytics() {
         hourlyActivity,
         dailyActivity,
       });
-    } catch (error) {
-              // Error loading analytics
+    } catch {
       Alert.alert('Error', 'Failed to load analytics');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [eventId]);
+
+  useEffect(() => {
+    if (eventId) {
+      loadAnalytics();
+    }
+  }, [eventId, loadAnalytics]);
 
   const handleBack = () => {
     router.back();

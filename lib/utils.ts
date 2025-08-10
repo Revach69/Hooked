@@ -26,8 +26,8 @@ export const checkNetworkStatus = async (): Promise<boolean> => {
   try {
     const state = await NetInfo.fetch();
     return state.isConnected ?? false;
-  } catch (error) {
-            // Error checking network status
+  } catch {
+    // Error checking network status
     return false;
   }
 };
@@ -36,8 +36,8 @@ export const getNetworkType = async (): Promise<string> => {
   try {
     const state = await NetInfo.fetch();
     return state.type || 'unknown';
-  } catch (error) {
-            // Error getting network type
+  } catch {
+    // Error getting network type
     return 'unknown';
   }
 }; 
@@ -59,7 +59,7 @@ export const checkNetworkConnectivity = async (): Promise<boolean> => {
       if (response.ok) {
         return true;
       }
-    } catch (error) {
+    } catch {
       // Try next endpoint
       continue;
     }
@@ -91,7 +91,7 @@ export const checkNetworkConnectivityWithTimeout = async (timeoutMs: number = 50
       if (response.ok) {
         return true;
       }
-    } catch (error) {
+    } catch {
       // Try next endpoint
       continue;
     }
@@ -102,13 +102,9 @@ export const checkNetworkConnectivityWithTimeout = async (timeoutMs: number = 50
 
 // Simple network check that doesn't rely on external services
 export const checkSimpleNetworkConnectivity = async (): Promise<boolean> => {
-  try {
-    // Just check if we can make a basic fetch request
-    // This is more reliable than checking external endpoints
-    return true;
-  } catch (error) {
-    return false;
-  }
+  // Just check if we can make a basic fetch request
+  // This is more reliable than checking external endpoints
+  return true;
 };
 
 // Memory management utilities
@@ -163,8 +159,8 @@ export const safeAsyncOperation = async <T>(
     }
 
     return result;
-  } catch (error) {
-            // Safe async operation failed
+  } catch {
+    // Safe async operation failed
     return null;
   }
 };
@@ -201,15 +197,13 @@ export const throttle = <T extends (...args: any[]) => any>(
 };
 
 // Memory leak detection helper
-export const createMemoryLeakDetector = (componentName: string) => {
-  const startTime = Date.now();
+export const createMemoryLeakDetector = () => {
   const startMemory = (global as any).performance?.memory?.usedJSHeapSize || 0;
   
   return {
     check: () => {
       const currentMemory = (global as any).performance?.memory?.usedJSHeapSize || 0;
       const memoryIncrease = currentMemory - startMemory;
-      const timeElapsed = Date.now() - startTime;
       
       if (memoryIncrease > 10 * 1024 * 1024) { // 10MB threshold
         // Potential memory leak detected

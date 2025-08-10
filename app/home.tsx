@@ -12,34 +12,33 @@ import {
   useColorScheme,
   Image,
   Linking,
-  Keyboard,
 } from 'react-native';
 import { router } from 'expo-router';
-import { Heart, QrCode, Hash, Shield, Clock, Users, X, Camera } from 'lucide-react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { EventAPI } from '../lib/firebaseApi';
+import { QrCode, X } from 'lucide-react-native';
+import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
+
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useMobileAsyncOperation } from '../lib/hooks/useMobileErrorHandling';
+
 import MobileOfflineStatusBar from '../lib/components/MobileOfflineStatusBar';
 import { SurveyService } from '../lib/surveyService';
 import { MemoryManager } from '../lib/utils';
 import { useKickedUserCheck } from '../lib/hooks/useKickedUserCheck';
 import KickedUserModal from './KickedUserModal';
 
-const { width } = Dimensions.get('window');
+
 
 export default function Home() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const [activeModal, setActiveModal] = useState<string | null>(null);
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+
   const [isProcessing, setIsProcessing] = useState(false);
   const [manualCode, setManualCode] = useState('');
   const [isInitialized, setIsInitialized] = useState(false);
-  const { executeOperationWithOfflineFallback, showErrorAlert } = useMobileAsyncOperation();
-  const { kickedUser, isChecking, handleKickedUserClose } = useKickedUserCheck();
+
+  const { kickedUser, handleKickedUserClose } = useKickedUserCheck();
   const componentId = useRef('Home-' + Date.now()).current;
   const initializationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const manualCodeInputRef = useRef<TextInput>(null);
@@ -60,7 +59,7 @@ export default function Home() {
         clearTimeout(initializationTimeoutRef.current);
       }
     };
-  }, []);
+  }, [componentId]);
 
   // Effect to handle keyboard focus when manual code entry modal opens
   useEffect(() => {
@@ -83,8 +82,8 @@ export default function Home() {
 
     try {
       // Check for existing session first
-      const eventId = await AsyncStorage.getItem('currentEventId');
-      const sessionId = await AsyncStorage.getItem('currentSessionId');
+          const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
+    const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
       
       if (eventId && sessionId) {
         // User has an active session, redirect to discovery
@@ -102,8 +101,8 @@ export default function Home() {
         }
       }, 2000);
       
-    } catch (error) {
-              // Error during app initialization
+    } catch {
+      // Error during app initialization
     }
   };
 
@@ -128,31 +127,12 @@ export default function Home() {
           }
         }, 3000);
       }
-    } catch (error) {
+    } catch {
               // Error checking for survey
     }
   };
 
-  const handleScanSuccess = (scannedUrl: string) => {
-    try {
-      const url = new URL(scannedUrl);
-      const eventCode = url.searchParams.get("code");
-      if (eventCode) {
-        closeModal();
-        router.push(`/join?code=${eventCode.toUpperCase()}`);
-      } else {
-        Alert.alert("Invalid QR Code", "No event code found in URL.");
-      }
-    } catch (error) {
-      // If it's not a URL, it might be the code itself.
-      if (typeof scannedUrl === 'string' && scannedUrl.trim().length > 3) {
-        closeModal();
-        router.push(`/join?code=${scannedUrl.toUpperCase()}`);
-      } else {
-        Alert.alert("Invalid QR Code", "Invalid QR code format.");
-      }
-    }
-  };
+
 
   const handleCameraAccess = async () => {
     if (!MemoryManager.isComponentMounted(componentId)) return;
@@ -187,7 +167,7 @@ export default function Home() {
           ]
         );
       }
-    } catch (error) {
+    } catch {
               // Camera access error
     } finally {
       if (MemoryManager.isComponentMounted(componentId)) {
@@ -215,14 +195,13 @@ export default function Home() {
   };
 
   const handleManualSubmit = () => {
-    if (manualCode.trim().length > 0) {
+    if (manualCode.trim()) {
       handleEventAccess(manualCode.trim());
+      closeModal();
     } else {
       Alert.alert("Invalid Code", "Please enter a valid event code.");
     }
   };
-
-
 
   const styles = StyleSheet.create({
     container: {
@@ -520,13 +499,10 @@ export default function Home() {
               style={styles.button}
               onPress={() => openModal('manualCodeEntry')}
               accessibilityLabel="Enter Code Manually"
-              accessibilityHint="Opens form to manually enter event code"
+              accessibilityHint="Opens modal to manually enter event code"
             >
-              <Hash size={24} color="black" />
               <Text style={styles.buttonText}>Enter Code Manually</Text>
             </TouchableOpacity>
-
-
           </View>
         </View>
 
@@ -567,7 +543,7 @@ export default function Home() {
               <View style={styles.infoCard}>
                 <Text style={styles.infoText}>• Join the event via QR or Code{'\n'}
                   • Create a temporary profile{'\n'}
-                  • See who's single{'\n'}
+                  • See who&apos;s single{'\n'}
                   • Match, chat, and meet{'\n'}
                   • Profiles expires after event</Text>
               </View>

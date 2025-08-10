@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,13 +9,12 @@ import {
   StyleSheet,
   useColorScheme,
   SafeAreaView,
-  Animated,
   Modal,
 } from 'react-native';
 import { router } from 'expo-router';
-import { BarChart3, Users, Heart, MessageCircle, Plus, LogOut, AlertTriangle, Calendar, MapPin, Home, ChevronDown, ChevronUp, QrCode, Edit, Trash2, Download, Flag } from 'lucide-react-native';
+import { BarChart3, Users, Plus, LogOut, Calendar, MapPin, Home, ChevronDown, ChevronUp, QrCode, Edit, Download, Flag } from 'lucide-react-native';
 import { EventAPI, EventProfileAPI, LikeAPI, MessageAPI, AuthAPI, type Event } from '../lib/firebaseApi';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import QRCodeGenerator from '../lib/QRCodeGenerator';
 import { AdminUtils } from '../lib/adminUtils';
 import ReportsModal from './admin/ReportsModal';
@@ -42,11 +41,7 @@ export default function Admin() {
   const [showReportsModal, setShowReportsModal] = useState(false);
   const [selectedEventForReports, setSelectedEventForReports] = useState<Event | null>(null);
 
-  useEffect(() => {
-    initializeSession();
-  }, []);
-
-  const initializeSession = async () => {
+  const initializeSession = useCallback(async () => {
     // Check if user is authenticated with Firebase
     const currentUser = AuthAPI.getCurrentUser();
     
@@ -74,13 +69,17 @@ export default function Admin() {
     await loadEvents();
     await loadAdminStats();
     setIsLoading(false);
-  };
+  }, []);
+
+  useEffect(() => {
+    initializeSession();
+  }, [initializeSession]);
 
   const loadEvents = async () => {
     try {
       const allEvents = await EventAPI.filter({});
       setEvents(allEvents);
-    } catch (error) {
+    } catch {
       // Handle error silently
     }
   };
@@ -124,7 +123,7 @@ export default function Admin() {
         totalMatches: mutualLikes.length,
         totalMessages: allMessages.length,
       });
-    } catch (error) {
+    } catch {
       // Handle error silently
     }
   };
@@ -193,7 +192,7 @@ export default function Admin() {
               await AuthAPI.signOut();
               
               // Clear all admin-related storage
-              await AsyncStorage.multiRemove([
+              await AsyncStorageUtils.multiRemove([
                 'currentEventId',
                 'currentSessionId',
                 'currentEventCode',
@@ -208,7 +207,7 @@ export default function Admin() {
               await AdminUtils.clearAdminSession();
               
               router.replace('/home');
-            } catch (error) {
+            } catch {
               // Handle error silently
               Alert.alert('Error', 'Failed to logout. Please try again.');
             }
@@ -265,7 +264,6 @@ export default function Admin() {
   const renderEventCard = (event: Event) => {
     const status = getEventStatus(event);
     const isExpanded = expandedEvents.has(event.id);
-    const joinLink = `https://www.hooked-app.com/join-instant?code=${event.event_code}`;
 
     return (
       <View key={event.id} style={styles.eventCard}>

@@ -65,7 +65,7 @@
         }
       ]
     ],
-    "scheme": "hooked",
+    "scheme": "hooked", 
     "extra": {
       "firebaseConfig": {
         "apiKey": "AIzaSyDkVAo_xXbBHy8FYwFtMQA66aju08qK_yE",

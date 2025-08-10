@@ -1,6 +1,9 @@
-apply plugin: "com.android.application"
-apply plugin: "org.jetbrains.kotlin.android"
-apply plugin: "com.facebook.react"
+plugins {
+  id 'com.android.application'
+  id 'org.jetbrains.kotlin.android'
+  id 'com.facebook.react'
+  id 'com.google.gms.google-services'
+}
 
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
 
@@ -104,9 +107,9 @@ android {
         }
         release {
             storeFile file('../../hooked-release-key.keystore')
-            storePassword System.getenv('KEYSTORE_PASSWORD') ?: 'your-store-password'
-            keyAlias System.getenv('KEY_ALIAS') ?: 'your-key-alias'
-            keyPassword System.getenv('KEY_PASSWORD') ?: 'your-key-password'
+            storePassword 'Hooked_69US69'
+            keyAlias 'hooked-key-alias'
+            keyPassword 'Hooked_69US69'
         }
     }
     buildTypes {
@@ -178,4 +181,14 @@ dependencies {
     } else {
         implementation jscFlavor
     }
+
+    // Firebase BOM (latest version)
+    implementation platform('com.google.firebase:firebase-bom:34.1.0')
+    implementation 'com.google.firebase:firebase-analytics'
+    implementation 'com.google.firebase:firebase-auth'
+    implementation 'com.google.firebase:firebase-firestore'
+    implementation 'com.google.firebase:firebase-storage'
+    implementation 'com.google.firebase:firebase-messaging'
+    implementation 'com.google.firebase:firebase-crashlytics'
+    implementation 'com.google.firebase:firebase-perf'
 }

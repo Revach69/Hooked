@@ -1,6 +1,7 @@
 'use client';
 
 import Link from "next/link";
+import FadeInImage from "./FadeInImage";
 import { useState } from "react";
 
 export default function Header() {
@@ -17,7 +18,16 @@ export default function Header() {
           {/* Logo */}
           <div className="flex-shrink-0">
             <Link href="/" className="flex items-center" aria-label="Hooked - Home">
-              <img src="/Hooked Full Logo.png" alt="Hooked - Real-life dating app for events" className="h-8 w-auto" />
+              <div className="relative w-[120px] h-[32px]">
+                <FadeInImage 
+                  src="/Hooked Full Logo.png" 
+                  alt="Hooked - Real-life dating app for events" 
+                  fill
+                  className="object-contain" 
+                  priority
+                  fadeInDuration={50}
+                />
+              </div>
             </Link>
           </div>
           

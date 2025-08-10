@@ -53,7 +53,7 @@ export default function KickedUserModal({
                     styles.title,
                     { color: isDark ? '#ffffff' : '#111827' }
                   ]}>
-                    You've been removed from the event
+                    You&apos;ve been removed from the event
                   </Text>
                 </View>
               </View>

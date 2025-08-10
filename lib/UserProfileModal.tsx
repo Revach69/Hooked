@@ -10,7 +10,7 @@ import {
   useColorScheme,
   Dimensions,
 } from 'react-native';
-import { X, MapPin, User, Heart } from 'lucide-react-native';
+import { X, MapPin, Heart } from 'lucide-react-native';
 
 const { width, height } = Dimensions.get('window');
 
