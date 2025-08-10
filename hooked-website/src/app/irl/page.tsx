@@ -22,7 +22,7 @@ export default function IRL() {
       <Header />
       
       {/* Hero Section */}
-      <section className="bg-gradient-to-r from-pink-400/90 to-purple-500/90 text-white py-16 relative">
+      <section className="bg-gradient-to-r from-purple-500/90 to-pink-400/90 text-white py-16 relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <h1 className="text-4xl font-bold mb-4">
@@ -39,7 +39,7 @@ export default function IRL() {
       <EventsClient />
 
       {/* Organizer CTA Section */}
-      <section className="py-16 bg-gradient-to-r from-purple-400/90 to-pink-400/90 text-white relative">
+      <section className="py-16 bg-gradient-to-r from-purple-500/90 to-pink-400/90 text-white relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl font-bold mb-4">
             Host Your Event with Hooked

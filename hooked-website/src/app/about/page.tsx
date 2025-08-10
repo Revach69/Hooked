@@ -52,7 +52,7 @@ export default function About() {
       <Header />
       
       {/* Section 1: Hero */}
-      <section className="bg-gradient-to-r from-pink-400/90 to-purple-500/90 text-white py-16 md:py-16 pt-24 md:pt-16 relative min-h-[60vh] flex items-center">
+      <section className="bg-gradient-to-r from-purple-500/90 to-pink-400/90 text-white py-16 md:py-16 pt-24 md:pt-16 relative min-h-[60vh] flex items-center">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             {/* Left side - white header */}
@@ -206,7 +206,7 @@ export default function About() {
       </section>
 
       {/* Section 5: The World We Want */}
-      <section className="py-12 bg-gradient-to-r from-purple-400/90 to-pink-400/90 text-white">
+      <section className="py-12 bg-gradient-to-r from-purple-500/90 to-pink-400/90 text-white">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-4xl font-bold mb-6 font-heading">
             The World We Want

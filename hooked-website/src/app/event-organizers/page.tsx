@@ -39,7 +39,7 @@ export default function EventOrganizers() {
       <Header />
       
       {/* Section 1: Event Organizers - Hero */}
-      <section className="py-32 bg-gradient-to-r from-purple-400/90 to-pink-400/90 text-white">
+      <section className="py-32 bg-gradient-to-r from-purple-500/90 to-pink-400/90 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h1 className="text-4xl md:text-5xl font-bold mb-8 text-center font-heading">
             Event Organizers
@@ -202,7 +202,7 @@ export default function EventOrganizers() {
       </section>
 
       {/* Section 4: Ready to Get Hooked? - CTA */}
-      <section className="py-16 bg-gradient-to-r from-purple-400/90 to-pink-400/90 text-white">
+      <section className="py-16 bg-gradient-to-r from-purple-500/90 to-pink-400/90 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl md:text-4xl font-bold mb-6 font-heading">
             Ready to Get Hooked?

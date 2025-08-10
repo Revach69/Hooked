@@ -69,7 +69,7 @@ export default function Home() {
   return (
     <div className="dark-mode-bg">
       {/* Hero Section */}
-      <section className="relative bg-gradient-to-r from-purple-400/90 to-pink-400/90 text-white min-h-screen flex flex-col pb-12 md:pb-0" style={{
+      <section className="relative bg-gradient-to-r from-purple-500/90 to-pink-400/90 text-white min-h-screen flex flex-col pb-12 md:pb-0" style={{
       }}>
         {/* Header */}
         <Header />
@@ -192,7 +192,7 @@ export default function Home() {
       </section>
 
       {/* The Hooked Experience Section */}
-      <section className="py-20 bg-gradient-to-r from-purple-400/90 to-pink-400/90 text-white">
+      <section className="py-20 bg-gradient-to-r from-purple-500/90 to-pink-400/90 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center mb-16">
             {/* Left side - Large text */}
@@ -401,7 +401,7 @@ export default function Home() {
       </section>
 
       {/* Get Hooked at Your Event Section */}
-      <section className="py-20 bg-gradient-to-r from-purple-400/90 to-pink-400/90 text-white relative flex items-center">
+      <section className="py-20 bg-gradient-to-r from-purple-500/90 to-pink-400/90 text-white relative flex items-center">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-5xl md:text-6xl font-bold mb-4 font-heading">
             Get Hooked at Your Event

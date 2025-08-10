@@ -1,180 +1,177 @@
-# Hooked Web Admin Dashboard
+# Hooked Admin Dashboard
 
-A modern, responsive admin dashboard for managing Hooked events with analytics and data export capabilities.
+A Next.js admin dashboard for managing Hooked events and client relationships.
 
 ## Features
 
-### 🎯 Event Management
-- **Create Events**: Full event creation form with validation
-- **Edit Events**: Modify existing events with real-time updates
-- **Delete Events**: Safe event deletion with confirmation
-- **Event Cards**: Beautiful event display with all essential information
+### 🔐 Authentication
+- Firebase Authentication integration
+- Protected admin routes
+- Login/logout functionality
 
-### 📊 Analytics
-- **Real-time Analytics**: View event statistics in a modal
-- **Key Metrics**: Total profiles, mutual matches, messages sent, average age
-- **Gender Breakdown**: Demographic analysis of event participants
-- **Event-specific Data**: Analytics filtered by individual events
+### 📅 Events Management
+- Create, edit, and delete events
+- Event analytics and reporting
+- QR code generation for events
+- Data export functionality
+- Event status tracking (Active, Future, Past)
 
-### 📱 QR Code Management
-- **QR Code Generation**: Automatic QR code generation for join links
-- **QR Download**: Download QR codes as PNG files
-- **Join Link Copy**: One-click copy of event join links
-- **QR Sign Template**: Placeholder for future QR sign template feature
+### 👥 Clients Management
+- Complete CRUD operations for clients
+- Advanced filtering and search
+- CSV export functionality
+- Client relationship tracking
+- Status management (Initial Discussion, Negotiation, Won, Lost)
 
-### 📈 Data Export
-- **CSV Export**: Download event data in CSV format
-- **Multiple Files**: Separate files for profiles, likes, and messages
-- **Complete Data**: All event-related data available for export
+### 🎨 UI/UX
+- Modern, responsive design
+- Dark mode support
+- Persistent header navigation
+- Slide-over forms for editing
+- Data tables with sorting and pagination
 
-### 🎨 Modern UI/UX
-- **Dark/Light Mode**: Automatic theme switching based on system preference
-- **Responsive Design**: Works perfectly on desktop, tablet, and mobile
-- **Hooked Branding**: Consistent with the main app's design language
-- **Smooth Animations**: Professional transitions and loading states
+## Tech Stack
 
-## Structure
-
-```
-web-admin-hooked/
-├── src/
-│   ├── app/
-│   │   ├── page.tsx              # Main dashboard page
-│   │   ├── layout.tsx            # Root layout
-│   │   └── globals.css           # Global styles
-│   ├── components/
-│   │   ├── EventCard.tsx         # Event display component
-│   │   ├── AnalyticsModal.tsx    # Analytics modal
-│   │   └── EventForm.tsx         # Event creation/edit form
-│   └── lib/
-│       ├── firebaseConfig.ts     # Firebase configuration
-│       └── firebaseApi.ts        # Firebase API functions
-```
-
-## Components
-
-### EventCard
-- Displays event information in a card format
-- Shows event name, code, location, and status
-- QR code generation and download
-- Schedule information and join link
-- Action buttons for analytics, edit, delete, and data export
-
-### AnalyticsModal
-- Modal display of event analytics
-- Real-time data loading from Firebase
-- Key metrics in a grid layout
-- Gender breakdown statistics
-
-### EventForm
-- Form for creating and editing events
-- Validation for all required fields
-- Date/time picker for event scheduling
-- Error handling and loading states
-
-## Authentication
-
-- Simple password-based authentication
-- Session persistence (24-hour sessions)
-- Secure admin access control
-
-## Technology Stack
-
-- **Next.js 15**: React framework with App Router
-- **TypeScript**: Type-safe development
-- **Tailwind CSS**: Utility-first styling
-- **Firebase**: Backend services (Firestore, Auth)
-- **Lucide React**: Icon library
-- **QRCode**: QR code generation
+- **Framework**: Next.js 15
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS
+- **UI Components**: shadcn/ui
+- **Database**: Firebase Firestore
+- **Authentication**: Firebase Auth
+- **Tables**: TanStack Table
+- **Icons**: Lucide React
 
 ## Getting Started
 
-1. **Install Dependencies**:
+1. Install dependencies:
    ```bash
    npm install
    ```
 
-2. **Environment Variables**:
-Create a `.env.local` file with your Firebase configuration:
+2. Set up environment variables:
+   Create a `.env.local` file with your Firebase configuration:
    ```
-NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_auth_domain
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_storage_bucket
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
-   NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=your_measurement_id
+   NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
+   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_auth_domain
+   NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
+   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_storage_bucket
+   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
+   NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
    ```
 
-3. **Run Development Server**:
+3. Run the development server:
    ```bash
    npm run dev
    ```
 
-4. **Access Admin Dashboard**:
-   - Navigate to `http://localhost:3000`
-   - Login with password: `HOOKEDADMIN25`
+4. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-## Usage
+## Project Structure
 
-### Creating Events
-1. Click "Create Event" button in the header
-2. Fill in event details (name, code, location, dates)
-3. Click "Create Event" to save
+```
+src/
+├── app/
+│   ├── admin/
+│   │   ├── clients/          # Clients management page
+│   │   ├── events/           # Events management page
+│   │   ├── login/            # Login page
+│   │   └── layout.tsx        # Admin layout with persistent header
+│   ├── globals.css           # Global styles and CSS variables
+│   ├── layout.tsx            # Root layout
+│   └── page.tsx              # Home page (redirects to admin)
+├── components/
+│   ├── clients/              # Client-specific components
+│   │   ├── ClientsTable.tsx  # Main clients table
+│   │   ├── ClientFormSheet.tsx # Add/edit client form
+│   │   ├── ColumnFilters.tsx # Table filters
+│   │   └── ExportCsvButton.tsx # CSV export functionality
+│   ├── ui/                   # Reusable UI components (shadcn/ui)
+│   └── ...                   # Other existing components
+├── lib/
+│   ├── firebaseConfig.ts     # Firebase configuration
+│   ├── firebaseApi.ts        # Firebase API functions
+│   ├── firestore/
+│   │   └── clients.ts        # Client CRUD operations
+│   └── utils.ts              # Utility functions
+├── types/
+│   └── admin.ts              # TypeScript types for admin data
+└── contexts/
+    └── AuthContext.tsx       # Authentication context
+```
 
-### Viewing Analytics
-1. Click "Analytics" button on any event card
-2. View real-time statistics in the modal
-3. Close modal to return to dashboard
+## Client Data Model
 
-### Exporting Data
-1. Click "Download Data" on any event card
-2. CSV files will be automatically downloaded:
-   - `event-{id}-profiles.csv`
-   - `event-{id}-likes.csv`
-   - `event-{id}-messages.csv`
+The clients are stored in Firestore with the following structure:
 
-### Managing Events
-- **Edit**: Click "Edit" button to modify event details
-- **Delete**: Click "Delete" button (with confirmation)
-- **QR Code**: Click "Download QR" to get event QR code
+```typescript
+type AdminClient = {
+  id: string;                  // Firestore doc id
+  name: string;                // Organization/Host/Company name
+  type: 'Company' | 'Wedding Organizer' | 'Club / Bar' | 'Restaurant' | 'Personal Host' | 'Other Organization';
+  eventKind: 'House Party' | 'Club' | 'Wedding' | 'Meetup' | 'High Tech Event' | 'Retreat' | 'Party' | 'Conference';
+  pocName: string;             // Name of POC
+  phone?: string | null;
+  email?: string | null;
+  country?: string | null;
+  expectedAttendees?: number | null;
+  eventDate?: string | null;   // ISO date (yyyy-mm-dd) or null
+  organizerFormSent?: 'Yes' | 'No';
+  status: 'Initial Discussion' | 'Negotiation' | 'Won' | 'Lost';
+  source?: 'Personal Connect' | 'Instagram Inbound' | 'Email' | 'Other' | 'Olim in TLV';
+  description?: string | null;
+  createdAt: number;           // Date.now()
+  updatedAt: number;           // Date.now()
+  createdByUid?: string | null;
+};
+```
 
-## Color Scheme
+## Features in Detail
 
-### Light Mode
-- Primary: Pink (#ec4899)
-- Secondary: Purple (#8b5cf6)
-- Background: Light gray (#f9fafb)
-- Cards: White with subtle shadows
+### Persistent Header
+- Fixed header with Events/Clients navigation
+- User authentication status and logout
+- Responsive design for mobile devices
 
-### Dark Mode
-- Primary: Pink (#ec4899)
-- Secondary: Purple (#8b5cf6)
-- Background: Dark gray (#111827)
-- Cards: Dark gray (#1f2937)
+### Events Dashboard
+- View all events categorized by status
+- Create new events with rich form
+- Edit existing events
+- Generate QR codes for event joining
+- Export event data to CSV
+- Analytics and reporting
 
-## Future Enhancements
+### Clients Dashboard
+- Full-featured data table with sorting and pagination
+- Advanced filtering by status, type, source, and event
+- Global search across name, POC, email, and description
+- Add new clients with comprehensive form
+- Edit clients in slide-over panel
+- Delete clients with confirmation
+- Export filtered data to CSV
+- Status badges with color coding
 
-- [ ] QR Sign template generation
-- [ ] Feedback system integration
-- [ ] Advanced analytics and charts
-- [ ] Bulk event operations
-- [ ] User management features
-- [ ] Real-time notifications
-- [ ] Export to Excel format
-- [ ] Custom event templates
+### Form Validation
+- Required field validation
+- Email format validation
+- Number range validation
+- Real-time error feedback
 
-## Security
+## Deployment
 
-- Admin password protection
-- Firebase security rules
-- Client-side only Firebase initialization
-- No sensitive data in client code
+The application can be deployed to Vercel or any other Next.js-compatible hosting platform.
 
-## Performance
+```bash
+npm run build
+```
 
-- Dynamic imports for code splitting
-- Optimized bundle size
-- Efficient Firebase queries
-- Responsive image loading
-- Minimal re-renders with React hooks
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
+
+## License
+
+This project is proprietary software for Hooked.
