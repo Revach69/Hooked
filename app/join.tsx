@@ -78,7 +78,14 @@ export default function JoinPage() {
 
       
       if (nowUTC < foundEvent.starts_at) {
-        setError("This event hasn't started yet. Try again soon!");
+        const accessTime = new Date(foundEvent.starts_at);
+        const realStartTime = foundEvent.start_date ? new Date(foundEvent.start_date) : accessTime;
+        
+        if (foundEvent.start_date && realStartTime > accessTime) {
+          setError("This event hasn't opened for early access yet. Try again soon!");
+        } else {
+          setError("This event hasn't started yet. Try again soon!");
+        }
         setIsLoading(false);
         return;
       }

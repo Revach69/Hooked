@@ -185,8 +185,8 @@ export default function EventsClient() {
                     {/* Event Content */}
                     <div className="p-6 flex flex-col flex-grow">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm text-gray-500 dark:text-gray-400">{EventAPI.formatDate(event.starts_at)}</span>
-                        <span className="text-sm text-gray-500 dark:text-gray-400">{EventAPI.formatTime(event.starts_at)}</span>
+                        <span className="text-sm text-gray-500 dark:text-gray-400">{EventAPI.formatDate(event.start_date || event.starts_at, event.timezone)}</span>
+                        <span className="text-sm text-gray-500 dark:text-gray-400">{EventAPI.formatTime(event.start_date || event.starts_at, event.timezone)}</span>
                       </div>
                       
                       <h3 className="text-xl font-semibold dark-mode-text mb-2">
@@ -283,11 +283,11 @@ export default function EventsClient() {
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
                       <span className="text-gray-500 dark:text-gray-400">Date:</span>
-                      <p className="dark-mode-text">{EventAPI.formatDate(selectedEvent.starts_at)}</p>
+                      <p className="dark-mode-text">{EventAPI.formatDate(selectedEvent.start_date || selectedEvent.starts_at, selectedEvent.timezone)}</p>
                     </div>
                     <div>
                       <span className="text-gray-500 dark:text-gray-400">Time:</span>
-                      <p className="dark-mode-text">{EventAPI.formatTime(selectedEvent.starts_at)} - {EventAPI.formatTime(selectedEvent.expires_at)}</p>
+                      <p className="dark-mode-text">{EventAPI.formatTime(selectedEvent.start_date || selectedEvent.starts_at, selectedEvent.timezone)} - {EventAPI.formatTime(selectedEvent.expires_at, selectedEvent.timezone)}</p>
                     </div>
                     {selectedEvent.location && (
                       <div>

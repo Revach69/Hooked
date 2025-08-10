@@ -10,36 +10,81 @@ import {
   useColorScheme,
   SafeAreaView,
   Modal,
+  TextInput,
+  FlatList,
 } from 'react-native';
 import { router } from 'expo-router';
-import { BarChart3, Users, Plus, LogOut, Calendar, MapPin, Home, ChevronDown, ChevronUp, QrCode, Edit, Download, Flag } from 'lucide-react-native';
-import { EventAPI, EventProfileAPI, LikeAPI, MessageAPI, AuthAPI, type Event } from '../lib/firebaseApi';
+import { 
+  BarChart3, 
+  Users, 
+  Plus, 
+  LogOut, 
+  Calendar, 
+  MapPin, 
+  Home, 
+  ChevronDown, 
+  ChevronUp, 
+  QrCode, 
+  Edit, 
+  Download, 
+  Flag,
+  Search,
+  Filter,
+  User,
+  Phone,
+  Mail,
+  Globe,
+  Users as UsersIcon,
+  FileText,
+  Trash2,
+  ChevronRight
+} from 'lucide-react-native';
+import { 
+  EventAPI, 
+  EventProfileAPI, 
+  LikeAPI, 
+  MessageAPI, 
+  AuthAPI, 
+  AdminClientAPI,
+  type Event,
+  type AdminClient 
+} from '../lib/firebaseApi';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import QRCodeGenerator from '../lib/QRCodeGenerator';
 import { AdminUtils } from '../lib/adminUtils';
 import ReportsModal from './admin/ReportsModal';
+import ClientFormModal from './admin/ClientFormModal';
+
+type TabType = 'events' | 'clients';
 
 export default function Admin() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const [activeTab, setActiveTab] = useState<TabType>('events');
+  
+  // Events state
   const [events, setEvents] = useState<Event[]>([]);
-  const [stats, setStats] = useState({
-    totalEvents: 0,
-    activeEvents: 0,
-    futureEvents: 0,
-    pastEvents: 0,
-    totalProfiles: 0,
-    totalLikes: 0,
-    totalMatches: 0,
-    totalMessages: 0,
-  });
-  const [isLoading, setIsLoading] = useState(true);
-  const [adminEmail, setAdminEmail] = useState<string>('');
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
   const [showQRCodeModal, setShowQRCodeModal] = useState(false);
   const [selectedEventForQR, setSelectedEventForQR] = useState<Event | null>(null);
   const [showReportsModal, setShowReportsModal] = useState(false);
   const [selectedEventForReports, setSelectedEventForReports] = useState<Event | null>(null);
+  
+  // Clients state
+  const [clients, setClients] = useState<AdminClient[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [typeFilter, setTypeFilter] = useState<string[]>([]);
+  const [sourceFilter, setSourceFilter] = useState<string[]>([]);
+  const [eventFilter, setEventFilter] = useState<string[]>([]);
+  const [sortBy, setSortBy] = useState('createdAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [showClientForm, setShowClientForm] = useState(false);
+  const [editingClient, setEditingClient] = useState<AdminClient | null>(null);
+  
+  // General state
+  const [isLoading, setIsLoading] = useState(true);
+  const [adminEmail, setAdminEmail] = useState<string>('');
 
   const initializeSession = useCallback(async () => {
     // Check if user is authenticated with Firebase
@@ -65,9 +110,9 @@ export default function Admin() {
     // Set admin email for display
     setAdminEmail(currentUser.email || '');
     
-    // Load events first, then stats
+    // Load data
     await loadEvents();
-    await loadAdminStats();
+    await loadClients();
     setIsLoading(false);
   }, []);
 
@@ -84,57 +129,21 @@ export default function Admin() {
     }
   };
 
-  const loadAdminStats = async () => {
+  const loadClients = async () => {
     try {
-      // Load overall stats across all events
-      const [allProfiles, allLikes, allMessages] = await Promise.all([
-        EventProfileAPI.filter({}),
-        LikeAPI.filter({}),
-        MessageAPI.filter({})
-      ]);
-
-      const mutualLikes = allLikes.filter((like: any) => like.is_mutual);
-      const now = new Date();
-      
-      // Calculate event stats after events are loaded
-      const activeEvents = events.filter(event => {
-        const startDate = new Date(event.starts_at);
-        const endDate = new Date(event.expires_at);
-        return now >= startDate && now <= endDate;
-      });
-
-      const futureEvents = events.filter(event => {
-        const startDate = new Date(event.starts_at);
-        return now < startDate;
-      });
-
-      const pastEvents = events.filter(event => {
-        const endDate = new Date(event.expires_at);
-        return now > endDate;
-      });
-
-      setStats({
-        totalEvents: events.length,
-        activeEvents: activeEvents.length,
-        futureEvents: futureEvents.length,
-        pastEvents: pastEvents.length,
-        totalProfiles: allProfiles.length,
-        totalLikes: allLikes.length,
-        totalMatches: mutualLikes.length,
-        totalMessages: allMessages.length,
-      });
+      const allClients = await AdminClientAPI.filter({});
+      setClients(allClients);
     } catch {
       // Handle error silently
     }
   };
 
+  // Events handlers
   const handleCreateEvent = () => {
-    // Navigate to event creation page
     router.push('/admin/create-event');
   };
 
   const handleEventPress = (event: Event) => {
-    // Navigate to specific event details page
     router.push(`/admin/event-details?eventId=${event.id}`);
   };
 
@@ -168,36 +177,109 @@ export default function Admin() {
     setExpandedEvents(newExpanded);
   };
 
+  // Clients handlers
+  const handleCreateClient = () => {
+    setEditingClient(null);
+    setShowClientForm(true);
+  };
+
+  const handleEditClient = (client: AdminClient) => {
+    setEditingClient(client);
+    setShowClientForm(true);
+  };
+
+  const handleDeleteClient = async (clientId: string) => {
+    Alert.alert(
+      'Delete Client',
+      'Are you sure you want to delete this client?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await AdminClientAPI.delete(clientId);
+              await loadClients();
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete client');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleClientFormSuccess = () => {
+    setShowClientForm(false);
+    setEditingClient(null);
+    loadClients();
+  };
+
+  // Filter and sort clients
+  const filteredClients = clients.filter((client) => {
+    // Search filter
+    const searchMatch = !searchQuery || 
+      client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      client.pocName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (client.email && client.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (client.description && client.description.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    // Status filter
+    const statusMatch = statusFilter.length === 0 || statusFilter.includes(client.status);
+
+    // Type filter
+    const typeMatch = typeFilter.length === 0 || typeFilter.includes(client.type);
+
+    // Source filter
+    const sourceMatch = sourceFilter.length === 0 || 
+      (client.source && sourceFilter.includes(client.source));
+
+    // Event filter
+    const eventMatch = eventFilter.length === 0 || eventFilter.includes(client.eventKind);
+
+    return searchMatch && statusMatch && typeMatch && sourceMatch && eventMatch;
+  });
+
+  const sortedClients = [...filteredClients].sort((a, b) => {
+    let aValue: any = a[sortBy as keyof AdminClient];
+    let bValue: any = b[sortBy as keyof AdminClient];
+    
+    if (sortBy === 'createdAt' || sortBy === 'updatedAt') {
+      aValue = aValue || 0;
+      bValue = bValue || 0;
+    } else {
+      aValue = String(aValue || '').toLowerCase();
+      bValue = String(bValue || '').toLowerCase();
+    }
+    
+    if (sortOrder === 'asc') {
+      return aValue > bValue ? 1 : -1;
+    } else {
+      return aValue < bValue ? 1 : -1;
+    }
+  });
+
+  // General handlers
   const handleBackToHome = () => {
-    // Navigate back to home without logging out
-    // This preserves the admin session and auto-login functionality
     router.replace('/home');
   };
 
   const handleLogout = async () => {
     Alert.alert(
-      "Logout",
-      "Are you sure you want to logout?",
+      'Logout',
+      'Are you sure you want to logout?',
       [
+        { text: 'Cancel', style: 'cancel' },
         {
-          text: "Cancel",
-          style: "cancel"
-        },
-        {
-          text: "Logout",
-          style: "destructive",
+          text: 'Logout',
+          style: 'destructive',
           onPress: async () => {
             try {
-              // Sign out from Firebase
-              await AuthAPI.signOut();
-              
               // Clear all admin-related storage
               await AsyncStorageUtils.multiRemove([
-                'currentEventId',
-                'currentSessionId',
-                'currentEventCode',
-                'currentProfileColor',
-                'currentProfilePhotoUrl',
+                'adminUid',
+                'adminEmail',
                 'adminSavedEmail',
                 'adminSavedPassword',
                 'adminRememberMe'
@@ -206,10 +288,14 @@ export default function Admin() {
               // Clear admin session
               await AdminUtils.clearAdminSession();
               
+              // Sign out from Firebase
+              await AuthAPI.signOut();
+              
+              // Navigate to home
               router.replace('/home');
-            } catch {
-              // Handle error silently
-              Alert.alert('Error', 'Failed to logout. Please try again.');
+            } catch (error) {
+              console.error('Logout error:', error);
+              router.replace('/home');
             }
           }
         }
@@ -219,7 +305,9 @@ export default function Admin() {
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
@@ -229,36 +317,38 @@ export default function Admin() {
 
   const getEventStatus = (event: Event) => {
     const now = new Date();
-    const startTime = new Date(event.starts_at);
-    const endTime = new Date(event.expires_at);
-    
-    if (now < startTime) return { text: 'Upcoming', color: '#3b82f6' };
-    if (now >= startTime && now < endTime) return { text: 'Active', color: '#10b981' };
-    return { text: 'Ended', color: '#6b7280' };
+    const eventDate = new Date(event.starts_at);
+    const eventEndDate = new Date(event.expires_at);
+
+    if (now < eventDate) {
+      return { status: 'Upcoming', color: '#3b82f6' };
+    } else if (now >= eventDate && now <= eventEndDate) {
+      return { status: 'Live', color: '#10b981' };
+    } else {
+      return { status: 'Past', color: '#6b7280' };
+    }
   };
 
   const categorizeEvents = () => {
     const now = new Date();
-    const categorized = {
-      active: [] as Event[],
-      future: [] as Event[],
-      past: [] as Event[]
-    };
+    const active: Event[] = [];
+    const future: Event[] = [];
+    const past: Event[] = [];
 
     events.forEach(event => {
-      const startDate = new Date(event.starts_at);
-      const endDate = new Date(event.expires_at);
-      
-      if (now >= startDate && now < endDate) {
-        categorized.active.push(event);
-      } else if (now < startDate) {
-        categorized.future.push(event);
+      const eventDate = new Date(event.starts_at);
+      const eventEndDate = new Date(event.expires_at);
+
+      if (now >= eventDate && now <= eventEndDate) {
+        active.push(event);
+      } else if (now < eventDate) {
+        future.push(event);
       } else {
-        categorized.past.push(event);
+        past.push(event);
       }
     });
 
-    return categorized;
+    return { active, future, past };
   };
 
   const renderEventCard = (event: Event) => {
@@ -266,116 +356,64 @@ export default function Admin() {
     const isExpanded = expandedEvents.has(event.id);
 
     return (
-      <View key={event.id} style={styles.eventCard}>
-        {/* Event Header - Always Visible */}
-        <TouchableOpacity 
+      <View key={event.id} style={[styles.eventCard, { backgroundColor: isDark ? '#1f2937' : '#ffffff' }]}>
+        <TouchableOpacity
           style={styles.eventHeader}
           onPress={() => toggleEventExpansion(event.id)}
         >
-          <View style={styles.eventHeaderContent}>
-            <Text style={styles.eventName}>{event.name}</Text>
-            <View style={[styles.eventStatus, { backgroundColor: status.color + '20' }]}>
-              <Text style={[styles.eventDetailText, { color: status.color }]}>
-                {status.text}
+          <View style={styles.eventInfo}>
+            <Text style={[styles.eventName, { color: isDark ? '#ffffff' : '#000000' }]}>
+              {event.name}
+            </Text>
+            <View style={[styles.statusBadge, { backgroundColor: status.color + '20' }]}>
+              <Text style={[styles.statusText, { color: status.color }]}>
+                {status.status}
               </Text>
             </View>
           </View>
-          
-          <View style={styles.eventHeaderDetails}>
-            <View style={styles.eventDetails}>
-              <Text style={styles.eventDetailText}>Code: #{event.event_code}</Text>
+          <View style={styles.eventMeta}>
+            <View style={styles.eventMetaItem}>
+              <Calendar size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
+              <Text style={[styles.eventMetaText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                {formatDate(event.starts_at)}
+              </Text>
             </View>
-            
             {event.location && (
-              <View style={styles.eventDetails}>
-                <MapPin size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
-                <Text style={styles.eventDetailText}>{event.location}</Text>
+              <View style={styles.eventMetaItem}>
+                <MapPin size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
+                <Text style={[styles.eventMetaText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                  {event.location}
+                </Text>
               </View>
             )}
           </View>
-          
-          <View style={styles.expandIcon}>
-            {isExpanded ? (
-              <ChevronUp size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
-            ) : (
-              <ChevronDown size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
-            )}
-          </View>
+          <ChevronDown size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
         </TouchableOpacity>
 
-        {/* Expanded Content */}
         {isExpanded && (
           <View style={styles.expandedContent}>
-            <View style={styles.eventSchedule}>
-              <Text style={styles.sectionTitle}>Schedule</Text>
-              <View style={styles.scheduleItem}>
-                <Calendar size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
-                <Text style={styles.eventDetailText}>
-                  Starts: {formatDate(event.starts_at)}
-                </Text>
-              </View>
-              <View style={styles.scheduleItem}>
-                <Calendar size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
-                <Text style={styles.eventDetailText}>
-                  Expires: {formatDate(event.expires_at)}
-                </Text>
-              </View>
-            </View>
-
-            {event.event_link && (
-              <View style={styles.eventSchedule}>
-                <Text style={styles.sectionTitle}>Event Link</Text>
-                <View style={styles.scheduleItem}>
-                  <Text style={[styles.eventDetailText, { color: '#3b82f6' }]} numberOfLines={1}>
-                    {event.event_link}
-                  </Text>
-                </View>
-              </View>
-            )}
-
             <View style={styles.eventActions}>
-              <Text style={styles.sectionTitle}>Actions</Text>
-              <View style={styles.actionButtons}>
-                <TouchableOpacity 
-                  style={styles.actionButton}
-                  onPress={() => handleEventPress(event)}
-                >
-                  <BarChart3 size={16} color="#3b82f6" />
-                  <Text style={styles.actionButtonText}>Analytics</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={styles.actionButton}
-                  onPress={() => handleReportsPress(event)}
-                >
-                  <Flag size={16} color="#f97316" />
-                  <Text style={styles.actionButtonText}>Reports</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={styles.actionButton}
-                  onPress={() => router.push(`/admin/edit-event?eventId=${event.id}`)}
-                >
-                  <Edit size={16} color="#6b7280" />
-                  <Text style={styles.actionButtonText}>Edit</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={styles.actionButton}
-                  onPress={() => handleQRCodePress(event)}
-                >
-                  <QrCode size={16} color="#10b981" />
-                  <Text style={styles.actionButtonText}>QR Code</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={styles.actionButton}
-                  onPress={() => handleEventPress(event)}
-                >
-                  <Download size={16} color="#8b5cf6" />
-                  <Text style={styles.actionButtonText}>Download</Text>
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => handleEventPress(event)}
+              >
+                <Edit size={16} color="#6b7280" />
+                <Text style={styles.actionText}>Edit</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => handleQRCodePress(event)}
+              >
+                <QrCode size={16} color="#6b7280" />
+                <Text style={styles.actionText}>QR Code</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => handleReportsPress(event)}
+              >
+                <Flag size={16} color="#6b7280" />
+                <Text style={styles.actionText}>Reports</Text>
+              </TouchableOpacity>
             </View>
           </View>
         )}
@@ -387,270 +425,162 @@ export default function Admin() {
     if (events.length === 0) return null;
 
     return (
-      <View style={styles.eventCategory}>
-        <View style={styles.categoryHeader}>
-          <View style={[styles.categoryIndicator, { backgroundColor: color }]} />
-          <Text style={styles.categoryTitle}>{title}</Text>
-          <Text style={styles.categoryCount}>({events.length})</Text>
-        </View>
+      <View style={styles.categorySection}>
+        <Text style={[styles.categoryTitle, { color }]}>{title} ({events.length})</Text>
         {events.map(renderEventCard)}
       </View>
     );
   };
 
-  const styles = StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: isDark ? '#1a1a1a' : '#f8fafc',
-    },
-    loadingContainer: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    loadingText: {
-      marginTop: 16,
-      fontSize: 16,
-      color: isDark ? '#9ca3af' : '#6b7280',
-    },
-    header: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      padding: 16,
-      paddingTop: 60, // Extra padding for iPhone camera holder
-    },
-    title: {
-      fontSize: 24,
-      fontWeight: 'bold',
-      color: isDark ? '#ffffff' : '#1f2937',
-    },
-    adminEmail: {
-      fontSize: 14,
-      color: isDark ? '#9ca3af' : '#6b7280',
-      marginTop: 4,
-    },
-    createButton: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      borderWidth: 1,
-      borderColor: isDark ? '#404040' : '#d1d5db',
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: isDark ? '#2d2d2d' : 'white',
-    },
-    content: {
-      flex: 1,
-      paddingHorizontal: 16,
-    },
-    statsSection: {
-      marginBottom: 24,
-    },
-    sectionTitle: {
-      fontSize: 18,
-      fontWeight: '600',
-      color: isDark ? '#ffffff' : '#1f2937',
-      marginBottom: 12,
-    },
-    statsGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 12,
-    },
-    statCard: {
-      flex: 1,
-      minWidth: '45%',
-      backgroundColor: isDark ? '#2d2d2d' : 'white',
-      borderRadius: 12,
-      padding: 16,
-      alignItems: 'center',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: isDark ? 0.3 : 0.1,
-      shadowRadius: 4,
-      elevation: 3,
-    },
-    statIcon: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
-      backgroundColor: isDark ? '#404040' : '#f3f4f6',
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: 8,
-    },
-    statNumber: {
-      fontSize: 24,
-      fontWeight: 'bold',
-      color: isDark ? '#ffffff' : '#1f2937',
-      marginBottom: 4,
-    },
-    statLabel: {
-      fontSize: 14,
-      color: isDark ? '#9ca3af' : '#6b7280',
-      textAlign: 'center',
-    },
-    eventCategory: {
-      marginBottom: 24,
-    },
-    categoryHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: 16,
-    },
-    categoryIndicator: {
-      width: 4,
-      height: 20,
-      borderRadius: 2,
-      marginRight: 8,
-    },
-    categoryTitle: {
-      fontSize: 20,
-      fontWeight: 'bold',
-      color: isDark ? '#ffffff' : '#1f2937',
-      flex: 1,
-    },
-    categoryCount: {
-      fontSize: 16,
-      color: isDark ? '#9ca3af' : '#6b7280',
-      fontWeight: '500',
-    },
-    eventCard: {
-      backgroundColor: isDark ? '#2d2d2d' : 'white',
-      borderRadius: 12,
-      marginBottom: 12,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: isDark ? 0.3 : 0.1,
-      shadowRadius: 4,
-      elevation: 3,
-      overflow: 'hidden',
-    },
-    eventHeader: {
-      padding: 16,
-    },
-    eventHeaderContent: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'flex-start',
-      marginBottom: 8,
-    },
-    eventName: {
-      fontSize: 18,
-      fontWeight: 'bold',
-      color: isDark ? '#ffffff' : '#1f2937',
-      flex: 1,
-      marginRight: 8,
-    },
-    eventStatus: {
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: 12,
-      fontSize: 12,
-      fontWeight: '600',
-    },
-    eventHeaderDetails: {
-      flex: 1,
-    },
-    eventDetails: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: 4,
-    },
-    eventDetailText: {
-      fontSize: 14,
-      color: isDark ? '#9ca3af' : '#6b7280',
-      marginLeft: 4,
-    },
-    expandIcon: {
-      position: 'absolute',
-      top: 16,
-      right: 16,
-    },
-    expandedContent: {
-      paddingHorizontal: 16,
-      paddingBottom: 16,
-      borderTopWidth: 1,
-      borderTopColor: isDark ? '#404040' : '#e5e7eb',
-    },
-    eventSchedule: {
-      marginBottom: 16,
-    },
-    scheduleItem: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: 8,
-    },
-    eventActions: {
-      marginBottom: 8,
-    },
-    actionButtons: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 8,
-    },
-    actionButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: isDark ? '#404040' : '#f3f4f6',
-      borderRadius: 8,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      gap: 6,
-    },
-    actionButtonText: {
-      fontSize: 14,
-      color: isDark ? '#ffffff' : '#1f2937',
-      fontWeight: '500',
-    },
-    actionsSection: {
-      marginBottom: 24,
-    },
-    mainActionButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: isDark ? '#2d2d2d' : 'white',
-      borderRadius: 12,
-      padding: 16,
-      marginBottom: 12,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: isDark ? 0.3 : 0.1,
-      shadowRadius: 4,
-      elevation: 3,
-      gap: 12,
-    },
-    actionText: {
-      fontSize: 16,
-      color: isDark ? '#ffffff' : '#1f2937',
-      fontWeight: '500',
-    },
-    logoutButton: {
-      backgroundColor: isDark ? '#dc2626' : '#fef2f2',
-      borderColor: isDark ? '#dc2626' : '#fecaca',
-      borderWidth: 1,
-    },
-    logoutText: {
-      color: isDark ? '#ffffff' : '#dc2626',
-    },
-    emptyState: {
-      alignItems: 'center',
-      paddingVertical: 40,
-    },
-    emptyStateText: {
-      fontSize: 16,
-      color: isDark ? '#9ca3af' : '#6b7280',
-      textAlign: 'center',
-      marginTop: 12,
-    },
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-  });
+  const renderClientCard = ({ item: client }: { item: AdminClient }) => {
+    const getStatusColor = (status: string) => {
+      switch (status) {
+        case 'Initial Discussion': return '#6b7280';
+        case 'Negotiation': return '#f59e0b';
+        case 'Won': return '#10b981';
+        case 'Lost': return '#ef4444';
+        default: return '#6b7280';
+      }
+    };
+
+    return (
+      <TouchableOpacity
+        style={[styles.clientCard, { backgroundColor: isDark ? '#1f2937' : '#ffffff' }]}
+        onPress={() => handleEditClient(client)}
+      >
+        <View style={styles.clientHeader}>
+          <Text style={[styles.clientName, { color: isDark ? '#ffffff' : '#000000' }]}>
+            {client.name}
+          </Text>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(client.status) + '20' }]}>
+            <Text style={[styles.statusText, { color: getStatusColor(client.status) }]}>
+              {client.status}
+            </Text>
+          </View>
+        </View>
+        
+        <View style={styles.clientInfo}>
+          <View style={styles.clientInfoRow}>
+            <User size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
+            <Text style={[styles.clientInfoText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+              {client.pocName}
+            </Text>
+          </View>
+          
+          {client.phone && (
+            <View style={styles.clientInfoRow}>
+              <Phone size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
+              <Text style={[styles.clientInfoText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                {client.phone}
+              </Text>
+            </View>
+          )}
+          
+          {client.email && (
+            <View style={styles.clientInfoRow}>
+              <Mail size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
+              <Text style={[styles.clientInfoText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                {client.email}
+              </Text>
+            </View>
+          )}
+          
+          <View style={styles.clientInfoRow}>
+            <Globe size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
+            <Text style={[styles.clientInfoText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+              {client.type} • {client.eventKind}
+            </Text>
+          </View>
+          
+          {client.expectedAttendees && (
+            <View style={styles.clientInfoRow}>
+              <UsersIcon size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
+              <Text style={[styles.clientInfoText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                {client.expectedAttendees} attendees
+              </Text>
+            </View>
+          )}
+        </View>
+        
+        <View style={styles.clientActions}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => handleEditClient(client)}
+          >
+            <Edit size={16} color="#6b7280" />
+            <Text style={styles.actionText}>Edit</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.deleteButton]}
+            onPress={() => handleDeleteClient(client.id)}
+          >
+            <Trash2 size={16} color="#ef4444" />
+            <Text style={[styles.actionText, { color: '#ef4444' }]}>Delete</Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderEventsTab = () => (
+    <ScrollView style={styles.content}>
+      {events.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Text style={[styles.emptyStateText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+            No events created yet
+          </Text>
+          <TouchableOpacity style={styles.mainActionButton} onPress={handleCreateEvent}>
+            <Plus size={20} color="#6b7280" />
+            <Text style={styles.actionText}>Create Your First Event</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <>
+          {renderEventCategory('Active Events', categorizeEvents().active, '#10b981')}
+          {renderEventCategory('Future Events', categorizeEvents().future, '#3b82f6')}
+          {renderEventCategory('Past Events', categorizeEvents().past, '#6b7280')}
+        </>
+      )}
+    </ScrollView>
+  );
+
+  const renderClientsTab = () => (
+    <View style={styles.content}>
+      {/* Search and Filters */}
+      <View style={[styles.searchSection, { backgroundColor: isDark ? '#1f2937' : '#ffffff' }]}>
+        <View style={styles.searchContainer}>
+          <Search size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+          <TextInput
+            style={[styles.searchInput, { color: isDark ? '#ffffff' : '#000000' }]}
+            placeholder="Search clients..."
+            placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
+      </View>
+
+      {/* Clients List */}
+      <FlatList
+        data={sortedClients}
+        renderItem={renderClientCard}
+        keyExtractor={(item) => item.id}
+        style={styles.clientsList}
+        contentContainerStyle={styles.clientsListContent}
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Text style={[styles.emptyStateText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+              No clients found
+            </Text>
+            <TouchableOpacity style={styles.mainActionButton} onPress={handleCreateClient}>
+              <Plus size={20} color="#6b7280" />
+              <Text style={styles.actionText}>Add Your First Client</Text>
+            </TouchableOpacity>
+          </View>
+        }
+      />
+    </View>
+  );
 
   if (isLoading) {
     return (
@@ -663,102 +593,82 @@ export default function Admin() {
     );
   }
 
-  const categorizedEvents = categorizeEvents();
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>Admin Dashboard</Text>
+          <Text style={[styles.title, { color: isDark ? '#ffffff' : '#000000' }]}>Admin Dashboard</Text>
           {adminEmail && (
-            <Text style={styles.adminEmail}>{adminEmail}</Text>
+            <Text style={[styles.adminEmail, { color: isDark ? '#9ca3af' : '#6b7280' }]}>{adminEmail}</Text>
           )}
         </View>
-        <TouchableOpacity style={styles.createButton} onPress={handleCreateEvent}>
+        <TouchableOpacity 
+          style={styles.createButton} 
+          onPress={activeTab === 'events' ? handleCreateEvent : handleCreateClient}
+        >
           <Plus size={20} color="#6b7280" />
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content}>
-        {/* General Analytics */}
-        <View style={styles.statsSection}>
-          <Text style={styles.sectionTitle}>General Analytics</Text>
-          <View style={styles.statsGrid}>
-            <View style={styles.statCard}>
-              <View style={styles.statIcon}>
-                <Calendar size={24} color="#3b82f6" />
-              </View>
-              <Text style={styles.statNumber}>{stats.totalEvents}</Text>
-              <Text style={styles.statLabel}>Total Events</Text>
-            </View>
+      {/* Tab Navigation */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[
+            styles.tabButton,
+            activeTab === 'events' && styles.activeTabButton,
+            { backgroundColor: isDark ? '#1f2937' : '#f3f4f6' }
+          ]}
+          onPress={() => setActiveTab('events')}
+        >
+          <Calendar size={20} color={activeTab === 'events' ? '#8b5cf6' : (isDark ? '#9ca3af' : '#6b7280')} />
+          <Text style={[
+            styles.tabText,
+            { color: activeTab === 'events' ? '#8b5cf6' : (isDark ? '#9ca3af' : '#6b7280') }
+          ]}>
+            Events
+          </Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[
+            styles.tabButton,
+            activeTab === 'clients' && styles.activeTabButton,
+            { backgroundColor: isDark ? '#1f2937' : '#f3f4f6' }
+          ]}
+          onPress={() => setActiveTab('clients')}
+        >
+          <Users size={20} color={activeTab === 'clients' ? '#8b5cf6' : (isDark ? '#9ca3af' : '#6b7280')} />
+          <Text style={[
+            styles.tabText,
+            { color: activeTab === 'clients' ? '#8b5cf6' : (isDark ? '#9ca3af' : '#6b7280') }
+          ]}>
+            Clients
+          </Text>
+        </TouchableOpacity>
+      </View>
 
-            <View style={styles.statCard}>
-              <View style={styles.statIcon}>
-                <BarChart3 size={24} color="#10b981" />
-              </View>
-              <Text style={styles.statNumber}>{stats.activeEvents}</Text>
-              <Text style={styles.statLabel}>Active Events</Text>
-            </View>
+      {/* Content */}
+      {activeTab === 'events' ? renderEventsTab() : renderClientsTab()}
 
-            <View style={styles.statCard}>
-              <View style={styles.statIcon}>
-                <Calendar size={24} color="#8b5cf6" />
-              </View>
-              <Text style={styles.statNumber}>{stats.futureEvents}</Text>
-              <Text style={styles.statLabel}>Future Events</Text>
-            </View>
-
-            <View style={styles.statCard}>
-              <View style={styles.statIcon}>
-                <Users size={24} color="#ec4899" />
-              </View>
-              <Text style={styles.statNumber}>{stats.pastEvents}</Text>
-              <Text style={styles.statLabel}>Past Events</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Categorized Events */}
-        {events.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>No events created yet</Text>
-            <TouchableOpacity style={styles.mainActionButton} onPress={handleCreateEvent}>
-              <Plus size={20} color="#6b7280" />
-              <Text style={styles.actionText}>Create Your First Event</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <>
-            {renderEventCategory('Active Events', categorizedEvents.active, '#10b981')}
-            {renderEventCategory('Future Events', categorizedEvents.future, '#3b82f6')}
-            {renderEventCategory('Past Events', categorizedEvents.past, '#6b7280')}
-          </>
-        )}
-
-        {/* Actions */}
-        <View style={styles.actionsSection}>
-          <Text style={styles.sectionTitle}>Admin Actions</Text>
-          
-
-          
-          <TouchableOpacity 
-            style={styles.mainActionButton}
-            onPress={handleBackToHome}
-          >
-            <Home size={20} color="#6b7280" />
-            <Text style={styles.actionText}>Back to Home</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.mainActionButton, styles.logoutButton]}
-            onPress={handleLogout}
-          >
-            <LogOut size={20} color="#dc2626" />
-            <Text style={[styles.actionText, styles.logoutText]}>Logout</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+      {/* Actions */}
+      <View style={styles.actionsSection}>
+        <TouchableOpacity 
+          style={styles.mainActionButton}
+          onPress={handleBackToHome}
+        >
+          <Home size={20} color="#6b7280" />
+          <Text style={styles.actionText}>Back to Home</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={[styles.mainActionButton, styles.logoutButton]}
+          onPress={handleLogout}
+        >
+          <LogOut size={20} color="#dc2626" />
+          <Text style={[styles.actionText, styles.logoutText]}>Logout</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* QR Code Modal */}
       <Modal
@@ -787,6 +697,261 @@ export default function Admin() {
           eventName={selectedEventForReports.name}
         />
       )}
+
+      {/* Client Form Modal */}
+      <ClientFormModal
+        visible={showClientForm}
+        onClose={() => setShowClientForm(false)}
+        onSuccess={handleClientFormSuccess}
+        editingClient={editingClient}
+      />
     </SafeAreaView>
   );
-} 
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6b7280',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  adminEmail: {
+    fontSize: 14,
+    marginTop: 4,
+  },
+  createButton: {
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#f3f4f6',
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  tabButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    gap: 8,
+  },
+  activeTabButton: {
+    backgroundColor: '#8b5cf6',
+  },
+  tabText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  content: {
+    flex: 1,
+  },
+  searchSection: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 16,
+  },
+  clientsList: {
+    flex: 1,
+  },
+  clientsListContent: {
+    padding: 16,
+  },
+  eventCard: {
+    marginHorizontal: 16,
+    marginVertical: 8,
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  eventHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  eventInfo: {
+    flex: 1,
+  },
+  eventName: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  eventMeta: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  eventMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  eventMetaText: {
+    fontSize: 14,
+    marginLeft: 4,
+  },
+  expandedContent: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  eventActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    backgroundColor: '#f3f4f6',
+    gap: 6,
+  },
+  actionText: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  deleteButton: {
+    backgroundColor: '#fef2f2',
+  },
+  clientCard: {
+    marginBottom: 16,
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  clientHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  clientName: {
+    fontSize: 18,
+    fontWeight: '600',
+    flex: 1,
+  },
+  clientInfo: {
+    marginBottom: 12,
+  },
+  clientInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  clientInfoText: {
+    fontSize: 14,
+    marginLeft: 8,
+    flex: 1,
+  },
+  clientActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  categorySection: {
+    marginBottom: 24,
+  },
+  categoryTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginHorizontal: 16,
+    marginBottom: 12,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  emptyStateText: {
+    fontSize: 18,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  mainActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    backgroundColor: '#f3f4f6',
+    gap: 8,
+  },
+  logoutButton: {
+    backgroundColor: '#fef2f2',
+  },
+  logoutText: {
+    color: '#dc2626',
+  },
+  actionsSection: {
+    padding: 16,
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+}); 

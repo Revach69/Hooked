@@ -95,6 +95,7 @@ export interface Event {
   name: string;
   description?: string;
   starts_at: string;
+  start_date?: string; // Real event start time (for display purposes)
   expires_at: string;
   event_code: string;
   location?: string;
@@ -104,6 +105,7 @@ export interface Event {
   event_type?: string; // Added for event type filtering
   event_link?: string; // Added for event link
   is_private?: boolean; // Added for private events
+  timezone?: string; // Added for timezone support
   created_at: string;
   updated_at: string;
 }
@@ -190,6 +192,27 @@ export interface KickedUser {
   event_name: string;
   admin_notes: string;
   created_at: string;
+}
+
+export interface AdminClient {
+  id: string;                  // Firestore doc id
+  name: string;                // Name
+  type: 'Company' | 'Wedding Organizer' | 'Club / Bar' | 'Restaurant' | 'Personal Host' | 'Other Organization';
+  eventKind: 'House Party' | 'Club' | 'Wedding' | 'Meetup' | 'High Tech Event' | 'Retreat' | 'Party' | 'Conference';
+  pocName: string;             // Name of POC
+  phone?: string | null;
+  email?: string | null;
+  country?: string | null;
+  expectedAttendees?: number | null;
+  eventDate?: string | null;   // ISO date (yyyy-mm-dd) or null
+  organizerFormSent?: 'Yes' | 'No';
+  status: 'Initial Discussion' | 'Negotiation' | 'Won' | 'Lost';
+  source?: 'Personal Connect' | 'Instagram Inbound' | 'Email' | 'Other' | 'Olim in TLV';
+  description?: string | null;
+  // system fields
+  createdAt: number;           // Date.now()
+  updatedAt: number;           // Date.now()
+  createdByUid?: string | null;
 }
 
 // Event API
@@ -869,6 +892,64 @@ export const SavedProfileAPI = {
     }, { operation: 'Delete cloud profile' });
   }
 }; 
+
+// AdminClient API
+export const AdminClientAPI = {
+  async create(data: Omit<AdminClient, 'id' | 'createdAt' | 'updatedAt'>): Promise<AdminClient> {
+    const clientData = {
+      ...data,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    
+    const docRef = await addDoc(collection(db, 'adminClients'), clientData);
+    
+    return { 
+      id: docRef.id, 
+      ...data,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    } as AdminClient;
+  },
+
+  async filter(filters: Partial<AdminClient> = {}): Promise<AdminClient[]> {
+    let q = query(collection(db, 'adminClients'));
+    
+    if (filters.status) {
+      q = query(q, where('status', '==', filters.status));
+    }
+    if (filters.type) {
+      q = query(q, where('type', '==', filters.type));
+    }
+    if (filters.eventKind) {
+      q = query(q, where('eventKind', '==', filters.eventKind));
+    }
+    if (filters.source) {
+      q = query(q, where('source', '==', filters.source));
+    }
+    
+    q = query(q, orderBy('updatedAt', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as AdminClient);
+  },
+
+  async get(id: string): Promise<AdminClient | null> {
+    const docSnap = await getDoc(doc(db, 'adminClients', id));
+    if (!docSnap.exists()) return null;
+    return { id: docSnap.id, ...docSnap.data() } as AdminClient;
+  },
+
+  async update(id: string, data: Partial<AdminClient>): Promise<void> {
+    await updateDoc(doc(db, 'adminClients', id), { 
+      ...data, 
+      updatedAt: Date.now() 
+    });
+  },
+
+  async delete(id: string): Promise<void> {
+    await deleteDoc(doc(db, 'adminClients', id));
+  },
+};
 
 // Add User export
 export { User as FirebaseUser } from 'firebase/auth'; 

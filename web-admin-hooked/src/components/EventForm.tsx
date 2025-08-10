@@ -6,6 +6,16 @@ import { X, Save, Plus, Camera, Upload, Edit3 } from 'lucide-react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/lib/firebaseConfig';
 import ImageEditor from './ImageEditor';
+import { utcToLocalDateTimeString } from '../lib/utils';
+import { 
+  getAvailableCountries, 
+  getPrimaryTimezoneForCountry, 
+  getTimezonesForCountry, 
+  getUserTimezone, 
+  localDateTimeStringToUTC, 
+  formDateTimeToUTC,
+  getAvailableTimezones 
+} from '../lib/timezoneUtils';
 
 interface EventFormProps {
   event?: Event | null;
@@ -24,12 +34,14 @@ export default function EventForm({
     name: '',
     event_code: '',
     location: '',
-    start_date: '',
+    starts_at: '', // When users can start accessing the event (early access)
+    start_date: '', // Real event start time (for display)
     end_date: '',
     description: '',
     event_type: '',
     event_link: '',
-    is_private: false
+    is_private: false,
+    timezone: getUserTimezone() // Default to user's timezone
   });
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -52,26 +64,18 @@ export default function EventForm({
     setIsDragOver(false);
     
     if (event) {
-      // Convert UTC dates to local time for the form
-      const formatDateForInput = (dateString: string) => {
-        const date = new Date(dateString);
-        // Get the local timezone offset in minutes
-        const offset = date.getTimezoneOffset();
-        // Create a new date that represents the local time
-        const localDate = new Date(date.getTime() - (offset * 60 * 1000));
-        return localDate.toISOString().slice(0, 16);
-      };
-
       setFormData({
         name: event.name || '',
         event_code: event.event_code || '',
         location: event.location || '',
-        start_date: event.starts_at ? formatDateForInput(event.starts_at) : '',
-        end_date: event.expires_at ? formatDateForInput(event.expires_at) : '',
+        starts_at: event.starts_at ? utcToLocalDateTimeString(event.starts_at) : '',
+        start_date: event.start_date ? utcToLocalDateTimeString(event.start_date) : (event.starts_at ? utcToLocalDateTimeString(event.starts_at) : ''),
+        end_date: event.expires_at ? utcToLocalDateTimeString(event.expires_at) : '',
         description: event.description || '',
         event_type: event.event_type || '',
         event_link: event.event_link || '',
-        is_private: event.is_private || false
+        is_private: event.is_private || false,
+        timezone: event.timezone || getUserTimezone()
       });
       
       // Load existing image if available
@@ -84,12 +88,14 @@ export default function EventForm({
         name: '',
         event_code: '',
         location: '',
+        starts_at: '',
         start_date: '',
         end_date: '',
         description: '',
         event_type: '',
         event_link: '',
-        is_private: false
+        is_private: false,
+        timezone: getUserTimezone()
       });
     }
     setErrors({});
@@ -212,17 +218,30 @@ export default function EventForm({
       newErrors.event_type = 'Event type is required';
     }
 
+    if (!formData.starts_at) {
+      newErrors.starts_at = 'Access start time is required';
+    }
+
     if (!formData.start_date) {
-      newErrors.start_date = 'Start date is required';
+      newErrors.start_date = 'Real event start time is required';
     }
 
     if (!formData.end_date) {
       newErrors.end_date = 'End date is required';
-    } else if (formData.start_date && formData.end_date) {
-      const startDate = new Date(formData.start_date);
+    } else if (formData.starts_at && formData.end_date) {
+      const accessStartDate = new Date(formData.starts_at);
       const endDate = new Date(formData.end_date);
-      if (endDate <= startDate) {
-        newErrors.end_date = 'End date must be after start date';
+      if (endDate <= accessStartDate) {
+        newErrors.end_date = 'End date must be after access start time';
+      }
+    }
+
+    // Validate that real event start time is not before access start time
+    if (formData.starts_at && formData.start_date) {
+      const accessStartDate = new Date(formData.starts_at);
+      const realStartDate = new Date(formData.start_date);
+      if (realStartDate < accessStartDate) {
+        newErrors.start_date = 'Real event start time cannot be before access start time';
       }
     }
 
@@ -342,27 +361,16 @@ export default function EventForm({
       }
       // If imagePreview is null, it means the image was removed, so imageUrl stays null
 
+      // Convert form datetime inputs (user's timezone) to event timezone, then to UTC for storage
       const eventData: any = {
         ...formData,
-        starts_at: (() => {
-          // Create a date object from the local datetime string
-          const localDate = new Date(formData.start_date);
-          // Convert to UTC by adding the timezone offset
-          const offset = localDate.getTimezoneOffset();
-          const utcDate = new Date(localDate.getTime() + (offset * 60 * 1000));
-          return utcDate.toISOString();
-        })(),
-        expires_at: (() => {
-          // Create a date object from the local datetime string
-          const localDate = new Date(formData.end_date);
-          // Convert to UTC by adding the timezone offset
-          const offset = localDate.getTimezoneOffset();
-          const utcDate = new Date(localDate.getTime() + (offset * 60 * 1000));
-          return utcDate.toISOString();
-        })(),
+        starts_at: formDateTimeToUTC(formData.starts_at, formData.timezone),
+        start_date: formDateTimeToUTC(formData.start_date, formData.timezone),
+        expires_at: formDateTimeToUTC(formData.end_date, formData.timezone),
         event_type: formData.event_type,
         event_link: formData.event_link,
         is_private: formData.is_private,
+        timezone: formData.timezone,
       };
 
       // Handle image_url field
@@ -515,11 +523,51 @@ export default function EventForm({
             )}
           </div>
 
+          {/* Timezone Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Event Timezone
+            </label>
+            <select
+              value={formData.timezone}
+              onChange={(e) => handleInputChange('timezone', e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            >
+              {getAvailableTimezones().map((tz) => (
+                <option key={tz.value} value={tz.value}>
+                  {tz.label}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              Select the timezone where this event will take place
+            </p>
+          </div>
+
           {/* Date Range */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Start Date & Time *
+                Access Start Date & Time *
+              </label>
+              <input
+                type="datetime-local"
+                value={formData.starts_at}
+                onChange={(e) => handleInputChange('starts_at', e.target.value)}
+                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  errors.starts_at 
+                    ? 'border-red-500 dark:border-red-400' 
+                    : 'border-gray-300 dark:border-gray-600'
+                } bg-white dark:bg-gray-700 text-gray-900 dark:text-white`}
+              />
+              {errors.starts_at && (
+                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.starts_at}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Real Event Start Date & Time *
               </label>
               <input
                 type="datetime-local"
@@ -535,25 +583,26 @@ export default function EventForm({
                 <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.start_date}</p>
               )}
             </div>
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                End Date & Time *
-              </label>
-              <input
-                type="datetime-local"
-                value={formData.end_date}
-                onChange={(e) => handleInputChange('end_date', e.target.value)}
-                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                  errors.end_date 
-                    ? 'border-red-500 dark:border-red-400' 
-                    : 'border-gray-300 dark:border-gray-600'
-                } bg-white dark:bg-gray-700 text-gray-900 dark:text-white`}
-              />
-              {errors.end_date && (
-                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.end_date}</p>
-              )}
-            </div>
+          {/* End Date */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              End Date & Time *
+            </label>
+            <input
+              type="datetime-local"
+              value={formData.end_date}
+              onChange={(e) => handleInputChange('end_date', e.target.value)}
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                errors.end_date 
+                  ? 'border-red-500 dark:border-red-400' 
+                  : 'border-gray-300 dark:border-gray-600'
+              } bg-white dark:bg-gray-700 text-gray-900 dark:text-white`}
+            />
+            {errors.end_date && (
+              <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.end_date}</p>
+            )}
           </div>
 
           {/* Description */}

@@ -19,14 +19,17 @@ export interface Event {
   name: string;
   description?: string;
   starts_at: string;
+  start_date?: string; // Real event start time (for display purposes)
   expires_at: string;
   event_code: string;
   location?: string;
   organizer_email?: string;
+  is_active: boolean;
+  image_url?: string;
   event_type?: string;
-  image_url?: string; // Added for event images
-  event_link?: string; // Added for event link
-  is_private?: boolean; // Added for private events
+  event_link?: string;
+  is_private?: boolean;
+  timezone?: string; // Added for timezone support
   created_at: string;
   updated_at: string;
 }

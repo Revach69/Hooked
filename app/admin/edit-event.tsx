@@ -11,6 +11,8 @@ import {
   SafeAreaView,
   TextInput,
   Image,
+  Modal,
+  FlatList,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { 
@@ -25,6 +27,12 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../../lib/firebaseConfig';
+import { 
+  getAvailableCountries, 
+  getPrimaryTimezoneForCountry, 
+  getTimezonesForCountry,
+  getUserTimezone 
+} from '../../lib/timezoneUtils';
 
 export default function EditEvent() {
   const colorScheme = useColorScheme();
@@ -38,17 +46,24 @@ export default function EditEvent() {
     event_code: '',
     event_link: '',
     starts_at: new Date(),
+    start_date: new Date(), // Real event start time
     expires_at: new Date(),
     is_private: false,
+    timezone: getUserTimezone(), // Default to user's timezone
   });
   
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
+  const [showRealStartPicker, setShowRealStartPicker] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
+  const [showTimezonePicker, setShowTimezonePicker] = useState(false);
+  const [selectedCountry, setSelectedCountry] = useState<string>('');
+  const [availableTimezones, setAvailableTimezones] = useState<string[]>([]);
 
   const loadEvent = useCallback(async () => {
     try {
@@ -66,8 +81,10 @@ export default function EditEvent() {
         event_code: eventData.event_code || '',
         event_link: eventData.event_link || '',
         starts_at: new Date(eventData.starts_at),
+        start_date: eventData.start_date ? new Date(eventData.start_date) : new Date(eventData.starts_at),
         expires_at: new Date(eventData.expires_at),
         is_private: eventData.is_private || false,
+        timezone: eventData.timezone || getUserTimezone(),
       });
 
       // Load existing image if available
@@ -153,6 +170,11 @@ export default function EditEvent() {
       return;
     }
 
+    if (formData.start_date < formData.starts_at) {
+      Alert.alert('Error', 'Real event start time cannot be before access start time');
+      return;
+    }
+
     try {
       setIsSaving(true);
       
@@ -186,9 +208,11 @@ export default function EditEvent() {
         event_code: formData.event_code.trim(),
         event_link: formData.event_link.trim(),
         starts_at: formData.starts_at.toISOString(),
+        start_date: formData.start_date.toISOString(), // Update start_date
         expires_at: formData.expires_at.toISOString(),
         image_url: imageUrl, // Add image URL if uploaded or existing
         is_private: formData.is_private,
+        timezone: formData.timezone, // Add timezone field
       });
 
       Alert.alert('Success', 'Event updated successfully!', [
@@ -215,6 +239,13 @@ export default function EditEvent() {
     setShowEndPicker(false);
     if (selectedDate) {
       setFormData(prev => ({ ...prev, expires_at: selectedDate }));
+    }
+  };
+
+  const handleRealStartDateChange = (event: any, selectedDate?: Date) => {
+    setShowRealStartPicker(false);
+    if (selectedDate) {
+      setFormData(prev => ({ ...prev, start_date: selectedDate }));
     }
   };
 
@@ -442,6 +473,45 @@ export default function EditEvent() {
       color: isDark ? '#9ca3af' : '#6b7280',
       flex: 1,
     },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    modalContent: {
+      backgroundColor: isDark ? '#2d2d2d' : 'white',
+      borderRadius: 12,
+      width: '90%',
+      maxHeight: '80%',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: isDark ? 0.3 : 0.1,
+      shadowRadius: 4,
+      elevation: 5,
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? '#404040' : '#e5e7eb',
+    },
+    modalTitle: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: isDark ? '#ffffff' : '#1f2937',
+    },
+    modalItem: {
+      padding: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? '#404040' : '#e5e7eb',
+    },
+    modalItemText: {
+      fontSize: 16,
+      color: isDark ? '#ffffff' : '#1f2937',
+    },
   });
 
   if (isLoading) {
@@ -587,10 +657,13 @@ export default function EditEvent() {
             </View>
           </View>
 
-          {/* Start Date/Time */}
+          {/* Access Start Date/Time */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>
-              Start Date & Time <Text style={styles.required}>*</Text>
+              Access Start Date & Time <Text style={styles.required}>*</Text>
+            </Text>
+            <Text style={[styles.label, { fontSize: 12, color: isDark ? '#9ca3af' : '#6b7280', marginTop: 4 }]}>
+              When users can start joining the event (early access)
             </Text>
             <TouchableOpacity 
               style={styles.dateButton}
@@ -598,6 +671,23 @@ export default function EditEvent() {
             >
               <Calendar size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
               <Text style={styles.dateButtonText}>{formatDate(formData.starts_at)}</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Real Event Start Date/Time */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>
+              Real Event Start Date & Time <Text style={styles.required}>*</Text>
+            </Text>
+            <Text style={[styles.label, { fontSize: 12, color: isDark ? '#9ca3af' : '#6b7280', marginTop: 4 }]}>
+              When the actual event starts (displayed to users)
+            </Text>
+            <TouchableOpacity 
+              style={styles.dateButton}
+              onPress={() => setShowRealStartPicker(true)}
+            >
+              <Calendar size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+              <Text style={styles.dateButtonText}>{formatDate(formData.start_date)}</Text>
             </TouchableOpacity>
           </View>
 
@@ -613,6 +703,32 @@ export default function EditEvent() {
               <Calendar size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
               <Text style={styles.dateButtonText}>{formatDate(formData.expires_at)}</Text>
             </TouchableOpacity>
+          </View>
+
+          {/* Timezone Selection */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Event Timezone</Text>
+            <Text style={[styles.label, { fontSize: 12, color: isDark ? '#9ca3af' : '#6b7280', marginTop: 4 }]}>
+              Select the timezone where this event will take place
+            </Text>
+            <TouchableOpacity 
+              style={styles.dateButton}
+              onPress={() => setShowCountryPicker(true)}
+            >
+              <Text style={styles.dateButtonText}>
+                {selectedCountry || 'Select Country'}
+              </Text>
+            </TouchableOpacity>
+            {selectedCountry && (
+              <TouchableOpacity 
+                style={[styles.dateButton, { marginTop: 8 }]}
+                onPress={() => setShowTimezonePicker(true)}
+              >
+                <Text style={styles.dateButtonText}>
+                  {formData.timezone || 'Select Timezone'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Private Event Checkbox */}
@@ -653,6 +769,89 @@ export default function EditEvent() {
           onChange={handleEndDateChange}
           minimumDate={formData.starts_at}
         />
+      )}
+
+      {showRealStartPicker && (
+        <DateTimePicker
+          value={formData.start_date}
+          mode="datetime"
+          display="default"
+          onChange={handleRealStartDateChange}
+          minimumDate={formData.starts_at}
+        />
+      )}
+
+      {/* Country Picker Modal */}
+      {showCountryPicker && (
+        <Modal
+          visible={showCountryPicker}
+          transparent={true}
+          animationType="slide"
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Select Country</Text>
+                <TouchableOpacity onPress={() => setShowCountryPicker(false)}>
+                  <X size={24} color={isDark ? '#ffffff' : '#1f2937'} />
+                </TouchableOpacity>
+              </View>
+              <FlatList
+                data={getAvailableCountries()}
+                keyExtractor={(item) => item}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.modalItem}
+                    onPress={() => {
+                      setSelectedCountry(item);
+                      const primaryTimezone = getPrimaryTimezoneForCountry(item);
+                      setFormData(prev => ({ ...prev, timezone: primaryTimezone }));
+                      setAvailableTimezones(getTimezonesForCountry(item));
+                      setShowCountryPicker(false);
+                    }}
+                  >
+                    <Text style={styles.modalItemText}>{item}</Text>
+                  </TouchableOpacity>
+                )}
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {/* Timezone Picker Modal */}
+      {showTimezonePicker && (
+        <Modal
+          visible={showTimezonePicker}
+          transparent={true}
+          animationType="slide"
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Select Timezone</Text>
+                <TouchableOpacity onPress={() => setShowTimezonePicker(false)}>
+                  <X size={24} color={isDark ? '#ffffff' : '#1f2937'} />
+                </TouchableOpacity>
+              </View>
+              <FlatList
+                data={availableTimezones}
+                keyExtractor={(item) => item}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.modalItem}
+                    onPress={() => {
+                      setFormData(prev => ({ ...prev, timezone: item }));
+                      setShowTimezonePicker(false);
+                    }}
+                  >
+                    <Text style={styles.modalItemText}>{item}</Text>
+                  </TouchableOpacity>
+                )}
+              />
+            </View>
+          </View>
+        </Modal>
       )}
     </SafeAreaView>
   );

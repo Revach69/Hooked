@@ -15,6 +15,7 @@ export interface FirestoreEvent {
   name: string;
   description?: string;
   starts_at: string;
+  start_date?: string; // Real event start time (for display purposes)
   expires_at: string;
   event_code: string;
   location?: string;
@@ -24,6 +25,7 @@ export interface FirestoreEvent {
   event_type?: string; // Added back for event type filtering
   event_link?: string; // Added for event link
   is_private?: boolean; // Added for private events
+  timezone?: string; // Added for timezone support
   created_at: string;
   updated_at: string;
 }
@@ -64,13 +66,19 @@ export const EventAPI = {
   // Helper function to determine event status
   getEventStatus(event: FirestoreEvent): { status: string; color: string; bgColor: string } {
     const now = new Date();
-    const startDate = new Date(event.starts_at);
+    const accessStartDate = new Date(event.starts_at);
+    const realStartDate = new Date(event.start_date || event.starts_at);
     const expiryDate = new Date(event.expires_at);
 
-    if (now < startDate) {
+    if (now < accessStartDate) {
       return { status: 'Upcoming', color: 'text-blue-600', bgColor: 'bg-blue-100' };
-    } else if (now >= startDate && now <= expiryDate) {
-      return { status: 'Active', color: 'text-green-600', bgColor: 'bg-green-100' };
+    } else if (now >= accessStartDate && now <= expiryDate) {
+      // Check if the real event has started
+      if (now < realStartDate) {
+        return { status: 'Early Access', color: 'text-purple-600', bgColor: 'bg-purple-100' };
+      } else {
+        return { status: 'Active', color: 'text-green-600', bgColor: 'bg-green-100' };
+      }
     } else {
       return { status: 'Inactive', color: 'text-gray-600', bgColor: 'bg-gray-100' };
     }
@@ -90,12 +98,12 @@ export const EventAPI = {
     };
 
     events.forEach(event => {
-      const startDate = new Date(event.starts_at);
+      const accessStartDate = new Date(event.starts_at);
       const endDate = new Date(event.expires_at);
       
-      if (now >= startDate && now <= endDate) {
+      if (now >= accessStartDate && now <= endDate) {
         categorized.active.push(event);
-      } else if (now < startDate) {
+      } else if (now < accessStartDate) {
         categorized.upcoming.push(event);
       } else {
         categorized.past.push(event);
@@ -106,7 +114,19 @@ export const EventAPI = {
   },
 
   // Helper function to format date (date only, no time)
-  formatDate(dateString: string): string {
+  formatDate(dateString: string, timezone?: string): string {
+    if (timezone) {
+      try {
+        return new Date(dateString).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          timeZone: timezone
+        });
+      } catch (error) {
+        console.warn('Timezone formatting failed, using fallback:', error);
+      }
+    }
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
@@ -115,7 +135,19 @@ export const EventAPI = {
   },
 
   // Helper function to format time (24-hour format)
-  formatTime(dateString: string): string {
+  formatTime(dateString: string, timezone?: string): string {
+    if (timezone) {
+      try {
+        return new Date(dateString).toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+          timeZone: timezone
+        });
+      } catch (error) {
+        console.warn('Timezone formatting failed, using fallback:', error);
+      }
+    }
     return new Date(dateString).toLocaleTimeString('en-US', {
       hour: '2-digit',
       minute: '2-digit',

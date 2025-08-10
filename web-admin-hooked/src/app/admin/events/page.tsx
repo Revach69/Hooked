@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import * as QRCode from 'qrcode';
 import dynamic from 'next/dynamic';
+import { formatDateWithTimezone } from '@/lib/utils';
 
 // Dynamic imports to avoid SSR issues
 const EventCard = dynamic(() => import('@/components/EventCard'), { ssr: false });
@@ -124,7 +125,23 @@ export default function EventsPage() {
       if (editingEvent) {
         await EventAPI.update(editingEvent.id, eventData);
       } else {
-        await EventAPI.create(eventData);
+        // Ensure all required fields are present for new events
+        const newEventData = {
+          name: eventData.name || '',
+          event_code: eventData.event_code || '',
+          starts_at: eventData.starts_at || '',
+          start_date: eventData.start_date || eventData.starts_at || '',
+          expires_at: eventData.expires_at || '',
+          location: eventData.location || '',
+          description: eventData.description || '',
+          event_type: eventData.event_type || '',
+          event_link: eventData.event_link || '',
+          is_private: eventData.is_private || false,
+          is_active: eventData.is_active !== undefined ? eventData.is_active : true,
+          organizer_email: eventData.organizer_email || '',
+          image_url: eventData.image_url,
+        };
+        await EventAPI.create(newEventData);
       }
       setShowEventForm(false);
       setEditingEvent(null);
@@ -316,21 +333,7 @@ export default function EventsPage() {
   };
 
   const formatDate = (dateString: string) => {
-    if (!dateString) return 'Invalid Date';
-    try {
-      return new Date(dateString).toLocaleDateString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
-      });
-    } catch (error) {
-      console.error('Error formatting date:', dateString, error);
-      return 'Invalid Date';
-    }
+    return formatDateWithTimezone(dateString);
   };
 
   const renderEventCard = (event: Event) => {
