@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { EmailService } from '@/lib/emailService';
+import { createClientFromContactForm } from '@/lib/firebaseApi';
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,6 +19,15 @@ export async function POST(request: NextRequest) {
     
     // Send the email
     await emailService.sendContactFormEmail(body);
+
+    // Create client entry in admin dashboard
+    try {
+      await createClientFromContactForm(body);
+    } catch (clientError) {
+      console.error('Error creating client entry:', clientError);
+      // Don't fail the entire request if client creation fails
+      // The email was already sent successfully
+    }
 
     return NextResponse.json(
       { message: 'Email sent successfully' },

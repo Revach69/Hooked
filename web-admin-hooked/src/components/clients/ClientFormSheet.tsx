@@ -40,7 +40,8 @@ const STATUS_OPTIONS = [
   'Initial Discussion',
   'Negotiation',
   'Won',
-  'Lost'
+  'Lost',
+  'Pre-Discussion'
 ] as const;
 
 const SOURCE_OPTIONS = [
@@ -48,7 +49,8 @@ const SOURCE_OPTIONS = [
   'Instagram Inbound',
   'Email',
   'Other',
-  'Olim in TLV'
+  'Olim in TLV',
+  'Contact Form'
 ] as const;
 
 const ORGANIZER_FORM_OPTIONS = ['Yes', 'No'] as const;

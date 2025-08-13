@@ -10,8 +10,8 @@ export type AdminClient = {
   expectedAttendees?: number | null;
   eventDate?: string | null;   // ISO date (yyyy-mm-dd) or null
   organizerFormSent?: 'Yes' | 'No';
-  status: 'Initial Discussion' | 'Negotiation' | 'Won' | 'Lost';
-  source?: 'Personal Connect' | 'Instagram Inbound' | 'Email' | 'Other' | 'Olim in TLV';
+  status: 'Initial Discussion' | 'Negotiation' | 'Won' | 'Lost' | 'Pre-Discussion';
+  source?: 'Personal Connect' | 'Instagram Inbound' | 'Email' | 'Other' | 'Olim in TLV' | 'Contact Form';
   description?: string | null;
 
   // system fields

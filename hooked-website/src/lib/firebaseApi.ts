@@ -1,4 +1,6 @@
 import { db, auth } from './firebaseConfig';
+import { initializeApp } from 'firebase/app';
+import { getFirestore } from 'firebase/firestore';
 import {
   collection,
   doc,
@@ -6,6 +8,7 @@ import {
   getDoc,
   query,
   orderBy,
+  addDoc,
 } from 'firebase/firestore';
 import { signInAnonymously } from 'firebase/auth';
 
@@ -39,6 +42,11 @@ export const EventAPI = {
         await signInAnonymously(auth);
       }
       
+      if (!db) {
+        console.warn('Firebase not initialized');
+        return [];
+      }
+      
       const q = query(collection(db, 'events'), orderBy('starts_at', 'desc'));
       const snapshot = await getDocs(q);
       return snapshot.docs.map(doc => ({ 
@@ -53,6 +61,11 @@ export const EventAPI = {
 
   async getEvent(id: string): Promise<FirestoreEvent | null> {
     try {
+      if (!db) {
+        console.warn('Firebase not initialized');
+        return null;
+      }
+      
       const docRef = doc(db, 'events', id);
       const docSnap = await getDoc(docRef);
       if (!docSnap.exists()) return null;
@@ -155,3 +168,56 @@ export const EventAPI = {
     });
   }
 }; 
+
+export interface ContactFormData {
+  fullName: string;
+  email: string;
+  phone: string;
+  message: string;
+}
+
+export async function createClientFromContactForm(formData: ContactFormData) {
+  try {
+    // Initialize Firebase if not already initialized
+    let firestoreDb = db;
+    if (!firestoreDb) {
+      const firebaseConfig = {
+        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || '',
+        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || '',
+        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '',
+        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || '',
+        messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '',
+        appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || '',
+        measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || ''
+      };
+      
+      const app = initializeApp(firebaseConfig);
+      firestoreDb = getFirestore(app);
+    }
+
+    const clientData = {
+      name: 'Unknown', // Default value as required
+      type: 'Other Organization' as const, // Default value as required
+      eventKind: 'Party' as const, // Default value as required
+      pocName: formData.fullName, // Map to Name of POC
+      phone: formData.phone || null,
+      email: formData.email || null,
+      country: 'Unknown', // Default value for required field
+      expectedAttendees: null,
+      eventDate: null,
+      organizerFormSent: 'No' as const,
+      status: 'Pre-Discussion' as const, // Default for contact form entries
+      source: 'Contact Form' as const, // Default for contact form entries
+      description: formData.message || null,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      createdByUid: null
+    };
+
+    const docRef = await addDoc(collection(firestoreDb, 'adminClients'), clientData);
+    return docRef.id;
+  } catch (error) {
+    console.error('Error creating client from contact form:', error);
+    throw error;
+  }
+} 

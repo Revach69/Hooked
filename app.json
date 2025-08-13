@@ -29,7 +29,8 @@
         "aps-environment": "production"
       },
       "podfileProperties": {
-        "ios.useModularHeaders": "true"
+        "ios.useModularHeaders": "true",
+        "newArchEnabled": "false"
       }
     },
     "android": {
@@ -82,6 +83,13 @@
           "ios": {
             "googleServicesPlist": "./GoogleService-Info.plist"
           }
+        }
+      ],
+      [
+        "./lib/ios-config-plugin.js",
+        {
+          "useModularHeaders": true,
+          "newArchEnabled": false
         }
       ]
     ],
