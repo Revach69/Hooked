@@ -35,7 +35,7 @@ target 'Hooked' do
   use_frameworks! :linkage => ENV['USE_FRAMEWORKS'].to_sym if ENV['USE_FRAMEWORKS']
   
   # Fix for Firebase Swift module integration
-  use_modular_headers! if podfile_properties['ios.useModularHeaders'] == 'true'
+  use_modular_headers!
 
   use_react_native!(
     :path => config[:reactNativePath],

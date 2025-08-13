@@ -26,10 +26,7 @@
     "production": {
       "autoIncrement": true,
       "ios": {
-        "resourceClass": "m-medium",
-        "env": {
-          "USE_MODULAR_HEADERS": "true"
-        }
+        "resourceClass": "m-medium"
       },
       "android": {
         "resourceClass": "medium",

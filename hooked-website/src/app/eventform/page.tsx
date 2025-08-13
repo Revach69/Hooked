@@ -184,6 +184,40 @@ export default function EventForm() {
                 />
               </div>
 
+              {/* Name of the Event */}
+              <div>
+                <label htmlFor="eventName" className="block text-sm font-medium dark-mode-text mb-2">
+                  Name of the Event <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  id="eventName"
+                  name="eventName"
+                  value={formData.eventName}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-4 py-3 border dark-mode-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark-mode-bg dark-mode-text"
+                  placeholder="Event name"
+                />
+              </div>
+
+              {/* Event Date */}
+              <div>
+                <label htmlFor="eventDate" className="block text-sm font-medium dark-mode-text mb-2">
+                  Event Date & Time <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="datetime-local"
+                  id="eventDate"
+                  name="eventDate"
+                  value={formData.eventDate}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-4 py-3 border dark-mode-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark-mode-bg dark-mode-text"
+                  min={new Date().toISOString().slice(0, 16)}
+                />
+              </div>
+
               {/* Event Details */}
               <div>
                 <label htmlFor="eventDetails" className="block text-sm font-medium dark-mode-text mb-2">
@@ -305,40 +339,6 @@ export default function EventForm() {
                   <option value="201-300">201-300</option>
                   <option value=">300">&gt;300</option>
                 </select>
-              </div>
-
-              {/* Name of the Event */}
-              <div>
-                <label htmlFor="eventName" className="block text-sm font-medium dark-mode-text mb-2">
-                  Name of the Event <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  id="eventName"
-                  name="eventName"
-                  value={formData.eventName}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-4 py-3 border dark-mode-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark-mode-bg dark-mode-text"
-                  placeholder="Event name"
-                />
-              </div>
-
-              {/* Event Date */}
-              <div>
-                <label htmlFor="eventDate" className="block text-sm font-medium dark-mode-text mb-2">
-                  Event Date & Time <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="datetime-local"
-                  id="eventDate"
-                  name="eventDate"
-                  value={formData.eventDate}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-4 py-3 border dark-mode-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark-mode-bg dark-mode-text"
-                  min={new Date().toISOString().slice(0, 16)}
-                />
               </div>
 
               {/* Poster Preference */}
