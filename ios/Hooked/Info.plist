@@ -54,11 +54,11 @@
       <true/>
     </dict>
     <key>NSCameraUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your camera</string>
-    <key>NSMicrophoneUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your microphone</string>
+    <string>Hooked needs camera access to let you take profile photos for your dating profile at events.</string>
     <key>NSPhotoLibraryUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your photos</string>
+    <string>Hooked needs photo library access to let you select existing photos for your dating profile at events.</string>
+    <key>NSUserNotificationUsageDescription</key>
+    <string>Hooked needs notification access to send you alerts about new matches and messages at events.</string>
     <key>NSUserActivityTypes</key>
     <array>
       <string>$(PRODUCT_BUNDLE_IDENTIFIER).expo.index_route</string>
