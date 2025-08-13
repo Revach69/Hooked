@@ -11,9 +11,6 @@ platform :ios, podfile_properties['ios.deploymentTarget'] || '15.1'
 install! 'cocoapods',
   :deterministic_uuids => false
 
-# Add modular headers for Firebase Swift pods
-use_modular_headers!
-
 prepare_react_native_project!
 
 target 'Hooked' do
@@ -36,6 +33,9 @@ target 'Hooked' do
 
   use_frameworks! :linkage => podfile_properties['ios.useFrameworks'].to_sym if podfile_properties['ios.useFrameworks']
   use_frameworks! :linkage => ENV['USE_FRAMEWORKS'].to_sym if ENV['USE_FRAMEWORKS']
+  
+  # Fix for Firebase Swift module integration
+  use_modular_headers!
 
   use_react_native!(
     :path => config[:reactNativePath],
@@ -44,14 +44,6 @@ target 'Hooked' do
     :app_path => "#{Pod::Config.instance.installation_root}/..",
     :privacy_file_aggregation_enabled => podfile_properties['apple.privacyManifestAggregationEnabled'] != 'false',
   )
-
-  # Add Firebase pods
-  pod 'Firebase/Analytics'
-  pod 'Firebase/Auth'
-  pod 'Firebase/Firestore'
-  pod 'Firebase/Storage'
-  pod 'Firebase/Crashlytics'
-  pod 'Firebase/Performance'
 
   post_install do |installer|
     react_native_post_install(
