@@ -141,8 +141,15 @@ service cloud.firestore {
       // ✅ Only authenticated users (admins) can read clients
       allow read: if true; // Allow mobile app to read reports
       
-      // ✅ Only authenticated users (admins) can create clients
-      allow create: if request.auth != null;
+      // ✅ Allow contact form submissions to create clients (no auth required)
+      // ✅ Only authenticated users (admins) can create clients manually
+      allow create: if 
+        request.auth != null || 
+        // Allow contact form submissions with specific data structure
+        (request.resource.data.source == 'Contact Form' &&
+         request.resource.data.status == 'Pre-Discussion' &&
+         request.resource.data.pocName is string &&
+         request.resource.data.email is string);
       
       // ✅ Only authenticated users (admins) can update clients
       allow update: if request.auth != null;

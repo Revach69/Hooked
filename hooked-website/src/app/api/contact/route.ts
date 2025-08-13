@@ -22,9 +22,15 @@ export async function POST(request: NextRequest) {
 
     // Create client entry in admin dashboard
     try {
-      await createClientFromContactForm(body);
+      console.log('Attempting to create client from contact form data:', body);
+      const clientId = await createClientFromContactForm(body);
+      console.log('Successfully created client with ID:', clientId);
     } catch (clientError) {
       console.error('Error creating client entry:', clientError);
+      console.error('Client error details:', {
+        message: clientError instanceof Error ? clientError.message : 'Unknown error',
+        stack: clientError instanceof Error ? clientError.stack : undefined
+      });
       // Don't fail the entire request if client creation fails
       // The email was already sent successfully
     }

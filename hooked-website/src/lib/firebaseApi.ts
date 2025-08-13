@@ -181,18 +181,49 @@ export async function createClientFromContactForm(formData: ContactFormData) {
     // Initialize Firebase if not already initialized
     let firestoreDb = db;
     if (!firestoreDb) {
+      console.log('Firebase not initialized, creating new instance...');
+      
+      // Check if we have the required environment variables
+      const requiredEnvVars = {
+        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
+      };
+      
+      console.log('Environment variables check:', {
+        hasApiKey: !!requiredEnvVars.apiKey,
+        hasAuthDomain: !!requiredEnvVars.authDomain,
+        hasProjectId: !!requiredEnvVars.projectId
+      });
+      
+      if (!requiredEnvVars.apiKey || !requiredEnvVars.authDomain || !requiredEnvVars.projectId) {
+        throw new Error('Missing required Firebase environment variables');
+      }
+      
       const firebaseConfig = {
-        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || '',
-        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || '',
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '',
+        apiKey: requiredEnvVars.apiKey,
+        authDomain: requiredEnvVars.authDomain,
+        projectId: requiredEnvVars.projectId,
         storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || '',
         messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '',
         appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || '',
         measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || ''
       };
       
-      const app = initializeApp(firebaseConfig);
-      firestoreDb = getFirestore(app);
+      console.log('Initializing Firebase with project:', firebaseConfig.projectId);
+      
+      try {
+        const app = initializeApp(firebaseConfig);
+        firestoreDb = getFirestore(app);
+        console.log('Firebase initialized successfully');
+      } catch (initError) {
+        console.error('Firebase initialization error:', initError);
+        throw new Error(`Firebase initialization failed: ${initError}`);
+      }
+    }
+
+    if (!firestoreDb) {
+      throw new Error('Firestore database not available');
     }
 
     const clientData = {
@@ -214,7 +245,9 @@ export async function createClientFromContactForm(formData: ContactFormData) {
       createdByUid: null
     };
 
+    console.log('Creating client document with data:', clientData);
     const docRef = await addDoc(collection(firestoreDb, 'adminClients'), clientData);
+    console.log('Client document created successfully with ID:', docRef.id);
     return docRef.id;
   } catch (error) {
     console.error('Error creating client from contact form:', error);

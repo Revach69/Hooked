@@ -84,6 +84,14 @@
             "googleServicesPlist": "./GoogleService-Info.plist"
           }
         }
+      ], 
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static"
+          }
+        }
       ]
     ],
     "scheme": "hooked", 
