@@ -26,10 +26,17 @@
     "production": {
       "autoIncrement": true,
       "ios": {
-        "resourceClass": "m-medium"
+        "resourceClass": "m-medium",
+        "env": {
+          "USE_MODULAR_HEADERS": "true"
+        }
       },
       "android": {
-        "resourceClass": "medium"
+        "resourceClass": "medium",
+        "env": {
+          "EXPO_USE_DEV_SERVER": "false"
+        },
+        "buildType": "app-bundle"
       }
     }
   },

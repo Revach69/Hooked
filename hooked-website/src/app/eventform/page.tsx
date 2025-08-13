@@ -14,6 +14,7 @@ interface EventFormData {
   otherEventType: string;
   expectedAttendees: string;
   eventName: string;
+  eventDate: string;
   posterPreference: string;
   eventVisibility: string;
   socialMedia: string;
@@ -31,6 +32,7 @@ export default function EventForm() {
     otherEventType: '',
     expectedAttendees: '',
     eventName: '',
+    eventDate: '',
     posterPreference: '',
     eventVisibility: '',
     socialMedia: ''
@@ -52,7 +54,7 @@ export default function EventForm() {
     setSubmitStatus('idle');
 
     // Validate required fields
-    const requiredFields = ['fullName', 'email', 'phone', 'eventAddress', 'venueName', 'eventType', 'expectedAttendees', 'eventName', 'posterPreference', 'eventVisibility'];
+    const requiredFields = ['fullName', 'email', 'phone', 'eventAddress', 'venueName', 'eventType', 'expectedAttendees', 'eventName', 'eventDate', 'posterPreference', 'eventVisibility'];
     const missingFields = requiredFields.filter(field => !formData[field as keyof EventFormData]);
     
     // Check if "Other" event type is selected but no specification provided
@@ -88,17 +90,18 @@ export default function EventForm() {
           otherEventType: '',
           expectedAttendees: '',
           eventName: '',
+          eventDate: '',
           posterPreference: '',
           eventVisibility: '',
           socialMedia: ''
         });
       } else {
         const errorData = await response.json();
-        console.error('Form submission error:', errorData);
+        // Form submission error
         setSubmitStatus('error');
       }
     } catch (error) {
-      console.error('Network error:', error);
+      // Network error
       setSubmitStatus('error');
     } finally {
       setIsSubmitting(false);
@@ -318,6 +321,23 @@ export default function EventForm() {
                   required
                   className="w-full px-4 py-3 border dark-mode-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark-mode-bg dark-mode-text"
                   placeholder="Event name"
+                />
+              </div>
+
+              {/* Event Date */}
+              <div>
+                <label htmlFor="eventDate" className="block text-sm font-medium dark-mode-text mb-2">
+                  Event Date & Time <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="datetime-local"
+                  id="eventDate"
+                  name="eventDate"
+                  value={formData.eventDate}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-4 py-3 border dark-mode-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark-mode-bg dark-mode-text"
+                  min={new Date().toISOString().slice(0, 16)}
                 />
               </div>
 

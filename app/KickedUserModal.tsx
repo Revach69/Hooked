@@ -32,6 +32,7 @@ export default function KickedUserModal({
       transparent={true}
       animationType="fade"
       onRequestClose={onClose}
+      accessibilityViewIsModal={true}
     >
       <View style={[styles.overlay, { backgroundColor: 'rgba(0, 0, 0, 0.5)' }]}>
         <View style={[
@@ -63,6 +64,9 @@ export default function KickedUserModal({
                   styles.closeButton,
                   { backgroundColor: isDark ? '#374151' : '#f3f4f6' }
                 ]}
+                accessibilityRole="button"
+                accessibilityLabel="Close modal"
+                accessibilityHint="Closes the kicked user modal"
               >
                 <X size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
               </TouchableOpacity>
@@ -110,6 +114,9 @@ export default function KickedUserModal({
               <TouchableOpacity
                 onPress={onClose}
                 style={[styles.button, { backgroundColor: '#3b82f6' }]}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                accessibilityHint="Dismiss this modal and return to the previous screen"
               >
                 <Text style={styles.buttonText}>Close</Text>
               </TouchableOpacity>

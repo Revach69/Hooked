@@ -89,7 +89,7 @@ export default function AnalyticsModal({
         genderBreakdown
       });
     } catch (error) {
-      console.error('Error loading analytics:', error);
+      // Error loading analytics
     } finally {
       setIsLoading(false);
     }

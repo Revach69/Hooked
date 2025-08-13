@@ -322,11 +322,7 @@ export async function logFirebaseError(error: any, operation: string, context: P
 
   // Regular error logging with rate limiting
   if (errorLogCount < MAX_ERROR_LOGS) {
-    console.error('❌ Firebase Error:', {
-      error: error.message,
-      code: error.code,
-      context: errorContext
-    });
+    // Firebase Error logged
   }
 }
 
@@ -341,7 +337,7 @@ class ListenerManager {
       try {
         this.activeListeners.get(id)!();
       } catch (error) {
-        console.warn(`Error cleaning up existing listener ${id}:`, error);
+        // Error cleaning up existing listener
       }
     }
 
@@ -361,7 +357,7 @@ class ListenerManager {
         
         // Listener unregistered
       } catch (error) {
-        console.warn(`Error unregistering listener ${id}:`, error);
+        // Error unregistering listener
       }
     }
   }
@@ -374,7 +370,7 @@ class ListenerManager {
         unsubscribe();
         // Cleaned up listener
       } catch (error) {
-        console.warn(`Error cleaning up listener ${id}:`, error);
+        // Error cleaning up listener
       }
     }
     
@@ -416,12 +412,12 @@ export function createSafeListener<T>(
           })) as T;
           onNext(data);
         } catch (error: any) {
-          console.error('Error processing snapshot data:', error);
+          // Error processing snapshot data
           if (onError) onError(error);
         }
       },
       (error: any) => {
-        console.error('Firestore listener error:', error);
+        // Firestore listener error
         if (onError) onError(error);
       }
     );
@@ -485,7 +481,7 @@ export class ErrorRecovery {
     const attempts = this.recoveryAttempts.get(operation) || 0;
     
     if (attempts >= this.maxRecoveryAttempts) {
-      console.warn(`⚠️ Max recovery attempts reached for ${operation}`);
+      // Max recovery attempts reached
       return false;
     }
 
@@ -496,7 +492,7 @@ export class ErrorRecovery {
       return true;
     } catch (error) {
       this.recoveryAttempts.set(operation, attempts + 1);
-      console.error(`❌ Recovery attempt ${attempts + 1} failed for ${operation}:`, error);
+      // Recovery attempt failed
       return false;
     }
   }
@@ -516,17 +512,17 @@ export class NetworkAwareErrorHandler {
     const netInfo = await NetInfo.fetch();
     
     if (!netInfo.isConnected) {
-      console.warn(`⚠️ Network disconnected during ${operation}, error may be network-related`);
+      // Network disconnected during operation
       // Could trigger offline mode or queue operation
     }
     
     if (error.code === 'unavailable') {
-      console.warn(`⚠️ Service unavailable for ${operation}, may be temporary`);
+      // Service unavailable for operation
       // Could implement circuit breaker pattern
     }
     
     if (error.message?.includes('INTERNAL ASSERTION FAILED')) {
-      console.error(`🚨 Internal assertion error in ${operation}, may require app restart`);
+      // Internal assertion error in operation
       // Could trigger app restart or Firebase reinitialization
     }
   }

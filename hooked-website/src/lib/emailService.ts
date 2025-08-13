@@ -22,6 +22,7 @@ export interface EventFormData {
   otherEventType: string;
   expectedAttendees: string;
   eventName: string;
+  eventDate: string;
   posterPreference: string;
   eventVisibility: string;
   socialMedia: string;
@@ -76,11 +77,11 @@ export class EmailService {
   }
 
   async sendEventFormEmail(data: EventFormData): Promise<void> {
-    const { fullName, email, phone, eventAddress, venueName, eventType, otherEventType, expectedAttendees, eventName, posterPreference, eventVisibility, socialMedia } = data;
+    const { fullName, email, phone, eventAddress, venueName, eventType, otherEventType, expectedAttendees, eventName, eventDate, posterPreference, eventVisibility, socialMedia } = data;
 
     // Validate required fields
-    if (!fullName || !email || !phone || !eventAddress || !venueName || !eventType || !expectedAttendees || !eventName || !posterPreference || !eventVisibility || !socialMedia) {
-      throw new Error('Missing required fields: fullName, email, phone, eventAddress, venueName, eventType, expectedAttendees, eventName, posterPreference, eventVisibility, and socialMedia are required');
+    if (!fullName || !email || !phone || !eventAddress || !venueName || !eventType || !expectedAttendees || !eventName || !eventDate || !posterPreference || !eventVisibility) {
+      throw new Error('Missing required fields: fullName, email, phone, eventAddress, venueName, eventType, expectedAttendees, eventName, eventDate, posterPreference, and eventVisibility are required');
     }
 
     // Validate that if eventType is "Other", otherEventType must be provided
@@ -94,7 +95,7 @@ export class EmailService {
 
     const mailOptions = {
       from: process.env.EMAIL_USER,
-      to: process.env.EMAIL_TO || 'roi@hooked-app.com',
+      to: 'contact@hooked-app.com',
       subject: subject,
       html: htmlContent,
       replyTo: email,
@@ -161,9 +162,20 @@ export class EmailService {
   }
 
   private generateEventFormEmailContent(data: EventFormData): string {
-    const { fullName, email, phone, eventDetails, eventAddress, venueName, eventType, otherEventType, expectedAttendees, eventName, posterPreference, eventVisibility, socialMedia } = data;
+    const { fullName, email, phone, eventDetails, eventAddress, venueName, eventType, otherEventType, expectedAttendees, eventName, eventDate, posterPreference, eventVisibility, socialMedia } = data;
 
     const finalEventType = eventType === 'Other' ? otherEventType : eventType;
+
+    // Format the event date for display
+    const formattedEventDate = eventDate ? new Date(eventDate).toLocaleString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZoneName: 'short'
+    }) : 'Not specified';
 
     const content = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -181,6 +193,7 @@ export class EmailService {
         <div style="background-color: #fef3c7; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f59e0b;">
           <h3 style="color: #92400e; margin-top: 0;">Event Details</h3>
           <p><strong>Event Name:</strong> ${eventName}</p>
+          <p><strong>Event Date & Time:</strong> ${formattedEventDate}</p>
           <p><strong>Event Type:</strong> ${finalEventType}</p>
           <p><strong>Venue Name:</strong> ${venueName}</p>
           <p><strong>Event Address:</strong> ${eventAddress}</p>

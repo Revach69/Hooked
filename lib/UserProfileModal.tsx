@@ -180,11 +180,12 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, is
       transparent
       animationType="fade"
       onRequestClose={onClose}
+      accessibilityViewIsModal={true}
     >
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           {/* Close Button */}
-          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+          <TouchableOpacity style={styles.closeButton} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close profile" accessibilityHint="Close the profile modal">
             <X size={24} color="white" />
           </TouchableOpacity>
 
@@ -193,6 +194,7 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, is
             {profile.profile_photo_url ? (
               <Image
                 source={{ uri: profile.profile_photo_url }}
+        onError={() => {}}
                 style={styles.profileImage}
               />
             ) : (
@@ -224,6 +226,10 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, is
                   style={styles.likeButton} 
                   onPress={handleLikePress}
                   disabled={isLiked}
+                  accessibilityRole="button"
+                  accessibilityLabel={isLiked ? 'Already liked' : `Like ${profile.first_name}`}
+                  accessibilityHint={isLiked ? 'You have already liked this person' : 'Add like to this person'}
+                  accessibilityState={{ disabled: isLiked }}
                 >
                   <Heart 
                     size={20} 

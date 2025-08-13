@@ -84,7 +84,7 @@ export default function EventCard({
       setQrCodeUrl(qrDataUrl);
       return qrDataUrl;
     } catch (error) {
-      console.error('Error generating QR code:', error);
+      // Error generating QR code
     } finally {
       setIsLoadingQR(false);
     }
@@ -95,7 +95,7 @@ export default function EventCard({
       await navigator.clipboard.writeText(joinLink);
       // You could add a toast notification here
     } catch (error) {
-      console.error('Failed to copy:', error);
+      // Failed to copy
     }
   };
 

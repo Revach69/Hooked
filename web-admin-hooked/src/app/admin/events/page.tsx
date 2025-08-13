@@ -47,9 +47,9 @@ function QRCodeGenerator({ joinLink, eventCode }: { joinLink: string; eventCode:
           }
         });
         setQrCodeUrl(qrDataUrl);
-      } catch (error) {
-        console.error('Error generating QR code:', error);
-      } finally {
+          } catch (error) {
+      // Error generating QR code
+    } finally {
         setIsLoading(false);
       }
     };
@@ -104,7 +104,7 @@ export default function EventsPage() {
       const allEvents = await EventAPI.filter({});
       setEvents(allEvents);
     } catch (error) {
-      console.error('Error loading events:', error);
+      // Error loading events
     } finally {
       setIsLoading(false);
     }
@@ -147,7 +147,7 @@ export default function EventsPage() {
       setEditingEvent(null);
       await loadEvents();
     } catch (error) {
-      console.error('Error saving event:', error);
+      // Error saving event
     }
   };
 
@@ -157,7 +157,7 @@ export default function EventsPage() {
         await EventAPI.delete(eventId);
         await loadEvents();
       } catch (error) {
-        console.error('Error deleting event:', error);
+        // Error deleting event
       }
     }
   };
@@ -195,7 +195,7 @@ export default function EventsPage() {
       downloadCSV(likesCsv, `${event.name}-likes.csv`);
       downloadCSV(messagesCsv, `${event.name}-messages.csv`);
     } catch (error) {
-      console.error('Error downloading data:', error);
+      // Error downloading data
     }
   };
 
@@ -221,7 +221,7 @@ export default function EventsPage() {
       link.click();
       document.body.removeChild(link);
     } catch (error) {
-      console.error('Error downloading QR code:', error);
+      // Error downloading QR code
     }
   };
 
@@ -282,7 +282,7 @@ export default function EventsPage() {
       };
       img.src = qrDataUrl;
     } catch (error) {
-      console.error('Error downloading QR sign:', error);
+      // Error downloading QR sign
     }
   };
 

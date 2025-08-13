@@ -21,10 +21,12 @@ import {
 import { router, useFocusEffect } from 'expo-router';
 import { Clock, Users, Camera, LogOut, Edit, User, AlertCircle, MessageCircle } from 'lucide-react-native';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
+import { ensureFirebaseReady } from '../lib/firebaseReady';
 import { EventProfileAPI, EventAPI, ReportAPI, StorageAPI, LikeAPI, MessageAPI } from '../lib/firebaseApi';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { checkSimpleNetworkConnectivity } from '../lib/utils';
+import * as Sentry from '@sentry/react-native';
 
 
 export default function Profile() {
@@ -76,7 +78,8 @@ export default function Profile() {
         const { hasUnseenMessages } = await import('../lib/messageNotificationHelper');
         const hasUnseen = await hasUnseenMessages(currentEvent.id, profile.session_id);
         setHasUnreadMessages(hasUnseen);
-      } catch {
+      } catch (error) {
+      Sentry.captureException(error);
         // Error checking unseen messages in profile
       }
     };
@@ -113,11 +116,20 @@ export default function Profile() {
   );
 
   const initializeSession = async () => {
+    // Ensure Firebase is initialized
+    const firebaseReady = await ensureFirebaseReady();
+    if (!firebaseReady) {
+      Alert.alert("Connection Error", "Unable to connect to the server. Please check your internet connection and try again.");
+      router.replace('/home');
+      return;
+    }
+    await new Promise(resolve => setTimeout(resolve, 100));
     const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
     const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
     
     if (!eventId || !sessionId) {
       router.replace('/home');
+      return;
       return;
     }
     
@@ -135,6 +147,7 @@ export default function Profile() {
           'currentProfilePhotoUrl'
         ]);
         router.replace('/home');
+      return;
         return;
       }
 
@@ -156,9 +169,11 @@ export default function Profile() {
           'currentProfilePhotoUrl'
         ]);
         router.replace('/home');
+      return;
         return;
       }
-    } catch {
+    } catch (error) {
+      Sentry.captureException(error);
       // Clear data and redirect to home on error
       await AsyncStorageUtils.multiRemove([
         'currentEventId',
@@ -168,6 +183,7 @@ export default function Profile() {
         'currentProfilePhotoUrl'
       ]);
       router.replace('/home');
+      return;
     }
     setIsLoading(false);
   };
@@ -232,13 +248,15 @@ export default function Profile() {
           await EventProfileAPI.update(profile.id, { profile_photo_url: file_url });
           setProfile((prev: any) => ({ ...prev, profile_photo_url: file_url }));
           await AsyncStorageUtils.setItem('currentProfilePhotoUrl', file_url);
-        } catch {
+        } catch (error) {
+      Sentry.captureException(error);
           Alert.alert("Upload Failed", "Failed to upload photo. Please try again.");
         } finally {
           setIsUploadingPhoto(false);
         }
       }
-    } catch {
+    } catch (error) {
+      Sentry.captureException(error);
       Alert.alert("Error", "Failed to pick image. Please try again.");
     }
   };
@@ -291,7 +309,8 @@ export default function Profile() {
       });
 
       setAllUsers(filteredUsers);
-    } catch {
+    } catch (error) {
+      Sentry.captureException(error);
               // Error loading users for report
       // Handle error silently
     }
@@ -325,7 +344,8 @@ export default function Profile() {
       try {
         isConnected = await checkSimpleNetworkConnectivity();
 
-      } catch {
+      } catch (error) {
+      Sentry.captureException(error);
         
         isConnected = true; // Proceed even if network check fails
       }
@@ -385,6 +405,7 @@ export default function Profile() {
         ]
       );
     } catch (error) {
+      Sentry.captureException(error);
       // Report submission error details
       
       let errorMessage = "Failed to submit report. Please try again.";
@@ -487,7 +508,9 @@ export default function Profile() {
               ]);
               
               router.replace('/home');
-            } catch {
+      return;
+            } catch (error) {
+      Sentry.captureException(error);
               // Error deleting profile
               Alert.alert("Error", "Failed to delete profile. Please try again.");
             }
@@ -542,7 +565,8 @@ export default function Profile() {
           : "Your profile is now hidden. You won't see other users in discovery, but you can still access your matches and chat with them."
       );
       
-    } catch {
+    } catch (error) {
+      Sentry.captureException(error);
       Alert.alert("Error", "Failed to update visibility. Please try again.");
       // Revert the toggle if update failed
       setEventVisible(!value);
@@ -1023,6 +1047,7 @@ export default function Profile() {
             {profile.profile_photo_url ? (
               <Image
                 source={{ uri: profile.profile_photo_url }}
+                onError={() => {}}
                 style={styles.profilePhoto}
                 resizeMode="cover"
               />
@@ -1381,7 +1406,8 @@ export default function Profile() {
                       >
                         <View style={styles.userListPhoto}>
                           {item.profile_photo_url ? (
-                            <Image source={{ uri: item.profile_photo_url }} style={styles.userListPhotoImage} />
+                            <Image source={{ uri: item.profile_photo_url }}
+              onError={() => {}} style={styles.userListPhotoImage} />
                           ) : (
                             <View style={[styles.userListPhotoFallback, { backgroundColor: item.profile_color || '#cccccc' }]}>
                               <Text style={styles.userListPhotoFallbackText}>{item.first_name[0]}</Text>
@@ -1408,7 +1434,8 @@ export default function Profile() {
                   <View style={styles.reportUserInfo}>
                     <View style={styles.userListPhoto}>
                       {selectedUserToReport?.profile_photo_url ? (
-                        <Image source={{ uri: selectedUserToReport.profile_photo_url }} style={styles.userListPhotoImage} />
+                        <Image source={{ uri: selectedUserToReport.profile_photo_url }}
+              onError={() => {}} style={styles.userListPhotoImage} />
                       ) : (
                         <View style={[styles.userListPhotoFallback, { backgroundColor: selectedUserToReport?.profile_color || '#cccccc' }]}>
                           <Text style={styles.userListPhotoFallbackText}>{selectedUserToReport?.first_name[0]}</Text>

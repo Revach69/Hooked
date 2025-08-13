@@ -18,11 +18,18 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.hookedapp.app",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "associatedDomains": [
         "applinks:www.hooked-app.com"
       ],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
+      },
+      "entitlements": {
+        "aps-environment": "production"
+      },
+      "podfileProperties": {
+        "ios.useModularHeaders": "true"
       }
     },
     "android": {
@@ -31,6 +38,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.hookedapp.app",
+      "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -47,6 +55,7 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "@sentry/react-native/expo",
       "expo-router",
       [
         "expo-notifications",
@@ -62,6 +71,17 @@
           "androidShowBadge": true,
           "androidVibrate": true,
           "androidSound": "default"
+        }
+      ],
+      [
+        "@react-native-firebase/app",
+        {
+          "android": {
+            "googleServicesFile": "./google-services.json"
+          },
+          "ios": {
+            "googleServicesPlist": "./GoogleService-Info.plist"
+          }
         }
       ]
     ],

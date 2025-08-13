@@ -70,63 +70,63 @@ export function ClientsTable({
         cell: ({ getValue }) => (
           <div className="font-medium">{getValue()}</div>
         ),
-      }),
+      }) as ColumnDef<AdminClient>,
       columnHelper.accessor('type', {
         header: 'Type',
         cell: ({ getValue }) => (
           <div className="text-sm">{getValue()}</div>
         ),
-      }),
+      }) as ColumnDef<AdminClient>,
       columnHelper.accessor('eventKind', {
         header: 'Event',
         cell: ({ getValue }) => (
           <div className="text-sm">{getValue()}</div>
         ),
-      }),
+      }) as ColumnDef<AdminClient>,
       columnHelper.accessor('pocName', {
         header: 'Name of POC',
         cell: ({ getValue }) => (
           <div className="text-sm">{getValue()}</div>
         ),
-      }),
+      }) as ColumnDef<AdminClient>,
       columnHelper.accessor('phone', {
         header: 'Phone',
         cell: ({ getValue }) => (
           <div className="text-sm">{getValue() || '-'}</div>
         ),
-      }),
+      }) as ColumnDef<AdminClient>,
       columnHelper.accessor('email', {
         header: 'Email',
         cell: ({ getValue }) => (
           <div className="text-sm">{getValue() || '-'}</div>
         ),
-      }),
+      }) as ColumnDef<AdminClient>,
       columnHelper.accessor('country', {
         header: 'Country',
         cell: ({ getValue }) => (
           <div className="text-sm">{getValue() || '-'}</div>
         ),
-      }),
+      }) as ColumnDef<AdminClient>,
       columnHelper.accessor('expectedAttendees', {
         header: '# of Expected Attendees',
         cell: ({ getValue }) => (
           <div className="text-sm">{getValue() || '-'}</div>
         ),
-      }),
+      }) as ColumnDef<AdminClient>,
       columnHelper.accessor('eventDate', {
         header: 'Date of Event',
         cell: ({ getValue }) => (
           <div className="text-sm">
-            {getValue() ? new Date(getValue()).toLocaleDateString() : '-'}
+            {getValue() ? new Date(getValue()!).toLocaleDateString() : '-'}
           </div>
         ),
-      }),
+      }) as ColumnDef<AdminClient>,
       columnHelper.accessor('organizerFormSent', {
         header: 'Organizer Form Sent?',
         cell: ({ getValue }) => (
           <div className="text-sm">{getValue() || '-'}</div>
         ),
-      }),
+      }) as ColumnDef<AdminClient>,
       columnHelper.accessor('status', {
         header: 'Status',
         cell: ({ getValue }) => (
@@ -134,13 +134,13 @@ export function ClientsTable({
             {getValue()}
           </Badge>
         ),
-      }),
+      }) as ColumnDef<AdminClient>,
       columnHelper.accessor('source', {
         header: 'Source',
         cell: ({ getValue }) => (
           <div className="text-sm">{getValue() || '-'}</div>
         ),
-      }),
+      }) as ColumnDef<AdminClient>,
       columnHelper.accessor('description', {
         header: 'Description',
         cell: ({ getValue }) => (
@@ -148,7 +148,7 @@ export function ClientsTable({
             {getValue() || '-'}
           </div>
         ),
-      }),
+      }) as ColumnDef<AdminClient>,
       columnHelper.display({
         id: 'actions',
         header: 'Actions',

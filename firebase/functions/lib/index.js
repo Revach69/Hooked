@@ -1,10 +1,49 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.listAdminUsers = exports.removeAdminUser = exports.addAdminUser = exports.verifyAdminStatus = exports.setAdminClaim = exports.getUserSavedProfiles = exports.saveUserProfile = exports.sendProfileExpirationNotifications = exports.cleanupExpiredProfiles = void 0;
-const functions = require("firebase-functions");
-const admin = require("firebase-admin");
-// Initialize Firebase Admin
-admin.initializeApp();
+exports.savePushToken = exports.onMessageCreate = exports.onMutualLike = exports.notify = exports.verifyAdminStatus = exports.setAdminClaim = exports.getUserSavedProfiles = exports.saveUserProfile = exports.sendProfileExpirationNotifications = exports.cleanupExpiredProfiles = void 0;
+const functions = __importStar(require("firebase-functions"));
+const admin = __importStar(require("firebase-admin"));
+const path = __importStar(require("path"));
+const fetch = require('node-fetch');
+// Initialize Firebase Admin with service account
+const serviceAccount = require(path.join(__dirname, '../hooked-69-firebase-adminsdk-fbsvc-c7009d8539.json'));
+admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+    databaseURL: 'https://hooked-69-default-rtdb.firebaseio.com'
+});
 const db = admin.firestore();
 // Get region from environment or default to us-central1
 const FUNCTION_REGION = process.env.FUNCTION_REGION || 'us-central1';
@@ -310,11 +349,11 @@ exports.verifyAdminStatus = functions
         throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
     }
     const userId = context.auth.uid;
+    const userEmail = context.auth.token.email;
     try {
-        // Check if user exists in admins collection
-        const adminDoc = await db.collection('admins').doc(userId).get();
-        const isAdmin = adminDoc.exists;
-        console.log(`Verified admin status for user ${userId}: ${isAdmin}`);
+        // Any authenticated user from Firebase Authentication is considered an admin
+        const isAdmin = !!userEmail;
+        console.log(`Verified admin status for user ${userId} (${userEmail}): ${isAdmin}`);
         return { success: true, isAdmin };
     }
     catch (error) {
@@ -322,93 +361,234 @@ exports.verifyAdminStatus = functions
         throw new functions.https.HttpsError('internal', 'Failed to verify admin status');
     }
 });
-// Cloud Function to add admin user
-exports.addAdminUser = functions
-    .region(FUNCTION_REGION)
-    .https.onCall(async (data, context) => {
-    // Verify authentication
-    if (!context.auth) {
-        throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+const REGION = FUNCTION_REGION;
+// Shared helpers for push notifications
+async function fetchSessionTokens(sessionId) {
+    console.log(`Fetching tokens for sessionId: ${sessionId}`);
+    const snap = await admin.firestore()
+        .collection('push_tokens')
+        .where('sessionId', '==', sessionId)
+        .get();
+    const tokens = [];
+    snap.forEach(d => {
+        const data = d.data();
+        if (typeof (data === null || data === void 0 ? void 0 : data.token) === 'string' && data.token)
+            tokens.push(data.token);
+    });
+    console.log(`Found ${tokens.length} tokens for sessionId: ${sessionId}`);
+    return tokens;
+}
+async function sendExpoPush(toTokens, payload) {
+    if (!toTokens.length) {
+        console.log('No tokens to send push to');
+        return { sent: 0, results: [] };
     }
-    const { targetUserId, adminEmail } = data;
-    if (!targetUserId || !adminEmail) {
-        throw new functions.https.HttpsError('invalid-argument', 'targetUserId and adminEmail are required');
-    }
-    try {
-        // Check if current user is admin
-        const currentUserAdminDoc = await db.collection('admins').doc(context.auth.uid).get();
-        if (!currentUserAdminDoc.exists) {
-            throw new functions.https.HttpsError('permission-denied', 'Only admins can add other admins');
-        }
-        // Add user to admins collection
-        await db.collection('admins').doc(targetUserId).set({
-            email: adminEmail,
-            added_by: context.auth.uid,
-            added_at: admin.firestore.FieldValue.serverTimestamp(),
+    console.log(`Sending push to ${toTokens.length} tokens:`, payload);
+    const chunks = [];
+    for (let i = 0; i < toTokens.length; i += 100)
+        chunks.push(toTokens.slice(i, i + 100));
+    const results = [];
+    for (const chunk of chunks) {
+        const messages = chunk.map(to => (Object.assign({ to, sound: 'default' }, payload)));
+        const resp = await fetch(EXPO_PUSH_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(messages),
         });
-        console.log(`Added admin user ${targetUserId} (${adminEmail})`);
-        return { success: true, message: `Admin user ${adminEmail} added successfully` };
+        const json = await resp.json().catch(() => null);
+        console.log(`Expo push response: ${resp.status}`, json);
+        results.push({ status: resp.status, json });
     }
-    catch (error) {
-        console.error('Error adding admin user:', error);
-        throw new functions.https.HttpsError('internal', 'Failed to add admin user');
+    return { sent: toTokens.length, results };
+}
+async function onceOnly(key) {
+    // Idempotency via notifications_log
+    const ref = admin.firestore().collection('notifications_log').doc(key);
+    const snap = await ref.get();
+    if (snap.exists)
+        return false;
+    await ref.set({ createdAt: admin.firestore.FieldValue.serverTimestamp() });
+    return true;
+}
+const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
+function requireApiKey(req) {
+    var _a;
+    const key = req.header('x-api-key');
+    const expected = process.env.API_KEY || ((_a = functions.config().hooked) === null || _a === void 0 ? void 0 : _a.api_key);
+    if (!expected || key !== expected) {
+        throw new functions.https.HttpsError('permission-denied', 'Invalid API key');
+    }
+}
+exports.notify = functions
+    .region(REGION)
+    .https.onRequest(async (req, res) => {
+    try {
+        if (req.method !== 'POST') {
+            res.set('Allow', 'POST');
+            res.status(405).send('Method Not Allowed');
+            return;
+        }
+        requireApiKey(req);
+        const { recipientSessionId, title, body, data } = req.body || {};
+        if (!recipientSessionId || !title) {
+            throw new functions.https.HttpsError('invalid-argument', 'recipientSessionId and title required');
+        }
+        const db = admin.firestore();
+        const snap = await db.collection('push_tokens')
+            .where('sessionId', '==', recipientSessionId)
+            .get();
+        const tokens = [];
+        snap.forEach(doc => {
+            const d = doc.data();
+            if (typeof (d === null || d === void 0 ? void 0 : d.token) === 'string' && d.token)
+                tokens.push(d.token);
+        });
+        if (!tokens.length) {
+            res.status(200).json({ sent: 0, message: 'No tokens for recipient' });
+            return;
+        }
+        // chunk to 100 per request
+        const chunks = [];
+        for (let i = 0; i < tokens.length; i += 100)
+            chunks.push(tokens.slice(i, i + 100));
+        const results = [];
+        for (const chunk of chunks) {
+            const messages = chunk.map(to => ({ to, title, body, data, sound: 'default' }));
+            const resp = await fetch(EXPO_PUSH_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(messages),
+            });
+            const json = await resp.json().catch(() => null);
+            results.push({ status: resp.status, json });
+        }
+        res.status(200).json({ sent: tokens.length, results });
+    }
+    catch (err) {
+        console.error('notify error', err);
+        const code = (err === null || err === void 0 ? void 0 : err.code) === 'permission-denied' ? 403 : 500;
+        res.status(code).json({ error: (err === null || err === void 0 ? void 0 : err.message) || 'Unknown error' });
     }
 });
-// Cloud Function to remove admin user
-exports.removeAdminUser = functions
-    .region(FUNCTION_REGION)
-    .https.onCall(async (data, context) => {
-    // Verify authentication
-    if (!context.auth) {
-        throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+// Trigger: Mutual Match (likes)
+exports.onMutualLike = functions
+    .region(REGION)
+    .firestore.document('likes/{likeId}')
+    .onWrite(async (change, context) => {
+    const before = change.before.exists ? change.before.data() : null;
+    const after = change.after.exists ? change.after.data() : null;
+    if (!after)
+        return;
+    const was = (before === null || before === void 0 ? void 0 : before.is_mutual) === true;
+    const now = (after === null || after === void 0 ? void 0 : after.is_mutual) === true;
+    if (was || !now)
+        return; // only fire on rising edge
+    const eventId = after.event_id;
+    const likerSession = after.liker_session_id; // user who just liked (second liker when is_mutual flips)
+    const likedSession = after.liked_session_id; // user who liked earlier (first liker)
+    if (!eventId || !likerSession || !likedSession)
+        return;
+    // Idempotency key: match per event per pair
+    const pairKey = [likerSession, likedSession].sort().join('|');
+    const logKey = `match:${eventId}:${pairKey}`;
+    if (!(await onceOnly(logKey)))
+        return;
+    // Send to second liker (creator)
+    {
+        const tokens = await fetchSessionTokens(likerSession);
+        await sendExpoPush(tokens, {
+            title: "It's a match!",
+            body: undefined,
+            data: { type: 'match', otherSessionId: likedSession }
+        });
     }
-    const { targetUserId } = data;
-    if (!targetUserId) {
-        throw new functions.https.HttpsError('invalid-argument', 'targetUserId is required');
-    }
-    try {
-        // Check if current user is admin
-        const currentUserAdminDoc = await db.collection('admins').doc(context.auth.uid).get();
-        if (!currentUserAdminDoc.exists) {
-            throw new functions.https.HttpsError('permission-denied', 'Only admins can remove other admins');
-        }
-        // Prevent removing yourself
-        if (targetUserId === context.auth.uid) {
-            throw new functions.https.HttpsError('invalid-argument', 'Cannot remove yourself as admin');
-        }
-        // Remove user from admins collection
-        await db.collection('admins').doc(targetUserId).delete();
-        console.log(`Removed admin user ${targetUserId}`);
-        return { success: true, message: 'Admin user removed successfully' };
-    }
-    catch (error) {
-        console.error('Error removing admin user:', error);
-        throw new functions.https.HttpsError('internal', 'Failed to remove admin user');
+    // Send to first liker (recipient)
+    {
+        const tokens = await fetchSessionTokens(likedSession);
+        await sendExpoPush(tokens, {
+            title: 'You got a match!',
+            body: undefined,
+            data: { type: 'match', otherSessionId: likerSession }
+        });
     }
 });
-// Cloud Function to list admin users
-exports.listAdminUsers = functions
+// Trigger: New Message (messages)
+exports.onMessageCreate = functions
+    .region(REGION)
+    .firestore.document('messages/{messageId}')
+    .onCreate(async (snap, context) => {
+    var _a;
+    const d = snap.data();
+    const messageId = (d === null || d === void 0 ? void 0 : d.id) || context.params.messageId;
+    const eventId = d === null || d === void 0 ? void 0 : d.event_id;
+    const fromProfile = d === null || d === void 0 ? void 0 : d.from_profile_id;
+    const toProfile = d === null || d === void 0 ? void 0 : d.to_profile_id;
+    const senderName = (d === null || d === void 0 ? void 0 : d.sender_name) || 'Someone';
+    const preview = typeof (d === null || d === void 0 ? void 0 : d.content) === 'string' ? d.content.slice(0, 80) : undefined;
+    if (!eventId || !fromProfile || !toProfile)
+        return;
+    // Idempotency: 1 push per message id
+    const logKey = `msg:${eventId}:${messageId}`;
+    if (!(await onceOnly(logKey)))
+        return;
+    // Don't notify the sender
+    if (fromProfile === toProfile)
+        return;
+    // Resolve recipient session_id via event_profiles (if not in messages)
+    let toSession = null;
+    if (typeof (d === null || d === void 0 ? void 0 : d.to_session_id) === 'string') {
+        toSession = d.to_session_id;
+    }
+    else {
+        const prof = await admin.firestore()
+            .collection('event_profiles')
+            .where('id', '==', toProfile)
+            .limit(1)
+            .get();
+        const rec = (_a = prof.docs[0]) === null || _a === void 0 ? void 0 : _a.data();
+        toSession = (rec === null || rec === void 0 ? void 0 : rec.session_id) || null;
+    }
+    if (!toSession)
+        return;
+    const tokens = await fetchSessionTokens(toSession);
+    await sendExpoPush(tokens, {
+        title: `New message from ${senderName}`,
+        body: preview !== null && preview !== void 0 ? preview : 'Open to read',
+        data: { type: 'message', conversationId: toProfile }
+    });
+});
+// === Callable: savePushToken ===
+// Saves/updates a user's Expo token under push_tokens/{sessionId}_{platform}
+// Expects: { token: string, platform: 'ios' | 'android', sessionId: string }
+exports.savePushToken = functions
     .region(FUNCTION_REGION)
     .https.onCall(async (data, context) => {
-    // Verify authentication
-    if (!context.auth) {
-        throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+    console.log('savePushToken called with data:', data);
+    const token = data === null || data === void 0 ? void 0 : data.token;
+    const platform = data === null || data === void 0 ? void 0 : data.platform;
+    const sessionId = data === null || data === void 0 ? void 0 : data.sessionId;
+    if (typeof token !== 'string' || !token.trim()) {
+        console.log('Invalid token:', token);
+        throw new functions.https.HttpsError('invalid-argument', 'token is required');
     }
-    try {
-        // Check if current user is admin
-        const currentUserAdminDoc = await db.collection('admins').doc(context.auth.uid).get();
-        if (!currentUserAdminDoc.exists) {
-            throw new functions.https.HttpsError('permission-denied', 'Only admins can list admin users');
-        }
-        // Get all admin users
-        const adminUsersSnapshot = await db.collection('admins').get();
-        const adminUsers = adminUsersSnapshot.docs.map(doc => (Object.assign({ uid: doc.id }, doc.data())));
-        console.log(`Listed ${adminUsers.length} admin users`);
-        return { success: true, adminUsers };
+    if (platform !== 'ios' && platform !== 'android') {
+        console.log('Invalid platform:', platform);
+        throw new functions.https.HttpsError('invalid-argument', "platform must be 'ios' or 'android'");
     }
-    catch (error) {
-        console.error('Error listing admin users:', error);
-        throw new functions.https.HttpsError('internal', 'Failed to list admin users');
+    if (typeof sessionId !== 'string' || !sessionId.trim()) {
+        console.log('Invalid sessionId:', sessionId);
+        throw new functions.https.HttpsError('invalid-argument', 'sessionId is required');
     }
+    const docId = `${sessionId}_${platform}`;
+    console.log(`Saving push token with docId: ${docId}`);
+    await admin.firestore().collection('push_tokens').doc(docId).set({
+        token,
+        platform,
+        sessionId,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    console.log(`Successfully saved push token for sessionId: ${sessionId}, platform: ${platform}`);
+    return { ok: true };
 });
 //# sourceMappingURL=index.js.map

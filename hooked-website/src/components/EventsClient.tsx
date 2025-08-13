@@ -56,7 +56,7 @@ export default function EventsClient() {
       const publicEvents = eventsData.filter(event => !event.is_private);
       setEvents(publicEvents);
     } catch (error) {
-      console.error('Error loading events:', error);
+      // Error loading events
     } finally {
       setLoading(false);
     }

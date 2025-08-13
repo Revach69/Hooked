@@ -44,7 +44,7 @@ export default function Collage({ className = "", selectedImages }: CollageProps
 
   
   useEffect(() => {
-    console.log('Collage received images:', selectedImages);
+    // Collage received images
   }, [selectedImages]);
 
   return (

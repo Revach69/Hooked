@@ -15,8 +15,9 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { Heart, Filter, Users, User, MessageCircle, X } from 'lucide-react-native';
-import { EventProfileAPI, LikeAPI, EventAPI } from '../lib/firebaseApi';
-import { sendMatchNotification, sendLikeNotification } from '../lib/notificationService';
+import { EventProfileAPI, LikeAPI, EventAPI, BlockedMatchAPI } from '../lib/firebaseApi';
+import * as Sentry from '@sentry/react-native';
+
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Slider from '@react-native-community/slider';
@@ -69,6 +70,7 @@ export default function Discovery() {
   const [showExtendedInterests, setShowExtendedInterests] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [likedProfiles, setLikedProfiles] = useState(new Set<string>());
+  const [blockedProfiles, setBlockedProfiles] = useState(new Set<string>());
   const [selectedProfileForDetail, setSelectedProfileForDetail] = useState<any>(null);
   const [isAppActive, setIsAppActive] = useState(true);
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
@@ -128,8 +130,8 @@ export default function Discovery() {
         const { hasUnseenMessages } = await import('../lib/messageNotificationHelper');
         const hasUnseen = await hasUnseenMessages(currentEvent.id, currentSessionId);
         setHasUnreadMessages(hasUnseen);
-      } catch {
-        // Error checking unseen messages
+      } catch (error) {
+        Sentry.captureException(error);
       }
     };
 
@@ -157,14 +159,14 @@ export default function Discovery() {
           const { hasUnseenMessages } = await import('../lib/messageNotificationHelper');
           const hasUnseen = await hasUnseenMessages(currentEvent.id, currentSessionId);
           setHasUnreadMessages(hasUnseen);
-        } catch {
-          // Error checking unseen messages from real-time listener
+        } catch (error) {
+          Sentry.captureException(error);
         }
       });
 
       return () => unsubscribe();
-    } catch {
-      // Error setting up real-time message listener
+    } catch (error) {
+      Sentry.captureException(error);
     }
   }, [currentEvent?.id, currentSessionId, currentUserProfile?.id]);
 
@@ -227,17 +229,17 @@ export default function Discovery() {
               setupOtherListeners();
             }
           }
-        } catch {
-          // Handle error silently
+        } catch (error) {
+          Sentry.captureException(error);
         }
-      }, () => {
-        // Handle error silently
+      }, (error) => {
+        Sentry.captureException(error);
       });
 
       listenersRef.current.userProfile = userProfileUnsubscribe;
 
-    } catch {
-      // Handle error silently
+    } catch (error) {
+      Sentry.captureException(error);
     }
 
     return () => {
@@ -267,20 +269,15 @@ export default function Discovery() {
             id: doc.id,
             ...doc.data()
           })) as any[];
-          const otherUsersProfiles = allVisibleProfiles.filter(p => p.session_id !== currentSessionId);
+          const otherUsersProfiles = allVisibleProfiles.filter(p => 
+            p.session_id !== currentSessionId && !blockedProfiles.has(p.session_id)
+          );
           setProfiles(otherUsersProfiles);
-        } catch {
-          // Error in other profiles listener
+        } catch (error) {
+          Sentry.captureException(error);
         }
               }, (error) => {
-          // Handle Firestore listener errors gracefully
-          if (error.code === 'permission-denied') {
-            // Permission denied for other profiles listener
-          } else if (error.code === 'unavailable') {
-            // Firestore temporarily unavailable
-          } else {
-            // Error in other profiles listener
-          }
+          Sentry.captureException(error);
         });
 
       listenersRef.current.otherProfiles = otherProfilesUnsubscribe;
@@ -300,18 +297,11 @@ export default function Discovery() {
           })) as any[];
           
           setLikedProfiles(new Set(likes.map(like => like.liked_session_id)));
-        } catch {
-          // Error in likes listener
+        } catch (error) {
+          Sentry.captureException(error);
         }
               }, (error) => {
-          // Handle Firestore listener errors gracefully
-          if (error.code === 'permission-denied') {
-            // Permission denied for likes listener
-          } else if (error.code === 'unavailable') {
-            // Firestore temporarily unavailable
-          } else {
-            // Error in likes listener
-          }
+          Sentry.captureException(error);
         });
 
       listenersRef.current.likes = likesUnsubscribe;
@@ -327,20 +317,13 @@ export default function Discovery() {
         // Match notifications are now handled globally in _layout.tsx
         // This listener is kept for any future local match-related functionality
       }, (error) => {
-        // Handle Firestore listener errors gracefully
-        if (error.code === 'permission-denied') {
-          // Permission denied for mutual matches listener
-        } else if (error.code === 'unavailable') {
-          // Firestore temporarily unavailable
-        } else {
-          // Error in mutual matches listener
-        }
+        Sentry.captureException(error);
       });
 
       listenersRef.current.mutualMatches = mutualMatchesUnsubscribe;
 
-    } catch {
-      // Error setting up other listeners
+    } catch (error) {
+      Sentry.captureException(error);
     }
   };
 
@@ -350,8 +333,8 @@ export default function Discovery() {
       if (listenersRef.current.userProfile) {
         try {
           listenersRef.current.userProfile();
-        } catch {
-          // Handle error silently
+        } catch (error) {
+          Sentry.captureException(error);
         }
         listenersRef.current.userProfile = undefined;
       }
@@ -360,8 +343,8 @@ export default function Discovery() {
       if (listenersRef.current.otherProfiles) {
         try {
           listenersRef.current.otherProfiles();
-        } catch {
-          // Handle error silently
+        } catch (error) {
+          Sentry.captureException(error);
         }
         listenersRef.current.otherProfiles = undefined;
       }
@@ -370,8 +353,8 @@ export default function Discovery() {
       if (listenersRef.current.likes) {
         try {
           listenersRef.current.likes();
-        } catch {
-          // Handle error silently
+        } catch (error) {
+          Sentry.captureException(error);
         }
         listenersRef.current.likes = undefined;
       }
@@ -380,20 +363,32 @@ export default function Discovery() {
       if (listenersRef.current.mutualMatches) {
         try {
           listenersRef.current.mutualMatches();
-        } catch {
-          // Handle error silently
+        } catch (error) {
+          Sentry.captureException(error);
         }
         listenersRef.current.mutualMatches = undefined;
       }
-    } catch {
-      // Handle error silently
+    } catch (error) {
+      Sentry.captureException(error);
+    }
+  };
+
+  const loadBlockedProfiles = async (eventId: string, sessionId: string) => {
+    try {
+      const blocked = await BlockedMatchAPI.filter({
+        event_id: eventId,
+        blocker_session_id: sessionId
+      });
+      setBlockedProfiles(new Set(blocked.map(b => b.blocked_session_id)));
+    } catch (error) {
+      Sentry.captureException(error);
     }
   };
 
   // Apply filters whenever profiles or currentUserProfile changes
   useEffect(() => {
     applyFilters();
-  }, [profiles, currentUserProfile, filters]);
+  }, [profiles, currentUserProfile, filters, blockedProfiles]);
 
   const initializeSession = async () => {
           const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
@@ -411,6 +406,8 @@ export default function Discovery() {
       const events = await EventAPI.filter({ id: eventId });
       if (events.length > 0) {
         setCurrentEvent(events[0]);
+        // Load blocked profiles
+        await loadBlockedProfiles(eventId, sessionId);
       } else {
         // Event doesn't exist, clear all data and redirect to home
         await AsyncStorageUtils.multiRemove([
@@ -452,8 +449,8 @@ export default function Discovery() {
       }
 
       // Likes are now handled by real-time listener
-    } catch {
-      // Handle error silently - if there's an error, clear data and redirect to home
+    } catch (error) {
+      Sentry.captureException(error);
       await AsyncStorageUtils.multiRemove([
         'currentEventId',
         'currentSessionId',
@@ -550,14 +547,7 @@ export default function Discovery() {
         });
       }, { profile_id: likedProfile.id, event_id: eventId });
 
-      // Send notification to the person being liked (they get notified that someone liked them)
-      try {
-        await trackAsyncOperation('send_like_notification', async () => {
-          return await sendLikeNotification(likedProfile.session_id, currentUserProfile.first_name);
-        });
-      } catch {
-        // Handle notification error silently
-      }
+      // Like notification handled by centralized system
 
       // Check for mutual match
       const theirLikesToMe = await trackAsyncOperation('check_mutual_like', async () => {
@@ -593,21 +583,14 @@ export default function Discovery() {
         // - First liker (User B) gets toast/push notification
         // - Second liker (User A, match creator) gets alert
         
-        // Send push notification to the first liker (User B) if they're not in the app
-        try {
-          await trackAsyncOperation('send_match_notification_to_first_liker', async () => {
-            return await sendMatchNotification(likedProfile.session_id, currentUserProfile.first_name, true);
-          });
-        } catch {
-          // Handle notification error silently
-        }
+        // Match notification handled by centralized system
 
         // Note: All match notifications (toast/alert) will be handled by the mutual matches listener
         // This prevents duplicate notifications and ensures correct timing
         // The listener will determine who gets toast vs alert based on liker/liked roles
       }
-    } catch {
-              // Error creating like
+    } catch (error) {
+      Sentry.captureException(error);
       // Revert optimistic update on error
       setLikedProfiles(prev => {
         const newSet = new Set(prev);
@@ -1083,6 +1066,7 @@ export default function Discovery() {
             <TouchableOpacity
               style={styles.makeVisibleButton}
               onPress={() => router.push('/profile')}
+              accessibilityRole="button"
               accessibilityLabel="Go to Profile"
               accessibilityHint="Navigate to profile settings to make your profile visible"
             >
@@ -1096,6 +1080,7 @@ export default function Discovery() {
           <TouchableOpacity
             style={[styles.navButton, styles.navButtonActive]}
             onPress={() => router.push('/profile')}
+            accessibilityRole="button"
             accessibilityLabel="Profile Tab"
             accessibilityHint="Navigate to your profile settings"
           >
@@ -1106,6 +1091,9 @@ export default function Discovery() {
           <TouchableOpacity
             style={styles.navButton}
             onPress={() => {}} // Already on discovery page but hidden
+            accessibilityRole="button"
+            accessibilityLabel="Discover"
+            accessibilityHint="Currently on discovery page"
           >
             <Users size={24} color="#9ca3af" />
             <Text style={styles.navButtonText}>Discover</Text>
@@ -1114,6 +1102,7 @@ export default function Discovery() {
           <TouchableOpacity
             style={styles.navButton}
             onPress={() => router.push('/matches')}
+            accessibilityRole="button"
             accessibilityLabel="Matches Tab"
             accessibilityHint="Navigate to your matches"
           >
@@ -1147,6 +1136,7 @@ export default function Discovery() {
         <TouchableOpacity
           style={styles.filterButton}
           onPress={() => setShowFilters(true)}
+          accessibilityRole="button"
           accessibilityLabel="Filter Profiles"
           accessibilityHint="Open filters to customize your discovery preferences"
         >
@@ -1168,6 +1158,7 @@ export default function Discovery() {
                       key={profile.id}
                       style={styles.profileCard}
                       onPress={() => handleProfileTap(profile)}
+                      accessibilityRole="button"
                       accessibilityLabel={`View ${profile.first_name}'s Profile`}
                       accessibilityHint={`Tap to view ${profile.first_name}'s full profile details`}
                     >
@@ -1175,6 +1166,7 @@ export default function Discovery() {
                         {profile.profile_photo_url ? (
                           <Image
                             source={{ uri: profile.profile_photo_url }}
+        onError={() => {}}
                             style={styles.profileImage}
                             resizeMode="cover"
                           />
@@ -1195,6 +1187,10 @@ export default function Discovery() {
                             handleLike(profile);
                           }}
                           disabled={likedProfiles.has(profile.session_id)}
+                          accessibilityRole="button"
+                          accessibilityLabel={likedProfiles.has(profile.session_id) ? `Already liked ${profile.first_name}` : `Like ${profile.first_name}`}
+                          accessibilityHint={likedProfiles.has(profile.session_id) ? "You have already liked this profile" : "Add like to this profile"}
+                          accessibilityState={{ disabled: likedProfiles.has(profile.session_id) }}
                         >
                           <Heart 
                             size={16} 
@@ -1227,6 +1223,9 @@ export default function Discovery() {
             <TouchableOpacity
               style={styles.adjustFiltersButton}
               onPress={() => setShowFilters(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Adjust Filters"
+              accessibilityHint="Open filters to adjust your discovery preferences"
             >
               <Text style={styles.adjustFiltersButtonText}>Adjust Filters</Text>
             </TouchableOpacity>
@@ -1239,6 +1238,9 @@ export default function Discovery() {
         <TouchableOpacity
           style={styles.navButton}
           onPress={() => router.push('/profile')}
+          accessibilityRole="button"
+          accessibilityLabel="Profile"
+          accessibilityHint="Navigate to your profile page"
         >
           <User size={24} color="#9ca3af" />
           <Text style={styles.navButtonText}>Profile</Text>
@@ -1247,6 +1249,10 @@ export default function Discovery() {
         <TouchableOpacity
           style={[styles.navButton, styles.navButtonActive]}
           onPress={() => {}} // Already on discovery page
+          accessibilityRole="button"
+          accessibilityLabel="Discover"
+          accessibilityHint="Currently on discovery page"
+          accessibilityState={{ selected: true }}
         >
           <Users size={24} color="#8b5cf6" />
           <Text style={[styles.navButtonText, styles.navButtonTextActive]}>Discover</Text>
@@ -1255,6 +1261,9 @@ export default function Discovery() {
         <TouchableOpacity
           style={styles.navButton}
           onPress={() => router.push('/matches')}
+          accessibilityRole="button"
+          accessibilityLabel="Matches"
+          accessibilityHint="Navigate to your matches page"
         >
           <View style={{ position: 'relative' }}>
             <MessageCircle size={24} color="#9ca3af" />
@@ -1284,12 +1293,12 @@ export default function Discovery() {
       </View>
 
       {/* Filter Modal */}
-      <Modal visible={showFilters} transparent animationType="slide" onRequestClose={() => setShowFilters(false)}>
+      <Modal visible={showFilters} transparent animationType="slide" onRequestClose={() => setShowFilters(false)} accessibilityViewIsModal={true}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Filters</Text>
-              <TouchableOpacity onPress={() => setShowFilters(false)}>
+              <TouchableOpacity onPress={() => setShowFilters(false)} accessibilityRole="button" accessibilityLabel="Close filters" accessibilityHint="Close the filters modal">
                 <X size={24} color="#6b7280" />
               </TouchableOpacity>
             </View>
@@ -1349,6 +1358,13 @@ export default function Discovery() {
                         ]}
                         onPress={() => handleToggleInterest(interest)}
                         disabled={!filters.interests.includes(interest) && filters.interests.length >= 3}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${interest.charAt(0).toUpperCase() + interest.slice(1)}`}
+                        accessibilityHint={filters.interests.includes(interest) ? "Remove this interest filter" : "Add this interest filter"}
+                        accessibilityState={{ 
+                          selected: filters.interests.includes(interest),
+                          disabled: !filters.interests.includes(interest) && filters.interests.length >= 3
+                        }}
                       >
                         <Text style={[
                           styles.interestOptionText,
@@ -1366,6 +1382,9 @@ export default function Discovery() {
                   <TouchableOpacity 
                     style={styles.interestsSectionHeader}
                     onPress={() => setShowExtendedInterests(!showExtendedInterests)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${showExtendedInterests ? 'Hide' : 'Show'} extended interests`}
+                    accessibilityHint="Toggle visibility of additional interest options"
                   >
                     <Text style={styles.toggleIcon}>{showExtendedInterests ? '↑' : '↓'}</Text>
                   </TouchableOpacity>
@@ -1381,6 +1400,13 @@ export default function Discovery() {
                           ]}
                           onPress={() => handleToggleInterest(interest)}
                           disabled={!filters.interests.includes(interest) && filters.interests.length >= 3}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${interest.charAt(0).toUpperCase() + interest.slice(1)}`}
+                          accessibilityHint={filters.interests.includes(interest) ? "Remove this interest filter" : "Add this interest filter"}
+                          accessibilityState={{ 
+                            selected: filters.interests.includes(interest),
+                            disabled: !filters.interests.includes(interest) && filters.interests.length >= 3
+                          }}
                         >
                           <Text style={[
                             styles.interestOptionText,
@@ -1398,10 +1424,10 @@ export default function Discovery() {
 
             {/* Action Buttons */}
             <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.resetButton} onPress={handleResetFilters}>
+              <TouchableOpacity style={styles.resetButton} onPress={handleResetFilters} accessibilityRole="button" accessibilityLabel="Reset filters" accessibilityHint="Reset all filters to default values">
                 <Text style={styles.resetButtonText}>Reset</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.applyButton} onPress={handleApplyFilters}>
+              <TouchableOpacity style={styles.applyButton} onPress={handleApplyFilters} accessibilityRole="button" accessibilityLabel="Apply filters" accessibilityHint="Apply the selected filters and close the modal">
                 <Text style={styles.applyButtonText}>Apply Filters</Text>
               </TouchableOpacity>
             </View>

@@ -23,6 +23,8 @@ import { Upload, ArrowLeft } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { SurveyService } from '../lib/surveyService';
+import { ensureFirebaseReady } from '../lib/firebaseReady';
+import * as Sentry from '@sentry/react-native';
 
 // Simple UUID v4 generator function
 function generateUUID() {
@@ -84,19 +86,34 @@ export default function Consent() {
 
   useEffect(() => {
     const fetchEvent = async () => {
-      const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
-      if (!eventId) {
+      const firebaseReady = await ensureFirebaseReady();
+      if (!firebaseReady) {
+        Alert.alert("Connection Error", "Unable to connect to the server. Please check your internet connection and try again.");
         router.replace('/home');
         return;
       }
+      const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
+      
+      if (!eventId) {
+        Sentry.captureException(new Error('No event ID found in AsyncStorage'));
+        router.replace('/home');
+        return;
+      }
+      
       try {
-        const events = await EventAPI.filter({ id: eventId });
-        if (events.length > 0) {
-          const foundEvent = events[0];
+        const foundEvent = await EventAPI.get(eventId);
+        
+        if (foundEvent) {
           setEvent(foundEvent);
+        } else {
+          Sentry.captureException(new Error(`No event found with ID: ${eventId}`));
+          Alert.alert("Error", "Event not found. Please try again.");
+          router.replace('/home');
         }
-      } catch {
-        // Handle error silently
+      } catch (error) {
+        Sentry.captureException(error);
+        Alert.alert("Error", "Failed to load event information. Please try again.");
+        router.replace('/home');
       }
     };
     fetchEvent();
@@ -141,8 +158,9 @@ export default function Consent() {
           // Set the remember profile toggle to true if we have saved data
           setRememberProfile(true);
         }
-      } catch {
+      } catch (error) {
         // Error loading saved profile
+        Sentry.captureException(error);
       }
     };
     loadSavedProfile();
@@ -190,7 +208,7 @@ export default function Consent() {
       }
 
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: 'images',
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.6, // Reduced quality for faster upload
@@ -223,7 +241,7 @@ export default function Consent() {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: 'images',
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.6, // Reduced quality for faster upload
@@ -243,6 +261,7 @@ export default function Consent() {
   const processImageAsset = async (asset: any) => {
     // Validate file size (10MB limit)
     if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
+      Sentry.captureException(new Error(`File too large: ${asset.fileSize}`));
       Alert.alert("File Too Large", "Image must be smaller than 10MB.");
       return;
     }
@@ -282,7 +301,11 @@ export default function Consent() {
 
           // Save photo URL locally if "remember profile" is checked
           if (rememberProfile) {
-            await AsyncStorageUtils.setItem('savedProfilePhotoUrl', file_url);
+            try {
+              await AsyncStorageUtils.setItem('savedProfilePhotoUrl', file_url);
+            } catch (storageError) {
+              Sentry.captureException(storageError);
+            }
           }
           
           // Success - break out of retry loop
@@ -295,14 +318,14 @@ export default function Consent() {
           }
           
           // Wait before retrying (exponential backoff)
-          await new Promise(resolve => setTimeout(resolve, 1000 * uploadAttempts));
+          const waitTime = 1000 * uploadAttempts;
+          await new Promise(resolve => setTimeout(resolve, waitTime));
         }
       }
     } catch (err) {
-      // Enhanced error logging
-      // Photo upload error details
+      Sentry.captureException(err);
       
-      // Provide more specific error messages
+      // Enhanced error logging
       let errorMessage = 'Unknown upload error';
       
       if (err instanceof Error) {
@@ -335,6 +358,13 @@ export default function Consent() {
       return;
     }
     
+    // Validate that we have the event data
+    if (!event || !event.id || !event.expires_at) {
+      Sentry.captureException(new Error(`Event data is missing or invalid: ${JSON.stringify(event)}`));
+      Alert.alert("Error", "Event information is missing. Please try again.");
+      return;
+    }
+    
     setIsSubmitting(true);
     setStep('processing');
     
@@ -344,8 +374,6 @@ export default function Consent() {
       
       // Ensure the color is a valid 6-digit hex
       const validColor = profileColor.length === 7 ? profileColor : '#000000';
-      
-
 
       // Save profile data locally if "remember profile" is checked
       if (rememberProfile) {
@@ -363,16 +391,16 @@ export default function Consent() {
               profileDataToSave.gender_identity && profileDataToSave.interested_in) {
             await AsyncStorageUtils.setItem('savedProfileData', JSON.stringify(profileDataToSave));
           }
-        } catch {
-          // Error saving profile data
+        } catch (error) {
+          Sentry.captureException(error);
         }
       } else {
         // Clear saved profile data if not checked
         try {
           await AsyncStorageUtils.removeItem('savedProfileData');
           await AsyncStorageUtils.removeItem('savedProfilePhotoUrl');
-        } catch {
-          // Error clearing profile data
+        } catch (error) {
+          Sentry.captureException(error);
         }
       }
 
@@ -390,7 +418,13 @@ export default function Consent() {
         expires_at: event.expires_at,
       };
       
-      await EventProfileAPI.create(profileData);
+      // Add timeout to prevent hanging
+      const profileCreationPromise = EventProfileAPI.create(profileData);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Profile creation timeout')), 15000)
+      );
+      
+      await Promise.race([profileCreationPromise, timeoutPromise]);
 
       // Save session and profile data to AsyncStorage
       await AsyncStorageUtils.setItem('currentSessionId', sessionId);
@@ -398,15 +432,21 @@ export default function Consent() {
       await AsyncStorageUtils.setItem('currentProfileColor', validColor);
       
       // Add event to user's history for survey purposes
-      await SurveyService.addEventToHistory(
-        event.id,
-        event.name,
-        sessionId,
-        event.expires_at
-      );
+      try {
+        await SurveyService.addEventToHistory(
+          event.id,
+          event.name,
+          sessionId,
+          event.expires_at
+        );
+      } catch (error) {
+        Sentry.captureException(error);
+        // Don't fail the entire process for this
+      }
       
       router.replace('/discovery');
-    } catch {
+    } catch (error) {
+      Sentry.captureException(error);
       setError("Failed to create profile. Please try again.");
       setIsSubmitting(false);
     }
@@ -911,6 +951,7 @@ export default function Consent() {
                 {formData.profile_photo_url ? (
                   <Image
                     source={{ uri: formData.profile_photo_url }}
+                    onError={() => {}}
                     style={styles.profilePhoto}
                     resizeMode="cover"
                   />

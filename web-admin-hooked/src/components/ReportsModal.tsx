@@ -48,7 +48,7 @@ export default function ReportsModal({ isOpen, onClose, eventId, eventName }: Re
   const loadReports = async () => {
     setIsLoading(true);
     try {
-      console.log('Loading reports for event:', eventId);
+      // Loading reports for event
       // Filter reports by event_id
       const eventReports = await ReportAPI.filter({ event_id: eventId });
       
@@ -76,7 +76,7 @@ export default function ReportsModal({ isOpen, onClose, eventId, eventName }: Re
 
       setReports(reportsWithProfiles);
     } catch (error) {
-      console.error('Error loading reports:', error);
+      // Error loading reports
     } finally {
       setIsLoading(false);
     }
@@ -133,7 +133,7 @@ export default function ReportsModal({ isOpen, onClose, eventId, eventName }: Re
       // Reload reports
       await loadReports();
     } catch (error) {
-      console.error('Error processing report:', error);
+      // Error processing report
     } finally {
       setProcessingReport(null);
       setPendingAction(null);
@@ -174,13 +174,13 @@ export default function ReportsModal({ isOpen, onClose, eventId, eventName }: Re
       date = dateValue;
     } else {
       // Fallback
-      console.warn('Unknown date format:', dateValue);
+      // Unknown date format
       return 'Unknown Date';
     }
     
     // Check if date is valid
     if (isNaN(date.getTime())) {
-      console.warn('Invalid date:', dateValue);
+      // Invalid date
       return 'Invalid Date';
     }
     

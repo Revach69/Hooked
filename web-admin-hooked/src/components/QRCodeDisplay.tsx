@@ -29,7 +29,7 @@ export default function QRCodeDisplay({ joinLink, eventCode }: QRCodeDisplayProp
       });
       setQrCodeUrl(qrDataUrl);
     } catch (error) {
-      console.error('Error generating QR code:', error);
+      // Error generating QR code
     } finally {
       setIsLoading(false);
     }

@@ -70,3 +70,6 @@ web-build/
 ios/Pods/
 
 .env.local
+
+# Firebase Service Account Keys
+*firebase-adminsdk*.json

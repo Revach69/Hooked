@@ -13,8 +13,8 @@ import {
   Platform,
 } from 'react-native';
 import { router } from 'expo-router';
-import { Heart, MessageCircle, Users, User } from 'lucide-react-native';
-import { EventProfileAPI, LikeAPI, EventAPI } from '../lib/firebaseApi';
+import { Heart, MessageCircle, Users, User, MoreVertical, UserX, VolumeX, Volume2 } from 'lucide-react-native';
+import { EventProfileAPI, LikeAPI, EventAPI, BlockedMatchAPI, MutedMatchAPI } from '../lib/firebaseApi';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
@@ -22,7 +22,7 @@ import { db } from '../lib/firebaseConfig';
 import UserProfileModal from '../lib/UserProfileModal';
 
 import { updateUserActivity } from '../lib/messageNotificationHelper';
-import { sendLikeNotification } from '../lib/notificationService';
+
 
 export default function Matches() {
   const colorScheme = useColorScheme();
@@ -37,6 +37,9 @@ export default function Matches() {
   const [unreadMessages, setUnreadMessages] = useState<Set<string>>(new Set());
   const [isAppActive, setIsAppActive] = useState(true);
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
+  const [blockedMatches, setBlockedMatches] = useState<Set<string>>(new Set());
+  const [mutedMatches, setMutedMatches] = useState<Set<string>>(new Set());
+  const [showActionMenu, setShowActionMenu] = useState<string | null>(null);
   // Single ref to hold all unsubscribe functions
   const listenersRef = useRef<{
     userProfile?: () => void;
@@ -326,7 +329,12 @@ export default function Matches() {
             }
           }
 
-          setMatches(matchedProfiles);
+          // Filter out blocked matches
+          const unblockedMatches = matchedProfiles.filter(profile => 
+            !blockedMatches.has(profile.session_id)
+          );
+
+          setMatches(unblockedMatches);
                   } catch {
             // Error in matches listener
           }
@@ -438,6 +446,91 @@ export default function Matches() {
     }
   };
 
+  const loadBlockedAndMutedMatches = async () => {
+    if (!currentEvent?.id || !currentSessionId) return;
+
+    try {
+      // Load blocked matches
+      const blocked = await BlockedMatchAPI.filter({
+        event_id: currentEvent.id,
+        blocker_session_id: currentSessionId
+      });
+      setBlockedMatches(new Set(blocked.map(b => b.blocked_session_id)));
+
+      // Load muted matches
+      const muted = await MutedMatchAPI.filter({
+        event_id: currentEvent.id,
+        muter_session_id: currentSessionId
+      });
+      setMutedMatches(new Set(muted.map(m => m.muted_session_id)));
+    } catch {
+      // Error loading blocked/muted matches
+    }
+  };
+
+  const handleBlockMatch = async (matchSessionId: string) => {
+    if (!currentEvent?.id || !currentSessionId) return;
+
+    try {
+      await BlockedMatchAPI.create({
+        event_id: currentEvent.id,
+        blocker_session_id: currentSessionId,
+        blocked_session_id: matchSessionId
+      });
+
+      setBlockedMatches(prev => new Set([...prev, matchSessionId]));
+      setShowActionMenu(null);
+
+      Alert.alert(
+        'Match Blocked',
+        'You have blocked this match. You will not see each other for the rest of the event.',
+        [{ text: 'OK' }]
+      );
+    } catch {
+      Alert.alert('Error', 'Failed to block match');
+    }
+  };
+
+  const handleMuteMatch = async (matchSessionId: string) => {
+    if (!currentEvent?.id || !currentSessionId) return;
+
+    const isMuted = mutedMatches.has(matchSessionId);
+
+    try {
+      if (isMuted) {
+        // Unmute
+        const mutedRecords = await MutedMatchAPI.filter({
+          event_id: currentEvent.id,
+          muter_session_id: currentSessionId,
+          muted_session_id: matchSessionId
+        });
+        
+        for (const record of mutedRecords) {
+          await MutedMatchAPI.delete(record.id);
+        }
+
+        setMutedMatches(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(matchSessionId);
+          return newSet;
+        });
+      } else {
+        // Mute
+        await MutedMatchAPI.create({
+          event_id: currentEvent.id,
+          muter_session_id: currentSessionId,
+          muted_session_id: matchSessionId
+        });
+
+        setMutedMatches(prev => new Set([...prev, matchSessionId]));
+      }
+
+      setShowActionMenu(null);
+    } catch {
+      Alert.alert('Error', `Failed to ${isMuted ? 'unmute' : 'mute'} match`);
+    }
+  };
+
   const initializeSession = async () => {
     try {
       setIsLoading(true);
@@ -489,6 +582,9 @@ export default function Matches() {
         router.replace('/home');
         return;
       }
+
+      // Load blocked and muted matches
+      await loadBlockedAndMutedMatches();
 
       // Matches are now handled by real-time listener
     } catch {
@@ -548,12 +644,7 @@ export default function Matches() {
 
               // Like created successfully
 
-      // Send notification to the person being liked (they get notified that someone liked them)
-      try {
-        await sendLikeNotification(likedProfile.session_id, currentUserProfile.first_name);
-      } catch {
-        // Handle notification error silently
-      }
+      // Like notification handled by centralized system
 
       // Check for mutual match
       const theirLikesToMe = await LikeAPI.filter({
@@ -855,6 +946,44 @@ export default function Matches() {
       color: isDark ? '#e5e7eb' : '#92400e',
       lineHeight: 20,
     },
+    actionMenu: {
+      position: 'absolute',
+      top: '100%',
+      right: 16,
+      backgroundColor: isDark ? '#1f2937' : '#ffffff',
+      borderRadius: 8,
+      padding: 8,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: isDark ? 0.3 : 0.15,
+      shadowRadius: 8,
+      elevation: 8,
+      zIndex: 1000,
+      minWidth: 120,
+      borderWidth: 1,
+      borderColor: isDark ? '#374151' : '#e5e7eb',
+    },
+    actionMenuItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+      gap: 8,
+    },
+    actionMenuText: {
+      fontSize: 14,
+      color: isDark ? '#e5e7eb' : '#374151',
+      fontWeight: '500',
+    },
+    destructiveAction: {
+      borderTopWidth: 1,
+      borderTopColor: isDark ? '#374151' : '#e5e7eb',
+      marginTop: 4,
+      paddingTop: 12,
+    },
+    destructiveText: {
+      color: '#dc2626',
+    },
   });
 
   if (isLoading) {
@@ -897,6 +1026,9 @@ export default function Matches() {
             <TouchableOpacity
               style={styles.makeVisibleButton}
               onPress={() => router.push('/profile')}
+              accessibilityRole="button"
+              accessibilityLabel="Make visible"
+              accessibilityHint="Navigate to profile settings to make your profile visible"
             >
               <Text style={styles.makeVisibleButtonText}>Make Visible</Text>
             </TouchableOpacity>
@@ -913,28 +1045,25 @@ export default function Matches() {
                 key={match.id}
                 style={[
                   styles.matchCard,
-                  unreadMessages.has(match.session_id) && Platform.select({
-                    ios: {
-                      borderWidth: 3,
-                      borderColor: '#ef4444',
-                      backgroundColor: isDark ? '#1f1f1f' : '#fef2f2',
+                  unreadMessages.has(match.session_id) && {
+                    borderWidth: 3,
+                    borderColor: '#ef4444',
+                    backgroundColor: isDark ? '#1f1f1f' : '#fef2f2',
+                    ...(Platform.OS === 'ios' ? {
                       shadowColor: '#ef4444',
                       shadowOffset: { width: 0, height: 0 },
                       shadowOpacity: 0.4,
                       shadowRadius: 8,
-                    },
-                    android: {
-                      borderWidth: 3,
-                      borderColor: '#ef4444',
-                      backgroundColor: isDark ? '#1f1f1f' : '#fef2f2',
+                    } : {
                       elevation: 8,
-                    }
-                  })
+                    })
+                  }
                 ]}
                 onPress={() => {
                   // Navigate to chat without marking messages as seen
                   router.push(`/chat?matchId=${match.session_id}&matchName=${match.first_name}`);
                 }}
+                accessibilityRole="button"
                 accessibilityLabel={`Open chat with ${match.first_name}`}
                 accessibilityHint={`Tap to open chat with ${match.first_name}`}
               >
@@ -944,9 +1073,13 @@ export default function Matches() {
                     e.stopPropagation();
                     handleProfileTap(match);
                   }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`View ${match.first_name}'s profile`}
+                  accessibilityHint="Opens profile details modal"
                 >
                     {match.profile_photo_url ? (
-                      <Image source={{ uri: match.profile_photo_url }} style={styles.matchImage} />
+                      <Image source={{ uri: match.profile_photo_url }}
+        onError={() => {}} style={styles.matchImage} />
                     ) : (
                       <View style={[styles.matchImageFallback, { backgroundColor: match.profile_color || '#cccccc' }]}>
                         <Text style={styles.matchImageFallbackText}>{match.first_name[0]}</Text>
@@ -995,14 +1128,56 @@ export default function Matches() {
                           matchName: match.first_name
                         }
                       })}
+                      accessibilityRole="button"
                       accessibilityLabel={`Message ${match.first_name}`}
                       accessibilityHint={`Open chat with ${match.first_name}`}
                     >
                       <MessageCircle size={16} color="#6b7280" />
                       <Text style={styles.actionText}>Message</Text>
                     </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      style={styles.actionButton}
+                      onPress={() => setShowActionMenu(showActionMenu === match.session_id ? null : match.session_id)}
+                      accessibilityRole="button"
+                      accessibilityLabel="More options"
+                      accessibilityHint="Show mute and block options"
+                    >
+                      <MoreVertical size={16} color="#6b7280" />
+                    </TouchableOpacity>
                   </View>
                 </View>
+                
+                {/* Action Menu */}
+                {showActionMenu === match.session_id && (
+                  <View style={styles.actionMenu}>
+                    <TouchableOpacity
+                      style={styles.actionMenuItem}
+                      onPress={() => handleMuteMatch(match.session_id)}
+                      accessibilityRole="button"
+                      accessibilityLabel={mutedMatches.has(match.session_id) ? 'Unmute match' : 'Mute match'}
+                    >
+                      {mutedMatches.has(match.session_id) ? (
+                        <Volume2 size={16} color="#6b7280" />
+                      ) : (
+                        <VolumeX size={16} color="#6b7280" />
+                      )}
+                      <Text style={styles.actionMenuText}>
+                        {mutedMatches.has(match.session_id) ? 'Unmute' : 'Mute'}
+                      </Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                      style={[styles.actionMenuItem, styles.destructiveAction]}
+                      onPress={() => handleBlockMatch(match.session_id)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Block match"
+                    >
+                      <UserX size={16} color="#dc2626" />
+                      <Text style={[styles.actionMenuText, styles.destructiveText]}>Block</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </TouchableOpacity>
             ))}
           </View>
@@ -1016,6 +1191,9 @@ export default function Matches() {
             <TouchableOpacity
               style={styles.browseButton}
               onPress={() => router.push('/discovery')}
+              accessibilityRole="button"
+              accessibilityLabel="Browse singles"
+              accessibilityHint="Navigate to discovery page to browse and like profiles"
             >
               <Text style={styles.browseButtonText}>Browse Singles</Text>
             </TouchableOpacity>
@@ -1028,6 +1206,9 @@ export default function Matches() {
         <TouchableOpacity
           style={styles.navButton}
           onPress={() => router.push('/profile')}
+          accessibilityRole="button"
+          accessibilityLabel="Profile"
+          accessibilityHint="Navigate to your profile page"
         >
           <User size={24} color="#9ca3af" />
           <Text style={styles.navButtonText}>Profile</Text>
@@ -1036,6 +1217,9 @@ export default function Matches() {
         <TouchableOpacity
           style={styles.navButton}
           onPress={() => router.push('/discovery')}
+          accessibilityRole="button"
+          accessibilityLabel="Discover"
+          accessibilityHint="Navigate to discovery page to browse profiles"
         >
           <Users size={24} color="#9ca3af" />
           <Text style={styles.navButtonText}>Discover</Text>
@@ -1044,6 +1228,10 @@ export default function Matches() {
         <TouchableOpacity
           style={[styles.navButton, styles.navButtonActive]}
           onPress={() => {}} // Already on matches page
+          accessibilityRole="button"
+          accessibilityLabel="Matches"
+          accessibilityHint="Currently on matches page"
+          accessibilityState={{ selected: true }}
         >
           <View style={{ position: 'relative' }}>
             <MessageCircle size={24} color="#8b5cf6" />
@@ -1071,6 +1259,22 @@ export default function Matches() {
           <Text style={[styles.navButtonText, styles.navButtonTextActive]}>Matches</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Overlay to close action menu */}
+      {showActionMenu && (
+        <TouchableOpacity
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 999,
+          }}
+          onPress={() => setShowActionMenu(null)}
+          activeOpacity={1}
+        />
+      )}
 
       {/* Profile Detail Modal */}
       <UserProfileModal

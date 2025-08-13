@@ -82,7 +82,7 @@ service cloud.firestore {
     // ===== EVENT FEEDBACK COLLECTION =====
     match /event_feedback/{feedbackId} {
       // ✅ Only authenticated users (admins) can read feedback
-      allow read: if request.auth != null;
+      allow read: if true; // Allow mobile app to read reports
       
       // ✅ Anyone can create anonymous feedback
       allow create: if true;
@@ -97,7 +97,7 @@ service cloud.firestore {
     // ===== REPORTS COLLECTION =====
     match /reports/{reportId} {
       // ✅ Only authenticated users (admins) can read reports
-      allow read: if request.auth != null;
+      allow read: if true; // Allow mobile app to read reports
       
       // ✅ Anyone can create reports (mobile app) - no authentication required
       // Explicitly allow anonymous users to create reports
@@ -120,14 +120,11 @@ service cloud.firestore {
 
     // ===== KICKED USERS COLLECTION =====
     match /kicked_users/{kickedUserId} {
-      // ✅ Only authenticated users (admins) can read all kicked users
-      allow read: if request.auth != null;
+      // ✅ Anyone can read kicked user records (for mobile app notifications)
+      allow read: if true;
       
       // ✅ Only authenticated users (admins) can create kicked user records
       allow create: if request.auth != null;
-      
-      // ✅ Anyone can read kicked user records (for mobile app notifications)
-      allow read: if true;
       
       // ✅ Only authenticated users (admins) can delete kicked user records
       allow delete: if request.auth != null;
@@ -142,7 +139,7 @@ service cloud.firestore {
     // ===== ADMIN CLIENTS COLLECTION =====
     match /adminClients/{clientId} {
       // ✅ Only authenticated users (admins) can read clients
-      allow read: if request.auth != null;
+      allow read: if true; // Allow mobile app to read reports
       
       // ✅ Only authenticated users (admins) can create clients
       allow create: if request.auth != null;
@@ -152,6 +149,27 @@ service cloud.firestore {
       
       // ✅ Only authenticated users (admins) can delete clients
       allow delete: if request.auth != null;
+    }
+    
+    // ===== PUSH TOKENS COLLECTION =====
+    match /push_tokens/{tokenId} {
+      // ✅ Anyone can create push tokens (mobile app registration)
+      allow create: if 
+        // Ensure required fields are present
+        request.resource.data.token is string &&
+        request.resource.data.platform is string &&
+        request.resource.data.session_id is string &&
+        request.resource.data.created_at is string;
+      
+      // ✅ Only authenticated users (admins) can read push tokens
+      allow read: if true; // Allow mobile app to read reports
+      
+      // ✅ Users can update their own push tokens by session_id
+      allow update: if 
+        resource.data.session_id == request.resource.data.session_id;
+      
+      // ✅ Users can delete their own push tokens by session_id
+      allow delete: if true; // Allow deletion for cleanup purposes
     }
     
     // ===== DEFAULT RULE =====

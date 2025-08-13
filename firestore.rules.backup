@@ -1,0 +1,181 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===== EVENTS COLLECTION =====
+    match /events/{eventId} {
+      // ✅ Everyone can read events (for joining)
+      allow read: if true;
+      
+      // ✅ Only authenticated users (admins) can create/modify events
+      allow write: if request.auth != null;
+    }
+    
+    // ===== EVENT PROFILES COLLECTION =====
+    match /event_profiles/{profileId} {
+      // ✅ Everyone can read profiles for active events
+      allow read: if true;
+      
+      // ✅ Anyone can create profiles (mobile app)
+      allow create: if true;
+      
+      // ✅ Users can update their own profile (session-based)
+      allow update: if 
+        resource.data.session_id == request.resource.data.session_id;
+      
+      // ✅ Users can delete their own profile
+      // Simplified: allow all profile deletions since mobile app doesn't use Firebase Auth
+      allow delete: if true;
+    }
+    
+    // ===== LIKES COLLECTION =====
+    match /likes/{likeId} {
+      // ✅ Everyone can read likes
+      allow read: if true;
+      
+      // ✅ Anyone can create likes
+      allow create: if true;
+      
+      // ✅ Users can update their own likes
+      allow update: if 
+        resource.data.liker_session_id == request.resource.data.liker_session_id;
+      
+      // ✅ Users can delete their own likes
+      // Simplified: allow all like deletions since mobile app doesn't use Firebase Auth
+      allow delete: if true;
+    }
+    
+    // ===== MESSAGES COLLECTION =====
+    match /messages/{messageId} {
+      // ✅ Everyone can read messages
+      allow read: if true;
+      
+      // ✅ Anyone can create messages
+      allow create: if true;
+      
+      // ✅ Users can update their own messages
+      allow update: if 
+        resource.data.from_profile_id == request.resource.data.from_profile_id;
+      
+      // ✅ Users can delete their own messages
+      // Simplified: allow all message deletions since mobile app doesn't use Firebase Auth
+      allow delete: if true;
+    }
+    
+    // ===== CONTACT SHARES COLLECTION =====
+    match /contact_shares/{shareId} {
+      // ✅ Everyone can read contact shares
+      allow read: if true;
+      
+      // ✅ Anyone can create contact shares
+      allow create: if true;
+      
+      // ✅ Users can update their own contact shares
+      allow update: if 
+        resource.data.from_profile_id == request.resource.data.from_profile_id;
+      
+      // ✅ Users can delete their own contact shares
+      // Simplified: allow all contact share deletions since mobile app doesn't use Firebase Auth
+      allow delete: if true;
+    }
+    
+    // ===== EVENT FEEDBACK COLLECTION =====
+    match /event_feedback/{feedbackId} {
+      // ✅ Only authenticated users (admins) can read feedback
+      allow read: if request.auth != null;
+      
+      // ✅ Anyone can create anonymous feedback
+      allow create: if true;
+      
+      // ✅ No updates allowed (feedback is immutable)
+      allow update: if false;
+      
+      // ✅ Only authenticated users (admins) can delete feedback
+      allow delete: if request.auth != null;
+    }
+    
+    // ===== REPORTS COLLECTION =====
+    match /reports/{reportId} {
+      // ✅ Only authenticated users (admins) can read reports
+      allow read: if request.auth != null;
+      
+      // ✅ Anyone can create reports (mobile app) - no authentication required
+      // Explicitly allow anonymous users to create reports
+      allow create: if 
+        // Ensure required fields are present
+        request.resource.data.event_id is string &&
+        request.resource.data.reporter_session_id is string &&
+        request.resource.data.reported_session_id is string &&
+        request.resource.data.reason is string &&
+        request.resource.data.status is string &&
+        // Ensure status is valid
+        request.resource.data.status in ['pending', 'reviewed', 'resolved', 'dismissed'];
+      
+      // ✅ Only authenticated users (admins) can update reports
+      allow update: if request.auth != null;
+      
+      // ✅ Only authenticated users (admins) can delete reports
+      allow delete: if request.auth != null;
+    }
+
+    // ===== KICKED USERS COLLECTION =====
+    match /kicked_users/{kickedUserId} {
+      // ✅ Anyone can read kicked user records (for mobile app notifications)
+      allow read: if true;
+      
+      // ✅ Only authenticated users (admins) can create kicked user records
+      allow create: if request.auth != null;
+      
+      // ✅ Only authenticated users (admins) can delete kicked user records
+      allow delete: if request.auth != null;
+    }
+
+    // ===== USERS COLLECTION =====
+    match /users/{userId} {
+      // ✅ Only authenticated users can access user data
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // ===== ADMIN CLIENTS COLLECTION =====
+    match /adminClients/{clientId} {
+      // ✅ Only authenticated users (admins) can read clients
+      allow read: if request.auth != null;
+      
+      // ✅ Only authenticated users (admins) can create clients
+      allow create: if request.auth != null;
+      
+      // ✅ Only authenticated users (admins) can update clients
+      allow update: if request.auth != null;
+      
+      // ✅ Only authenticated users (admins) can delete clients
+      allow delete: if request.auth != null;
+    }
+    
+    // ===== PUSH TOKENS COLLECTION =====
+    match /push_tokens/{tokenId} {
+      // ✅ Anyone can create push tokens (mobile app registration)
+      allow create: if 
+        // Ensure required fields are present
+        request.resource.data.token is string &&
+        request.resource.data.platform is string &&
+        request.resource.data.session_id is string &&
+        request.resource.data.created_at is string;
+      
+      // ✅ Only authenticated users (admins) can read push tokens
+      allow read: if request.auth != null;
+      
+      // ✅ Users can update their own push tokens by session_id
+      allow update: if 
+        resource.data.session_id == request.resource.data.session_id;
+      
+      // ✅ Users can delete their own push tokens by session_id
+      allow delete: if true; // Allow deletion for cleanup purposes
+    }
+    
+    // ===== DEFAULT RULE =====
+    // Deny all other operations by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+} 

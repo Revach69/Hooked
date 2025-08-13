@@ -20,7 +20,7 @@ export default function AdminLayout({
       await logout();
       router.push('/admin/login');
     } catch (error) {
-      console.error('Logout error:', error);
+      // Logout error
     }
   };
 

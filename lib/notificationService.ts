@@ -57,10 +57,20 @@ export interface NotificationData {
   data?: Record<string, any>;
 }
 
+// Flag to enable/disable legacy client-side push token storage
+const LEGACY_PUSH_TOKEN_STORAGE_ENABLED = false;
+
+// Flag to enable/disable legacy notification functions (now handled by centralized system)
+const LEGACY_NOTIFICATION_FUNCTIONS_ENABLED = false;
+
 /**
- * Store push token for a session
+ * Store push token for a session (legacy - now handled by callable)
  */
 export async function storePushToken(sessionId: string, token: string): Promise<void> {
+  if (!LEGACY_PUSH_TOKEN_STORAGE_ENABLED) {
+    return;
+  }
+
   try {
     const tokenData = {
       token,
@@ -69,7 +79,7 @@ export async function storePushToken(sessionId: string, token: string): Promise<
       createdAt: new Date().toISOString(),
     };
 
-    // Store in Firestore
+    // Store in Firestore (legacy - will fail in production due to security rules)
     await setDoc(doc(db, 'push_tokens', `${sessionId}_${Platform.OS}`), tokenData);
     
     // Also store locally for backup
@@ -180,13 +190,16 @@ async function sendPushNotification(
 
 
 /**
- * Send match notification
+ * Send match notification (legacy - now handled by centralized system)
  */
 export async function sendMatchNotification(
   sessionId: string,
   matchedUserName: string,
   isLiker: boolean = false
 ): Promise<boolean> {
+  if (!LEGACY_NOTIFICATION_FUNCTIONS_ENABLED) {
+    return false;
+  }
   // Determine notification content based on role
   let title: string;
   let body: string;
@@ -233,13 +246,16 @@ export async function sendMatchNotification(
 }
 
 /**
- * Send like notification (when someone likes you back)
+ * Send like notification (legacy - now handled by centralized system)
  * Only sends push notification if user is not in app
  */
 export async function sendLikeNotification(
   sessionId: string,
   likerName: string
 ): Promise<boolean> {
+  if (!LEGACY_NOTIFICATION_FUNCTIONS_ENABLED) {
+    return false;
+  }
   try {
     // Check if user is currently in the app
     const currentSessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
@@ -282,7 +298,7 @@ export async function sendLikeNotification(
 }
 
 /**
- * Send message notification
+ * Send message notification (legacy - now handled by centralized system)
  */
 export async function sendMessageNotification(
   sessionId: string,
@@ -290,6 +306,9 @@ export async function sendMessageNotification(
   messagePreview: string,
   isDeviceLocked: boolean = false
 ): Promise<boolean> {
+  if (!LEGACY_NOTIFICATION_FUNCTIONS_ENABLED) {
+    return false;
+  }
   try {
     // Check if user has push notification permissions
     const { status } = await Notifications.getPermissionsAsync();

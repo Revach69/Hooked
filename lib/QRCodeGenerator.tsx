@@ -12,6 +12,7 @@ import {
 import QRCode from 'react-native-qrcode-svg';
 import { Download, Share2 } from 'lucide-react-native';
 import ViewShot from 'react-native-view-shot';
+import * as Sentry from '@sentry/react-native';
 
 interface QRCodeGeneratorProps {
   eventCode: string;
@@ -49,7 +50,7 @@ export default function QRCodeGenerator({ eventCode, eventName, onClose }: QRCod
         }
       }
     } catch (error) {
-      console.error('Error downloading QR code:', error);
+      Sentry.captureException(error);
       Alert.alert('Error', 'Failed to download QR code. Please try again.');
     }
   };
@@ -62,7 +63,7 @@ export default function QRCodeGenerator({ eventCode, eventName, onClose }: QRCod
         url: joinLink,
       });
     } catch (error) {
-      console.error('Error sharing:', error);
+      Sentry.captureException(error);
       Alert.alert('Error', 'Failed to share. Please try again.');
     }
   };
@@ -142,6 +143,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 24,
     alignItems: 'center',
+    backgroundColor: 'white',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,

@@ -15,13 +15,13 @@ import {
   Modal,
   ActivityIndicator,
 } from 'react-native';
-import { ArrowLeft, Send, Flag, X } from 'lucide-react-native';
+import { ArrowLeft, Send, Flag, X, MoreVertical, UserX, VolumeX, Volume2 } from 'lucide-react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { collection, query, where, orderBy, onSnapshot, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '../lib/firebaseConfig';
-import { EventProfileAPI, MessageAPI, ReportAPI } from '../lib/firebaseApi';
+import { EventProfileAPI, MessageAPI, ReportAPI, BlockedMatchAPI, MutedMatchAPI } from '../lib/firebaseApi';
 import UserProfileModal from '../lib/UserProfileModal';
 import { formatTime } from '../lib/utils';
 
@@ -53,6 +53,9 @@ export default function Chat() {
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportReason, setReportReason] = useState('');
   const [isSubmittingReport, setIsSubmittingReport] = useState(false);
+  const [showActionMenu, setShowActionMenu] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
   
   const flatListRef = useRef<FlatList>(null);
   // Single ref to hold unsubscribe function
@@ -107,11 +110,99 @@ export default function Chat() {
         return;
       }
 
+      // Load mute/block status
+      await loadMuteBlockStatus();
+
       setIsLoading(false);
     } catch {
       Alert.alert('Error', 'Failed to load chat');
       router.back();
     }
+  };
+
+  const loadMuteBlockStatus = async () => {
+    if (!currentEventId || !currentSessionId || !matchId) return;
+
+    try {
+      // Check if match is muted
+      const mutedRecords = await MutedMatchAPI.filter({
+        event_id: currentEventId,
+        muter_session_id: currentSessionId,
+        muted_session_id: matchId as string
+      });
+      setIsMuted(mutedRecords.length > 0);
+
+      // Check if match is blocked
+      const blockedRecords = await BlockedMatchAPI.filter({
+        event_id: currentEventId,
+        blocker_session_id: currentSessionId,
+        blocked_session_id: matchId as string
+      });
+      setIsBlocked(blockedRecords.length > 0);
+    } catch {
+      // Error loading mute/block status
+    }
+  };
+
+  const handleMuteMatch = async () => {
+    if (!currentEventId || !currentSessionId || !matchId) return;
+
+    try {
+      if (isMuted) {
+        // Unmute
+        const mutedRecords = await MutedMatchAPI.filter({
+          event_id: currentEventId,
+          muter_session_id: currentSessionId,
+          muted_session_id: matchId as string
+        });
+        
+        for (const record of mutedRecords) {
+          await MutedMatchAPI.delete(record.id);
+        }
+        setIsMuted(false);
+      } else {
+        // Mute
+        await MutedMatchAPI.create({
+          event_id: currentEventId,
+          muter_session_id: currentSessionId,
+          muted_session_id: matchId as string
+        });
+        setIsMuted(true);
+      }
+      setShowActionMenu(false);
+    } catch {
+      Alert.alert('Error', `Failed to ${isMuted ? 'unmute' : 'mute'} match`);
+    }
+  };
+
+  const handleBlockMatch = async () => {
+    if (!currentEventId || !currentSessionId || !matchId) return;
+
+    Alert.alert(
+      'Block Match',
+      'Are you sure you want to block this match? You will both be hidden from each other for the rest of the event.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Block',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await BlockedMatchAPI.create({
+                event_id: currentEventId,
+                blocker_session_id: currentSessionId,
+                blocked_session_id: matchId as string
+              });
+              
+              setShowActionMenu(false);
+              router.back(); // Go back to matches since this chat is now blocked
+            } catch {
+              Alert.alert('Error', 'Failed to block match');
+            }
+          }
+        }
+      ]
+    );
   };
 
   useEffect(() => {
@@ -463,7 +554,7 @@ export default function Chat() {
       padding: 8,
       marginRight: 8,
     },
-    reportButton: {
+    actionMenuButton: {
       padding: 8,
       marginLeft: 'auto',
       marginRight: 8,
@@ -618,6 +709,7 @@ export default function Chat() {
       maxWidth: 400,
       borderRadius: 12,
       padding: 20,
+      backgroundColor: isDark ? '#2d2d2d' : 'white',
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.25,
@@ -680,6 +772,38 @@ export default function Chat() {
       fontSize: 16,
       fontWeight: '600',
     },
+    actionMenuDropdown: {
+      backgroundColor: isDark ? '#1f2937' : '#ffffff',
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? '#374151' : '#e5e7eb',
+      paddingVertical: 8,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: isDark ? 0.3 : 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    actionMenuItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      gap: 12,
+    },
+    actionMenuText: {
+      fontSize: 14,
+      color: isDark ? '#e5e7eb' : '#374151',
+      fontWeight: '500',
+    },
+    destructiveAction: {
+      borderTopWidth: 1,
+      borderTopColor: isDark ? '#374151' : '#e5e7eb',
+      marginTop: 4,
+      paddingTop: 12,
+    },
+    destructiveText: {
+      color: '#dc2626',
+    },
   });
 
   if (isLoading) {
@@ -703,25 +827,35 @@ export default function Chat() {
             <TouchableOpacity
               style={styles.backButton}
               onPress={() => router.back()}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+              accessibilityHint="Navigate back to the previous screen"
             >
               <ArrowLeft size={24} color={isDark ? '#ffffff' : '#1f2937'} />
             </TouchableOpacity>
             
             <TouchableOpacity
-              style={styles.reportButton}
-              onPress={() => setShowReportModal(true)}
+              style={styles.actionMenuButton}
+              onPress={() => setShowActionMenu(!showActionMenu)}
+              accessibilityRole="button"
+              accessibilityLabel="More options"
+              accessibilityHint="Show mute, block, and report options"
             >
-              <Flag size={20} color={isDark ? '#ef4444' : '#dc2626'} />
+              <MoreVertical size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.headerInfo}
               onPress={() => setShowProfileModal(true)}
+              accessibilityRole="button"
+              accessibilityLabel={`View ${matchProfile?.first_name || matchName || 'match'}'s profile`}
+              accessibilityHint="Opens the user's profile modal"
             >
               <View style={styles.headerUserInfo}>
                 <View style={styles.headerAvatarContainer}>
                   {matchProfile?.profile_photo_url ? (
                     <Image
                       source={{ uri: matchProfile.profile_photo_url }}
+            onError={() => {}}
                       style={styles.headerAvatar}
                     />
                   ) : (
@@ -743,6 +877,50 @@ export default function Chat() {
               </View>
             </TouchableOpacity>
           </View>
+
+          {/* Action Menu Dropdown */}
+          {showActionMenu && (
+            <View style={styles.actionMenuDropdown}>
+              <TouchableOpacity
+                style={styles.actionMenuItem}
+                onPress={handleMuteMatch}
+                accessibilityRole="button"
+                accessibilityLabel={isMuted ? 'Unmute match' : 'Mute match'}
+              >
+                {isMuted ? (
+                  <Volume2 size={16} color="#6b7280" />
+                ) : (
+                  <VolumeX size={16} color="#6b7280" />
+                )}
+                <Text style={styles.actionMenuText}>
+                  {isMuted ? 'Unmute notifications' : 'Mute notifications'}
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.actionMenuItem}
+                onPress={() => {
+                  setShowActionMenu(false);
+                  setShowReportModal(true);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Report user"
+              >
+                <Flag size={16} color="#6b7280" />
+                <Text style={styles.actionMenuText}>Report user</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.actionMenuItem, styles.destructiveAction]}
+                onPress={handleBlockMatch}
+                accessibilityRole="button"
+                accessibilityLabel="Block match"
+              >
+                <UserX size={16} color="#dc2626" />
+                <Text style={[styles.actionMenuText, styles.destructiveText]}>Block match</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* Messages */}
           <FlatList
@@ -775,6 +953,8 @@ export default function Chat() {
               placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
               multiline
               maxLength={500}
+              accessibilityLabel="Message input"
+              accessibilityHint="Type your message here. Maximum 500 characters"
               onFocus={() => {
                 // Scroll to bottom when keyboard appears
                 setTimeout(() => {
@@ -789,6 +969,10 @@ export default function Chat() {
               ]}
               onPress={sendMessage}
               disabled={!newMessage.trim() || isSending}
+              accessibilityRole="button"
+              accessibilityLabel="Send message"
+              accessibilityHint="Send the typed message to your match"
+              accessibilityState={{ disabled: !newMessage.trim() || isSending }}
             >
               {isSending ? (
                 <ActivityIndicator size="small" color="white" />
@@ -800,12 +984,29 @@ export default function Chat() {
         </KeyboardAvoidingView>
       </SafeAreaView>
 
+      {/* Overlay to close action menu */}
+      {showActionMenu && (
+        <TouchableOpacity
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 999,
+          }}
+          onPress={() => setShowActionMenu(false)}
+          activeOpacity={1}
+        />
+      )}
+
       {/* Report Modal */}
       <Modal
         visible={showReportModal}
         transparent={true}
         animationType="fade"
         onRequestClose={() => setShowReportModal(false)}
+        accessibilityViewIsModal={true}
       >
         <KeyboardAvoidingView 
           style={styles.modalOverlay}
@@ -820,6 +1021,9 @@ export default function Chat() {
               <TouchableOpacity
                 onPress={() => setShowReportModal(false)}
                 style={styles.closeButton}
+                accessibilityRole="button"
+                accessibilityLabel="Close report modal"
+                accessibilityHint="Closes the report modal without submitting"
               >
                 <X size={24} color={isDark ? '#9ca3af' : '#6b7280'} />
               </TouchableOpacity>
@@ -845,12 +1049,17 @@ export default function Chat() {
               multiline
               numberOfLines={4}
               maxLength={500}
+              accessibilityLabel="Report reason"
+              accessibilityHint="Enter the reason for reporting this user. Maximum 500 characters"
             />
             
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
                 onPress={() => setShowReportModal(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel"
+                accessibilityHint="Cancel reporting and close the modal"
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
@@ -863,6 +1072,10 @@ export default function Chat() {
                 ]}
                 onPress={submitReport}
                 disabled={!reportReason.trim() || isSubmittingReport}
+                accessibilityRole="button"
+                accessibilityLabel="Submit report"
+                accessibilityHint="Submit the report for this user"
+                accessibilityState={{ disabled: !reportReason.trim() || isSubmittingReport }}
               >
                 {isSubmittingReport ? (
                   <ActivityIndicator size="small" color="#ffffff" />

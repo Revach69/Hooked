@@ -1,0 +1,487 @@
+import * as Sentry from '@sentry/react-native';
+
+Sentry.init({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+  enableAutoPerformanceTracing: true,
+  tracesSampleRate: __DEV__ ? 1.0 : 0.2, // Lower sample rate in production
+  enableAutoSessionTracking: true,
+  debug: false, // Disable debug in production
+  environment: process.env.EXPO_PUBLIC_ENV || (__DEV__ ? 'development' : 'production'),
+  release: `${process.env.EXPO_PUBLIC_APP_ID ?? 'hooked'}@${process.env.EXPO_PUBLIC_APP_VERSION ?? '1.0.0'}`,
+  beforeSend(event) {
+    return event; // keep for future filtering
+  },
+});
+
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Stack, useRouter } from 'expo-router';
+import { TouchableOpacity, Text, View } from 'react-native';
+import Toast from 'react-native-toast-message';
+import { NotificationRouter } from '../lib/notifications/NotificationRouter';
+import { useIsForegroundGetter } from '../lib/notifications/helpers';
+import CustomSplashScreen from '../lib/components/SplashScreen';
+import ErrorBoundary from '../lib/components/ErrorBoundary';
+import * as Notifications from 'expo-notifications';
+import { registerPushToken } from '../lib/notifications/registerPushToken';
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  getFirestore, collection, query, where, orderBy, limit, onSnapshot
+} from 'firebase/firestore';
+
+// Types
+import type { AnyEvent, MatchEvent, MessageEvent } from '../lib/notifications/types';
+
+// ===== Helpers to read current context =====
+// Improved session ID parsing with better error handling
+function parseStoredValue(rawValue: string | null): string | null {
+  if (!rawValue) return null;
+  
+  try {
+    // Try to parse as JSON first
+    const parsed = JSON.parse(rawValue);
+    
+    // Handle different storage formats
+    if (typeof parsed === 'object' && parsed !== null) {
+      return parsed.value || parsed.sessionId || null;
+    } else if (typeof parsed === 'string') {
+      return parsed;
+    }
+    
+    return null;
+  } catch {
+    // If JSON parsing fails, treat as plain string
+    return typeof rawValue === 'string' && rawValue.trim() ? rawValue.trim() : null;
+  }
+}
+
+async function getCurrentSessionId(): Promise<string | null> {
+  try {
+    const sessionIdData = await AsyncStorage.getItem('currentSessionId');
+    
+    const sessionId = parseStoredValue(sessionIdData);
+    return sessionId;
+  } catch (error) { 
+    Sentry.captureException(error, {
+        tags: {
+          operation: 'firebase_operation',
+          source: 'unknown'
+        }
+      });
+    return null; 
+  }
+}
+
+// Synchronous version for router (will be updated by state)
+let currentSessionIdSync: string | null = null;
+
+// Global function to retry profile ID lookup (can be called from other screens)
+export const retryGetProfileId = async () => {
+  const profileId = await getMyProfileId();
+  return profileId;
+};
+
+async function getCurrentEventId(): Promise<string | null> {
+  try {
+    const eventIdData = await AsyncStorage.getItem('currentEventId');
+    
+    const eventId = parseStoredValue(eventIdData);
+    return eventId;
+  } catch (error) { 
+    Sentry.captureException(error, {
+        tags: {
+          operation: 'firebase_operation',
+          source: 'unknown'
+        }
+      });
+    return null; 
+  }
+}
+
+async function getMyProfileId(): Promise<string | null> {
+  try {
+    // Get current session and event IDs
+    const [sessionId, eventId] = await Promise.all([
+      getCurrentSessionId(),
+      getCurrentEventId()
+    ]);
+    
+    if (!sessionId || !eventId) return null;
+    
+    // Query for the user's profile using session_id and event_id
+    const { EventProfileAPI } = await import('../lib/firebaseApi');
+    const userProfiles = await EventProfileAPI.filter({
+      session_id: sessionId,
+      event_id: eventId
+    });
+    
+    const profileId = userProfiles.length > 0 ? userProfiles[0].id : null;
+    return profileId;
+  } catch (error) { 
+    Sentry.captureException(error, {
+        tags: {
+          operation: 'firebase_operation',
+          source: 'unknown'
+        }
+      });
+    return null; 
+  }
+}
+
+// Map Firestore Like doc -> MatchEvent (only for change.type === 'added')
+function mapLikeToMatchEvent(
+  docData: any,
+  mySession: string
+): MatchEvent | null {
+  const d = docData;
+  
+  if (!d?.id || !d?.event_id || !d?.is_mutual) {
+    return null;
+  }
+
+  const isCreator = d.liker_session_id === mySession;
+  const iAmFirstLiker = d.liked_session_id === mySession;
+
+  if (!isCreator && !iAmFirstLiker) {
+    return null; // not for me
+  }
+
+  const otherSessionId = isCreator ? d.liked_session_id : d.liker_session_id;
+
+  const event = {
+    id: d.id,
+    type: 'match' as const,
+    createdAt: Date.parse(d.created_at ?? new Date().toISOString()),
+    isCreator,
+    otherSessionId,
+    otherName: d.other_name ?? undefined, // if you store it
+  };
+  
+  return event;
+}
+
+// Map Firestore Message doc -> MessageEvent (recipient only)
+function mapMessageToEvent(
+  docData: any,
+  myProfileId: string
+): MessageEvent | null {
+  const d = docData;
+  
+  if (!d?.id || !d?.event_id) {
+    return null;
+  }
+  if (d.to_profile_id !== myProfileId) {
+    return null;
+  }
+  if (d.from_profile_id === myProfileId) {
+    return null; // don't notify sender
+  }
+
+  const event = {
+    id: d.id,
+    type: 'message' as const,
+    createdAt: Date.parse(d.created_at ?? new Date().toISOString()),
+    senderProfileId: d.from_profile_id,
+    senderName: d.sender_name ?? undefined,
+    conversationId: d.to_profile_id, // or a composed id if you use one
+    preview: d.content?.slice?.(0, 80),
+  };
+  
+  return event;
+}
+
+export default function RootLayout() {
+  const router = useRouter();
+  const [appIsReady, setAppIsReady] = useState(false);
+
+  // 1) Provide getIsForeground to the router
+  const getIsForeground = useIsForegroundGetter();
+
+  // 2) Initialize router once
+  useEffect(() => {
+    NotificationRouter.init({
+      getIsForeground,
+      navigateToMatches: () => router.push('/matches'),
+    });
+  }, [getIsForeground, router]);
+
+  // 2.5) Push notification tap handler
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      try {
+        const data = (response?.notification?.request?.content?.data || {}) as any;
+        if (data?.type === 'match') {
+          router.push('/matches');
+        } else if (data?.type === 'message') {
+          router.push('/chat');
+        }
+      } catch (e) {
+        Sentry.captureException(e);
+      }
+    });
+    return () => sub.remove();
+  }, [router]);
+
+  // 2.6) Optional foreground banner policy
+  useEffect(() => {
+    if (!(Notifications as any).__hookedHandlerSet) {
+      (Notifications as any).__hookedHandlerSet = true;
+      Notifications.setNotificationHandler({
+        handleNotification: async () => ({
+          shouldShowAlert: true,
+          shouldPlaySound: false,
+          shouldSetBadge: false,
+          shouldShowBanner: true,
+          shouldShowList: true,
+        }),
+      });
+    }
+  }, []);
+
+  // 3) App initialization
+  useEffect(() => {
+    const initializeApp = async () => {
+      try {
+        
+        // Simple loading delay
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        setAppIsReady(true);
+      } catch (error) {
+        Sentry.captureException(error, {
+        tags: {
+          operation: 'firebase_operation',
+          source: 'unknown'
+        }
+      });
+        setAppIsReady(true); // Still set ready to prevent infinite loading
+      }
+    };
+
+    initializeApp();
+  }, []);
+
+  // 3.5) Register push token when session is available
+  useEffect(() => {
+    if (!appIsReady) return;
+    
+    let cancelled = false;
+    (async () => {
+      try {
+        const sessionIdData = await AsyncStorage.getItem('currentSessionId');
+        if (!sessionIdData || cancelled) return;
+        
+        // Parse session ID using the improved helper
+        const sessionId = parseStoredValue(sessionIdData);
+        
+        if (!sessionId || cancelled) return;
+        
+        const success = await registerPushToken(sessionId);
+        
+        if (!success) {
+          Sentry.addBreadcrumb({
+            message: 'Push token registration failed',
+            level: 'warning'
+          });
+        }
+        
+      } catch (error) {
+        Sentry.captureException(error, {
+        tags: {
+          operation: 'firebase_operation',
+          source: 'unknown'
+        }
+      });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [appIsReady]);
+
+  // 4) Single subscription
+  useEffect(() => {
+    if (!appIsReady) return; // Wait for app to be ready
+
+    let unsubLikes: (() => void) | undefined;
+    let unsubMsgs: (() => void) | undefined;
+    let cancelled = false;
+    let retryCount = 0;
+    const maxRetries = 5;
+
+    const setupListeners = async () => {
+      const [sessionId, eventId, myProfileId] = await Promise.all([
+        getCurrentSessionId(), getCurrentEventId(), getMyProfileId()
+      ]);
+      
+      if (cancelled) return;
+      
+      if (!sessionId || !eventId) {
+        return;
+      }
+      
+      if (!myProfileId) {
+        if (retryCount < maxRetries) {
+          retryCount++;
+          setTimeout(setupListeners, 2000); // Retry in 2 seconds
+          return;
+        }
+      }
+
+      // Update sync version for router
+      currentSessionIdSync = sessionId;
+
+      const db = getFirestore();
+
+      // ---- Likes (mutual) — ONLY 'added' changes ----
+      {
+        const likesRef = collection(db, 'likes');
+        // Two queries to emulate OR:
+        const qLikesILiked = query(
+          likesRef,
+          where('event_id', '==', eventId),
+          where('is_mutual', '==', true),
+          where('liker_session_id', '==', sessionId),
+          orderBy('created_at', 'desc'),
+          limit(50)
+        );
+        const qLikesILikedMe = query(
+          likesRef,
+          where('event_id', '==', eventId),
+          where('is_mutual', '==', true),
+          where('liked_session_id', '==', sessionId),
+          orderBy('created_at', 'desc'),
+          limit(50)
+        );
+
+        const handleLikeSnap = (snap: any) => {
+          snap.docChanges().forEach((change: any) => {
+            if (change.type !== 'added') return; // critical: only new like docs == second liker action
+            const ev = mapLikeToMatchEvent(change.doc.data(), sessionId);
+            if (ev) {
+              NotificationRouter.handleIncoming(ev);
+            }
+          });
+        };
+
+        const u1 = onSnapshot(qLikesILiked, handleLikeSnap);
+        const u2 = onSnapshot(qLikesILikedMe, handleLikeSnap);
+        unsubLikes = () => { u1(); u2(); };
+      }
+
+      // ---- Messages — recipient only, 'added' ----
+      if (myProfileId) {
+        const msgsRef = collection(db, 'messages');
+        const qMsgs = query(
+          msgsRef,
+          where('event_id', '==', eventId),
+          where('to_profile_id', '==', myProfileId),
+          orderBy('created_at', 'desc'),
+          limit(50)
+        );
+
+        unsubMsgs = onSnapshot(qMsgs, (snap) => {
+          snap.docChanges().forEach((change: any) => {
+            if (change.type !== 'added') return;
+            const ev = mapMessageToEvent(change.doc.data(), myProfileId);
+            if (ev) {
+              NotificationRouter.handleIncoming(ev);
+            }
+          });
+        });
+      }
+    };
+
+    setupListeners();
+
+    return () => {
+      cancelled = true;
+      if (unsubLikes) unsubLikes();
+      if (unsubMsgs) unsubMsgs();
+    };
+  }, [appIsReady]);
+
+  if (!appIsReady) {
+    return (
+      <ErrorBoundary>
+        <CustomSplashScreen />
+      </ErrorBoundary>
+    );
+  }
+
+  return (
+    <ErrorBoundary>
+      <Stack screenOptions={{ headerShown: false }} />
+      <Toast 
+        config={{
+          success: (props) => (
+            <View style={{
+              backgroundColor: '#4CAF50',
+              padding: 15,
+              marginHorizontal: 20,
+              marginTop: 50,
+              borderRadius: 10,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.25,
+              shadowRadius: 3.84,
+              elevation: 5,
+            }}>
+              <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>
+                {props.text1}
+              </Text>
+              {props.text2 && (
+                <Text style={{ color: 'white', fontSize: 14, marginTop: 4 }}>
+                  {props.text2}
+                </Text>
+              )}
+            </View>
+          ),
+          info: (props) => (
+            <View style={{
+              backgroundColor: '#2196F3',
+              padding: 15,
+              marginHorizontal: 20,
+              marginTop: 50,
+              borderRadius: 10,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.25,
+              shadowRadius: 3.84,
+              elevation: 5,
+            }}>
+              <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>
+                {props.text1}
+              </Text>
+              {props.text2 && (
+                <Text style={{ color: 'white', fontSize: 14, marginTop: 4 }}>
+                  {props.text2}
+                </Text>
+              )}
+            </View>
+          ),
+          error: (props) => (
+            <View style={{
+              backgroundColor: '#F44336',
+              padding: 15,
+              marginHorizontal: 20,
+              marginTop: 50,
+              borderRadius: 10,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.25,
+              shadowRadius: 3.84,
+              elevation: 5,
+            }}>
+              <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>
+                {props.text1}
+              </Text>
+              {props.text2 && (
+                <Text style={{ color: 'white', fontSize: 14, marginTop: 4 }}>
+                  {props.text2}
+                </Text>
+              )}
+            </View>
+          ),
+        }}
+      />
+    </ErrorBoundary>
+  );
+}

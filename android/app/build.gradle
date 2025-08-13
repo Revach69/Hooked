@@ -1,9 +1,6 @@
-plugins {
-  id 'com.android.application'
-  id 'org.jetbrains.kotlin.android'
-  id 'com.facebook.react'
-  id 'com.google.gms.google-services'
-}
+apply plugin: "com.android.application"
+apply plugin: "org.jetbrains.kotlin.android"
+apply plugin: "com.facebook.react"
 
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
 
@@ -84,6 +81,8 @@ def enableProguardInReleaseBuilds = (findProperty('android.enableProguardInRelea
  */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
+apply from: new File(["node", "--print", "require('path').dirname(require.resolve('@sentry/react-native/package.json'))"].execute().text.trim(), "sentry.gradle")
+
 android {
     ndkVersion rootProject.ext.ndkVersion
 
@@ -105,19 +104,15 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
-        release {
-            storeFile file('../../hooked-release-key.keystore')
-            storePassword 'Hooked_69US69'
-            keyAlias 'hooked-key-alias'
-            keyPassword 'Hooked_69US69'
-        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            signingConfig signingConfigs.release
+            // Caution! In production, you need to generate your own keystore file.
+            // see https://reactnative.dev/docs/signed-apk-android.
+            signingConfig signingConfigs.debug
             shrinkResources (findProperty('android.enableShrinkResourcesInReleaseBuilds')?.toBoolean() ?: false)
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
@@ -181,14 +176,4 @@ dependencies {
     } else {
         implementation jscFlavor
     }
-
-    // Firebase BOM (latest version)
-    implementation platform('com.google.firebase:firebase-bom:34.1.0')
-    implementation 'com.google.firebase:firebase-analytics'
-    implementation 'com.google.firebase:firebase-auth'
-    implementation 'com.google.firebase:firebase-firestore'
-    implementation 'com.google.firebase:firebase-storage'
-    implementation 'com.google.firebase:firebase-messaging'
-    implementation 'com.google.firebase:firebase-crashlytics'
-    implementation 'com.google.firebase:firebase-perf'
 }

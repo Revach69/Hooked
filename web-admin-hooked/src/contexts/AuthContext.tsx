@@ -38,7 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await signInWithEmailAndPassword(auth, email, password);
     } catch (error: any) {
-      console.error('Sign in error:', error);
+      // Sign in error
       throw error;
     }
   };
@@ -48,7 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
     } catch (error: any) {
-      console.error('Google sign in error:', error);
+      // Google sign in error
       throw error;
     }
   };
@@ -57,7 +57,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await signOut(auth);
     } catch (error: any) {
-      console.error('Logout error:', error);
+      // Logout error
       throw error;
     }
   };

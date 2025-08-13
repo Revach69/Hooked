@@ -25,8 +25,8 @@ import {
 import { EventAPI, AuthAPI } from '../../lib/firebaseApi';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../../lib/firebaseConfig';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { 
   getAvailableCountries, 
   getPrimaryTimezoneForCountry, 
@@ -74,7 +74,7 @@ export default function CreateEvent() {
   const pickImage = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: 'images',
         allowsEditing: true,
         aspect: [16, 9],
         quality: 0.8,
@@ -100,7 +100,7 @@ export default function CreateEvent() {
       const filename = `events/${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
       const storageRef = ref(storage, filename);
       
-      // Upload to Firebase Storage
+      // Upload to Firebase Storage using Firebase v9+ API
       await uploadBytes(storageRef, blob);
       
       // Get download URL

@@ -47,6 +47,9 @@ export const usePerformanceMonitoring = (options: PerformanceOptions = {}) => {
           stopTrace(screenTraceRef.current);
           // Stopped screen load trace
         }
+        
+        // Clear all active traces on unmount
+        firebasePerformance.clearActiveTraces();
       };
     }
   }, [screenName, enableScreenTracking]);
@@ -100,18 +103,7 @@ export const usePerformanceMonitoring = (options: PerformanceOptions = {}) => {
     additionalData?: Record<string, string>
   ): Promise<T> => {
     return firebasePerformance.trace(`async_operation_${operationName}`, async () => {
-      // Add additional attributes to the trace
-      const trace = await startTrace(`async_operation_${operationName}`);
-      
-      if (additionalData) {
-        for (const [key, value] of Object.entries(additionalData)) {
-          await firebasePerformance.addTraceAttribute(trace, key, value);
-        }
-      }
-
-      const result = await operation();
-      await stopTrace(trace);
-      return result;
+      return await operation();
     });
   };
 
@@ -145,16 +137,14 @@ export const usePerformanceMonitoring = (options: PerformanceOptions = {}) => {
     trackNetworkRequest,
     trackCustomMetric,
     trackCustomAttribute,
-    firebasePerformance
   };
 };
 
-// Convenience hook for screen tracking only
+// Convenience hooks for specific use cases
 export const useScreenTracking = (screenName: string) => {
-  return usePerformanceMonitoring({ screenName, enableScreenTracking: true, enableUserInteractionTracking: false });
+  return usePerformanceMonitoring({ screenName, enableUserInteractionTracking: false });
 };
 
-// Convenience hook for interaction tracking only
 export const useInteractionTracking = (screenName?: string) => {
-  return usePerformanceMonitoring({ screenName, enableScreenTracking: false, enableUserInteractionTracking: true });
+  return usePerformanceMonitoring({ screenName, enableScreenTracking: false });
 }; 

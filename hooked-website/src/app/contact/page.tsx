@@ -47,11 +47,11 @@ export default function Contact() {
         });
       } else {
         const errorData = await response.json();
-        console.error('Form submission error:', errorData);
+        // Form submission error
         setSubmitStatus('error');
       }
     } catch (error) {
-      console.error('Network error:', error);
+      // Network error
       setSubmitStatus('error');
     } finally {
       setIsSubmitting(false);

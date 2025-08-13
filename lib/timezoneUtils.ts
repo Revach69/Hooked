@@ -1,5 +1,6 @@
 // Comprehensive timezone utilities for the Hooked app
 import { Platform } from 'react-native';
+import * as Sentry from '@sentry/react-native';
 
 // Common timezone mappings by country
 export const COUNTRY_TIMEZONES: Record<string, string[]> = {
@@ -162,7 +163,7 @@ export const convertTimezone = (
         parseInt(values.second)
       );
     } catch (error) {
-      console.warn('Timezone conversion failed, using fallback:', error);
+      Sentry.captureException(error);
     }
   }
   
@@ -191,7 +192,7 @@ export const formatDateInTimezone = (
       
       return dateObj.toLocaleDateString('en-US', { ...defaultOptions, ...options });
     } catch (error) {
-      console.warn('Timezone formatting failed, using fallback:', error);
+      Sentry.captureException(error);
     }
   }
   
@@ -238,7 +239,7 @@ export const getTimezoneAbbreviation = (timezone: string): string => {
       const timezonePart = parts.find(part => part.type === 'timeZoneName');
       return timezonePart?.value || timezone;
     } catch (error) {
-      console.warn('Timezone abbreviation failed, using fallback:', error);
+      Sentry.captureException(error);
     }
   }
   
@@ -282,7 +283,7 @@ export const utcToLocalDateTimeString = (
     
     return `${year}-${month}-${day}T${hours}:${minutes}`;
   } catch (error) {
-    console.error('Error converting UTC to local datetime:', utcDateString, error);
+    Sentry.captureException(error);
     return '';
   }
 };
@@ -299,7 +300,7 @@ export const localDateTimeStringToUTC = (
     const utcDate = convertTimezone(localDate, sourceTimezone, 'UTC');
     return utcDate.toISOString();
   } catch (error) {
-    console.error('Error converting local datetime to UTC:', localDateTimeString, error);
+    Sentry.captureException(error);
     return '';
   }
 };
@@ -342,7 +343,7 @@ export const getTimezoneOffset = (timezone: string): number => {
       
       return (targetDate.getTime() - date.getTime()) / 60000;
     } catch (error) {
-      console.warn('Timezone offset calculation failed:', error);
+      Sentry.captureException(error);
     }
   }
   

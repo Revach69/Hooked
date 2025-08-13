@@ -154,12 +154,17 @@ export function ClientFormSheet({ open, onOpenChange, client, onSuccess }: Clien
     try {
       const payload = {
         ...formData,
+        name: formData.name!,
+        type: formData.type!,
+        eventKind: formData.eventKind!,
+        pocName: formData.pocName!,
+        status: formData.status!,
         expectedAttendees: formData.expectedAttendees || null,
         eventDate: formData.eventDate || null,
         phone: formData.phone || null,
         email: formData.email || null,
         country: formData.country || null,
-        source: formData.source || null,
+        source: formData.source || undefined,
         description: formData.description || null,
         organizerFormSent: formData.organizerFormSent || 'No'
       };
@@ -173,7 +178,7 @@ export function ClientFormSheet({ open, onOpenChange, client, onSuccess }: Clien
       onSuccess();
       onOpenChange(false);
     } catch (error) {
-      console.error('Error saving client:', error);
+      // Error saving client
       setErrors({ submit: 'Failed to save client. Please try again.' });
     } finally {
       setIsSubmitting(false);

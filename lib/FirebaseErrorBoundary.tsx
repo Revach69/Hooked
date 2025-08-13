@@ -11,6 +11,7 @@ import { AlertTriangle, RefreshCw, Wifi, WifiOff } from 'lucide-react-native';
 import { attemptFirebaseRecovery } from './firebaseRecovery';
 import { getErrorMessage } from './mobileErrorHandler';
 import NetInfo from '@react-native-community/netinfo';
+import * as Sentry from '@sentry/react-native';
 
 interface Props {
   children: ReactNode;
@@ -51,7 +52,12 @@ class FirebaseErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: any) {
-    console.error('🚨 Firebase Error Boundary caught an error:', error, errorInfo);
+    Sentry.captureException(error, {
+      extra: errorInfo,
+      tags: {
+        component: 'FirebaseErrorBoundary'
+      }
+    });
     
     this.setState({
       error,
@@ -88,14 +94,11 @@ class FirebaseErrorBoundary extends Component<Props, State> {
   }
 
   private async handleFirebaseError() {
-          // Handling Firebase error in error boundary
-    
     // Check network status
     const netInfo = await NetInfo.fetch();
     this.setState({ networkStatus: netInfo.isConnected ? 'connected' : 'disconnected' });
 
     if (!netInfo.isConnected) {
-              // Network is disconnected, cannot attempt recovery
       return;
     }
 
@@ -106,13 +109,15 @@ class FirebaseErrorBoundary extends Component<Props, State> {
       const recoverySuccess = await attemptFirebaseRecovery();
       
       if (recoverySuccess) {
-        // Firebase recovery successful, resetting error boundary
         this.resetErrorBoundary();
-      } else {
-                  // Firebase recovery failed
       }
     } catch (recoveryError) {
-      console.error('❌ Error during Firebase recovery:', recoveryError);
+      Sentry.captureException(recoveryError as Error, {
+        tags: {
+          component: 'FirebaseErrorBoundary',
+          context: 'firebaseRecovery'
+        }
+      });
     } finally {
       this.setState({ isRecovering: false });
     }
@@ -123,7 +128,6 @@ class FirebaseErrorBoundary extends Component<Props, State> {
       const netInfo = await NetInfo.fetch();
       this.setState({ networkStatus: netInfo.isConnected ? 'connected' : 'disconnected' });
     } catch (error) {
-      console.warn('⚠️ Failed to check network status:', error);
       this.setState({ networkStatus: 'disconnected' });
     }
   }
@@ -166,7 +170,12 @@ class FirebaseErrorBoundary extends Component<Props, State> {
         );
       }
     } catch (error) {
-      console.error('❌ Error during manual retry:', error);
+      Sentry.captureException(error as Error, {
+        tags: {
+          component: 'FirebaseErrorBoundary',
+          context: 'manualRetry'
+        }
+      });
       Alert.alert(
         'Error',
         'An unexpected error occurred. Please try again.',

@@ -45,6 +45,16 @@ export default function ReportsModal({ visible, onClose, eventId, eventName }: R
   const loadReports = useCallback(async () => {
     setIsLoading(true);
     try {
+      // Check if user is authenticated before accessing reports
+      const { AuthAPI } = await import('../../lib/firebaseApi');
+      const currentUser = AuthAPI.getCurrentUser();
+      
+      if (!currentUser) {
+        // User is not authenticated, close modal and return
+        onClose();
+        return;
+      }
+      
       const eventReports = await ReportAPI.filter({ event_id: eventId });
       
       // Load profiles for each report
@@ -99,6 +109,16 @@ export default function ReportsModal({ visible, onClose, eventId, eventName }: R
 
   const handleConfirmAction = async () => {
     if (!pendingAction) return;
+    
+    // Check if user is authenticated before performing actions
+    const { AuthAPI } = await import('../../lib/firebaseApi');
+    const currentUser = AuthAPI.getCurrentUser();
+    
+    if (!currentUser) {
+      // User is not authenticated, close modal and return
+      onClose();
+      return;
+    }
     
     setProcessingReport(pendingAction.report.id);
     setShowAdminNotesDialog(false);
@@ -307,6 +327,7 @@ export default function ReportsModal({ visible, onClose, eventId, eventName }: R
                                     {report.reporterProfile.profile_photo_url ? (
                                       <Image
                                         source={{ uri: report.reporterProfile.profile_photo_url }}
+                onError={() => {}}
                                         style={styles.avatarImage}
                                       />
                                     ) : (
@@ -349,6 +370,7 @@ export default function ReportsModal({ visible, onClose, eventId, eventName }: R
                                     {report.reportedProfile.profile_photo_url ? (
                                       <Image
                                         source={{ uri: report.reportedProfile.profile_photo_url }}
+                onError={() => {}}
                                         style={styles.avatarImage}
                                       />
                                     ) : (

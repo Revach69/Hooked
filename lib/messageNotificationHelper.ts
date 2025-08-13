@@ -9,11 +9,69 @@ import { Platform } from 'react-native';
 const recentNotifications = new Map<string, number>();
 const NOTIFICATION_COOLDOWN = 3000; // 3 seconds cooldown
 
+/**
+ * Check if sender is muted by the current user
+ */
+async function checkIfSenderIsMuted(senderSessionId: string): Promise<boolean> {
+  try {
+    const currentSessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
+    const currentEventId = await AsyncStorageUtils.getItem<string>('currentEventId');
+    
+    if (!currentSessionId || !currentEventId) {
+      return false; // Can't check mute status without session/event
+    }
+    
+    // Import MutedMatchAPI dynamically to avoid circular imports
+    const { MutedMatchAPI } = await import('./firebaseApi');
+    
+    const mutedRecords = await MutedMatchAPI.filter({
+      event_id: currentEventId,
+      muter_session_id: currentSessionId,
+      muted_session_id: senderSessionId
+    });
+    
+    return mutedRecords.length > 0;
+  } catch {
+    return false; // If error checking mute status, don't block notifications
+  }
+}
+
+/**
+ * Check if recipient has muted a specific sender
+ */
+async function checkIfRecipientMutedSender(recipientSessionId: string, senderSessionId: string): Promise<boolean> {
+  try {
+    const currentEventId = await AsyncStorageUtils.getItem<string>('currentEventId');
+    
+    if (!currentEventId) {
+      return false; // Can't check mute status without event
+    }
+    
+    // Import MutedMatchAPI dynamically to avoid circular imports
+    const { MutedMatchAPI } = await import('./firebaseApi');
+    
+    const mutedRecords = await MutedMatchAPI.filter({
+      event_id: currentEventId,
+      muter_session_id: recipientSessionId,
+      muted_session_id: senderSessionId
+    });
+    
+    return mutedRecords.length > 0;
+  } catch {
+    return false; // If error checking mute status, don't block notifications
+  }
+}
+
 
 
 // Show in-app message toast with navigation
-export function showInAppMessageToast(senderName: string, senderSessionId: string): void {
+export async function showInAppMessageToast(senderName: string, senderSessionId: string): Promise<void> {
   try {
+    // Check if sender is muted
+    const isMuted = await checkIfSenderIsMuted(senderSessionId);
+    if (isMuted) {
+      return; // Don't show toast if muted
+    }
     // Check for recent notification to prevent duplicates
     const notificationKey = `message_${senderName}_${senderSessionId}`;
     const now = Date.now();
@@ -137,8 +195,15 @@ export function showMatchToast(matchName: string): void {
 /**
  * Send push notification for message when user is not in app
  */
-async function sendPushNotificationForMessage(recipientSessionId: string, senderName: string): Promise<void> {
+async function sendPushNotificationForMessage(recipientSessionId: string, senderName: string, senderSessionId?: string): Promise<void> {
   try {
+    // Check if sender is muted by recipient
+    if (senderSessionId) {
+      const isMuted = await checkIfRecipientMutedSender(recipientSessionId, senderSessionId);
+      if (isMuted) {
+        return; // Don't send push notification if muted
+      }
+    }
     // Check if user has push notification permissions
     const { status } = await Notifications.getPermissionsAsync();
     
@@ -161,7 +226,7 @@ async function sendPushNotificationForMessage(recipientSessionId: string, sender
     }
   } catch (error) {
     // Error sending push notification for message - store for later
-    console.error('Error sending push notification for message:', error);
+    // Error sending push notification for message
     await storePendingMessageNotification(recipientSessionId, senderName);
   }
 }
@@ -480,10 +545,14 @@ export async function handleNewMessageNotification(
     } else {
       // User is not in app - send push notification to the RECEIVER (recipientSessionId)
       try {
-        await sendPushNotificationForMessage(recipientSessionId, senderName);
+        // Get sender's session ID for mute check
+        const senderProfile = await import('./firebaseApi').then(api => 
+          api.EventProfileAPI.get(fromProfileId)
+        );
+        await sendPushNotificationForMessage(recipientSessionId, senderName, senderProfile?.session_id);
       } catch (pushError) {
         // If push notification fails, store for later
-        console.error('Push notification failed:', pushError);
+        // Push notification failed
       }
     }
     
@@ -496,7 +565,6 @@ export async function handleNewMessageNotification(
     
   } catch (error) {
     // Error handling new message notification
-    console.error('Error handling new message notification:', error);
   }
 }
 

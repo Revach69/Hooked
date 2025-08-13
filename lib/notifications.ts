@@ -2,17 +2,18 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from './firebaseConfig';
-import { auth } from './firebaseConfig';
+import { auth } from './firebaseAuth';
+import * as Sentry from '@sentry/react-native';
 
-// Configure notification behavior
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+// Configure notification behavior (disabled - handled in _layout.tsx)
+// Notifications.setNotificationHandler({
+//   handleNotification: async () => ({
+//     shouldPlaySound: true,
+//     shouldSetBadge: false,
+//     shouldShowBanner: true,
+//     shouldShowList: true,
+//   }),
+// });
 
 export interface NotificationPermission {
   granted: boolean;
@@ -82,7 +83,6 @@ export async function savePushTokenToFirestore(token: string): Promise<boolean> 
   try {
     const user = auth.currentUser;
     if (!user) {
-      console.error('No authenticated user found');
       return false;
     }
 
@@ -108,7 +108,6 @@ export async function removePushTokenFromFirestore(token: string): Promise<boole
   try {
     const user = auth.currentUser;
     if (!user) {
-      console.error('No authenticated user found');
       return false;
     }
 

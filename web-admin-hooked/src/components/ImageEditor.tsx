@@ -78,7 +78,7 @@ export default function ImageEditor({ imageUrl, onSave, onCancel, aspectRatio = 
   };
 
   const onImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
-    console.log('Image loaded successfully:', e.currentTarget.src);
+    // Image loaded successfully
     setImageLoaded(true);
     setImageError(false);
     
@@ -89,7 +89,7 @@ export default function ImageEditor({ imageUrl, onSave, onCancel, aspectRatio = 
     const containerWidth = 500; // Target container width
     const optimalScale = containerWidth / naturalWidth;
     
-    console.log('Image dimensions:', { naturalWidth, naturalHeight, optimalScale });
+    // Image dimensions calculated
     
     // Set the scale to fit the width
     setScale(optimalScale);
@@ -109,7 +109,7 @@ export default function ImageEditor({ imageUrl, onSave, onCancel, aspectRatio = 
       const centerX = (editorWidth - scaledWidth) / 2;
       const centerY = (editorHeight - scaledHeight) / 2;
       
-      console.log('Centering image at:', { centerX, centerY, scaledWidth, scaledHeight, editorWidth, editorHeight });
+      // Image centered
       
       // Center the image initially
       setPosition({ x: centerX, y: centerY });
@@ -124,7 +124,7 @@ export default function ImageEditor({ imageUrl, onSave, onCancel, aspectRatio = 
   }, []);
 
   const onImageError = useCallback(() => {
-    console.error('Failed to load image:', imageUrl);
+          // Failed to load image
     setImageLoaded(false);
     setImageError(true);
   }, [imageUrl]);
@@ -200,16 +200,16 @@ export default function ImageEditor({ imageUrl, onSave, onCancel, aspectRatio = 
       try {
         canvas.toBlob((blob) => {
           if (blob) {
-            console.log('Successfully created positioned image blob:', blob.size, 'bytes');
+            // Successfully created positioned image blob
             const url = URL.createObjectURL(blob);
             resolve(url);
           } else {
-            console.error('Failed to create blob from canvas');
+            // Failed to create blob from canvas
             reject(new Error('Failed to create blob from canvas'));
           }
         }, 'image/jpeg', 0.9);
       } catch (error) {
-        console.error('Error in canvas.toBlob:', error);
+        // Error in canvas.toBlob
         reject(error);
       }
     });
@@ -217,11 +217,11 @@ export default function ImageEditor({ imageUrl, onSave, onCancel, aspectRatio = 
 
   const handleSave = async () => {
     try {
-      console.log('Starting save process...', { scale, rotation, position });
+      // Starting save process
       
       const croppedImageUrl = await getCroppedImg();
       if (croppedImageUrl) {
-        console.log('Positioned image URL created successfully:', croppedImageUrl.substring(0, 50) + '...');
+        // Positioned image URL created successfully
         
         // Get the blob data directly from the canvas without using fetch
         const canvas = document.createElement('canvas');
@@ -285,7 +285,7 @@ export default function ImageEditor({ imageUrl, onSave, onCancel, aspectRatio = 
         // Get blob data directly with maximum quality
         canvas.toBlob((blob) => {
           if (blob) {
-            console.log('Canvas blob created with size:', blob.size, 'bytes');
+            // Canvas blob created
             
             const cropData = {
               scale,
@@ -295,19 +295,19 @@ export default function ImageEditor({ imageUrl, onSave, onCancel, aspectRatio = 
               blob // Pass the blob data directly
             };
             
-            console.log('Calling onSave with position data and blob:', cropData);
+            // Calling onSave with position data and blob
             onSave(croppedImageUrl, cropData);
           } else {
-            console.error('Failed to create blob from canvas');
+            // Failed to create blob from canvas
             alert('Failed to create positioned image. Please try again.');
           }
         }, 'image/png', 1.0); // Use PNG for lossless quality instead of JPEG
       } else {
-        console.error('getCroppedImg returned null');
+        // getCroppedImg returned null
         alert('Failed to create positioned image. Please try again.');
       }
     } catch (error) {
-      console.error('Error saving positioned image:', error);
+      // Error saving positioned image
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       alert(`Failed to save the positioned image: ${errorMessage}. Please try again.`);
     }

@@ -1,8 +1,15 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
+import * as path from 'path';
+const fetch = require('node-fetch');
 
-// Initialize Firebase Admin
-admin.initializeApp();
+// Initialize Firebase Admin with service account
+const serviceAccount = require(path.join(__dirname, '../hooked-69-firebase-adminsdk-fbsvc-c7009d8539.json'));
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+  databaseURL: 'https://hooked-69-default-rtdb.firebaseio.com'
+});
 
 const db = admin.firestore();
 
@@ -392,4 +399,254 @@ export const verifyAdminStatus = functions
     console.error('Error verifying admin status:', error);
     throw new functions.https.HttpsError('internal', 'Failed to verify admin status');
   }
-}); 
+});
+
+const REGION = FUNCTION_REGION;
+
+// Shared helpers for push notifications
+async function fetchSessionTokens(sessionId: string) {
+  console.log(`Fetching tokens for sessionId: ${sessionId}`);
+  const snap = await admin.firestore()
+    .collection('push_tokens')
+    .where('sessionId', '==', sessionId)
+    .get();
+  const tokens: string[] = [];
+  snap.forEach(d => {
+    const data = d.data() as any;
+    if (typeof data?.token === 'string' && data.token) tokens.push(data.token);
+  });
+  console.log(`Found ${tokens.length} tokens for sessionId: ${sessionId}`);
+  return tokens;
+}
+
+
+async function sendExpoPush(toTokens: string[], payload: { title: string; body?: string; data?: any }) {
+  if (!toTokens.length) {
+    console.log('No tokens to send push to');
+    return { sent: 0, results: [] };
+  }
+  console.log(`Sending push to ${toTokens.length} tokens:`, payload);
+  const chunks: string[][] = [];
+  for (let i = 0; i < toTokens.length; i += 100) chunks.push(toTokens.slice(i, i + 100));
+  const results: any[] = [];
+  for (const chunk of chunks) {
+    const messages = chunk.map(to => ({ to, sound: 'default', ...payload }));
+    const resp = await fetch(EXPO_PUSH_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(messages),
+    });
+    const json = await resp.json().catch(() => null);
+    console.log(`Expo push response: ${resp.status}`, json);
+    results.push({ status: resp.status, json });
+  }
+  return { sent: toTokens.length, results };
+}
+
+async function onceOnly(key: string) {
+  // Idempotency via notifications_log
+  const ref = admin.firestore().collection('notifications_log').doc(key);
+  const snap = await ref.get();
+  if (snap.exists) return false;
+  await ref.set({ createdAt: admin.firestore.FieldValue.serverTimestamp() });
+  return true;
+}
+
+const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
+
+type NotifyBody = {
+  recipientSessionId: string;
+  title: string;
+  body?: string;
+  data?: Record<string, any>;
+};
+
+function requireApiKey(req: functions.https.Request) {
+  const key = req.header('x-api-key');
+  const expected =
+    process.env.API_KEY || functions.config().hooked?.api_key;
+  if (!expected || key !== expected) {
+    throw new functions.https.HttpsError('permission-denied', 'Invalid API key');
+  }
+}
+
+export const notify = functions
+  .region(REGION)
+  .https.onRequest(async (req, res) => {
+    try {
+      if (req.method !== 'POST') {
+        res.set('Allow', 'POST');
+        res.status(405).send('Method Not Allowed');
+        return;
+      }
+      requireApiKey(req);
+
+      const { recipientSessionId, title, body, data }: NotifyBody = req.body || {};
+      if (!recipientSessionId || !title) {
+        throw new functions.https.HttpsError('invalid-argument', 'recipientSessionId and title required');
+      }
+
+      const db = admin.firestore();
+      const snap = await db.collection('push_tokens')
+        .where('sessionId', '==', recipientSessionId)
+        .get();
+
+      const tokens: string[] = [];
+      snap.forEach(doc => {
+        const d = doc.data() as any;
+        if (typeof d?.token === 'string' && d.token) tokens.push(d.token);
+      });
+
+      if (!tokens.length) {
+        res.status(200).json({ sent: 0, message: 'No tokens for recipient' });
+        return;
+      }
+
+      // chunk to 100 per request
+      const chunks: string[][] = [];
+      for (let i = 0; i < tokens.length; i += 100) chunks.push(tokens.slice(i, i + 100));
+
+      const results: any[] = [];
+      for (const chunk of chunks) {
+        const messages = chunk.map(to => ({ to, title, body, data, sound: 'default' }));
+        const resp = await fetch(EXPO_PUSH_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(messages),
+        });
+        const json = await resp.json().catch(() => null);
+        results.push({ status: resp.status, json });
+      }
+
+      res.status(200).json({ sent: tokens.length, results });
+    } catch (err: any) {
+      console.error('notify error', err);
+      const code = err?.code === 'permission-denied' ? 403 : 500;
+      res.status(code).json({ error: err?.message || 'Unknown error' });
+    }
+  }); 
+// Trigger: Mutual Match (likes)
+export const onMutualLike = functions
+  .region(REGION)
+  .firestore.document('likes/{likeId}')
+  .onWrite(async (change, context) => {
+    const before = change.before.exists ? change.before.data() as any : null;
+    const after = change.after.exists ? change.after.data() as any : null;
+    if (!after) return;
+
+    const was = before?.is_mutual === true;
+    const now = after?.is_mutual === true;
+    if (was || !now) return; // only fire on rising edge
+
+    const eventId = after.event_id;
+    const likerSession = after.liker_session_id; // user who just liked (second liker when is_mutual flips)
+    const likedSession = after.liked_session_id; // user who liked earlier (first liker)
+    if (!eventId || !likerSession || !likedSession) return;
+
+    // Idempotency key: match per event per pair
+    const pairKey = [likerSession, likedSession].sort().join('|');
+    const logKey = `match:${eventId}:${pairKey}`;
+    if (!(await onceOnly(logKey))) return;
+
+    // Send to second liker (creator)
+    {
+      const tokens = await fetchSessionTokens(likerSession);
+      await sendExpoPush(tokens, {
+        title: "It's a match!",
+        body: undefined,
+        data: { type: 'match', otherSessionId: likedSession }
+      });
+    }
+
+    // Send to first liker (recipient)
+    {
+      const tokens = await fetchSessionTokens(likedSession);
+      await sendExpoPush(tokens, {
+        title: 'You got a match!',
+        body: undefined,
+        data: { type: 'match', otherSessionId: likerSession }
+      });
+    }
+  });
+
+// Trigger: New Message (messages)
+export const onMessageCreate = functions
+  .region(REGION)
+  .firestore.document('messages/{messageId}')
+  .onCreate(async (snap, context) => {
+    const d = snap.data() as any;
+    const messageId = d?.id || context.params.messageId;
+    const eventId = d?.event_id;
+    const fromProfile = d?.from_profile_id;
+    const toProfile = d?.to_profile_id;
+    const senderName = d?.sender_name || 'Someone';
+    const preview = typeof d?.content === 'string' ? d.content.slice(0, 80) : undefined;
+    if (!eventId || !fromProfile || !toProfile) return;
+
+    // Idempotency: 1 push per message id
+    const logKey = `msg:${eventId}:${messageId}`;
+    if (!(await onceOnly(logKey))) return;
+
+    // Don't notify the sender
+    if (fromProfile === toProfile) return;
+
+    // Resolve recipient session_id via event_profiles (if not in messages)
+    let toSession: string | null = null;
+    if (typeof d?.to_session_id === 'string') {
+      toSession = d.to_session_id;
+    } else {
+      const prof = await admin.firestore()
+        .collection('event_profiles')
+        .where('id', '==', toProfile)
+        .limit(1)
+        .get();
+      const rec = prof.docs[0]?.data() as any;
+      toSession = rec?.session_id || null;
+    }
+    if (!toSession) return;
+
+    const tokens = await fetchSessionTokens(toSession);
+    await sendExpoPush(tokens, {
+      title: `New message from ${senderName}`,
+      body: preview ?? 'Open to read',
+      data: { type: 'message', conversationId: toProfile }
+    });
+  });
+
+// === Callable: savePushToken ===
+// Saves/updates a user's Expo token under push_tokens/{sessionId}_{platform}
+// Expects: { token: string, platform: 'ios' | 'android', sessionId: string }
+export const savePushToken = functions
+  .region(FUNCTION_REGION)
+  .https.onCall(async (data, context) => {
+    console.log('savePushToken called with data:', data);
+    const token = data?.token;
+    const platform = data?.platform;
+    const sessionId = data?.sessionId;
+
+    if (typeof token !== 'string' || !token.trim()) {
+      console.log('Invalid token:', token);
+      throw new functions.https.HttpsError('invalid-argument', 'token is required');
+    }
+    if (platform !== 'ios' && platform !== 'android') {
+      console.log('Invalid platform:', platform);
+      throw new functions.https.HttpsError('invalid-argument', "platform must be 'ios' or 'android'");
+    }
+    if (typeof sessionId !== 'string' || !sessionId.trim()) {
+      console.log('Invalid sessionId:', sessionId);
+      throw new functions.https.HttpsError('invalid-argument', 'sessionId is required');
+    }
+
+    const docId = `${sessionId}_${platform}`;
+    console.log(`Saving push token with docId: ${docId}`);
+    await admin.firestore().collection('push_tokens').doc(docId).set({
+      token,
+      platform,
+      sessionId,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    console.log(`Successfully saved push token for sessionId: ${sessionId}, platform: ${platform}`);
+
+    return { ok: true };
+  });

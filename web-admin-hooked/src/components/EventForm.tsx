@@ -7,6 +7,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/lib/firebaseConfig';
 import ImageEditor from './ImageEditor';
 import { utcToLocalDateTimeString } from '../lib/utils';
+
 import { 
   getAvailableCountries, 
   getPrimaryTimezoneForCountry, 
@@ -152,13 +153,13 @@ export default function EventForm({
 
   const handleEditImage = () => {
     if (imagePreview) {
-      console.log('Opening image editor with URL:', imagePreview);
+      // Image editor opened
       setShowImageEditor(true);
     }
   };
 
   const handleImageEditorSave = (positionedImageUrl: string, positionData: any) => {
-    console.log('ImageEditor save called with:', { positionedImageUrl: positionedImageUrl.substring(0, 50) + '...', positionData });
+    // Image editor save called
     setImagePreview(positionedImageUrl);
     setCropData(positionData);
     setShowImageEditor(false);
@@ -187,10 +188,10 @@ export default function EventForm({
       // Get the download URL
       const downloadURL = await getDownloadURL(snapshot.ref);
       
-      console.log('✅ Image uploaded successfully:', downloadURL);
+              // Image uploaded successfully
       return downloadURL;
     } catch (error) {
-      console.error('❌ Error uploading image:', error);
+      // Error uploading image
       return null;
     } finally {
       setUploadingImage(false);
@@ -261,15 +262,11 @@ export default function EventForm({
       // Handle image upload and management
       let imageUrl: string | null = null;
       
-      console.log('Image processing state:', { 
-        selectedImage: !!selectedImage, 
-        imagePreview: imagePreview ? imagePreview.substring(0, 50) + '...' : null,
-        existingImageUrl: existingImageUrl ? existingImageUrl.substring(0, 50) + '...' : null 
-      });
+      // Image processing state checked
       
       if (selectedImage) {
         // New image selected - upload it
-        console.log('Uploading new selected image...');
+        // Uploading new selected image
         const uploadedUrl = await uploadImage(selectedImage);
         if (!uploadedUrl) {
           setErrors({ submit: 'Failed to upload image. Please try again.' });
@@ -277,14 +274,14 @@ export default function EventForm({
           return;
         }
         imageUrl = uploadedUrl;
-        console.log('New image uploaded successfully');
+        // New image uploaded successfully
       } else if (imagePreview && imagePreview !== existingImageUrl) {
         // Cropped image from editor - check if we have blob data or need to fetch it
-        console.log('Using cropped image from editor');
+        // Using cropped image from editor
         if (imagePreview.startsWith('blob:')) {
           // Check if we have blob data in cropData
           if (cropData && cropData.blob) {
-            console.log('Using blob data from cropData');
+            // Using blob data from cropData
                          try {
                const file = new File([cropData.blob], 'processed-image.png', { type: 'image/png' });
               const uploadedUrl = await uploadImage(file);
@@ -294,16 +291,16 @@ export default function EventForm({
                 return;
               }
               imageUrl = uploadedUrl;
-              console.log('Processed image uploaded successfully');
-            } catch (error) {
-              console.error('Error uploading blob data:', error);
-              setErrors({ submit: 'Failed to process image. Please try again.' });
-              setIsLoading(false);
-              return;
-            }
+              // Processed image uploaded successfully
+                          } catch (error) {
+                // Error uploading blob data
+                setErrors({ submit: 'Failed to process image. Please try again.' });
+                setIsLoading(false);
+                return;
+              }
           } else {
             // Fallback: try to fetch the blob URL (may fail due to CSP)
-            console.log('No blob data, trying to fetch blob URL...');
+            // No blob data, trying to fetch blob URL
             try {
               // Create a temporary image element to get the blob data
               const img = new Image();
@@ -324,7 +321,7 @@ export default function EventForm({
                          uploadImage(file).then(uploadedUrl => {
                            if (uploadedUrl) {
                              imageUrl = uploadedUrl;
-                             console.log('Processed image uploaded successfully via canvas');
+                             // Processed image uploaded successfully via canvas
                              resolve(uploadedUrl);
                            } else {
                              reject(new Error('Failed to upload image'));
@@ -342,7 +339,7 @@ export default function EventForm({
                 img.src = imagePreview;
               });
             } catch (error) {
-              console.error('Error converting blob to file via canvas:', error);
+              // Error converting blob to file via canvas
               setErrors({ submit: 'Failed to process image. Please try again.' });
               setIsLoading(false);
               return;
@@ -354,10 +351,10 @@ export default function EventForm({
         }
       } else if (existingImageUrl && imagePreview === existingImageUrl) {
         // Keep existing image if it's still being displayed (not removed)
-        console.log('Keeping existing image');
+        // Keeping existing image
         imageUrl = existingImageUrl;
       } else {
-        console.log('No image to save');
+        // No image to save
       }
       // If imagePreview is null, it means the image was removed, so imageUrl stays null
 
@@ -384,12 +381,7 @@ export default function EventForm({
       await onSave(eventData);
       onClose();
     } catch (error: any) {
-      console.error('Error saving event:', error);
-      console.error('Error details:', {
-        message: error.message,
-        code: error.code,
-        stack: error.stack
-      });
+      // Error saving event
       setErrors({ submit: `Failed to save event: ${error.message}` });
     } finally {
       setIsLoading(false);

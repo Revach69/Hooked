@@ -294,7 +294,7 @@ export default function Admin() {
               // Navigate to home
               router.replace('/home');
             } catch (error) {
-              console.error('Logout error:', error);
+              // Silent logout error - still redirect to home
               router.replace('/home');
             }
           }

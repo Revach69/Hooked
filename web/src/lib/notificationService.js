@@ -4,7 +4,7 @@
 export class NotificationService {
   static async requestPermission() {
     if (!('Notification' in window)) {
-      console.log('This browser does not support notifications');
+      // This browser does not support notifications
       return false;
     }
 
@@ -13,7 +13,7 @@ export class NotificationService {
     }
 
     if (Notification.permission === 'denied') {
-      console.log('Notification permission denied');
+      // Notification permission denied
       return false;
     }
 
@@ -23,12 +23,12 @@ export class NotificationService {
 
   static async sendNotification(title, body, options = {}) {
     if (!('Notification' in window)) {
-      console.log('Notifications not supported');
+      // Notifications not supported
       return false;
     }
 
     if (Notification.permission !== 'granted') {
-      console.log('Notification permission not granted');
+      // Notification permission not granted
       return false;
     }
 
@@ -49,7 +49,7 @@ export class NotificationService {
 
       return true;
     } catch (error) {
-      console.error('Error sending notification:', error);
+      // Error sending notification
       return false;
     }
   }

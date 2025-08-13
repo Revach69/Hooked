@@ -19,7 +19,6 @@ export default function JoinPage() {
   const { code } = useLocalSearchParams<{ code: string }>();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isRetrying, setIsRetrying] = useState(false);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const { executeOperationWithOfflineFallback } = useMobileAsyncOperation();
@@ -120,20 +119,8 @@ export default function JoinPage() {
       await AsyncStorageUtils.setItem('currentSessionId', sessionId);
       await AsyncStorageUtils.setItem('currentEventCode', event.event_code);
 
-      // Register for push notifications
-      try {
-        const { getExpoPushTokenAsync } = await import('expo-notifications');
-        const token = await getExpoPushTokenAsync({
-          projectId: '7a1de260-e3cb-4cbb-863c-1557213d69f0',
-        });
-        
-        if (token.data) {
-          const { storePushToken } = await import('../lib/notificationService');
-          await storePushToken(sessionId, token.data);
-        }
-      } catch {
-        // Error registering push token - continue without it
-      }
+      // Register for push notifications (now handled by centralized system in _layout.tsx)
+      // Push token registration moved to app initialization for better reliability
 
       // Navigate to consent page
       router.replace('/consent');
@@ -144,18 +131,9 @@ export default function JoinPage() {
     }
   };
 
-  const handleRetry = async () => {
-    setIsRetrying(true);
-    setError(null);
-    
-    try {
-      await handleEventJoin();
-    } catch {
-      // Retry failed
-      setError("Retry failed. Please check your connection and try again.");
-    } finally {
-      setIsRetrying(false);
-    }
+  const handleRetry = () => {
+    // Navigate back to homepage instead of retrying the same code
+    router.replace('/');
   };
 
   return (
@@ -192,15 +170,13 @@ export default function JoinPage() {
             <TouchableOpacity
               style={[styles.retryButton, { backgroundColor: isDark ? '#374151' : '#e5e7eb' }]}
               onPress={handleRetry}
-              disabled={isRetrying}
+              accessibilityRole="button"
+              accessibilityLabel="Back to Home"
+              accessibilityHint="Navigate back to the home screen"
             >
-              {isRetrying ? (
-                <ActivityIndicator size="small" color={isDark ? '#fff' : '#000'} />
-              ) : (
-                <Text style={[styles.retryButtonText, { color: isDark ? '#fff' : '#000' }]}>
-                  Try Again
-                </Text>
-              )}
+              <Text style={[styles.retryButtonText, { color: isDark ? '#fff' : '#000' }]}>
+                Back to Home
+              </Text>
             </TouchableOpacity>
           </View>
         )}

@@ -11,16 +11,18 @@ import {
   orderBy, 
   serverTimestamp
 } from 'firebase/firestore';
-import { ref, getDownloadURL } from 'firebase/storage';
+import { ref, getDownloadURL, uploadBytes } from 'firebase/storage';
 import { 
   signInWithEmailAndPassword, 
   signOut as firebaseSignOut, 
   updateProfile as firebaseUpdateProfile,
   User as FirebaseUser
 } from 'firebase/auth';
-import { db, storage, auth } from './firebaseConfig';
+import { db, storage } from './firebaseConfig';
+import { auth } from './firebaseAuth';
 import { trace } from './firebasePerformance';
-
+import * as Sentry from '@sentry/react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Enhanced retry mechanism with network connectivity checks and memory safety
 export async function firebaseRetry<T>(
@@ -194,6 +196,22 @@ export interface KickedUser {
   created_at: string;
 }
 
+export interface BlockedMatch {
+  id: string;
+  event_id: string;
+  blocker_session_id: string;
+  blocked_session_id: string;
+  created_at: string;
+}
+
+export interface MutedMatch {
+  id: string;
+  event_id: string;
+  muter_session_id: string;
+  muted_session_id: string;
+  created_at: string;
+}
+
 export interface AdminClient {
   id: string;                  // Firestore doc id
   name: string;                // Name
@@ -207,7 +225,7 @@ export interface AdminClient {
   eventDate?: string | null;   // ISO date (yyyy-mm-dd) or null
   organizerFormSent?: 'Yes' | 'No';
   status: 'Initial Discussion' | 'Negotiation' | 'Won' | 'Lost';
-  source?: 'Personal Connect' | 'Instagram Inbound' | 'Email' | 'Other' | 'Olim in TLV';
+  source?: 'Personal Connect' | 'Instagram Inbound' | 'Email' | 'Other' | 'Olim in TLV' | null;
   description?: string | null;
   // system fields
   createdAt: number;           // Date.now()
@@ -249,7 +267,7 @@ export const EventAPI = {
         }
         
         const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => ({
+        return querySnapshot.docs.map((doc: any) => ({
           id: doc.id,
           ...(doc.data() as any)
         })) as Event[];
@@ -262,7 +280,8 @@ export const EventAPI = {
       const docRef = doc(db, 'events', id);
       const docSnap = await getDoc(docRef);
       
-      if (docSnap.exists()) {
+      // @ts-ignore - React Native Firebase v23 exists is a boolean property, not function
+      if (docSnap.exists) {
         return { id: docSnap.id, ...docSnap.data() } as Event;
       }
       return null;
@@ -287,22 +306,29 @@ export const EventAPI = {
 // Event Profile API
 export const EventProfileAPI = {
   async create(data: Omit<EventProfile, 'id' | 'created_at' | 'updated_at'>): Promise<EventProfile> {
-    return firebaseRetry(async () => {
-      return trace('create_event_profile', async () => {
-        const docRef = await addDoc(collection(db, 'event_profiles'), {
-          ...data,
-          created_at: serverTimestamp(),
-          updated_at: serverTimestamp()
-        });
-        
-        return {
-          id: docRef.id,
-          ...data,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
+    try {
+      // Simplified version without retry logic and performance monitoring
+      const docRef = await addDoc(collection(db, 'event_profiles'), {
+        ...data,
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp()
       });
-    }, { operation: 'Create event profile' });
+      
+      return {
+        id: docRef.id,
+        ...data,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+    } catch (error) {
+      Sentry.captureException(error, {
+        tags: {
+          operation: 'firebase_api',
+          source: 'EventProfileAPI'
+        }
+      });
+      throw error;
+    }
   },
 
   async filter(filters: Partial<EventProfile> = {}): Promise<EventProfile[]> {
@@ -321,7 +347,7 @@ export const EventProfileAPI = {
         }
         
         const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => ({
+        return querySnapshot.docs.map((doc: any) => ({
           id: doc.id,
           ...(doc.data() as any)
         })) as EventProfile[];
@@ -334,7 +360,8 @@ export const EventProfileAPI = {
       const docRef = doc(db, 'event_profiles', id);
       const docSnap = await getDoc(docRef);
       
-      if (docSnap.exists()) {
+      // @ts-ignore - React Native Firebase v23 exists is a boolean property, not function
+      if (docSnap.exists) {
         return { id: docSnap.id, ...docSnap.data() } as EventProfile;
       }
       return null;
@@ -408,7 +435,7 @@ export const LikeAPI = {
       }
       
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
+      return querySnapshot.docs.map((doc: any) => ({
         id: doc.id,
         ...(doc.data() as any)
       })) as Like[];
@@ -420,7 +447,8 @@ export const LikeAPI = {
       const docRef = doc(db, 'likes', id);
       const docSnap = await getDoc(docRef);
       
-      if (docSnap.exists()) {
+      // @ts-ignore - React Native Firebase v23 exists is a boolean property, not function
+      if (docSnap.exists) {
         return { id: docSnap.id, ...docSnap.data() } as Like;
       }
       return null;
@@ -478,7 +506,7 @@ export const MessageAPI = {
       q = query(q, orderBy('created_at', 'asc'));
       
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
+      return querySnapshot.docs.map((doc: any) => ({
         id: doc.id,
         ...(doc.data() as any)
       })) as Message[];
@@ -547,7 +575,7 @@ export const EventFeedbackAPI = {
       }
       
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
+      return querySnapshot.docs.map((doc: any) => ({
         id: doc.id,
         ...(doc.data() as any)
       })) as EventFeedback[];
@@ -584,7 +612,7 @@ export const KickedUserAPI = {
       }
       
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
+      return querySnapshot.docs.map((doc: any) => ({
         id: doc.id,
         ...(doc.data() as any)
       })) as KickedUser[];
@@ -596,7 +624,8 @@ export const KickedUserAPI = {
       const docRef = doc(db, 'kicked_users', id);
       const docSnap = await getDoc(docRef);
       
-      if (docSnap.exists()) {
+      // @ts-ignore - React Native Firebase v23 exists is a boolean property, not function
+      if (docSnap.exists) {
         return { id: docSnap.id, ...docSnap.data() } as KickedUser;
       }
       return null;
@@ -611,7 +640,99 @@ export const KickedUserAPI = {
   }
 };
 
+// Blocked Match API
+export const BlockedMatchAPI = {
+  async create(data: Omit<BlockedMatch, 'id' | 'created_at'>): Promise<BlockedMatch> {
+    return firebaseRetry(async () => {
+      const docRef = await addDoc(collection(db, 'blocked_matches'), {
+        ...data,
+        created_at: serverTimestamp()
+      });
+      
+      return {
+        id: docRef.id,
+        ...data,
+        created_at: new Date().toISOString()
+      };
+    }, { operation: 'Block match' });
+  },
 
+  async filter(filters: Partial<BlockedMatch> = {}): Promise<BlockedMatch[]> {
+    return firebaseRetry(async () => {
+      let q: any = collection(db, 'blocked_matches');
+      
+      if (filters.event_id) {
+        q = query(q, where('event_id', '==', filters.event_id));
+      }
+      if (filters.blocker_session_id) {
+        q = query(q, where('blocker_session_id', '==', filters.blocker_session_id));
+      }
+      if (filters.blocked_session_id) {
+        q = query(q, where('blocked_session_id', '==', filters.blocked_session_id));
+      }
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map((doc: any) => ({
+        id: doc.id,
+        ...doc.data()
+      })) as BlockedMatch[];
+    }, { operation: 'Filter blocked matches' });
+  },
+
+  async delete(id: string): Promise<void> {
+    return firebaseRetry(async () => {
+      const docRef = doc(db, 'blocked_matches', id);
+      await deleteDoc(docRef);
+    }, { operation: 'Unblock match' });
+  }
+};
+
+// Muted Match API
+export const MutedMatchAPI = {
+  async create(data: Omit<MutedMatch, 'id' | 'created_at'>): Promise<MutedMatch> {
+    return firebaseRetry(async () => {
+      const docRef = await addDoc(collection(db, 'muted_matches'), {
+        ...data,
+        created_at: serverTimestamp()
+      });
+      
+      return {
+        id: docRef.id,
+        ...data,
+        created_at: new Date().toISOString()
+      };
+    }, { operation: 'Mute match' });
+  },
+
+  async filter(filters: Partial<MutedMatch> = {}): Promise<MutedMatch[]> {
+    return firebaseRetry(async () => {
+      let q: any = collection(db, 'muted_matches');
+      
+      if (filters.event_id) {
+        q = query(q, where('event_id', '==', filters.event_id));
+      }
+      if (filters.muter_session_id) {
+        q = query(q, where('muter_session_id', '==', filters.muter_session_id));
+      }
+      if (filters.muted_session_id) {
+        q = query(q, where('muted_session_id', '==', filters.muted_session_id));
+      }
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map((doc: any) => ({
+        id: doc.id,
+        ...doc.data()
+      })) as MutedMatch[];
+    }, { operation: 'Filter muted matches' });
+  },
+
+  async delete(id: string): Promise<void> {
+    return firebaseRetry(async () => {
+      const docRef = doc(db, 'muted_matches', id);
+      await deleteDoc(docRef);
+    }, { operation: 'Unmute match' });
+  }
+};
 
 // Report API
 export const ReportAPI = {
@@ -653,6 +774,39 @@ export const ReportAPI = {
 
   async filter(filters: Partial<Report> = {}): Promise<Report[]> {
     return firebaseRetry(async () => {
+      // Check if user is authenticated (admin access)
+      const currentUser = auth.currentUser;
+      const isAuthenticated = !!currentUser;
+      
+      // If not authenticated, only allow filtering by session ID
+      if (!isAuthenticated) {
+        // Get current session ID from AsyncStorage
+        const sessionIdData = await AsyncStorage.getItem('currentSessionId');
+        let sessionId: string | null = null;
+        
+        if (sessionIdData) {
+          try {
+            const parsed = JSON.parse(sessionIdData);
+            sessionId = parsed.value || parsed.sessionId || (typeof parsed === 'string' ? parsed : null);
+          } catch {
+            sessionId = typeof sessionIdData === 'string' ? sessionIdData.trim() : null;
+          }
+        }
+        
+        if (!sessionId) {
+          return []; // No session ID, return empty array
+        }
+        
+        // Only allow queries that include the user's session ID
+        if (!filters.reporter_session_id && !filters.reported_session_id) {
+          // If no session filter provided, add the user's session ID
+          filters.reporter_session_id = sessionId;
+        } else if (filters.reporter_session_id !== sessionId && filters.reported_session_id !== sessionId) {
+          // If session filter provided but doesn't match user's session, return empty
+          return [];
+        }
+      }
+      
       let q: any = collection(db, 'reports');
       
       if (filters.event_id) {
@@ -668,11 +822,11 @@ export const ReportAPI = {
         q = query(q, where('status', '==', filters.status));
       }
       if (filters.id) {
-        q = query(q, where('__name__', '==', filters.id));
+        q = query(q, where('id', '==', filters.id));
       }
       
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
+      return querySnapshot.docs.map((doc: any) => ({
         id: doc.id,
         ...(doc.data() as any)
       })) as Report[];
@@ -684,7 +838,8 @@ export const ReportAPI = {
       const docRef = doc(db, 'reports', id);
       const docSnap = await getDoc(docRef);
       
-      if (docSnap.exists()) {
+      // @ts-ignore - React Native Firebase v23 exists is a boolean property, not function
+      if (docSnap.exists) {
         return { id: docSnap.id, ...docSnap.data() } as Report;
       }
       return null;
@@ -708,7 +863,7 @@ export const ReportAPI = {
 
 // Auth API
 export const AuthAPI = {
-  async signUp(email: string, password: string): Promise<FirebaseUser> {
+  async signUp(_email: string, _password: string): Promise<any> {
     return firebaseRetry(async () => {
       // Note: User creation should be done through Firebase Console or admin SDK
       // This method is kept for compatibility but will throw an error
@@ -716,7 +871,7 @@ export const AuthAPI = {
     }, { operation: 'Sign up' });
   },
 
-  async signIn(email: string, password: string): Promise<FirebaseUser> {
+  async signIn(email: string, password: string): Promise<any> {
     return firebaseRetry(async () => {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       return userCredential.user;
@@ -737,7 +892,7 @@ export const AuthAPI = {
     }, { operation: 'Update profile' });
   },
 
-  getCurrentUser(): FirebaseUser | null {
+  getCurrentUser(): any | null {
     return auth.currentUser;
   }
 };
@@ -745,37 +900,31 @@ export const AuthAPI = {
 // Storage API
 export const StorageAPI = {
   async uploadFile(file: { uri: string; name: string; type: string; fileSize?: number }): Promise<{ file_url: string }> {
-    return firebaseRetry(async () => {
+    try {
       const fileName = `${Date.now()}_${file.name}`;
       const storageRef = ref(storage, `uploads/${fileName}`);
       
       // Check if the URI is a remote URL (starts with http/https) or a local file
       if (file.uri.startsWith('http://') || file.uri.startsWith('https://')) {
         // Handle remote URL - download the file first
-  
         try {
           const response = await fetch(file.uri);
           if (!response.ok) {
             throw new Error(`Failed to download file: ${response.status} ${response.statusText}`);
           }
+          
           const blob = await response.blob();
           
-          // Upload the blob to Firebase Storage
-          const { uploadBytesResumable } = await import('firebase/storage');
-          await uploadBytesResumable(storageRef, blob, { contentType: file.type });
+          // Upload the blob
+          await uploadBytes(storageRef, blob, { contentType: file.type });
         } catch (downloadError) {
-          // Error downloading remote file
+          Sentry.captureException(downloadError);
           throw new Error(`Failed to download remote file: ${downloadError instanceof Error ? downloadError.message : 'Unknown error'}`);
         }
       } else {
-        // Handle local file URI - use a simpler, more reliable approach for Android
-
-        
+        // Handle local file URI
         try {
-          const { uploadBytesResumable } = await import('firebase/storage');
-          
-          // For Android, use a simpler approach that doesn't rely on complex base64 conversion
-          // Read the file as a blob directly using fetch
+          // For web SDK, we need to convert the file to a blob first
           const response = await fetch(file.uri);
           if (!response.ok) {
             throw new Error(`Failed to read local file: ${response.status} ${response.statusText}`);
@@ -783,21 +932,25 @@ export const StorageAPI = {
           
           const blob = await response.blob();
           
-          // Upload the blob to Firebase Storage
-          await uploadBytesResumable(storageRef, blob, { contentType: file.type });
+          await uploadBytes(storageRef, blob, { contentType: file.type });
         } catch (uploadError) {
-          // Error uploading local file
+          Sentry.captureException(uploadError);
           throw new Error(`Failed to upload local file: ${uploadError instanceof Error ? uploadError.message : 'Unknown error'}`);
         }
       }
       
-      // File uploaded to Firebase Storage successfully
-      
-      
       const downloadURL = await getDownloadURL(storageRef);
       
       return { file_url: downloadURL };
-    }, { operation: 'Upload file', maxRetries: 3, baseDelay: 2000 });
+    } catch (error) {
+      Sentry.captureException(error, {
+        tags: {
+          operation: 'firebase_api',
+          source: 'EventProfileAPI'
+        }
+      });
+      throw error;
+    }
   }
 };
 
@@ -913,7 +1066,7 @@ export const AdminClientAPI = {
   },
 
   async filter(filters: Partial<AdminClient> = {}): Promise<AdminClient[]> {
-    let q = query(collection(db, 'adminClients'));
+    let q: any = collection(db, 'adminClients');
     
     if (filters.status) {
       q = query(q, where('status', '==', filters.status));
@@ -930,12 +1083,12 @@ export const AdminClientAPI = {
     
     q = query(q, orderBy('updatedAt', 'desc'));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as AdminClient);
+    return snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }) as AdminClient);
   },
 
   async get(id: string): Promise<AdminClient | null> {
     const docSnap = await getDoc(doc(db, 'adminClients', id));
-    if (!docSnap.exists()) return null;
+    if (!docSnap.exists) return null;
     return { id: docSnap.id, ...docSnap.data() } as AdminClient;
   },
 
@@ -951,7 +1104,7 @@ export const AdminClientAPI = {
   },
 };
 
-// Add User export
-export { User as FirebaseUser } from 'firebase/auth'; 
+// Export auth module for compatibility
+export { auth }; 
 
  

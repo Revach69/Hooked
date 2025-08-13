@@ -25,7 +25,7 @@ export default function LoginForm() {
     try {
       await signIn(email, password);
     } catch (error: any) {
-      console.error('Sign in error:', error);
+      // Sign in error
       if (error.code === 'auth/user-not-found') {
         setError('No account found with this email address');
       } else if (error.code === 'auth/wrong-password') {
@@ -47,7 +47,7 @@ export default function LoginForm() {
     try {
       await signInWithGoogle();
     } catch (error: any) {
-      console.error('Google sign in error:', error);
+      // Google sign in error
       if (error.code === 'auth/popup-closed-by-user') {
         setError('Sign-in popup was closed');
       } else {

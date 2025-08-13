@@ -26,7 +26,7 @@ export class AsyncStorageUtils {
       const serializedValue = JSON.stringify(item);
       await AsyncStorage.setItem(key, serializedValue);
     } catch (error) {
-      console.error(`Failed to set item ${key}:`, error);
+      // Failed to set item
       throw error;
     }
   }
@@ -44,7 +44,7 @@ export class AsyncStorageUtils {
       const item: StorageItem<T> = JSON.parse(serializedValue);
       return item.value;
     } catch (error) {
-      console.error(`Failed to get item ${key}:`, error);
+      // Failed to get item
       return null;
     }
   }
@@ -68,7 +68,7 @@ export class AsyncStorageUtils {
         return JSON.parse(serializedValue);
       }
     } catch (error) {
-      console.error(`Failed to get item ${key}:`, error);
+      // Failed to get item
       return null;
     }
   }
@@ -80,7 +80,7 @@ export class AsyncStorageUtils {
     try {
       await AsyncStorage.removeItem(key);
     } catch (error) {
-      console.error(`Failed to remove item ${key}:`, error);
+      // Failed to remove item
       throw error;
     }
   }
@@ -92,7 +92,7 @@ export class AsyncStorageUtils {
     try {
       await AsyncStorage.multiRemove(keys);
     } catch (error) {
-      console.error('Failed to remove multiple items:', error);
+      // Failed to remove multiple items
       throw error;
     }
   }
@@ -105,7 +105,7 @@ export class AsyncStorageUtils {
       const keys = await AsyncStorage.getAllKeys();
       return Array.from(keys);
     } catch (error) {
-      console.error('Failed to get all keys:', error);
+      // Failed to get all keys
       return [];
     }
   }
@@ -117,7 +117,7 @@ export class AsyncStorageUtils {
     try {
       await AsyncStorage.clear();
     } catch (error) {
-      console.error('Failed to clear storage:', error);
+      // Failed to clear storage
       throw error;
     }
   }
@@ -130,7 +130,7 @@ export class AsyncStorageUtils {
       const value = await AsyncStorage.getItem(key);
       return value !== null;
     } catch (error) {
-      console.error(`Failed to check if item ${key} exists:`, error);
+      // Failed to check if item exists
       return false;
     }
   }
@@ -148,7 +148,7 @@ export class AsyncStorageUtils {
       const item: StorageItem = JSON.parse(serializedValue);
       return Date.now() - item.timestamp;
     } catch (error) {
-      console.error(`Failed to get item age for ${key}:`, error);
+      // Failed to get item age
       return null;
     }
   }
@@ -193,7 +193,7 @@ export class AsyncStorageUtils {
 
       return item.value;
     } catch (error) {
-      console.error(`Failed to get item with expiration ${key}:`, error);
+      // Failed to get item with expiration
       return null;
     }
   }

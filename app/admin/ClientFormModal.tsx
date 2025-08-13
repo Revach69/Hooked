@@ -308,7 +308,7 @@ export default function ClientFormModal({
             {renderSelectField('Client Type *', formData.type, CLIENT_TYPES, 'type')}
             {renderSelectField('Event Kind *', formData.eventKind, EVENT_KINDS, 'eventKind')}
             {renderSelectField('Status *', formData.status, STATUS_OPTIONS, 'status')}
-            {renderSelectField('Source', formData.source, SOURCE_OPTIONS, 'source')}
+            {renderSelectField('Source', formData.source || 'Personal Connect', SOURCE_OPTIONS, 'source')}
           </View>
 
           {/* Contact Information */}

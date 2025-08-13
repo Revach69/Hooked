@@ -35,7 +35,7 @@ export default function ClientsPage() {
       const clientsData = await listClients();
       setClients(clientsData);
     } catch (error) {
-      console.error('Error loading clients:', error);
+      // Error loading clients
     } finally {
       setIsLoading(false);
     }
@@ -57,7 +57,7 @@ export default function ClientsPage() {
         await deleteClient(clientId);
         await loadClients();
       } catch (error) {
-        console.error('Error deleting client:', error);
+        // Error deleting client
       }
     }
   };
