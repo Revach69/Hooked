@@ -84,13 +84,6 @@
             "googleServicesPlist": "./GoogleService-Info.plist"
           }
         }
-      ],
-      [
-        "./lib/ios-config-plugin.js",
-        {
-          "useModularHeaders": true,
-          "newArchEnabled": false
-        }
       ]
     ],
     "scheme": "hooked", 
