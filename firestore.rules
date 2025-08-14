@@ -164,18 +164,9 @@ service cloud.firestore {
       // ✅ Anyone can read muted matches (for mobile app filtering)
       allow read: if true;
       
-      // ✅ Anyone can create muted match records (mobile app muting)
-      allow create: if 
-        // Ensure required fields are present
-        request.resource.data.event_id is string &&
-        request.resource.data.muter_session_id is string &&
-        request.resource.data.muted_session_id is string;
-      
-      // ✅ Users can delete their own muted matches
-      allow delete: if true; // Simplified for mobile app
-      
-      // ✅ No updates allowed (muting is create/delete only)
-      allow update: if false;
+      // ✅ Deny public writes - only callable functions can access
+      allow write: if false;  // only callable/Admin writes
+      allow delete: if false; // only callable/Admin deletes
     }
 
     // ===== USERS COLLECTION =====
@@ -241,25 +232,30 @@ service cloud.firestore {
     
     // ===== PUSH TOKENS COLLECTION =====
     match /push_tokens/{tokenId} {
-      // ✅ Anyone can create/update push tokens (mobile app registration)
-      // Using merge: true in Firebase Functions, so this handles both create and update
-      allow write: if 
-        // Ensure required fields are present
-        request.resource.data.token is string &&
-        request.resource.data.platform is string &&
-        request.resource.data.sessionId is string; // Note: using camelCase to match Firebase Functions
-      
-      // ✅ Anyone can read push tokens (for notification system)
-      allow read: if true;
-      
-      // ✅ Anyone can delete push tokens (for cleanup purposes)
-      allow delete: if true;
+      // ✅ Deny public reads/writes - only callable functions can access
+      allow read: if false;   // deny public reads
+      allow write: if false;  // only callable/Admin writes
+      allow delete: if false; // only callable/Admin deletes
+    }
+    
+    // ===== APP STATES COLLECTION =====
+    match /app_states/{doc} {
+      // ✅ Deny public reads/writes - only callable functions can access
+      allow read: if false;   // deny public reads
+      allow write: if false;  // only callable/Admin writes
+      allow delete: if false; // only callable/Admin deletes
     }
     
     // ===== NOTIFICATIONS LOG COLLECTION =====
     match /notifications_log/{logId} {
       // ✅ Allow Firebase Functions to read/write notification logs (idempotency)
       allow read, write: if true;
+    }
+    
+    // ===== NOTIFICATION JOBS COLLECTION =====
+    match /notification_jobs/{jobId} {
+      // ✅ Deny public access - only Admin SDK can access
+      allow read, write: if false;
     }
     
     // ===== ANALYTICS COLLECTION =====

@@ -9,7 +9,7 @@ import {
   signOut,
   onAuthStateChanged
 } from 'firebase/auth';
-import { auth } from '@/lib/firebaseConfig';
+import { getAuthInstance } from '@/lib/firebaseConfig';
 
 interface AuthContextType {
   user: User | null;
@@ -19,25 +19,44 @@ interface AuthContextType {
   logout: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  loading: true,
+  signIn: async () => {},
+  signInWithGoogle: async () => {},
+  logout: async () => {}
+});
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
+    // Only run on client side
+    if (typeof window === 'undefined') {
       setLoading(false);
-    });
+      return;
+    }
 
-    return unsubscribe;
+    try {
+      const authInstance = getAuthInstance();
+      const unsubscribe = onAuthStateChanged(authInstance, (user) => {
+        setUser(user);
+        setLoading(false);
+      });
+
+      return unsubscribe;
+    } catch (error) {
+      console.error('Firebase Auth not initialized:', error);
+      setLoading(false);
+    }
   }, []);
 
   const signIn = async (email: string, password: string) => {
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-    } catch (error: any) {
+      const authInstance = getAuthInstance();
+      await signInWithEmailAndPassword(authInstance, email, password);
+    } catch (error: unknown) {
       // Sign in error
       throw error;
     }
@@ -45,9 +64,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithGoogle = async () => {
     try {
+      const authInstance = getAuthInstance();
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
-    } catch (error: any) {
+      await signInWithPopup(authInstance, provider);
+    } catch (error: unknown) {
       // Google sign in error
       throw error;
     }
@@ -55,8 +75,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
-      await signOut(auth);
-    } catch (error: any) {
+      const authInstance = getAuthInstance();
+      await signOut(authInstance);
+    } catch (error: unknown) {
       // Logout error
       throw error;
     }
@@ -79,9 +100,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
   return context;
 }
 

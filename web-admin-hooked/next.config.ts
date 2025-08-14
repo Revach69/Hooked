@@ -7,6 +7,8 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  output: 'standalone',
+  serverExternalPackages: ['firebase'],
   
   // Redirects configuration
   async redirects() {

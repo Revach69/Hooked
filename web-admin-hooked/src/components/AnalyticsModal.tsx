@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { EventAPI, EventProfile, Like, Message, type Event } from '@/lib/firebaseApi';
+import { EventProfile, Like, Message } from '@/lib/firebaseApi';
 import { X, Users, Heart, MessageCircle, Calendar } from 'lucide-react';
 
 interface AnalyticsModalProps {
@@ -62,15 +62,15 @@ export default function AnalyticsModal({
 
       // Calculate average age
       const validAges = profiles
-        .map((profile: any) => profile.age)
+        .map((profile: EventProfile) => profile.age)
         .filter((age: number) => age && age > 0);
       const averageAge = validAges.length > 0 
         ? Math.round(validAges.reduce((sum: number, age: number) => sum + age, 0) / validAges.length)
         : 0;
 
       // Calculate gender breakdown
-      const genderBreakdown = profiles.reduce((acc: any, profile: any) => {
-        const gender = profile.gender?.toLowerCase() || 'other';
+      const genderBreakdown = profiles.reduce((acc: { male: number; female: number; other: number }, profile: EventProfile) => {
+        const gender = profile.gender_identity?.toLowerCase() || 'other';
         if (gender === 'male' || gender === 'm') {
           acc.male++;
         } else if (gender === 'female' || gender === 'f') {

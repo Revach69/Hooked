@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -8,13 +8,22 @@ import { Calendar, Users, FileText, LogOut } from 'lucide-react';
 import { AuthContext } from '@/contexts/AuthContext';
 import { useContext } from 'react';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const { signOut } = useContext(AuthContext);
+  const [isClient, setIsClient] = useState(false);
+  const authContext = useContext(AuthContext);
+  const logout = authContext.logout;
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const navigation = [
     { name: 'Events', href: '/admin/events', icon: Calendar },
@@ -54,15 +63,17 @@ export default function AdminLayout({
               </nav>
             </div>
             
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={signOut}
-              className="flex items-center space-x-2"
-            >
-              <LogOut className="h-4 w-4" />
-              <span>Logout</span>
-            </Button>
+            {isClient && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={logout}
+                className="flex items-center space-x-2"
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Logout</span>
+              </Button>
+            )}
           </div>
         </div>
       </header>

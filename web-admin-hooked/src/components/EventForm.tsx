@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Event } from '@/lib/firebaseApi';
 import { X, Save, Plus, Camera, Upload, Edit3 } from 'lucide-react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { storage } from '@/lib/firebaseConfig';
+import { getStorageInstance } from '@/lib/firebaseConfig';
 import ImageEditor from './ImageEditor';
 import { utcToLocalDateTimeString } from '../lib/utils';
 
@@ -52,6 +52,7 @@ export default function EventForm({
   const [uploadingImage, setUploadingImage] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [showImageEditor, setShowImageEditor] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [cropData, setCropData] = useState<any>(null);
 
   const isEditing = !!event;
@@ -158,6 +159,7 @@ export default function EventForm({
     }
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleImageEditorSave = (positionedImageUrl: string, positionData: any) => {
     // Image editor save called
     setImagePreview(positionedImageUrl);
@@ -180,7 +182,8 @@ export default function EventForm({
       const filename = `events/${timestamp}_${randomString}.${fileExtension}`;
       
       // Create a reference to the file location in Firebase Storage
-      const storageRef = ref(storage, filename);
+      const storageInstance = getStorageInstance();
+      const storageRef = ref(storageInstance, filename);
       
       // Upload the file
       const snapshot = await uploadBytes(storageRef, file);
@@ -359,6 +362,7 @@ export default function EventForm({
       // If imagePreview is null, it means the image was removed, so imageUrl stays null
 
       // Convert form datetime inputs (user's timezone) to event timezone, then to UTC for storage
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const eventData: any = {
         ...formData,
         starts_at: formDateTimeToUTC(formData.starts_at, formData.timezone),
@@ -380,6 +384,7 @@ export default function EventForm({
 
       await onSave(eventData);
       onClose();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       // Error saving event
       setErrors({ submit: `Failed to save event: ${error.message}` });
@@ -624,7 +629,7 @@ export default function EventForm({
               placeholder="Enter event link (e.g., https://example.com/event)"
             />
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              This link will be used for the "Join Event" button on the website
+              This link will be used for the &quot;Join Event&quot; button on the website
             </p>
           </div>
 
@@ -638,7 +643,7 @@ export default function EventForm({
               className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded dark:bg-gray-700 dark:border-gray-600 dark:focus:ring-blue-600 dark:checked:bg-blue-600"
             />
             <label htmlFor="is_private" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Make this event private (won't be displayed on the IRL page)
+              Make this event private (won&apos;t be displayed on the IRL page)
             </label>
           </div>
 

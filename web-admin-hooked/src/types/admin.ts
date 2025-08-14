@@ -18,8 +18,8 @@ export type AdminClient = {
   linkedEventId?: string | null; // Reference to linked event
 
   // system fields
-  createdAt: any;              // Firestore Timestamp
-  updatedAt: any;              // Firestore Timestamp
+  createdAt: unknown;              // Firestore Timestamp
+  updatedAt: unknown;              // Firestore Timestamp
   createdByUid?: string | null;
 };
 
@@ -44,6 +44,23 @@ export type EventForm = {
   adminNotes?: string;
   
   // system fields
-  createdAt: any;              // Firestore Timestamp
-  updatedAt: any;              // Firestore Timestamp
+  createdAt: unknown;              // Firestore Timestamp
+  updatedAt: unknown;              // Firestore Timestamp
+};
+
+export type Event = {
+  id: string;                  // Firestore doc id
+  name: string;                // Event name
+  event_code: string;          // Event code for joining
+  starts_at: string;           // ISO date string
+  expires_at: string;          // ISO date string
+  location?: string;           // Event location (optional to match firebaseApi)
+  event_type?: string;         // Event type
+  description?: string;        // Event description
+  event_link?: string;         // External event link
+  linkedClientId?: string | null; // Reference to linked client
+  
+  // system fields
+  createdAt?: unknown;             // Firestore Timestamp
+  updatedAt?: unknown;             // Firestore Timestamp
 };

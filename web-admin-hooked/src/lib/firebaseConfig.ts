@@ -15,10 +15,10 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase app only on client side
-let app: any;
-let auth: any;
-let db: any;
-let storage: any;
+let app: ReturnType<typeof initializeApp> | null = null;
+let auth: ReturnType<typeof getAuth> | null = null;
+let db: ReturnType<typeof getFirestore> | null = null;
+let storage: ReturnType<typeof getStorage> | null = null;
 
 if (typeof window !== 'undefined') {
   try {
@@ -54,3 +54,25 @@ if (typeof window !== 'undefined') {
 
 export { auth, db, storage };
 export default app;
+
+// Helper functions to ensure Firebase is initialized
+export const getAuthInstance = () => {
+  if (!auth) {
+    throw new Error('Firebase Auth not initialized');
+  }
+  return auth;
+};
+
+export const getDbInstance = () => {
+  if (!db) {
+    throw new Error('Firebase Firestore not initialized');
+  }
+  return db;
+};
+
+export const getStorageInstance = () => {
+  if (!storage) {
+    throw new Error('Firebase Storage not initialized');
+  }
+  return storage;
+};

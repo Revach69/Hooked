@@ -160,7 +160,7 @@ export function EventViewerModal({ event, isOpen, onClose }: EventViewerModalPro
                   </Button>
                 </div>
                 <p className="mt-2 text-sm text-gray-600">
-                  This link is used for the "Join Event" button on the website
+                  This link is used for the &quot;Join Event&quot; button on the website
                 </p>
               </div>
             )}

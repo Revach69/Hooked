@@ -187,6 +187,7 @@ export function ClientFormSheet({ open, onOpenChange, client, onSuccess }: Clien
     }
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     if (errors[field]) {

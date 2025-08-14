@@ -5,6 +5,7 @@ import { X, Move, RotateCcw, RotateCw, ZoomIn, ZoomOut, RotateCcw as ResetIcon }
 
 interface ImageEditorProps {
   imageUrl: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onSave: (croppedImageUrl: string, cropData: any) => void;
   onCancel: () => void;
   aspectRatio?: number;

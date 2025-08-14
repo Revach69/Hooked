@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
+
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { EventFormCard } from '@/components/EventFormCard';
@@ -9,7 +9,7 @@ import { EventFormModal } from '@/components/EventFormModal';
 import { LinkFormModal } from '@/components/LinkFormModal';
 import { EventFormAPI } from '@/lib/firestore/eventForms';
 import { AdminClientAPI } from '@/lib/firestore/clients';
-import { FileText, Search, Filter, Plus } from 'lucide-react';
+import { FileText, Search, Filter } from 'lucide-react';
 import type { EventForm, AdminClient } from '@/types/admin';
 
 export default function FormsPage() {

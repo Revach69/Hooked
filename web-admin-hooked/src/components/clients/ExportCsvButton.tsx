@@ -5,6 +5,7 @@ import { Download } from 'lucide-react';
 import type { AdminClient } from '@/types/admin';
 
 // Firestore timestamp utility
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const formatTimestamp = (timestamp: any): string => {
   if (!timestamp) return '';
   

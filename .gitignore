@@ -1,30 +1,56 @@
-node_modules
-.DS_Store
-.vercel
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# IDE and Editor files
-.vscode/.react
-*.swp
-*.swo
-*~
-
-# Build outputs
-dist/
-build/
-*.tsbuildinfo
-
-# Environment files
+# Environment variables
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 
+# Build outputs
+dist/
+build/
+.next/
+out/
+
+# Expo
+.expo/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+
+# Firebase
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+*-firebase-adminsdk-*.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
 # Logs
+logs
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 
 # Runtime data
 pids
@@ -35,11 +61,23 @@ pids
 # Coverage directory used by tools like istanbul
 coverage/
 
+# nyc test coverage
+.nyc_output
+
 # Dependency directories
 jspm_packages/
 
 # Optional npm cache directory
 .npm
+
+# Optional eslint cache
+.eslintcache
+
+# Microbundle cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
 
 # Optional REPL history
 .node_repl_history
@@ -50,26 +88,52 @@ jspm_packages/
 # Yarn Integrity file
 .yarn-integrity
 
-# Expo
-.expo/
-.expo-shared/
+# parcel-bundler cache (https://parceljs.org/)
+.cache
+.parcel-cache
 
-# React Native
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
-*.orig.*
-web-build/
+# next.js build output
+.next
 
-# Metro
-.metro-health-check*
+# nuxt.js build output
+.nuxt
 
-# Flipper
-ios/Pods/
+# vuepress build output
+.vuepress/dist
 
-.env.local
+# Serverless directories
+.serverless/
 
-# Firebase Service Account Keys
-*firebase-adminsdk*.json
+# FuseBox cache
+.fusebox/
+
+# DynamoDB Local files
+.dynamodb/
+
+# TernJS port file
+.tern-port
+
+# Stores VSCode versions used for testing VSCode extensions
+.vscode-test
+
+# Vercel
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+
+# Mobile app specific
+android/app/build/
+ios/build/
+*.keystore
+!hooked-release-key.keystore
+
+# Functions specific
+functions/lib/
+functions/node_modules/
+
+# Workspace specific
+mobile-app/node_modules/
+web-admin-hooked/node_modules/
+hooked-website/node_modules/
+web/node_modules/

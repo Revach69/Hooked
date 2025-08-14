@@ -24,13 +24,14 @@ export default function LoginForm() {
 
     try {
       await signIn(email, password);
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Sign in error
-      if (error.code === 'auth/user-not-found') {
+      const firebaseError = error as { code?: string };
+      if (firebaseError.code === 'auth/user-not-found') {
         setError('No account found with this email address');
-      } else if (error.code === 'auth/wrong-password') {
+      } else if (firebaseError.code === 'auth/wrong-password') {
         setError('Incorrect password');
-      } else if (error.code === 'auth/invalid-email') {
+      } else if (firebaseError.code === 'auth/invalid-email') {
         setError('Invalid email address');
       } else {
         setError('Failed to sign in. Please try again.');
@@ -46,9 +47,10 @@ export default function LoginForm() {
 
     try {
       await signInWithGoogle();
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Google sign in error
-      if (error.code === 'auth/popup-closed-by-user') {
+      const firebaseError = error as { code?: string };
+      if (firebaseError.code === 'auth/popup-closed-by-user') {
         setError('Sign-in popup was closed');
       } else {
         setError('Failed to sign in with Google. Please try again.');

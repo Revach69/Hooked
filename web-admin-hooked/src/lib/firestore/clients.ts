@@ -11,12 +11,13 @@ import {
   orderBy, 
   serverTimestamp 
 } from 'firebase/firestore';
-import { db } from '../firebaseConfig';
+import { getDbInstance } from '../firebaseConfig';
 import type { AdminClient } from '@/types/admin';
 
 export const AdminClientAPI = {
   async create(data: Omit<AdminClient, 'id' | 'createdAt' | 'updatedAt'>): Promise<AdminClient> {
-    const docRef = await addDoc(collection(db, 'adminClients'), {
+    const dbInstance = getDbInstance();
+    const docRef = await addDoc(collection(dbInstance, 'adminClients'), {
       ...data,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
@@ -31,8 +32,9 @@ export const AdminClientAPI = {
   },
 
   async getAll(): Promise<AdminClient[]> {
+    const dbInstance = getDbInstance();
     const q = query(
-      collection(db, 'adminClients'),
+      collection(dbInstance, 'adminClients'),
       orderBy('createdAt', 'desc')
     );
     
@@ -44,7 +46,8 @@ export const AdminClientAPI = {
   },
 
   async get(id: string): Promise<AdminClient | null> {
-    const docRef = doc(db, 'adminClients', id);
+    const dbInstance = getDbInstance();
+    const docRef = doc(dbInstance, 'adminClients', id);
     const docSnap = await getDoc(docRef);
     
     if (docSnap.exists()) {
@@ -54,7 +57,8 @@ export const AdminClientAPI = {
   },
 
   async update(id: string, data: Partial<AdminClient>): Promise<void> {
-    const docRef = doc(db, 'adminClients', id);
+    const dbInstance = getDbInstance();
+    const docRef = doc(dbInstance, 'adminClients', id);
     await updateDoc(docRef, { 
       ...data, 
       updatedAt: serverTimestamp() 
@@ -62,12 +66,15 @@ export const AdminClientAPI = {
   },
 
   async delete(id: string): Promise<void> {
-    const docRef = doc(db, 'adminClients', id);
+    const dbInstance = getDbInstance();
+    const docRef = doc(dbInstance, 'adminClients', id);
     await deleteDoc(docRef);
   },
 
   async filter(filters: Partial<AdminClient> = {}): Promise<AdminClient[]> {
-    let q: any = collection(db, 'adminClients');
+    const dbInstance = getDbInstance();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let q: any = collection(dbInstance, 'adminClients');
     
     if (filters.status) {
       q = query(q, where('status', '==', filters.status));
@@ -87,12 +94,13 @@ export const AdminClientAPI = {
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
-      ...(doc.data() as any)
+      ...(doc.data() as Omit<AdminClient, 'id'>)
     })) as AdminClient[];
   },
 
   async linkForm(clientId: string, formId: string): Promise<void> {
-    const docRef = doc(db, 'adminClients', clientId);
+    const dbInstance = getDbInstance();
+    const docRef = doc(dbInstance, 'adminClients', clientId);
     await updateDoc(docRef, { 
       linkedFormId: formId,
       organizerFormSent: 'Yes',
@@ -101,7 +109,8 @@ export const AdminClientAPI = {
   },
 
   async unlinkForm(clientId: string): Promise<void> {
-    const docRef = doc(db, 'adminClients', clientId);
+    const dbInstance = getDbInstance();
+    const docRef = doc(dbInstance, 'adminClients', clientId);
     await updateDoc(docRef, { 
       linkedFormId: null,
       organizerFormSent: 'No',
@@ -110,7 +119,8 @@ export const AdminClientAPI = {
   },
 
   async linkEvent(clientId: string, eventId: string): Promise<void> {
-    const docRef = doc(db, 'adminClients', clientId);
+    const dbInstance = getDbInstance();
+    const docRef = doc(dbInstance, 'adminClients', clientId);
     await updateDoc(docRef, { 
       linkedEventId: eventId,
       eventCardCreated: 'Yes',
@@ -119,7 +129,8 @@ export const AdminClientAPI = {
   },
 
   async unlinkEvent(clientId: string): Promise<void> {
-    const docRef = doc(db, 'adminClients', clientId);
+    const dbInstance = getDbInstance();
+    const docRef = doc(dbInstance, 'adminClients', clientId);
     await updateDoc(docRef, { 
       linkedEventId: null,
       eventCardCreated: 'No',

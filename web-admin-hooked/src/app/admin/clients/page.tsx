@@ -11,8 +11,8 @@ import { EventViewerModal } from '@/components/EventViewerModal';
 import { AdminClientAPI } from '@/lib/firestore/clients';
 import { EventFormAPI } from '@/lib/firestore/eventForms';
 import { EventAPI } from '@/lib/firebaseApi';
-import { Plus, Search, Filter } from 'lucide-react';
-import type { AdminClient, EventForm } from '@/types/admin';
+import { Plus } from 'lucide-react';
+import type { AdminClient, EventForm, Event } from '@/types/admin';
 
 export default function ClientsPage() {
   const [clients, setClients] = useState<AdminClient[]>([]);
@@ -22,15 +22,15 @@ export default function ClientsPage() {
   const [typeFilter, setTypeFilter] = useState<string[]>([]);
   const [sourceFilter, setSourceFilter] = useState<string[]>([]);
   const [eventFilter, setEventFilter] = useState<string[]>([]);
-  const [sortBy, setSortBy] = useState('createdAt');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [sortBy] = useState('createdAt');
+  const [sortOrder] = useState<'asc' | 'desc'>('desc');
   
   // Modal states
   const [showClientForm, setShowClientForm] = useState(false);
   const [editingClient, setEditingClient] = useState<AdminClient | null>(null);
   const [selectedForm, setSelectedForm] = useState<EventForm | null>(null);
   const [isFormViewerOpen, setIsFormViewerOpen] = useState(false);
-  const [selectedEvent, setSelectedEvent] = useState<any>(null);
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [isEventViewerOpen, setIsEventViewerOpen] = useState(false);
 
   useEffect(() => {

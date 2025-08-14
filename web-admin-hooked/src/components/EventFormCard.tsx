@@ -46,6 +46,7 @@ export function EventFormCard({ form, onEdit, onDelete, onLink, linkedClientName
     });
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const formatCreatedDate = (timestamp: any) => {
     if (!timestamp) return 'Unknown';
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);

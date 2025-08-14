@@ -156,6 +156,7 @@ export default function ReportsModal({ isOpen, onClose, eventId, eventName }: Re
     }
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const formatDate = (dateValue: any) => {
     let date: Date;
     

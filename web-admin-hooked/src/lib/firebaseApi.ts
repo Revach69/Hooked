@@ -1,4 +1,4 @@
-import { db } from './firebaseConfig';
+import { getDbInstance } from './firebaseConfig';
 import {
   collection,
   doc,
@@ -106,7 +106,8 @@ export const EventAPI = {
       updated_at: serverTimestamp(),
     };
     
-    const docRef = await addDoc(collection(db, 'events'), eventData);
+    const dbInstance = getDbInstance();
+    const docRef = await addDoc(collection(dbInstance, 'events'), eventData);
     
     // Return the data we already have with the document ID
     return { 
@@ -118,7 +119,8 @@ export const EventAPI = {
   },
 
   async filter(filters: Partial<Event> = {}): Promise<Event[]> {
-    let q = query(collection(db, 'events'));
+    const dbInstance = getDbInstance();
+    let q = query(collection(dbInstance, 'events'));
     
     if (filters.event_code) {
       q = query(q, where('event_code', '==', filters.event_code));
@@ -132,13 +134,15 @@ export const EventAPI = {
   },
 
   async get(id: string): Promise<Event | null> {
-    const docSnap = await getDoc(doc(db, 'events', id));
+    const dbInstance = getDbInstance();
+    const docSnap = await getDoc(doc(dbInstance, 'events', id));
     if (!docSnap.exists()) return null;
     return { id: docSnap.id, ...docSnap.data() } as Event;
   },
 
   async update(id: string, data: Partial<Event>): Promise<void> {
     // Process the data to handle null values properly
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateData: any = {
       ...data,
       updated_at: serverTimestamp(),
@@ -149,11 +153,13 @@ export const EventAPI = {
       updateData.image_url = deleteField();
     }
 
-    await updateDoc(doc(db, 'events', id), updateData);
+    const dbInstance = getDbInstance();
+    await updateDoc(doc(dbInstance, 'events', id), updateData);
   },
 
   async delete(id: string): Promise<void> {
-    await deleteDoc(doc(db, 'events', id));
+    const dbInstance = getDbInstance();
+    await deleteDoc(doc(dbInstance, 'events', id));
   },
 };
 
@@ -166,7 +172,8 @@ export const EventProfile = {
       updated_at: serverTimestamp(),
     };
     
-    const docRef = await addDoc(collection(db, 'event_profiles'), profileData);
+    const dbInstance = getDbInstance();
+    const docRef = await addDoc(collection(dbInstance, 'event_profiles'), profileData);
     
     // Return the data we already have with the document ID
     return { 
@@ -178,7 +185,8 @@ export const EventProfile = {
   },
 
   async filter(filters: Partial<EventProfile> = {}): Promise<EventProfile[]> {
-    let q = query(collection(db, 'event_profiles'));
+    const dbInstance = getDbInstance();
+    let q = query(collection(dbInstance, 'event_profiles'));
     
     if (filters.event_id) {
       q = query(q, where('event_id', '==', filters.event_id));
@@ -195,20 +203,23 @@ export const EventProfile = {
   },
 
   async get(id: string): Promise<EventProfile | null> {
-    const docSnap = await getDoc(doc(db, 'event_profiles', id));
+    const dbInstance = getDbInstance();
+    const docSnap = await getDoc(doc(dbInstance, 'event_profiles', id));
     if (!docSnap.exists()) return null;
     return { id: docSnap.id, ...docSnap.data() } as EventProfile;
   },
 
   async update(id: string, data: Partial<EventProfile>): Promise<void> {
-    await updateDoc(doc(db, 'event_profiles', id), {
+    const dbInstance = getDbInstance();
+    await updateDoc(doc(dbInstance, 'event_profiles', id), {
       ...data,
       updated_at: serverTimestamp(),
     });
   },
 
   async delete(id: string): Promise<void> {
-    await deleteDoc(doc(db, 'event_profiles', id));
+    const dbInstance = getDbInstance();
+    await deleteDoc(doc(dbInstance, 'event_profiles', id));
   },
 };
 
@@ -220,7 +231,8 @@ export const Like = {
       created_at: serverTimestamp(),
     };
     
-    const docRef = await addDoc(collection(db, 'likes'), likeData);
+    const dbInstance = getDbInstance();
+    const docRef = await addDoc(collection(dbInstance, 'likes'), likeData);
     
     // Return the data we already have with the document ID
     return { 
@@ -231,7 +243,8 @@ export const Like = {
   },
 
   async filter(filters: Partial<Like> = {}): Promise<Like[]> {
-    let q = query(collection(db, 'likes'));
+    const dbInstance = getDbInstance();
+    let q = query(collection(dbInstance, 'likes'));
     
     if (filters.event_id) {
       q = query(q, where('event_id', '==', filters.event_id));
@@ -254,17 +267,20 @@ export const Like = {
   },
 
   async get(id: string): Promise<Like | null> {
-    const docSnap = await getDoc(doc(db, 'likes', id));
+    const dbInstance = getDbInstance();
+    const docSnap = await getDoc(doc(dbInstance, 'likes', id));
     if (!docSnap.exists()) return null;
     return { id: docSnap.id, ...docSnap.data() } as Like;
   },
 
   async update(id: string, data: Partial<Like>): Promise<void> {
-    await updateDoc(doc(db, 'likes', id), data);
+    const dbInstance = getDbInstance();
+    await updateDoc(doc(dbInstance, 'likes', id), data);
   },
 
   async delete(id: string): Promise<void> {
-    await deleteDoc(doc(db, 'likes', id));
+    const dbInstance = getDbInstance();
+    await deleteDoc(doc(dbInstance, 'likes', id));
   },
 };
 
@@ -276,7 +292,8 @@ export const Message = {
       created_at: serverTimestamp(),
     };
     
-    const docRef = await addDoc(collection(db, 'messages'), messageData);
+    const dbInstance = getDbInstance();
+    const docRef = await addDoc(collection(dbInstance, 'messages'), messageData);
     
     // Return the data we already have with the document ID
     return { 
@@ -287,7 +304,8 @@ export const Message = {
   },
 
   async filter(filters: Partial<Message> = {}): Promise<Message[]> {
-    let q = query(collection(db, 'messages'));
+    const dbInstance = getDbInstance();
+    let q = query(collection(dbInstance, 'messages'));
     
     if (filters.event_id) {
       q = query(q, where('event_id', '==', filters.event_id));
@@ -307,13 +325,15 @@ export const Message = {
   },
 
   async get(id: string): Promise<Message | null> {
-    const docSnap = await getDoc(doc(db, 'messages', id));
+    const dbInstance = getDbInstance();
+    const docSnap = await getDoc(doc(dbInstance, 'messages', id));
     if (!docSnap.exists()) return null;
     return { id: docSnap.id, ...docSnap.data() } as Message;
   },
 
   async delete(id: string): Promise<void> {
-    await deleteDoc(doc(db, 'messages', id));
+    const dbInstance = getDbInstance();
+    await deleteDoc(doc(dbInstance, 'messages', id));
   },
 };
 
@@ -325,7 +345,8 @@ export const KickedUserAPI = {
       created_at: serverTimestamp(),
     };
     
-    const docRef = await addDoc(collection(db, 'kicked_users'), kickedUserData);
+    const dbInstance = getDbInstance();
+    const docRef = await addDoc(collection(dbInstance, 'kicked_users'), kickedUserData);
     
     // Return the data we already have with the document ID
     return { 
@@ -336,7 +357,8 @@ export const KickedUserAPI = {
   },
 
   async filter(filters: Partial<KickedUser> = {}): Promise<KickedUser[]> {
-    let q = query(collection(db, 'kicked_users'));
+    const dbInstance = getDbInstance();
+    let q = query(collection(dbInstance, 'kicked_users'));
     
     if (filters.event_id) {
       q = query(q, where('event_id', '==', filters.event_id));
@@ -350,13 +372,15 @@ export const KickedUserAPI = {
   },
 
   async get(id: string): Promise<KickedUser | null> {
-    const docSnap = await getDoc(doc(db, 'kicked_users', id));
+    const dbInstance = getDbInstance();
+    const docSnap = await getDoc(doc(dbInstance, 'kicked_users', id));
     if (!docSnap.exists()) return null;
     return { id: docSnap.id, ...docSnap.data() } as KickedUser;
   },
 
   async delete(id: string): Promise<void> {
-    await deleteDoc(doc(db, 'kicked_users', id));
+    const dbInstance = getDbInstance();
+    await deleteDoc(doc(dbInstance, 'kicked_users', id));
   },
 };
 
@@ -368,7 +392,8 @@ export const ReportAPI = {
       created_at: serverTimestamp(),
     };
     
-    const docRef = await addDoc(collection(db, 'reports'), reportData);
+    const dbInstance = getDbInstance();
+    const docRef = await addDoc(collection(dbInstance, 'reports'), reportData);
     
     // Return the data we already have with the document ID
     return { 
@@ -379,7 +404,8 @@ export const ReportAPI = {
   },
 
   async filter(filters: Partial<Report> = {}): Promise<Report[]> {
-    let q = query(collection(db, 'reports'));
+    const dbInstance = getDbInstance();
+    let q = query(collection(dbInstance, 'reports'));
     
     if (filters.event_id) {
       q = query(q, where('event_id', '==', filters.event_id));
@@ -403,19 +429,22 @@ export const ReportAPI = {
   },
 
   async get(id: string): Promise<Report | null> {
-    const docSnap = await getDoc(doc(db, 'reports', id));
+    const dbInstance = getDbInstance();
+    const docSnap = await getDoc(doc(dbInstance, 'reports', id));
     if (!docSnap.exists()) return null;
     return { id: docSnap.id, ...docSnap.data() } as Report;
   },
 
   async update(id: string, data: Partial<Report>): Promise<void> {
-    await updateDoc(doc(db, 'reports', id), {
+    const dbInstance = getDbInstance();
+    await updateDoc(doc(dbInstance, 'reports', id), {
       ...data,
       updated_at: serverTimestamp(),
     });
   },
 
   async delete(id: string): Promise<void> {
-    await deleteDoc(doc(db, 'reports', id));
+    const dbInstance = getDbInstance();
+    await deleteDoc(doc(dbInstance, 'reports', id));
   },
 }; 

@@ -1,43 +1,18 @@
 {
   "cli": {
-    "version": ">= 16.17.0",
+    "version": ">= 16.17.4",
     "appVersionSource": "remote"
   },
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal",
-      "ios": {
-        "resourceClass": "m-medium"
-      },
-      "android": {
-        "resourceClass": "medium"
-      }
+      "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal",
-      "ios": {
-        "resourceClass": "m-medium"
-      },
-      "android": {
-        "resourceClass": "medium"
-      }
+      "distribution": "internal"
     },
     "production": {
-      "autoIncrement": true,
-      "ios": {
-        "resourceClass": "m-medium",
-        "env": {
-          "RCT_NEW_ARCH_ENABLED": "0"
-        }
-      },
-      "android": {
-        "resourceClass": "medium",
-        "env": {
-          "EXPO_USE_DEV_SERVER": "false"
-        },
-        "buildType": "app-bundle"
-      }
+      "autoIncrement": true
     }
   },
   "submit": {

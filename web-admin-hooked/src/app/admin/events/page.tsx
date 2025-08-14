@@ -8,26 +8,21 @@ import {
   Plus,
   Download,
   FileText,
-  User,
   Users,
-  ChevronDown,
-  ChevronUp,
   BarChart3,
   Edit,
-  QrCode,
   Trash2,
   MapPin,
   Calendar,
   Clock,
-  Copy,
-  Flag
+  Copy
 } from 'lucide-react';
 import * as QRCode from 'qrcode';
 import dynamic from 'next/dynamic';
+import Image from 'next/image';
 import { formatDateWithTimezone } from '@/lib/utils';
 
 // Dynamic imports to avoid SSR issues
-const EventCard = dynamic(() => import('@/components/EventCard'), { ssr: false });
 const AnalyticsModal = dynamic(() => import('@/components/AnalyticsModal'), { ssr: false });
 const EventForm = dynamic(() => import('@/components/EventForm'), { ssr: false });
 const ReportsModal = dynamic(() => import('@/components/ReportsModal'), { ssr: false });
@@ -51,7 +46,7 @@ function QRCodeGenerator({ joinLink, eventCode }: { joinLink: string; eventCode:
           }
         });
         setQrCodeUrl(qrDataUrl);
-          } catch (error) {
+          } catch {
       // Error generating QR code
     } finally {
         setIsLoading(false);
@@ -70,9 +65,11 @@ function QRCodeGenerator({ joinLink, eventCode }: { joinLink: string; eventCode:
 
   return (
     <div className="flex flex-col items-center">
-      <img 
+      <Image 
         src={qrCodeUrl} 
         alt={`QR Code for ${eventCode}`}
+        width={180}
+        height={180}
         className="w-full h-auto"
       />
       <div className="mt-2 text-center">
@@ -111,7 +108,7 @@ export default function EventsPage() {
       setIsLoading(true);
       const allEvents = await EventAPI.filter({});
       setEvents(allEvents);
-    } catch (error) {
+    } catch {
       // Error loading events
     } finally {
       setIsLoading(false);
@@ -173,9 +170,9 @@ export default function EventsPage() {
       try {
         await EventAPI.delete(eventId);
         await loadEvents();
-      } catch (error) {
-        // Error deleting event
-      }
+          } catch {
+      // Error deleting event
+    }
     }
   };
 
@@ -217,15 +214,15 @@ export default function EventsPage() {
       const messages = await Message.filter({ event_id: eventId });
 
       // Convert to CSV
-      const profilesCsv = convertToCSV(profiles, 'profiles');
-      const likesCsv = convertToCSV(likes, 'likes');
-      const messagesCsv = convertToCSV(messages, 'messages');
+      const profilesCsv = convertToCSV(profiles as unknown as Record<string, unknown>[], 'profiles');
+      const likesCsv = convertToCSV(likes as unknown as Record<string, unknown>[], 'likes');
+      const messagesCsv = convertToCSV(messages as unknown as Record<string, unknown>[], 'messages');
 
       // Download files
       downloadCSV(profilesCsv, `${event.name}-profiles.csv`);
       downloadCSV(likesCsv, `${event.name}-likes.csv`);
       downloadCSV(messagesCsv, `${event.name}-messages.csv`);
-    } catch (error) {
+    } catch {
       // Error downloading data
     }
   };
@@ -251,71 +248,12 @@ export default function EventsPage() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-    } catch (error) {
+    } catch {
       // Error downloading QR code
     }
   };
 
-  const handleDownloadQRSign = async (eventId: string) => {
-    try {
-      const event = events.find(e => e.id === eventId);
-      if (!event) return;
 
-      const joinLink = `${window.location.origin}/join?code=${event.event_code}`;
-      const qrDataUrl = await QRCode.toDataURL(joinLink, {
-        width: 400,
-        margin: 2,
-        color: {
-          dark: '#000000',
-          light: '#FFFFFF'
-        }
-      });
-
-      // Create a canvas with the QR code and event name
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      canvas.width = 600;
-      canvas.height = 800;
-
-      // White background
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // Load QR code image
-      const img = new Image();
-      img.onload = () => {
-        // Draw QR code
-        ctx.drawImage(img, 100, 100, 400, 400);
-
-        // Draw event name
-        ctx.fillStyle = '#000000';
-        ctx.font = 'bold 24px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText(event.name, canvas.width / 2, 550);
-
-        // Draw event code
-        ctx.font = '18px Arial';
-        ctx.fillText(`Code: ${event.event_code}`, canvas.width / 2, 580);
-
-        // Draw join link
-        ctx.font = '14px Arial';
-        ctx.fillText('Scan to join the event', canvas.width / 2, 610);
-
-        // Download the canvas
-        const link = document.createElement('a');
-        link.href = canvas.toDataURL();
-        link.download = `${event.name}-qr-sign.png`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      };
-      img.src = qrDataUrl;
-    } catch (error) {
-      // Error downloading QR sign
-    }
-  };
 
   const toggleEventExpansion = (eventId: string) => {
     const newExpanded = new Set(expandedEvents);
@@ -492,7 +430,7 @@ export default function EventsPage() {
                       </button>
                     </div>
                     <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                      This link is used for the "Join Event" button on the website
+                      This link is used for the &quot;Join Event&quot; button on the website
                     </p>
                   </div>
                 )}
@@ -577,7 +515,7 @@ export default function EventsPage() {
     );
   };
 
-  const convertToCSV = (data: any[], type: string): string => {
+  const convertToCSV = (data: Record<string, unknown>[], _type: string): string => {
     if (data.length === 0) return '';
 
     const headers = Object.keys(data[0]);

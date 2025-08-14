@@ -1,73 +1,116 @@
-# Hooked - React Native Mobile App
+# Hooked Monorepo
 
-A React Native mobile app built with Expo for connecting singles at events.
+This is a monorepo containing all Hooked applications and services.
 
-## Features
+## Project Structure
 
-- Event-based matching system
-- Real-time profile discovery
-- Mutual like notifications
-- Profile management
-- Firebase integration
-
-## Tech Stack
-
-- **Framework**: React Native 0.79.5
-- **Expo**: SDK 53
-- **Navigation**: Expo Router
-- **Backend**: Firebase (Auth + Firestore)
-- **Language**: TypeScript
-- **Styling**: React Native StyleSheet
+```
+Hooked-root (project root)/
+├── functions/              ← Firebase backend functions
+├── mobile-app/             ← React Native mobile application
+├── hooked-website/         ← Marketing website (Next.js)
+├── web-admin-hooked/       ← Web admin dashboard (Next.js)
+└── web/                    ← Web version of the app (Vite/React)
+```
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js 18+
-- Expo CLI
-- iOS Simulator or Android Emulator
+- Node.js 20+
+- npm or yarn
+- Firebase CLI
+- Expo CLI (for mobile development)
 
 ### Installation
 
+1. Install root dependencies:
 ```bash
 npm install
 ```
 
+2. Install all workspace dependencies:
+```bash
+npm run install:all
+```
+
 ### Development
 
+#### Mobile App
 ```bash
-# Start Expo development server
-npx expo start
+npm run dev:mobile
+```
 
-# Run on iOS
-npx expo run:ios
+#### Admin Dashboard
+```bash
+npm run dev:admin
+```
 
-# Run on Android
-npx expo run:android
+#### Marketing Website
+```bash
+npm run dev:website
+```
+
+#### Web App
+```bash
+npm run dev:web
 ```
 
 ### Building
 
+#### Mobile App
 ```bash
-# Prebuild native code
-npx expo prebuild
-
-# Build for production
-npx expo build:ios
-npx expo build:android
+npm run build:mobile
 ```
 
-## Project Structure
-
-```
-app/           # Expo Router pages
-lib/           # Utilities and Firebase config
-assets/        # Images and static assets
+#### Admin Dashboard
+```bash
+npm run build:admin
 ```
 
-## Firebase Setup
+#### Marketing Website
+```bash
+npm run build:website
+```
 
-1. Create a Firebase project
-2. Enable Authentication and Firestore
-3. Update `lib/firebaseConfig.ts` with your project credentials
-4. Set up Firestore database in `me-west1` region
+#### Web App
+```bash
+npm run build:web
+```
+
+### Deployment
+
+#### Firebase Functions
+```bash
+npm run deploy:functions
+```
+
+## Environment Variables
+
+Each workspace may have its own `.env` files. Make sure to copy the appropriate environment variables to each workspace:
+
+- `functions/.env` - Firebase functions environment variables
+- `mobile-app/.env` - Mobile app environment variables
+- `web-admin-hooked/.env` - Admin dashboard environment variables
+- `hooked-website/.env` - Marketing website environment variables
+- `web/.env` - Web app environment variables
+
+## Firebase Configuration
+
+The Firebase configuration is centralized in the root `firebase.json` file, which points to the `functions/` directory for Cloud Functions.
+
+## Workspace-Specific Commands
+
+Each workspace can be run independently by navigating to its directory:
+
+```bash
+cd mobile-app && npm start
+cd web-admin-hooked && npm run dev
+cd hooked-website && npm run dev
+cd web && npm run dev
+cd functions && npm run deploy
+```
+
+## Migration Notes
+
+This project has been restructured from a single repository to a monorepo. All imports have been updated to work within the new structure. Cross-workspace imports are not allowed - each workspace should be self-contained.
