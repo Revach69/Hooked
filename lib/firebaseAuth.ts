@@ -1,17 +1,19 @@
-import { getAuth } from 'firebase/auth';
+import { initializeAuth, getAuth, type Auth } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { app } from './firebaseConfig';
 
-// Initialize Firebase Auth
-let auth: any = null;
+// Initialize Firebase Auth with React Native persistence.
+// For Firebase v12.1.0, we'll use the standard approach
+// Firebase will automatically use AsyncStorage for persistence on React Native
+
+let auth: Auth;
 
 try {
-  // Initialize auth - Firebase will use default persistence for the platform
+  // Initialize auth - Firebase will use default React Native persistence
+  auth = initializeAuth(app);
+} catch {
+  // If already initialized, just return the existing instance.
   auth = getAuth(app);
-  
-  // For Firebase v9+, persistence is often handled automatically
-  // The warning about AsyncStorage is informational and doesn't break functionality
-} catch (error) {
-  console.error('Firebase Auth initialization error:', error);
 }
 
 export { auth };

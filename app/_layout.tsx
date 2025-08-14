@@ -13,6 +13,9 @@ Sentry.init({
   },
 });
 
+// Initialize React Native Firebase
+import '../lib/firebaseNativeConfig';
+
 import React, { useEffect, useState } from 'react';
 import { Stack, useRouter } from 'expo-router';
 import { Text, View } from 'react-native';
@@ -23,6 +26,7 @@ import CustomSplashScreen from '../lib/components/SplashScreen';
 import ErrorBoundary from '../lib/components/ErrorBoundary';
 import * as Notifications from 'expo-notifications';
 import { registerPushToken } from '../lib/notifications/registerPushToken';
+import { initializeNotificationChannels } from '../lib/notificationService';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -222,17 +226,17 @@ export default function RootLayout() {
     return () => sub.remove();
   }, [router]);
 
-  // 2.6) Optional foreground banner policy
+  // 2.6) Foreground notification policy - enable for both platforms
   useEffect(() => {
     if (!(Notifications as any).__hookedHandlerSet) {
       (Notifications as any).__hookedHandlerSet = true;
       Notifications.setNotificationHandler({
         handleNotification: async () => ({
-          shouldShowAlert: true,
-          shouldPlaySound: false,
-          shouldSetBadge: false,
-          shouldShowBanner: true,
-          shouldShowList: true,
+          shouldShowAlert: true,   // Show notifications on both platforms
+          shouldPlaySound: true,   // Enable sound
+          shouldSetBadge: true,    // Keep badge
+          shouldShowBanner: true,  // Show banner
+          shouldShowList: true,    // Show in notification list
         }),
       });
     }
@@ -242,6 +246,8 @@ export default function RootLayout() {
   useEffect(() => {
     const initializeApp = async () => {
       try {
+        // Initialize notification channels for Android
+        await initializeNotificationChannels();
         
         // Simple loading delay
         await new Promise(resolve => setTimeout(resolve, 1000));

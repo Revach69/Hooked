@@ -6,6 +6,7 @@ import { useEffect, useState, useRef } from "react";
 import AnimatedArrow from "../components/AnimatedArrow";
 import Header from "../components/Header";
 import Collage from "../components/Collage";
+import Head from "next/head";
 
 export default function Home() {
   const [showHeadline, setShowHeadline] = useState(false);
@@ -31,6 +32,11 @@ export default function Home() {
 
   // Randomly select 3 images for the collage
   const selectedCollageImages = collageImages.slice(0, 3);
+  
+  // Debug logging
+  useEffect(() => {
+    console.log('Homepage: Selected collage images:', selectedCollageImages);
+  }, [selectedCollageImages]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -67,8 +73,17 @@ export default function Home() {
     };
   }, []);
   return (
-    <div className="dark-mode-bg">
-      {/* Hero Section */}
+    <>
+      <Head>
+        {/* Preload critical images */}
+        <link rel="preload" as="image" href="/Site Image.png" />
+        <link rel="preload" as="image" href="/Hooked Full Logo.png" />
+        <link rel="preload" as="image" href="/Collage1.JPG" />
+        <link rel="preload" as="image" href="/Collage2.JPG" />
+        <link rel="preload" as="image" href="/Collage3.JPG" />
+      </Head>
+      <div className="dark-mode-bg">
+        {/* Hero Section */}
       <section className="relative bg-gradient-to-r from-purple-500/90 to-pink-400/90 text-white min-h-screen flex flex-col pb-12 md:pb-0" style={{
       }}>
         {/* Header */}
@@ -256,7 +271,10 @@ export default function Home() {
           </div>
           
           {/* Collage of images */}
-          <div className="h-80 bg-white/10 rounded-xl p-4">
+          <div className="text-center mb-6 text-white/80 text-lg font-semibold">
+            Real connections happening at events
+          </div>
+          <div className="h-80 bg-white/10 rounded-xl p-4 border border-white/20">
             <Collage 
               className="h-full" 
               selectedImages={selectedCollageImages}
@@ -417,6 +435,7 @@ export default function Home() {
           </Link>
         </div>
       </section>
-    </div>
+      </div>
+    </>
   );
 }

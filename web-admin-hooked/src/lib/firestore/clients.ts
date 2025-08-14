@@ -1,28 +1,129 @@
-import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, orderBy } from 'firebase/firestore';
-import { db } from '@/lib/firebaseConfig';
+import { 
+  collection, 
+  doc, 
+  getDocs, 
+  getDoc, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  query, 
+  where, 
+  orderBy, 
+  serverTimestamp 
+} from 'firebase/firestore';
+import { db } from '../firebaseConfig';
 import type { AdminClient } from '@/types/admin';
 
-const COL = 'adminClients';
+export const AdminClientAPI = {
+  async create(data: Omit<AdminClient, 'id' | 'createdAt' | 'updatedAt'>): Promise<AdminClient> {
+    const docRef = await addDoc(collection(db, 'adminClients'), {
+      ...data,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    
+    return {
+      id: docRef.id,
+      ...data,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+  },
 
-export async function listClients(): Promise<AdminClient[]> {
-  const q = query(collection(db, COL), orderBy('updatedAt', 'desc'));
-  const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
-}
+  async getAll(): Promise<AdminClient[]> {
+    const q = query(
+      collection(db, 'adminClients'),
+      orderBy('createdAt', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as AdminClient[];
+  },
 
-export async function createClient(payload: Omit<AdminClient, 'id' | 'createdAt' | 'updatedAt'>) {
-  const ref = await addDoc(collection(db, COL), {
-    ...payload,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  });
-  return ref.id;
-}
+  async get(id: string): Promise<AdminClient | null> {
+    const docRef = doc(db, 'adminClients', id);
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+      return { id: docSnap.id, ...docSnap.data() } as AdminClient;
+    }
+    return null;
+  },
 
-export async function updateClient(id: string, partial: Partial<AdminClient>) {
-  await updateDoc(doc(db, COL, id), { ...partial, updatedAt: Date.now() });
-}
+  async update(id: string, data: Partial<AdminClient>): Promise<void> {
+    const docRef = doc(db, 'adminClients', id);
+    await updateDoc(docRef, { 
+      ...data, 
+      updatedAt: serverTimestamp() 
+    });
+  },
 
-export async function deleteClient(id: string) {
-  await deleteDoc(doc(db, COL, id));
-}
+  async delete(id: string): Promise<void> {
+    const docRef = doc(db, 'adminClients', id);
+    await deleteDoc(docRef);
+  },
+
+  async filter(filters: Partial<AdminClient> = {}): Promise<AdminClient[]> {
+    let q: any = collection(db, 'adminClients');
+    
+    if (filters.status) {
+      q = query(q, where('status', '==', filters.status));
+    }
+    if (filters.type) {
+      q = query(q, where('type', '==', filters.type));
+    }
+    if (filters.source) {
+      q = query(q, where('source', '==', filters.source));
+    }
+    if (filters.eventKind) {
+      q = query(q, where('eventKind', '==', filters.eventKind));
+    }
+    
+    q = query(q, orderBy('createdAt', 'desc'));
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...(doc.data() as any)
+    })) as AdminClient[];
+  },
+
+  async linkForm(clientId: string, formId: string): Promise<void> {
+    const docRef = doc(db, 'adminClients', clientId);
+    await updateDoc(docRef, { 
+      linkedFormId: formId,
+      organizerFormSent: 'Yes',
+      updatedAt: serverTimestamp() 
+    });
+  },
+
+  async unlinkForm(clientId: string): Promise<void> {
+    const docRef = doc(db, 'adminClients', clientId);
+    await updateDoc(docRef, { 
+      linkedFormId: null,
+      organizerFormSent: 'No',
+      updatedAt: serverTimestamp() 
+    });
+  },
+
+  async linkEvent(clientId: string, eventId: string): Promise<void> {
+    const docRef = doc(db, 'adminClients', clientId);
+    await updateDoc(docRef, { 
+      linkedEventId: eventId,
+      eventCardCreated: 'Yes',
+      updatedAt: serverTimestamp() 
+    });
+  },
+
+  async unlinkEvent(clientId: string): Promise<void> {
+    const docRef = doc(db, 'adminClients', clientId);
+    await updateDoc(docRef, { 
+      linkedEventId: null,
+      eventCardCreated: 'No',
+      updatedAt: serverTimestamp() 
+    });
+  }
+};

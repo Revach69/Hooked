@@ -53,9 +53,19 @@ service cloud.firestore {
       // ✅ Anyone can create messages
       allow create: if true;
       
-      // ✅ Users can update their own messages
+      // ✅ Allow message updates for:
+      // - Sender can update their own messages (editing)
+      // - Recipient can update messages sent to them (marking as seen/read)
       allow update: if 
-        resource.data.from_profile_id == request.resource.data.from_profile_id;
+        // Sender updating their own message
+        resource.data.from_profile_id == request.resource.data.from_profile_id ||
+        // Recipient marking message as seen/read (only allow seen/is_read/seen_at fields)
+        (resource.data.to_profile_id == request.resource.data.to_profile_id &&
+         // Ensure core message data doesn't change
+         resource.data.event_id == request.resource.data.event_id &&
+         resource.data.from_profile_id == request.resource.data.from_profile_id &&
+         resource.data.to_profile_id == request.resource.data.to_profile_id &&
+         resource.data.content == request.resource.data.content);
       
       // ✅ Users can delete their own messages
       // Simplified: allow all message deletions since mobile app doesn't use Firebase Auth
@@ -130,6 +140,44 @@ service cloud.firestore {
       allow delete: if request.auth != null;
     }
 
+    // ===== BLOCKED MATCHES COLLECTION =====
+    match /blocked_matches/{blockedMatchId} {
+      // ✅ Anyone can read blocked matches (for mobile app filtering)
+      allow read: if true;
+      
+      // ✅ Anyone can create blocked match records (mobile app blocking)
+      allow create: if 
+        // Ensure required fields are present
+        request.resource.data.event_id is string &&
+        request.resource.data.blocker_session_id is string &&
+        request.resource.data.blocked_session_id is string;
+      
+      // ✅ Users can delete their own blocked matches
+      allow delete: if true; // Simplified for mobile app
+      
+      // ✅ No updates allowed (blocking is create/delete only)
+      allow update: if false;
+    }
+
+    // ===== MUTED MATCHES COLLECTION =====
+    match /muted_matches/{mutedMatchId} {
+      // ✅ Anyone can read muted matches (for mobile app filtering)
+      allow read: if true;
+      
+      // ✅ Anyone can create muted match records (mobile app muting)
+      allow create: if 
+        // Ensure required fields are present
+        request.resource.data.event_id is string &&
+        request.resource.data.muter_session_id is string &&
+        request.resource.data.muted_session_id is string;
+      
+      // ✅ Users can delete their own muted matches
+      allow delete: if true; // Simplified for mobile app
+      
+      // ✅ No updates allowed (muting is create/delete only)
+      allow update: if false;
+    }
+
     // ===== USERS COLLECTION =====
     match /users/{userId} {
       // ✅ Only authenticated users can access user data
@@ -157,26 +205,79 @@ service cloud.firestore {
       // ✅ Only authenticated users (admins) can delete clients
       allow delete: if request.auth != null;
     }
+
+    // ===== EVENT FORMS COLLECTION =====
+    match /eventForms/{formId} {
+      // ✅ Only authenticated users (admins) can read event forms
+      allow read: if request.auth != null;
+      
+      // ✅ Anyone can create event forms (website submissions)
+      allow create: if 
+        // Ensure required fields are present
+        request.resource.data.fullName is string &&
+        request.resource.data.email is string &&
+        request.resource.data.phone is string &&
+        request.resource.data.eventAddress is string &&
+        request.resource.data.venueName is string &&
+        request.resource.data.eventType is string &&
+        request.resource.data.expectedAttendees is string &&
+        request.resource.data.eventName is string &&
+        request.resource.data.eventDate is string &&
+        request.resource.data.posterPreference is string &&
+        request.resource.data.eventVisibility is string &&
+        request.resource.data.status is string &&
+        // Ensure status is valid
+        request.resource.data.status in ['New', 'Reviewed', 'Contacted', 'Converted', 'Rejected'] &&
+        // Ensure timestamps are present
+        request.resource.data.createdAt is timestamp &&
+        request.resource.data.updatedAt is timestamp;
+      
+      // ✅ Only authenticated users (admins) can update event forms
+      allow update: if request.auth != null;
+      
+      // ✅ Only authenticated users (admins) can delete event forms
+      allow delete: if request.auth != null;
+    }
     
     // ===== PUSH TOKENS COLLECTION =====
     match /push_tokens/{tokenId} {
-      // ✅ Anyone can create push tokens (mobile app registration)
-      allow create: if 
+      // ✅ Anyone can create/update push tokens (mobile app registration)
+      // Using merge: true in Firebase Functions, so this handles both create and update
+      allow write: if 
         // Ensure required fields are present
         request.resource.data.token is string &&
         request.resource.data.platform is string &&
-        request.resource.data.session_id is string &&
-        request.resource.data.created_at is string;
+        request.resource.data.sessionId is string; // Note: using camelCase to match Firebase Functions
       
-      // ✅ Only authenticated users (admins) can read push tokens
-      allow read: if true; // Allow mobile app to read reports
+      // ✅ Anyone can read push tokens (for notification system)
+      allow read: if true;
       
-      // ✅ Users can update their own push tokens by session_id
-      allow update: if 
-        resource.data.session_id == request.resource.data.session_id;
+      // ✅ Anyone can delete push tokens (for cleanup purposes)
+      allow delete: if true;
+    }
+    
+    // ===== NOTIFICATIONS LOG COLLECTION =====
+    match /notifications_log/{logId} {
+      // ✅ Allow Firebase Functions to read/write notification logs (idempotency)
+      allow read, write: if true;
+    }
+    
+    // ===== ANALYTICS COLLECTION =====
+    match /analytics/{analyticsId} {
+      // ✅ Allow Firebase Functions to write analytics data
+      allow write: if true;
       
-      // ✅ Users can delete their own push tokens by session_id
-      allow delete: if true; // Allow deletion for cleanup purposes
+      // ✅ Only authenticated users (admins) can read analytics
+      allow read: if request.auth != null;
+    }
+    
+    // ===== USER SAVED PROFILES COLLECTION =====
+    match /user_saved_profiles/{profileId} {
+      // ✅ Only authenticated users can access user saved profiles
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.user_id;
+      
+      // ✅ Allow Firebase Functions to create saved profiles
+      allow create: if true;
     }
     
     // ===== DEFAULT RULE =====

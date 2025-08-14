@@ -32,12 +32,15 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.savePushToken = exports.onMessageCreate = exports.onMutualLike = exports.notify = exports.verifyAdminStatus = exports.setAdminClaim = exports.getUserSavedProfiles = exports.saveUserProfile = exports.sendProfileExpirationNotifications = exports.cleanupExpiredProfiles = void 0;
 const functions = __importStar(require("firebase-functions"));
 const admin = __importStar(require("firebase-admin"));
 const path = __importStar(require("path"));
-const fetch = require('node-fetch');
+const node_fetch_1 = __importDefault(require("node-fetch"));
 // Initialize Firebase Admin with service account
 const serviceAccount = require(path.join(__dirname, '../hooked-69-firebase-adminsdk-fbsvc-c7009d8539.json'));
 admin.initializeApp({
@@ -364,7 +367,6 @@ exports.verifyAdminStatus = functions
 const REGION = FUNCTION_REGION;
 // Shared helpers for push notifications
 async function fetchSessionTokens(sessionId) {
-    console.log(`Fetching tokens for sessionId: ${sessionId}`);
     const snap = await admin.firestore()
         .collection('push_tokens')
         .where('sessionId', '==', sessionId)
@@ -375,28 +377,24 @@ async function fetchSessionTokens(sessionId) {
         if (typeof (data === null || data === void 0 ? void 0 : data.token) === 'string' && data.token)
             tokens.push(data.token);
     });
-    console.log(`Found ${tokens.length} tokens for sessionId: ${sessionId}`);
     return tokens;
 }
 async function sendExpoPush(toTokens, payload) {
     if (!toTokens.length) {
-        console.log('No tokens to send push to');
         return { sent: 0, results: [] };
     }
-    console.log(`Sending push to ${toTokens.length} tokens:`, payload);
     const chunks = [];
     for (let i = 0; i < toTokens.length; i += 100)
         chunks.push(toTokens.slice(i, i + 100));
     const results = [];
     for (const chunk of chunks) {
         const messages = chunk.map(to => (Object.assign({ to, sound: 'default' }, payload)));
-        const resp = await fetch(EXPO_PUSH_URL, {
+        const resp = await (0, node_fetch_1.default)(EXPO_PUSH_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(messages),
         });
         const json = await resp.json().catch(() => null);
-        console.log(`Expo push response: ${resp.status}`, json);
         results.push({ status: resp.status, json });
     }
     return { sent: toTokens.length, results };
@@ -454,7 +452,7 @@ exports.notify = functions
         const results = [];
         for (const chunk of chunks) {
             const messages = chunk.map(to => ({ to, title, body, data, sound: 'default' }));
-            const resp = await fetch(EXPO_PUSH_URL, {
+            const resp = await (0, node_fetch_1.default)(EXPO_PUSH_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(messages),
@@ -517,7 +515,6 @@ exports.onMessageCreate = functions
     .region(REGION)
     .firestore.document('messages/{messageId}')
     .onCreate(async (snap, context) => {
-    var _a;
     const d = snap.data();
     const messageId = (d === null || d === void 0 ? void 0 : d.id) || context.params.messageId;
     const eventId = d === null || d === void 0 ? void 0 : d.event_id;
@@ -542,10 +539,9 @@ exports.onMessageCreate = functions
     else {
         const prof = await admin.firestore()
             .collection('event_profiles')
-            .where('id', '==', toProfile)
-            .limit(1)
+            .doc(toProfile)
             .get();
-        const rec = (_a = prof.docs[0]) === null || _a === void 0 ? void 0 : _a.data();
+        const rec = prof.data();
         toSession = (rec === null || rec === void 0 ? void 0 : rec.session_id) || null;
     }
     if (!toSession)
@@ -563,24 +559,19 @@ exports.onMessageCreate = functions
 exports.savePushToken = functions
     .region(FUNCTION_REGION)
     .https.onCall(async (data, context) => {
-    console.log('savePushToken called with data:', data);
     const token = data === null || data === void 0 ? void 0 : data.token;
     const platform = data === null || data === void 0 ? void 0 : data.platform;
     const sessionId = data === null || data === void 0 ? void 0 : data.sessionId;
     if (typeof token !== 'string' || !token.trim()) {
-        console.log('Invalid token:', token);
         throw new functions.https.HttpsError('invalid-argument', 'token is required');
     }
     if (platform !== 'ios' && platform !== 'android') {
-        console.log('Invalid platform:', platform);
         throw new functions.https.HttpsError('invalid-argument', "platform must be 'ios' or 'android'");
     }
     if (typeof sessionId !== 'string' || !sessionId.trim()) {
-        console.log('Invalid sessionId:', sessionId);
         throw new functions.https.HttpsError('invalid-argument', 'sessionId is required');
     }
     const docId = `${sessionId}_${platform}`;
-    console.log(`Saving push token with docId: ${docId}`);
     await admin.firestore().collection('push_tokens').doc(docId).set({
         token,
         platform,
@@ -588,7 +579,6 @@ exports.savePushToken = functions
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
-    console.log(`Successfully saved push token for sessionId: ${sessionId}, platform: ${platform}`);
     return { ok: true };
 });
 //# sourceMappingURL=index.js.map

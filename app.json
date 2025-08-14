@@ -23,15 +23,14 @@
         "applinks:www.hooked-app.com"
       ],
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Hooked needs camera access to let you take profile photos for your dating profile at events.",
+        "NSPhotoLibraryUsageDescription": "Hooked needs photo library access to let you select existing photos for your dating profile at events.",
+        "NSUserNotificationUsageDescription": "Hooked needs notification access to send you alerts about new matches and messages at events."
       },
       "entitlements": {
         "aps-environment": "production"
       },
-      "podfileProperties": {
-        "ios.useModularHeaders": "true",
-        "newArchEnabled": "false"
-      }
     },
     "android": {
       "adaptiveIcon": {
@@ -89,7 +88,9 @@
         "expo-build-properties",
         {
           "ios": {
-            "useFrameworks": "static"
+            "useFrameworks": "static",
+            "useModularHeaders": true,
+            "newArchEnabled": false
           }
         }
       ]
@@ -108,6 +109,9 @@
       "router": {},
       "eas": {
         "projectId": "7a1de260-e3cb-4cbb-863c-1557213d69f0"
+      },
+      "updates": {
+        "url": "https://u.expo.dev/7a1de260-e3cb-4cbb-863c-1557213d69f0"
       }
     }
   }

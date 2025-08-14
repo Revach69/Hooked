@@ -52,6 +52,7 @@ export default function Consent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isReuploadingPhoto, setIsReuploadingPhoto] = useState(false);
+  const [tempPhotoUri, setTempPhotoUri] = useState<string | null>(null);
   const [showAgePicker, setShowAgePicker] = useState(false);
   const [rememberProfile, setRememberProfile] = useState(false);
 
@@ -266,6 +267,9 @@ export default function Consent() {
       return;
     }
 
+    // Show thumbnail immediately
+    setTempPhotoUri(asset.uri);
+    
     setIsUploadingPhoto(true);
     
     try {
@@ -308,7 +312,8 @@ export default function Consent() {
             }
           }
           
-          // Success - break out of retry loop
+          // Clear temp photo and success - break out of retry loop
+          setTempPhotoUri(null);
           break;
         } catch (uploadError) {
           uploadAttempts++;
@@ -341,6 +346,8 @@ export default function Consent() {
       }
       
       Alert.alert("Upload Failed", `Failed to upload photo: ${errorMessage}. Please try again.`);
+      // Clear temp photo on error
+      setTempPhotoUri(null);
     } finally {
       setIsUploadingPhoto(false);
     }
@@ -582,6 +589,17 @@ export default function Consent() {
       marginTop: 8,
       writingDirection: 'ltr',
       textAlign: 'center',
+    },
+    uploadOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.3)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderRadius: 50,
     },
     photoRequirements: {
       fontSize: 12,
@@ -948,7 +966,20 @@ export default function Consent() {
                 accessibilityLabel="Upload Profile Photo"
                 accessibilityHint="Tap to upload a profile photo from camera or gallery"
               >
-                {formData.profile_photo_url ? (
+                {isUploadingPhoto && tempPhotoUri ? (
+                  <View style={styles.photoContainer}>
+                    <Image
+                      source={{ uri: tempPhotoUri }}
+                      onError={() => {}}
+                      style={styles.profilePhoto}
+                      resizeMode="cover"
+                    />
+                    {/* Upload indicator overlay */}
+                    <View style={styles.uploadOverlay}>
+                      <ActivityIndicator size="small" color="white" />
+                    </View>
+                  </View>
+                ) : formData.profile_photo_url ? (
                   <Image
                     source={{ uri: formData.profile_photo_url }}
                     onError={() => {}}

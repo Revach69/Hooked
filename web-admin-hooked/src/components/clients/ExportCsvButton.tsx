@@ -4,6 +4,32 @@ import { Button } from '@/components/ui/button';
 import { Download } from 'lucide-react';
 import type { AdminClient } from '@/types/admin';
 
+// Firestore timestamp utility
+const formatTimestamp = (timestamp: any): string => {
+  if (!timestamp) return '';
+  
+  try {
+    let date: Date;
+    
+    // Handle Firestore Timestamp objects
+    if (timestamp.toDate && typeof timestamp.toDate === 'function') {
+      date = timestamp.toDate();
+    } else if (timestamp instanceof Date) {
+      date = timestamp;
+    } else if (typeof timestamp === 'number') {
+      date = new Date(timestamp);
+    } else if (typeof timestamp === 'string') {
+      date = new Date(timestamp);
+    } else {
+      return '';
+    }
+    
+    return date.toLocaleDateString();
+  } catch (error) {
+    return '';
+  }
+};
+
 interface ExportCsvButtonProps {
   clients: AdminClient[];
   disabled?: boolean;
@@ -45,8 +71,8 @@ export function ExportCsvButton({ clients, disabled = false }: ExportCsvButtonPr
       client.status,
       client.source || '',
       client.description || '',
-      new Date(client.createdAt).toLocaleDateString(),
-      new Date(client.updatedAt).toLocaleDateString()
+      formatTimestamp(client.createdAt),
+      formatTimestamp(client.updatedAt)
     ]);
 
     const csvContent = [

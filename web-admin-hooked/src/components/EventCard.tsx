@@ -119,7 +119,24 @@ export default function EventCard({
     generateQRCode();
   }, []);
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string, timezone?: string) => {
+    if (timezone) {
+      try {
+        // Convert UTC time to the event's timezone for display
+        const utcDate = new Date(dateString);
+        return utcDate.toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+          timeZone: timezone
+        });
+      } catch (error) {
+        console.warn('Timezone formatting failed, using fallback:', error);
+      }
+    }
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
@@ -214,12 +231,12 @@ export default function EventCard({
                   <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
                     <Clock size={16} />
                     <span className="font-medium">Starts:</span>
-                    <span>{formatDate(event.starts_at)}</span>
+                    <span>{formatDate(event.starts_at, event.timezone)}</span>
                   </div>
                   <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
                     <Calendar size={16} />
                     <span className="font-medium">Expires:</span>
-                    <span>{formatDate(event.expires_at)}</span>
+                    <span>{formatDate(event.expires_at, event.timezone)}</span>
                   </div>
                 </div>
               </div>

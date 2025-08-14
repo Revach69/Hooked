@@ -6,7 +6,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 // Utility function to format dates with proper timezone handling
-export function formatDateWithTimezone(dateString: string, options?: Intl.DateTimeFormatOptions) {
+export function formatDateWithTimezone(dateString: string, timezone?: string, options?: Intl.DateTimeFormatOptions) {
   if (!dateString) return 'Invalid Date';
   
   try {
@@ -21,7 +21,7 @@ export function formatDateWithTimezone(dateString: string, options?: Intl.DateTi
       hour: '2-digit',
       minute: '2-digit',
       hour12: false,
-      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone // Use local timezone
+      timeZone: timezone || Intl.DateTimeFormat().resolvedOptions().timeZone // Use event timezone or local timezone
     };
     
     return date.toLocaleDateString('en-US', { ...defaultOptions, ...options });

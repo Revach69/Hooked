@@ -1,7 +1,7 @@
 {
   "name": "hooked",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
@@ -76,5 +76,8 @@
         "listUnknownPackages": false
       }
     }
+  },
+  "overrides": {
+    "@react-native-async-storage/async-storage": "2.1.2"
   }
 }

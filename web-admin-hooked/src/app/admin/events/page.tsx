@@ -2,11 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { EventAPI, EventProfile, Like, Message, type Event } from '@/lib/firebaseApi';
+import { AdminClientAPI } from '@/lib/firestore/clients';
+import type { AdminClient } from '@/types/admin';
 import { 
   Plus,
   Download,
   FileText,
   User,
+  Users,
   ChevronDown,
   ChevronUp,
   BarChart3,
@@ -28,6 +31,7 @@ const EventCard = dynamic(() => import('@/components/EventCard'), { ssr: false }
 const AnalyticsModal = dynamic(() => import('@/components/AnalyticsModal'), { ssr: false });
 const EventForm = dynamic(() => import('@/components/EventForm'), { ssr: false });
 const ReportsModal = dynamic(() => import('@/components/ReportsModal'), { ssr: false });
+const LinkEventModal = dynamic(() => import('@/components/LinkEventModal').then(mod => ({ default: mod.LinkEventModal })), { ssr: false });
 
 // Inline QR Code Component
 function QRCodeGenerator({ joinLink, eventCode }: { joinLink: string; eventCode: string }) {
@@ -92,10 +96,14 @@ export default function EventsPage() {
   const [analyticsEvent, setAnalyticsEvent] = useState<{ id: string; name: string } | null>(null);
   const [showReports, setShowReports] = useState(false);
   const [reportsEvent, setReportsEvent] = useState<{ id: string; name: string } | null>(null);
+  const [showLinkEvent, setShowLinkEvent] = useState(false);
+  const [linkingEvent, setLinkingEvent] = useState<Event | null>(null);
+  const [clients, setClients] = useState<AdminClient[]>([]);
 
   // Load events on mount
   useEffect(() => {
     loadEvents();
+    loadClients();
   }, []);
 
   const loadEvents = async () => {
@@ -107,6 +115,15 @@ export default function EventsPage() {
       // Error loading events
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadClients = async () => {
+    try {
+      const allClients = await AdminClientAPI.getAll();
+      setClients(allClients);
+    } catch (error) {
+      console.error('Failed to load clients:', error);
     }
   };
 
@@ -173,6 +190,20 @@ export default function EventsPage() {
   const handleReports = (eventId: string, eventName: string) => {
     setReportsEvent({ id: eventId, name: eventName });
     setShowReports(true);
+  };
+
+  const handleLinkEvent = (event: Event) => {
+    setLinkingEvent(event);
+    setShowLinkEvent(true);
+  };
+
+  const handleLinkEventToClient = async (eventId: string, clientId: string) => {
+    try {
+      await AdminClientAPI.linkEvent(clientId, eventId);
+      await loadEvents(); // Refresh events to show updated state
+    } catch (error) {
+      console.error('Failed to link event to client:', error);
+    }
   };
 
   const handleDownloadData = async (eventId: string) => {
@@ -332,8 +363,8 @@ export default function EventsPage() {
     return { active, future, past };
   };
 
-  const formatDate = (dateString: string) => {
-    return formatDateWithTimezone(dateString);
+  const formatDate = (dateString: string, timezone?: string) => {
+    return formatDateWithTimezone(dateString, timezone);
   };
 
   const renderEventCard = (event: Event) => {
@@ -343,40 +374,32 @@ export default function EventsPage() {
     return (
       <div key={event.id} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
         {/* Collapsed card content */}
-        <div className="p-6">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <div className="flex items-center space-x-3 mb-2">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {event.name}
-                </h3>
-                <span className={`${status.bgColor} ${status.color} px-3 py-1 rounded-full text-sm font-medium`}>
-                  {status.status}
-                </span>
-              </div>
-              
-              <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400">
-                <div className="flex items-center space-x-1">
-                  <Calendar className="h-4 w-4" />
-                  <span>{formatDate(event.starts_at)}</span>
-                </div>
-                <div className="flex items-center space-x-1">
-                  <MapPin className="h-4 w-4" />
-                  <span>{event.location}</span>
-                </div>
-                <div className="flex items-center space-x-1">
-                  <span>Code: <code className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">{event.event_code}</code></span>
-                </div>
-              </div>
+        <div 
+          className="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+          onClick={() => toggleEventExpansion(event.id)}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                {event.name}
+              </h3>
+              <span className={`${status.bgColor} ${status.color} px-3 py-1 rounded-full text-sm font-medium`}>
+                {status.status}
+              </span>
             </div>
-
-            <div className="flex flex-col space-y-2">
-              <button
-                onClick={() => toggleEventExpansion(event.id)}
-                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-              >
-                {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-              </button>
+            
+            <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400">
+              <div className="flex items-center space-x-1">
+                <Calendar className="h-4 w-4" />
+                <span>{formatDate(event.starts_at, event.timezone)}</span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <MapPin className="h-4 w-4" />
+                <span>{event.location}</span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <span>Code: <code className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">{event.event_code}</code></span>
+              </div>
             </div>
           </div>
         </div>
@@ -412,12 +435,12 @@ export default function EventsPage() {
                   <div className="flex items-center gap-3 text-gray-700 dark:text-gray-300">
                     <Clock className="h-4 w-4" />
                     <span className="font-medium">Starts:</span>
-                    <span>{formatDate(event.starts_at)}</span>
+                    <span>{formatDate(event.starts_at, event.timezone)}</span>
                   </div>
                   <div className="flex items-center gap-3 text-gray-700 dark:text-gray-300">
                     <Calendar className="h-4 w-4" />
                     <span className="font-medium">Expires:</span>
-                    <span>{formatDate(event.expires_at)}</span>
+                    <span>{formatDate(event.expires_at, event.timezone)}</span>
                   </div>
                   {event.event_type && (
                     <div className="flex items-center gap-3 text-gray-700 dark:text-gray-300">
@@ -512,6 +535,14 @@ export default function EventsPage() {
                   </button>
                   
                   <button
+                    onClick={() => handleLinkEvent(event)}
+                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm"
+                  >
+                    <Users className="h-4 w-4" />
+                    Link
+                  </button>
+                  
+                  <button
                     onClick={() => handleDeleteEvent(event.id)}
                     className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
                   >
@@ -581,7 +612,7 @@ export default function EventsPage() {
   const categorizedEvents = categorizeEvents();
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-6xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -661,6 +692,19 @@ export default function EventsPage() {
             setShowReports(false);
             setReportsEvent(null);
           }}
+        />
+      )}
+
+      {showLinkEvent && linkingEvent && (
+        <LinkEventModal
+          event={linkingEvent}
+          clients={clients}
+          isOpen={showLinkEvent}
+          onClose={() => {
+            setShowLinkEvent(false);
+            setLinkingEvent(null);
+          }}
+          onLink={handleLinkEventToClient}
         />
       )}
     </div>

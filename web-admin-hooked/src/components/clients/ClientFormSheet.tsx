@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter, SheetDescription } from '@/components/ui/sheet';
-import { createClient, updateClient } from '@/lib/firestore/clients';
+import { AdminClientAPI } from '@/lib/firestore/clients';
 import type { AdminClient } from '@/types/admin';
 
 interface ClientFormSheetProps {
@@ -172,9 +172,9 @@ export function ClientFormSheet({ open, onOpenChange, client, onSuccess }: Clien
       };
 
       if (client) {
-        await updateClient(client.id, payload);
+        await AdminClientAPI.update(client.id, payload);
       } else {
-        await createClient(payload);
+        await AdminClientAPI.create(payload);
       }
 
       onSuccess();

@@ -1,117 +1,74 @@
 'use client';
 
-import { useAuth } from '@/contexts/AuthContext';
-import { usePathname, useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { LogOut, Calendar, Users } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { Calendar, Users, FileText, LogOut } from 'lucide-react';
+import { AuthContext } from '@/contexts/AuthContext';
+import { useContext } from 'react';
 
 export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { user, loading: authLoading, logout } = useAuth();
   const pathname = usePathname();
-  const router = useRouter();
+  const { signOut } = useContext(AuthContext);
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-      router.push('/admin/login');
-    } catch (error) {
-      // Logout error
-    }
-  };
-
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-pink-100 to-purple-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-pink-100 to-purple-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-            Access Denied
-          </h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
-            Please log in to access the admin panel.
-          </p>
-          <Button onClick={() => router.push('/admin/login')}>
-            Go to Login
-          </Button>
-        </div>
-      </div>
-    );
-  }
+  const navigation = [
+    { name: 'Events', href: '/admin/events', icon: Calendar },
+    { name: 'Clients', href: '/admin/clients', icon: Users },
+    { name: 'Forms', href: '/admin/forms', icon: FileText },
+  ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-100 to-purple-100 dark:from-gray-900 dark:to-gray-800">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
       <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            {/* Left side - Logo and Navigation */}
+        <div className="container mx-auto px-4">
+          <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-8">
-              {/* Logo */}
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-gradient-to-r from-pink-500 to-purple-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-sm">H</span>
-                </div>
-                <span className="text-xl font-bold text-gray-900 dark:text-white">
-                  Event Management
-                </span>
-              </div>
-
-              {/* Navigation */}
-              <nav className="flex space-x-1">
-                <Link href="/admin/events">
-                  <Button
-                    variant={pathname === '/admin/events' ? 'default' : 'ghost'}
-                    className="flex items-center space-x-2"
-                  >
-                    <Calendar className="h-4 w-4" />
-                    <span>Events</span>
-                  </Button>
-                </Link>
-                <Link href="/admin/clients">
-                  <Button
-                    variant={pathname === '/admin/clients' ? 'default' : 'ghost'}
-                    className="flex items-center space-x-2"
-                  >
-                    <Users className="h-4 w-4" />
-                    <span>Clients</span>
-                  </Button>
-                </Link>
+              <Link href="/admin/events" className="text-xl font-bold text-gray-900 dark:text-white">
+                Hooked Admin
+              </Link>
+              
+              <nav className="flex space-x-4">
+                {navigation.map((item) => {
+                  const isActive = pathname === item.href;
+                  return (
+                    <Link
+                      key={item.name}
+                      href={item.href}
+                      className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                        isActive
+                          ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
+                          : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700'
+                      }`}
+                    >
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.name}</span>
+                    </Link>
+                  );
+                })}
               </nav>
             </div>
-
-            {/* Right side - User menu */}
-            <div className="flex items-center space-x-4">
-              <div className="text-sm text-gray-700 dark:text-gray-300">
-                {user.email}
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleLogout}
-                className="flex items-center space-x-2"
-              >
-                <LogOut className="h-4 w-4" />
-                <span>Logout</span>
-              </Button>
-            </div>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={signOut}
+              className="flex items-center space-x-2"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>Logout</span>
+            </Button>
           </div>
         </div>
       </header>
 
-      {/* Main content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Main Content */}
+      <main className="bg-gray-50 dark:bg-gray-900 min-h-[calc(100vh-4rem)]">
         {children}
       </main>
     </div>

@@ -36,10 +36,14 @@ export default function Profile() {
   const [currentEvent, setCurrentEvent] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [tempPhotoUri, setTempPhotoUri] = useState<string | null>(null);
   const [aboutMe, setAboutMe] = useState(profile?.about_me || '');
   const [editingAboutMe, setEditingAboutMe] = useState(false);
   const [height, setHeight] = useState(profile?.height_cm ? String(profile.height_cm) : '');
   const [editingHeight, setEditingHeight] = useState(false);
+  const [heightUnit, setHeightUnit] = useState<'cm' | 'feet'>('cm');
+  const [feet, setFeet] = useState('');
+  const [inches, setInches] = useState('');
   const [interests, setInterests] = useState(profile?.interests || []);
   const [showInterests, setShowInterests] = useState(false);
   const [showExtendedInterests, setShowExtendedInterests] = useState(false);
@@ -190,74 +194,177 @@ export default function Profile() {
 
   const handlePhotoUpload = async () => {
     try {
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      Alert.alert(
+        "Choose Photo",
+        "How would you like to add your profile photo?",
+        [
+          {
+            text: "Take Photo",
+            onPress: () => handleCameraCapture()
+          },
+          {
+            text: "Choose from Gallery",
+            onPress: () => handleGalleryPick()
+          },
+          {
+            text: "Cancel",
+            style: "cancel"
+          }
+        ]
+      );
+    } catch {
+      Alert.alert("Error", "Failed to open photo options. Please try again.");
+    }
+  };
+
+  const handleCameraCapture = async () => {
+    try {
+      // Check current camera permissions
+      const permissionResult = await ImagePicker.getCameraPermissionsAsync();
       
       if (permissionResult.granted === false) {
-        Alert.alert("Permission Required", "Permission to access camera roll is required!");
-        return;
+        // Request camera permissions
+        const requestResult = await ImagePicker.requestCameraPermissionsAsync();
+        
+        if (requestResult.granted === false) {
+          Alert.alert("Permission Required", "Camera permission is required to take a photo!");
+          return;
+        }
       }
 
-      // Try with standard settings first
-      let result = await ImagePicker.launchImageLibraryAsync({
+      const result = await ImagePicker.launchCameraAsync({
         mediaTypes: 'images',
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.8,
+        quality: 0.6, // Reduced quality for faster upload
         allowsMultipleSelection: false,
         base64: false,
         exif: false,
       });
 
-      // If the first attempt fails or is canceled, try with different settings
-      if (result.canceled) {
-        // Try without editing first, then we can handle cropping differently
-        result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: 'images',
-          allowsEditing: false,
-          quality: 0.8,
-          allowsMultipleSelection: false,
-          base64: false,
-          exif: false,
-        });
+      if (!result.canceled && result.assets && result.assets[0]) {
+        await processImageAsset(result.assets[0]);
       }
+    } catch {
+      Alert.alert("Error", "Failed to capture photo. Please try again.");
+    }
+  };
 
-      if (!result.canceled && result.assets[0]) {
-        const asset = result.assets[0];
+  const handleGalleryPick = async () => {
+    try {
+      // Check current media library permissions
+      const permissionResult = await ImagePicker.getMediaLibraryPermissionsAsync();
+      
+      if (permissionResult.granted === false) {
+        // Request media library permissions
+        const requestResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
         
-
-        
-        if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
-          Alert.alert("File Too Large", "Image must be smaller than 10MB.");
+        if (requestResult.granted === false) {
+          Alert.alert("Permission Required", "Permission to access camera roll is required!");
           return;
         }
+      }
 
-        setIsUploadingPhoto(true);
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: 'images',
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.6, // Reduced quality for faster upload
+        allowsMultipleSelection: false,
+        base64: false,
+        exif: false,
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        await processImageAsset(result.assets[0]);
+      }
+    } catch {
+      Alert.alert("Error", "Failed to pick image. Please try again.");
+    }
+  };
+
+  const processImageAsset = async (asset: any) => {
+    // Validate file size (10MB limit)
+    if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
+      Sentry.captureException(new Error(`File too large: ${asset.fileSize}`));
+      Alert.alert("File Too Large", "Image must be smaller than 10MB.");
+      return;
+    }
+
+    // Show thumbnail immediately
+    setTempPhotoUri(asset.uri);
+    
+    // Start upload in background
+    setIsUploadingPhoto(true);
+    
+    try {
+      // Check network connectivity before upload
+      const { checkNetworkConnectivityWithTimeout } = await import('../lib/utils');
+      const isConnected = await checkNetworkConnectivityWithTimeout(5000);
+      
+      if (!isConnected) {
+        throw new Error('No internet connection. Please check your network and try again.');
+      }
+
+      // Create file object for upload with proper naming
+      const fileObject = {
+        uri: asset.uri,
+        name: `profile-photo-${Date.now()}.jpg`,
+        type: 'image/jpeg',
+        fileSize: asset.fileSize
+      };
+
+      // Upload to Firebase Storage with retry logic
+      let uploadAttempts = 0;
+      const maxAttempts = 3;
+      
+      while (uploadAttempts < maxAttempts) {
         try {
-          // Create file object for processing
-          const fileObject = {
-            uri: asset.uri,
-            name: asset.fileName || `profile-photo-${Date.now()}.jpg`,
-            type: asset.type || 'image/jpeg',
-            fileSize: asset.fileSize
-          };
-
-          // Upload directly to Firebase Storage (no Vision API)
-                     const { file_url } = await StorageAPI.uploadFile(fileObject);
+          const { file_url } = await StorageAPI.uploadFile(fileObject);
           
           // Update profile with new photo
           await EventProfileAPI.update(profile.id, { profile_photo_url: file_url });
           setProfile((prev: any) => ({ ...prev, profile_photo_url: file_url }));
           await AsyncStorageUtils.setItem('currentProfilePhotoUrl', file_url);
-        } catch (error) {
-      Sentry.captureException(error);
-          Alert.alert("Upload Failed", "Failed to upload photo. Please try again.");
-        } finally {
-          setIsUploadingPhoto(false);
+          
+          // Clear temp photo and success - break out of retry loop
+          setTempPhotoUri(null);
+          break;
+        } catch (uploadError) {
+          uploadAttempts++;
+          
+          if (uploadAttempts >= maxAttempts) {
+            throw uploadError;
+          }
+          
+          // Wait before retrying (exponential backoff)
+          const waitTime = 1000 * uploadAttempts;
+          await new Promise(resolve => setTimeout(resolve, waitTime));
         }
       }
-    } catch (error) {
-      Sentry.captureException(error);
-      Alert.alert("Error", "Failed to pick image. Please try again.");
+    } catch (err) {
+      Sentry.captureException(err);
+      
+      // Enhanced error logging
+      let errorMessage = 'Unknown upload error';
+      
+      if (err instanceof Error) {
+        if (err.message.includes('Network request failed')) {
+          errorMessage = 'Network connection failed. Please check your internet connection and try again.';
+        } else if (err.message.includes('No internet connection')) {
+          errorMessage = 'No internet connection. Please check your network and try again.';
+        } else if (err.message.includes('Failed to upload local file')) {
+          errorMessage = 'Failed to process image. Please try selecting a different photo.';
+        } else {
+          errorMessage = err.message;
+        }
+      }
+      
+      Alert.alert("Upload Failed", `Failed to upload photo: ${errorMessage}. Please try again.`);
+      // Clear temp photo on error
+      setTempPhotoUri(null);
+    } finally {
+      setIsUploadingPhoto(false);
     }
   };
 
@@ -527,10 +634,31 @@ export default function Profile() {
     setEditingAboutMe(false);
     setSaving(false);
   };
+  // Convert feet/inches to cm
+  const feetInchesToCm = (feet: number, inches: number): number => {
+    return Math.round((feet * 30.48) + (inches * 2.54));
+  };
+
+  // Convert cm to feet/inches
+  const cmToFeetInches = (cm: number): { feet: number, inches: number } => {
+    const totalInches = cm / 2.54;
+    const feet = Math.floor(totalInches / 12);
+    const inches = Math.round(totalInches % 12);
+    return { feet, inches };
+  };
+
   const handleSaveHeight = async () => {
     setSaving(true);
-    await EventProfileAPI.update(profile.id, { height_cm: parseInt(height) });
-    setProfile((prev: any) => ({ ...prev, height_cm: parseInt(height) }));
+    let heightInCm: number;
+    
+    if (heightUnit === 'cm') {
+      heightInCm = parseInt(height);
+    } else {
+      heightInCm = feetInchesToCm(parseInt(feet), parseInt(inches));
+    }
+    
+    await EventProfileAPI.update(profile.id, { height_cm: heightInCm });
+    setProfile((prev: any) => ({ ...prev, height_cm: heightInCm }));
     setEditingHeight(false);
     setSaving(false);
   };
@@ -623,6 +751,9 @@ export default function Profile() {
       borderRadius: 50,
       overflow: 'hidden',
       marginBottom: 10,
+      borderWidth: 2,
+      borderColor: '#8b5cf6',
+      borderStyle: 'dashed',
     },
     profilePhoto: {
       width: '100%',
@@ -637,19 +768,6 @@ export default function Profile() {
     fallbackText: {
       fontSize: 40,
       color: 'white',
-    },
-    photoEditButton: {
-      position: 'absolute',
-      bottom: 0,
-      right: 0,
-      backgroundColor: '#8b5cf6',
-      borderRadius: 15,
-      width: 30,
-      height: 30,
-      justifyContent: 'center',
-      alignItems: 'center',
-      borderWidth: 2,
-      borderColor: 'white',
     },
     name: {
       fontSize: 24,
@@ -687,6 +805,7 @@ export default function Profile() {
     detailValueContainer: {
       flexDirection: 'row',
       flexWrap: 'wrap',
+      gap: 8,
     },
     detailValue: {
       fontSize: 16,
@@ -732,6 +851,37 @@ export default function Profile() {
       borderColor: isDark ? '#374151' : '#e5e7eb',
       height: 50,
       marginTop: 8,
+    },
+    heightUnitButton: {
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: isDark ? '#374151' : '#e5e7eb',
+      marginHorizontal: 4,
+    },
+    heightUnitButtonSelected: {
+      backgroundColor: '#8b5cf6',
+      borderColor: '#8b5cf6',
+    },
+    heightUnitButtonText: {
+      fontSize: 14,
+      color: isDark ? '#e5e7eb' : '#374151',
+      fontWeight: '500',
+    },
+    heightUnitButtonTextSelected: {
+      color: 'white',
+    },
+    uploadOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.3)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderRadius: 50,
     },
     saveButton: {
       backgroundColor: '#8b5cf6',
@@ -1043,8 +1193,33 @@ export default function Profile() {
       <ScrollView style={styles.content}>
         {/* Profile Photo Section */}
         <View style={styles.photoSection}>
-          <View style={styles.photoContainer}>
-            {profile.profile_photo_url ? (
+          <TouchableOpacity
+            style={styles.photoContainer}
+            onPress={handlePhotoUpload}
+            disabled={isUploadingPhoto}
+            accessibilityLabel="Edit Profile Photo"
+            accessibilityHint="Tap to change your profile photo"
+          >
+            {isUploadingPhoto ? (
+              <View style={styles.photoContainer}>
+                {tempPhotoUri ? (
+                  <Image
+                    source={{ uri: tempPhotoUri }}
+                    onError={() => {}}
+                    style={styles.profilePhoto}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={[styles.fallbackAvatar, { backgroundColor: profile.profile_color || '#cccccc' }]}>
+                    <ActivityIndicator size="large" color="white" />
+                  </View>
+                )}
+                {/* Upload indicator overlay */}
+                <View style={styles.uploadOverlay}>
+                  <ActivityIndicator size="small" color="white" />
+                </View>
+              </View>
+            ) : profile.profile_photo_url ? (
               <Image
                 source={{ uri: profile.profile_photo_url }}
                 onError={() => {}}
@@ -1056,17 +1231,7 @@ export default function Profile() {
                 <Text style={styles.fallbackText}>{profile.first_name[0]}</Text>
               </View>
             )}
-            
-            <TouchableOpacity
-              style={styles.photoEditButton}
-              onPress={handlePhotoUpload}
-              disabled={isUploadingPhoto}
-              accessibilityLabel="Edit Profile Photo"
-              accessibilityHint="Tap to change your profile photo"
-            >
-              <Camera size={16} color="white" />
-            </TouchableOpacity>
-          </View>
+          </TouchableOpacity>
           
           <Text style={styles.name}>{profile.first_name}</Text>
           <Text style={styles.age}>{profile.age} years old</Text>
@@ -1313,18 +1478,78 @@ export default function Profile() {
           </View>
           {editingHeight ? (
             <View>
-              <TextInput
-                style={styles.heightInput}
-                value={height}
-                onChangeText={setHeight}
-                placeholder="180"
-                keyboardType="numeric"
-                maxLength={3}
-                textAlign="center"
-              />
+              {/* Height Unit Toggle */}
+              <View style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: 12 }}>
+                <TouchableOpacity
+                  style={[
+                    styles.heightUnitButton,
+                    heightUnit === 'cm' && styles.heightUnitButtonSelected
+                  ]}
+                  onPress={() => setHeightUnit('cm')}
+                >
+                  <Text style={[
+                    styles.heightUnitButtonText,
+                    heightUnit === 'cm' && styles.heightUnitButtonTextSelected
+                  ]}>CM</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.heightUnitButton,
+                    heightUnit === 'feet' && styles.heightUnitButtonSelected
+                  ]}
+                  onPress={() => setHeightUnit('feet')}
+                >
+                  <Text style={[
+                    styles.heightUnitButtonText,
+                    heightUnit === 'feet' && styles.heightUnitButtonTextSelected
+                  ]}>Feet/Inch</Text>
+                </TouchableOpacity>
+              </View>
+              
+              {heightUnit === 'cm' ? (
+                <TextInput
+                  style={styles.heightInput}
+                  value={height}
+                  onChangeText={setHeight}
+                  placeholder="180"
+                  keyboardType="numeric"
+                  maxLength={3}
+                  textAlign="center"
+                />
+              ) : (
+                <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 8 }}>
+                  <TextInput
+                    style={[styles.heightInput, { flex: 1, maxWidth: 80 }]}
+                    value={feet}
+                    onChangeText={setFeet}
+                    placeholder="5"
+                    keyboardType="numeric"
+                    maxLength={2}
+                    textAlign="center"
+                  />
+                  <Text style={{ alignSelf: 'center', fontSize: 18, color: isDark ? '#e5e7eb' : '#374151' }}>ft</Text>
+                  <TextInput
+                    style={[styles.heightInput, { flex: 1, maxWidth: 80 }]}
+                    value={inches}
+                    onChangeText={setInches}
+                    placeholder="10"
+                    keyboardType="numeric"
+                    maxLength={2}
+                    textAlign="center"
+                  />
+                  <Text style={{ alignSelf: 'center', fontSize: 18, color: isDark ? '#e5e7eb' : '#374151' }}>in</Text>
+                </View>
+              )}
+              
               <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8 }}>
                 <TouchableOpacity onPress={handleSaveHeight} disabled={saving} style={styles.saveButton}><Text style={styles.saveButtonText}>Save</Text></TouchableOpacity>
-                <TouchableOpacity onPress={() => { setEditingHeight(false); setHeight(profile.height_cm ? String(profile.height_cm) : ''); }} style={styles.cancelButton}><Text style={styles.cancelButtonText}>Cancel</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => { 
+                  setEditingHeight(false); 
+                  setHeight(profile.height_cm ? String(profile.height_cm) : ''); 
+                  setHeightUnit('cm');
+                  setFeet('');
+                  setInches('');
+                }} style={styles.cancelButton}><Text style={styles.cancelButtonText}>Cancel</Text></TouchableOpacity>
               </View>
             </View>
           ) : (

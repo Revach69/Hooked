@@ -433,7 +433,8 @@ export default function Chat() {
         to_profile_id: matchProfile.id,
         content: newMessage.trim(),
         created_at: serverTimestamp(),
-        seen: false
+        seen: false,
+        sender_name: currentUserProfile.first_name
       };
       
       await MessageAPI.create(messageData);

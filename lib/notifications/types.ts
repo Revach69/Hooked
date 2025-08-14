@@ -14,6 +14,7 @@ export type MatchEvent = BaseEvent & {
 export type MessageEvent = BaseEvent & {
   type: 'message';
   senderProfileId: string;
+  senderSessionId?: string; // for checking mute status
   senderName?: string;
   conversationId?: string;  // optional for deep-link
   preview?: string;

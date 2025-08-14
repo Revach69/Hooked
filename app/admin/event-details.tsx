@@ -177,14 +177,31 @@ export default function EventDetails() {
     Alert.alert('Download QR', 'QR code download feature will be implemented soon!');
   };
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string, timezone?: string) => {
+    if (timezone) {
+      try {
+        // Convert UTC time to the event's timezone for display
+        const utcDate = new Date(dateString);
+        return utcDate.toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+          timeZone: timezone
+        });
+      } catch (error) {
+        console.warn('Timezone formatting failed, using fallback:', error);
+      }
+    }
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
-              hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
     });
   };
 
@@ -436,14 +453,14 @@ export default function EventDetails() {
           <View style={styles.eventDetails}>
             <Calendar size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
             <Text style={styles.eventDetailText}>
-              Starts: {formatDate(event.starts_at)}
+                              Starts: {formatDate(event.starts_at, event.timezone)}
             </Text>
           </View>
           
           <View style={styles.eventDetails}>
             <Clock size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
             <Text style={styles.eventDetailText}>
-              Expires: {formatDate(event.expires_at)}
+                              Expires: {formatDate(event.expires_at, event.timezone)}
             </Text>
           </View>
         </View>

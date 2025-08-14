@@ -2,7 +2,6 @@ import React from 'react'
 import './App.css'
 import Pages from "@/pages/index.jsx"
 import { Toaster } from "@/components/ui/toaster"
-import FirebasePerformanceTest from "@/components/FirebasePerformanceTest"
 import ErrorBoundary from "@/components/ErrorBoundary"
 import OfflineStatusBar from "@/components/OfflineStatusBar"
 import { WebErrorHandler } from "./lib/webErrorHandler"

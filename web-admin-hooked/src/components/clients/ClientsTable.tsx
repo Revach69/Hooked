@@ -14,13 +14,15 @@ import {
 } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Edit, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
+import { Edit, Trash2, ChevronUp, ChevronDown, FileText, Calendar, ExternalLink } from 'lucide-react';
 import type { AdminClient } from '@/types/admin';
 
 interface ClientsTableProps {
   clients: AdminClient[];
   onEdit: (client: AdminClient) => void;
   onDelete: (clientId: string) => void;
+  onViewForm?: (formId: string) => void;
+  onViewEvent?: (eventId: string) => void;
   searchQuery: string;
   statusFilter: string[];
   typeFilter: string[];
@@ -51,6 +53,8 @@ export function ClientsTable({
   clients, 
   onEdit, 
   onDelete, 
+  onViewForm,
+  onViewEvent,
   searchQuery, 
   statusFilter, 
   typeFilter, 
@@ -123,9 +127,53 @@ export function ClientsTable({
       }) as ColumnDef<AdminClient>,
       columnHelper.accessor('organizerFormSent', {
         header: 'Organizer Form Sent?',
-        cell: ({ getValue }) => (
-          <div className="text-sm">{getValue() || '-'}</div>
-        ),
+        cell: ({ getValue, row }) => {
+          const hasForm = row.original.linkedFormId;
+          return (
+            <div className="flex items-center gap-2">
+              <div className="text-sm">{getValue() || '-'}</div>
+              {hasForm && onViewForm && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onViewForm(hasForm);
+                  }}
+                  className="h-6 w-6 p-0"
+                  title="View linked form"
+                >
+                  <FileText className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+          );
+        },
+      }) as ColumnDef<AdminClient>,
+      columnHelper.accessor('eventCardCreated', {
+        header: 'Event Card Created?',
+        cell: ({ getValue, row }) => {
+          const hasEvent = row.original.linkedEventId;
+          return (
+            <div className="flex items-center gap-2">
+              <div className="text-sm">{getValue() || '-'}</div>
+              {hasEvent && onViewEvent && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onViewEvent(hasEvent);
+                  }}
+                  className="h-6 w-6 p-0"
+                  title="View linked event"
+                >
+                  <Calendar className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+          );
+        },
       }) as ColumnDef<AdminClient>,
       columnHelper.accessor('status', {
         header: 'Status',
@@ -172,7 +220,7 @@ export function ClientsTable({
         ),
       }),
     ],
-    [onEdit, onDelete]
+    [onEdit, onDelete, onViewForm]
   );
 
   const filteredData = useMemo(() => {

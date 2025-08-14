@@ -1,7 +1,7 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import * as path from 'path';
-const fetch = require('node-fetch');
+import fetch from 'node-fetch';
 
 // Initialize Firebase Admin with service account
 const serviceAccount = require(path.join(__dirname, '../hooked-69-firebase-adminsdk-fbsvc-c7009d8539.json'));
@@ -405,7 +405,6 @@ const REGION = FUNCTION_REGION;
 
 // Shared helpers for push notifications
 async function fetchSessionTokens(sessionId: string) {
-  console.log(`Fetching tokens for sessionId: ${sessionId}`);
   const snap = await admin.firestore()
     .collection('push_tokens')
     .where('sessionId', '==', sessionId)
@@ -415,17 +414,14 @@ async function fetchSessionTokens(sessionId: string) {
     const data = d.data() as any;
     if (typeof data?.token === 'string' && data.token) tokens.push(data.token);
   });
-  console.log(`Found ${tokens.length} tokens for sessionId: ${sessionId}`);
   return tokens;
 }
 
 
 async function sendExpoPush(toTokens: string[], payload: { title: string; body?: string; data?: any }) {
   if (!toTokens.length) {
-    console.log('No tokens to send push to');
     return { sent: 0, results: [] };
   }
-  console.log(`Sending push to ${toTokens.length} tokens:`, payload);
   const chunks: string[][] = [];
   for (let i = 0; i < toTokens.length; i += 100) chunks.push(toTokens.slice(i, i + 100));
   const results: any[] = [];
@@ -437,7 +433,6 @@ async function sendExpoPush(toTokens: string[], payload: { title: string; body?:
       body: JSON.stringify(messages),
     });
     const json = await resp.json().catch(() => null);
-    console.log(`Expo push response: ${resp.status}`, json);
     results.push({ status: resp.status, json });
   }
   return { sent: toTokens.length, results };
@@ -552,7 +547,7 @@ export const onMutualLike = functions
     {
       const tokens = await fetchSessionTokens(likerSession);
       await sendExpoPush(tokens, {
-        title: "It's a match!",
+        title: "You got Hooked!",
         body: undefined,
         data: { type: 'match', otherSessionId: likedSession }
       });
@@ -562,7 +557,7 @@ export const onMutualLike = functions
     {
       const tokens = await fetchSessionTokens(likedSession);
       await sendExpoPush(tokens, {
-        title: 'You got a match!',
+        title: 'You got Hooked!',
         body: undefined,
         data: { type: 'match', otherSessionId: likerSession }
       });
@@ -579,7 +574,22 @@ export const onMessageCreate = functions
     const eventId = d?.event_id;
     const fromProfile = d?.from_profile_id;
     const toProfile = d?.to_profile_id;
-    const senderName = d?.sender_name || 'Someone';
+    let senderName = d?.sender_name;
+    
+    // If sender_name is missing, look it up from the sender's profile
+    if (!senderName) {
+      try {
+        const senderProf = await admin.firestore()
+          .collection('event_profiles')
+          .doc(fromProfile)
+          .get();
+        const senderData = senderProf.data() as any;
+        senderName = senderData?.first_name || 'Someone';
+      } catch {
+        senderName = 'Someone';
+      }
+    }
+    
     const preview = typeof d?.content === 'string' ? d.content.slice(0, 80) : undefined;
     if (!eventId || !fromProfile || !toProfile) return;
 
@@ -597,13 +607,50 @@ export const onMessageCreate = functions
     } else {
       const prof = await admin.firestore()
         .collection('event_profiles')
-        .where('id', '==', toProfile)
-        .limit(1)
+        .doc(toProfile)
         .get();
-      const rec = prof.docs[0]?.data() as any;
+      const rec = prof.data() as any;
       toSession = rec?.session_id || null;
     }
     if (!toSession) return;
+
+    // Get sender session_id to check if recipient has muted the sender
+    let fromSession: string | null = null;
+    if (typeof d?.from_session_id === 'string') {
+      fromSession = d.from_session_id;
+    } else {
+      try {
+        const senderProf = await admin.firestore()
+          .collection('event_profiles')
+          .doc(fromProfile)
+          .get();
+        const senderData = senderProf.data() as any;
+        fromSession = senderData?.session_id || null;
+      } catch {
+        // Continue without sender session if lookup fails
+      }
+    }
+
+    // Check if recipient has muted the sender
+    if (fromSession) {
+      try {
+        const mutedSnapshot = await admin.firestore()
+          .collection('muted_matches')
+          .where('event_id', '==', eventId)
+          .where('muter_session_id', '==', toSession)
+          .where('muted_session_id', '==', fromSession)
+          .get();
+
+        if (!mutedSnapshot.empty) {
+          // Recipient has muted the sender, don't send notification
+          console.log(`Skipping notification: recipient ${toSession} has muted sender ${fromSession}`);
+          return;
+        }
+      } catch (error) {
+        console.error('Error checking mute status:', error);
+        // Continue with notification if mute check fails (fail safe)
+      }
+    }
 
     const tokens = await fetchSessionTokens(toSession);
     await sendExpoPush(tokens, {
@@ -619,26 +666,21 @@ export const onMessageCreate = functions
 export const savePushToken = functions
   .region(FUNCTION_REGION)
   .https.onCall(async (data, context) => {
-    console.log('savePushToken called with data:', data);
     const token = data?.token;
     const platform = data?.platform;
     const sessionId = data?.sessionId;
 
     if (typeof token !== 'string' || !token.trim()) {
-      console.log('Invalid token:', token);
       throw new functions.https.HttpsError('invalid-argument', 'token is required');
     }
     if (platform !== 'ios' && platform !== 'android') {
-      console.log('Invalid platform:', platform);
       throw new functions.https.HttpsError('invalid-argument', "platform must be 'ios' or 'android'");
     }
     if (typeof sessionId !== 'string' || !sessionId.trim()) {
-      console.log('Invalid sessionId:', sessionId);
       throw new functions.https.HttpsError('invalid-argument', 'sessionId is required');
     }
 
     const docId = `${sessionId}_${platform}`;
-    console.log(`Saving push token with docId: ${docId}`);
     await admin.firestore().collection('push_tokens').doc(docId).set({
       token,
       platform,
@@ -646,7 +688,6 @@ export const savePushToken = functions
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
-    console.log(`Successfully saved push token for sessionId: ${sessionId}, platform: ${platform}`);
 
     return { ok: true };
   });

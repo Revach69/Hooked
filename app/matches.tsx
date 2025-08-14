@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { Heart, MessageCircle, Users, User, MoreVertical, UserX, VolumeX, Volume2 } from 'lucide-react-native';
-import { EventProfileAPI, LikeAPI, EventAPI, BlockedMatchAPI, MutedMatchAPI } from '../lib/firebaseApi';
+import { EventProfileAPI, LikeAPI, EventAPI, MutedMatchAPI } from '../lib/firebaseApi';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
@@ -37,7 +37,6 @@ export default function Matches() {
   const [unreadMessages, setUnreadMessages] = useState<Set<string>>(new Set());
   const [isAppActive, setIsAppActive] = useState(true);
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
-  const [blockedMatches, setBlockedMatches] = useState<Set<string>>(new Set());
   const [mutedMatches, setMutedMatches] = useState<Set<string>>(new Set());
   const [showActionMenu, setShowActionMenu] = useState<string | null>(null);
   // Single ref to hold all unsubscribe functions
@@ -133,7 +132,7 @@ export default function Matches() {
         const unsubscribe = onSnapshot(messagesQuery, async (snapshot) => {
           // Only update unread status, don't show toasts (handled by global listener)
           try {
-            // Process snapshot data directly for better performance
+            // Process snapshot data directly for better performance  
             const unseenMessages = snapshot.docs
               .map(doc => ({ id: doc.id, ...doc.data() }))
               .filter((message: any) => !message.seen);
@@ -234,7 +233,7 @@ export default function Matches() {
                 to_profile_id: userProfile.id
               });
               
-              // Filter for unseen messages only
+              // Filter for unseen messages
               const unseenMessages = allMessages.filter(message => !message.seen);
               
               // Create a set of session IDs that have sent unseen messages
@@ -252,7 +251,7 @@ export default function Matches() {
               
               setUnreadMessages(unseenSessionIds);
               setHasUnreadMessages(unseenSessionIds.size > 0);
-            } catch {
+            } catch (error) {
               // Error checking unseen messages
             }
           };
@@ -329,12 +328,7 @@ export default function Matches() {
             }
           }
 
-          // Filter out blocked matches
-          const unblockedMatches = matchedProfiles.filter(profile => 
-            !blockedMatches.has(profile.session_id)
-          );
-
-          setMatches(unblockedMatches);
+          setMatches(matchedProfiles);
                   } catch {
             // Error in matches listener
           }
@@ -446,17 +440,10 @@ export default function Matches() {
     }
   };
 
-  const loadBlockedAndMutedMatches = async () => {
+  const loadMutedMatches = async () => {
     if (!currentEvent?.id || !currentSessionId) return;
 
     try {
-      // Load blocked matches
-      const blocked = await BlockedMatchAPI.filter({
-        event_id: currentEvent.id,
-        blocker_session_id: currentSessionId
-      });
-      setBlockedMatches(new Set(blocked.map(b => b.blocked_session_id)));
-
       // Load muted matches
       const muted = await MutedMatchAPI.filter({
         event_id: currentEvent.id,
@@ -464,31 +451,69 @@ export default function Matches() {
       });
       setMutedMatches(new Set(muted.map(m => m.muted_session_id)));
     } catch {
-      // Error loading blocked/muted matches
+      // Error loading muted matches
     }
   };
 
-  const handleBlockMatch = async (matchSessionId: string) => {
+  const handleUnmatch = async (matchSessionId: string, matchName: string) => {
     if (!currentEvent?.id || !currentSessionId) return;
 
-    try {
-      await BlockedMatchAPI.create({
-        event_id: currentEvent.id,
-        blocker_session_id: currentSessionId,
-        blocked_session_id: matchSessionId
-      });
+    // Show confirmation alert first
+    Alert.alert(
+      'Unmatch',
+      `Are you sure you want to unmatch ${matchName}?`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Unmatch',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Find the mutual like record between these two users
+              const mutualLikes = await LikeAPI.filter({
+                event_id: currentEvent.id,
+                is_mutual: true
+              });
 
-      setBlockedMatches(prev => new Set([...prev, matchSessionId]));
-      setShowActionMenu(null);
+              // Find the like record where this user is involved with the match
+              const likeToDelete = mutualLikes.find(like => 
+                (like.liker_session_id === currentSessionId && like.liked_session_id === matchSessionId) ||
+                (like.liker_session_id === matchSessionId && like.liked_session_id === currentSessionId)
+              );
 
-      Alert.alert(
-        'Match Blocked',
-        'You have blocked this match. You will not see each other for the rest of the event.',
-        [{ text: 'OK' }]
-      );
-    } catch {
-      Alert.alert('Error', 'Failed to block match');
-    }
+              if (likeToDelete) {
+                // Delete this user's like, which will make it no longer mutual
+                await LikeAPI.delete(likeToDelete.id);
+                
+                // Also need to update the other user's like to set is_mutual to false
+                const otherLikes = await LikeAPI.filter({
+                  event_id: currentEvent.id,
+                  liker_session_id: matchSessionId,
+                  liked_session_id: currentSessionId
+                });
+
+                if (otherLikes.length > 0) {
+                  await LikeAPI.update(otherLikes[0].id, { is_mutual: false });
+                }
+
+                setShowActionMenu(null);
+
+                Alert.alert(
+                  'Match Removed',
+                  'You have unmatched with this person. You can see them again in discovery.',
+                  [{ text: 'OK' }]
+                );
+              }
+            } catch {
+              Alert.alert('Error', 'Failed to unmatch');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleMuteMatch = async (matchSessionId: string) => {
@@ -583,8 +608,8 @@ export default function Matches() {
         return;
       }
 
-      // Load blocked and muted matches
-      await loadBlockedAndMutedMatches();
+      // Load muted matches
+      await loadMutedMatches();
 
       // Matches are now handled by real-time listener
     } catch {
@@ -1048,15 +1073,24 @@ export default function Matches() {
                   unreadMessages.has(match.session_id) && {
                     borderWidth: 3,
                     borderColor: '#ef4444',
-                    backgroundColor: isDark ? '#1f1f1f' : '#fef2f2',
+                    backgroundColor: isDark ? '#2d1b1b' : '#fef2f2',
                     ...(Platform.OS === 'ios' ? {
                       shadowColor: '#ef4444',
-                      shadowOffset: { width: 0, height: 0 },
-                      shadowOpacity: 0.4,
-                      shadowRadius: 8,
+                      shadowOffset: { width: 0, height: 6 },
+                      shadowOpacity: 0.8,
+                      shadowRadius: 16,
+                      transform: [{ scale: 1.02 }],
                     } : {
-                      elevation: 8,
+                      elevation: 12,
+                      shadowColor: '#ef4444',
                     })
+                  },
+                  mutedMatches.has(match.session_id) && {
+                    opacity: 0.6,
+                    backgroundColor: isDark ? '#1a1a1a' : '#f5f5f5',
+                    borderColor: isDark ? '#404040' : '#d1d5db',
+                    borderWidth: 1,
+                    borderStyle: 'dashed',
                   }
                 ]}
                 onPress={() => {
@@ -1064,7 +1098,7 @@ export default function Matches() {
                   router.push(`/chat?matchId=${match.session_id}&matchName=${match.first_name}`);
                 }}
                 accessibilityRole="button"
-                accessibilityLabel={`Open chat with ${match.first_name}`}
+                accessibilityLabel={`Open chat with ${match.first_name}${mutedMatches.has(match.session_id) ? ' (muted)' : ''}`}
                 accessibilityHint={`Tap to open chat with ${match.first_name}`}
               >
                 <TouchableOpacity
@@ -1079,10 +1113,36 @@ export default function Matches() {
                 >
                     {match.profile_photo_url ? (
                       <Image source={{ uri: match.profile_photo_url }}
-        onError={() => {}} style={styles.matchImage} />
+        onError={() => {}} style={[styles.matchImage, mutedMatches.has(match.session_id) && { opacity: 0.5 }]} />
                     ) : (
-                      <View style={[styles.matchImageFallback, { backgroundColor: match.profile_color || '#cccccc' }]}>
+                      <View style={[styles.matchImageFallback, { backgroundColor: match.profile_color || '#cccccc' }, mutedMatches.has(match.session_id) && { opacity: 0.5 }]}>
                         <Text style={styles.matchImageFallbackText}>{match.first_name[0]}</Text>
+                      </View>
+                    )}
+                    {/* Mute icon for muted matches */}
+                    {mutedMatches.has(match.session_id) && (
+                      <View style={{
+                        position: 'absolute',
+                        bottom: -4,
+                        right: -4,
+                        backgroundColor: isDark ? '#374151' : '#6b7280',
+                        borderRadius: 12,
+                        width: 24,
+                        height: 24,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        borderWidth: 2,
+                        borderColor: isDark ? '#1a1a1a' : '#ffffff',
+                        ...(Platform.OS === 'ios' ? {
+                          shadowColor: '#000',
+                          shadowOffset: { width: 0, height: 1 },
+                          shadowOpacity: 0.3,
+                          shadowRadius: 2,
+                        } : {
+                          elevation: 3,
+                        })
+                      }}>
+                        <VolumeX size={12} color="#ffffff" />
                       </View>
                     )}
                     {/* Red dot for both platforms */}
@@ -1092,18 +1152,21 @@ export default function Matches() {
                         top: -4,
                         right: -4,
                         backgroundColor: '#ef4444',
-                        borderRadius: 8,
-                        width: 16,
-                        height: 16,
+                        borderRadius: 10,
+                        width: 20,
+                        height: 20,
                         justifyContent: 'center',
                         alignItems: 'center',
-                        borderWidth: 2,
+                        borderWidth: 3,
                         borderColor: isDark ? '#1a1a1a' : '#ffffff',
-                        shadowColor: '#ef4444',
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.3,
-                        shadowRadius: 4,
-                        elevation: 4,
+                        ...(Platform.OS === 'ios' ? {
+                          shadowColor: '#ef4444',
+                          shadowOffset: { width: 0, height: 2 },
+                          shadowOpacity: 0.8,
+                          shadowRadius: 6,
+                        } : {
+                          elevation: 6,
+                        })
                       }}>
                         <View style={{
                           width: 8,
@@ -1116,8 +1179,17 @@ export default function Matches() {
                   </TouchableOpacity>
                 
                 <View style={styles.matchInfo}>
-                  <Text style={styles.matchName}>{match.first_name}</Text>
-                  <Text style={styles.matchAge}>{match.age} years old</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                    <Text style={[styles.matchName, mutedMatches.has(match.session_id) && { opacity: 0.7 }]}>
+                      {match.first_name}
+                    </Text>
+                    {mutedMatches.has(match.session_id) && (
+                      <VolumeX size={14} color={isDark ? '#9ca3af' : '#6b7280'} style={{ marginLeft: 6 }} />
+                    )}
+                  </View>
+                  <Text style={[styles.matchAge, mutedMatches.has(match.session_id) && { opacity: 0.7 }]}>
+                    {match.age} years old{mutedMatches.has(match.session_id) ? ' • Muted' : ''}
+                  </Text>
                   <View style={styles.matchActions}>
                     <TouchableOpacity 
                       style={styles.actionButton}
@@ -1169,12 +1241,12 @@ export default function Matches() {
                     
                     <TouchableOpacity
                       style={[styles.actionMenuItem, styles.destructiveAction]}
-                      onPress={() => handleBlockMatch(match.session_id)}
+                      onPress={() => handleUnmatch(match.session_id, match.first_name)}
                       accessibilityRole="button"
-                      accessibilityLabel="Block match"
+                      accessibilityLabel="Unmatch"
                     >
                       <UserX size={16} color="#dc2626" />
-                      <Text style={[styles.actionMenuText, styles.destructiveText]}>Block</Text>
+                      <Text style={[styles.actionMenuText, styles.destructiveText]}>Unmatch</Text>
                     </TouchableOpacity>
                   </View>
                 )}

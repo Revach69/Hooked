@@ -31,7 +31,9 @@ import {
   getAvailableCountries, 
   getPrimaryTimezoneForCountry, 
   getTimezonesForCountry,
-  getUserTimezone 
+  getUserTimezone,
+  convertTimezone,
+  localDateTimeStringToUTC
 } from '../../lib/timezoneUtils';
 
 export default function CreateEvent() {
@@ -118,6 +120,24 @@ export default function CreateEvent() {
     setSelectedImage(null);
   };
 
+  // Convert admin's local time to event timezone, then to UTC for storage
+  const convertTimeToEventTimezone = (localDate: Date, eventTimezone: string): string => {
+    try {
+      // First convert from admin's local timezone to the event's timezone
+      const adminTimezone = getUserTimezone();
+      const eventTimezoneDate = convertTimezone(localDate, adminTimezone, eventTimezone);
+      
+      // Then convert from event timezone to UTC for storage
+      const utcDate = convertTimezone(eventTimezoneDate, eventTimezone, 'UTC');
+      
+      return utcDate.toISOString();
+    } catch (error) {
+      console.error('Timezone conversion error:', error);
+      // Fallback to direct UTC conversion
+      return localDate.toISOString();
+    }
+  };
+
   const handleSave = async () => {
     // Validation
     if (!formData.name.trim()) {
@@ -137,6 +157,11 @@ export default function CreateEvent() {
 
     if (formData.start_date < formData.starts_at) {
       Alert.alert('Error', 'Real event start time cannot be before access start time');
+      return;
+    }
+
+    if (!formData.timezone) {
+      Alert.alert('Error', 'Please select an event timezone');
       return;
     }
 
@@ -161,6 +186,11 @@ export default function CreateEvent() {
         imageUrl = uploadedUrl;
       }
 
+      // Convert times to event timezone, then to UTC for storage
+      const startsAtUTC = convertTimeToEventTimezone(formData.starts_at, formData.timezone);
+      const startDateUTC = convertTimeToEventTimezone(formData.start_date, formData.timezone);
+      const expiresAtUTC = convertTimeToEventTimezone(formData.expires_at, formData.timezone);
+
       // Create the event
       await EventAPI.create({
         name: formData.name.trim(),
@@ -168,9 +198,9 @@ export default function CreateEvent() {
         location: formData.location.trim(),
         event_code: formData.event_code.trim(),
         event_link: formData.event_link.trim(),
-        starts_at: formData.starts_at.toISOString(),
-        start_date: formData.start_date.toISOString(),
-        expires_at: formData.expires_at.toISOString(),
+        starts_at: startsAtUTC,
+        start_date: startDateUTC,
+        expires_at: expiresAtUTC,
         organizer_email: AuthAPI.getCurrentUser()?.email || '',
         is_active: true, // Set events as active by default
         image_url: imageUrl, // Add image URL if uploaded

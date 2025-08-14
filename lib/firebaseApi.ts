@@ -228,8 +228,8 @@ export interface AdminClient {
   source?: 'Personal Connect' | 'Instagram Inbound' | 'Email' | 'Other' | 'Olim in TLV' | null;
   description?: string | null;
   // system fields
-  createdAt: number;           // Date.now()
-  updatedAt: number;           // Date.now()
+  createdAt: any;              // Firestore Timestamp
+  updatedAt: any;              // Firestore Timestamp
   createdByUid?: string | null;
 }
 
@@ -901,7 +901,9 @@ export const AuthAPI = {
 export const StorageAPI = {
   async uploadFile(file: { uri: string; name: string; type: string; fileSize?: number }): Promise<{ file_url: string }> {
     try {
-      const fileName = `${Date.now()}_${file.name}`;
+      // Clean the file name to ensure it matches Firebase Storage rules
+      const cleanFileName = file.name.replace(/[^a-zA-Z0-9_.-]/g, '_');
+      const fileName = `${Date.now()}_${cleanFileName}`;
       const storageRef = ref(storage, `uploads/${fileName}`);
       
       // Check if the URI is a remote URL (starts with http/https) or a local file
@@ -1051,8 +1053,8 @@ export const AdminClientAPI = {
   async create(data: Omit<AdminClient, 'id' | 'createdAt' | 'updatedAt'>): Promise<AdminClient> {
     const clientData = {
       ...data,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     };
     
     const docRef = await addDoc(collection(db, 'adminClients'), clientData);
@@ -1060,8 +1062,8 @@ export const AdminClientAPI = {
     return { 
       id: docRef.id, 
       ...data,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
+      createdAt: new Date(),
+      updatedAt: new Date()
     } as AdminClient;
   },
 
@@ -1095,7 +1097,7 @@ export const AdminClientAPI = {
   async update(id: string, data: Partial<AdminClient>): Promise<void> {
     await updateDoc(doc(db, 'adminClients', id), { 
       ...data, 
-      updatedAt: Date.now() 
+      updatedAt: serverTimestamp() 
     });
   },
 

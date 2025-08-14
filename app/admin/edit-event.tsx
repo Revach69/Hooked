@@ -31,7 +31,8 @@ import {
   getAvailableCountries, 
   getPrimaryTimezoneForCountry, 
   getTimezonesForCountry,
-  getUserTimezone 
+  getUserTimezone,
+  convertTimezone
 } from '../../lib/timezoneUtils';
 
 export default function EditEvent() {
@@ -153,6 +154,24 @@ export default function EditEvent() {
     setExistingImageUrl(null);
   };
 
+  // Convert admin's local time to event timezone, then to UTC for storage
+  const convertTimeToEventTimezone = (localDate: Date, eventTimezone: string): string => {
+    try {
+      // First convert from admin's local timezone to the event's timezone
+      const adminTimezone = getUserTimezone();
+      const eventTimezoneDate = convertTimezone(localDate, adminTimezone, eventTimezone);
+      
+      // Then convert from event timezone to UTC for storage
+      const utcDate = convertTimezone(eventTimezoneDate, eventTimezone, 'UTC');
+      
+      return utcDate.toISOString();
+    } catch (error) {
+      console.error('Timezone conversion error:', error);
+      // Fallback to direct UTC conversion
+      return localDate.toISOString();
+    }
+  };
+
   const handleSave = async () => {
     // Validation
     if (!formData.name.trim()) {
@@ -172,6 +191,11 @@ export default function EditEvent() {
 
     if (formData.start_date < formData.starts_at) {
       Alert.alert('Error', 'Real event start time cannot be before access start time');
+      return;
+    }
+
+    if (!formData.timezone) {
+      Alert.alert('Error', 'Please select an event timezone');
       return;
     }
 
@@ -207,9 +231,9 @@ export default function EditEvent() {
         location: formData.location.trim(),
         event_code: formData.event_code.trim(),
         event_link: formData.event_link.trim(),
-        starts_at: formData.starts_at.toISOString(),
-        start_date: formData.start_date.toISOString(), // Update start_date
-        expires_at: formData.expires_at.toISOString(),
+        starts_at: convertTimeToEventTimezone(formData.starts_at, formData.timezone),
+        start_date: convertTimeToEventTimezone(formData.start_date, formData.timezone), // Update start_date
+        expires_at: convertTimeToEventTimezone(formData.expires_at, formData.timezone),
         image_url: imageUrl, // Add image URL if uploaded or existing
         is_private: formData.is_private,
         timezone: formData.timezone, // Add timezone field

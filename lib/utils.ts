@@ -17,6 +17,58 @@ export const formatTime = (date: Date): string => {
   });
 };
 
+// Firestore timestamp utilities
+export const getTimestampValue = (timestamp: any): number => {
+  if (!timestamp) return 0;
+  
+  // Handle Firestore Timestamp objects
+  if (timestamp.toDate && typeof timestamp.toDate === 'function') {
+    return timestamp.toDate().getTime();
+  }
+  
+  // Handle regular Date objects
+  if (timestamp instanceof Date) {
+    return timestamp.getTime();
+  }
+  
+  // Handle numbers (milliseconds)
+  if (typeof timestamp === 'number') {
+    return timestamp;
+  }
+  
+  // Handle string dates
+  if (typeof timestamp === 'string') {
+    return new Date(timestamp).getTime();
+  }
+  
+  return 0;
+};
+
+export const formatTimestamp = (timestamp: any): string => {
+  if (!timestamp) return '';
+  
+  try {
+    let date: Date;
+    
+    // Handle Firestore Timestamp objects
+    if (timestamp.toDate && typeof timestamp.toDate === 'function') {
+      date = timestamp.toDate();
+    } else if (timestamp instanceof Date) {
+      date = timestamp;
+    } else if (typeof timestamp === 'number') {
+      date = new Date(timestamp);
+    } else if (typeof timestamp === 'string') {
+      date = new Date(timestamp);
+    } else {
+      return '';
+    }
+    
+    return date.toLocaleDateString();
+  } catch (error) {
+    return '';
+  }
+};
+
 export const generateId = (): string => {
   return Math.random().toString(36).substr(2, 9);
 };

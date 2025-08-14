@@ -130,7 +130,9 @@ export const EventAPI = {
   formatDate(dateString: string, timezone?: string): string {
     if (timezone) {
       try {
-        return new Date(dateString).toLocaleDateString('en-US', {
+        // Convert UTC time to the event's timezone for display
+        const utcDate = new Date(dateString);
+        return utcDate.toLocaleDateString('en-US', {
           year: 'numeric',
           month: 'short',
           day: 'numeric',
@@ -151,7 +153,9 @@ export const EventAPI = {
   formatTime(dateString: string, timezone?: string): string {
     if (timezone) {
       try {
-        return new Date(dateString).toLocaleTimeString('en-US', {
+        // Convert UTC time to the event's timezone for display
+        const utcDate = new Date(dateString);
+        return utcDate.toLocaleTimeString('en-US', {
           hour: '2-digit',
           minute: '2-digit',
           hour12: false,

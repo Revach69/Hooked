@@ -54,6 +54,7 @@ import QRCodeGenerator from '../lib/QRCodeGenerator';
 import { AdminUtils } from '../lib/adminUtils';
 import ReportsModal from './admin/ReportsModal';
 import ClientFormModal from './admin/ClientFormModal';
+import { getTimestampValue } from '../lib/utils';
 
 type TabType = 'events' | 'clients';
 
@@ -246,8 +247,9 @@ export default function Admin() {
     let bValue: any = b[sortBy as keyof AdminClient];
     
     if (sortBy === 'createdAt' || sortBy === 'updatedAt') {
-      aValue = aValue || 0;
-      bValue = bValue || 0;
+      // Handle Firestore timestamps
+      aValue = getTimestampValue(aValue);
+      bValue = getTimestampValue(bValue);
     } else {
       aValue = String(aValue || '').toLowerCase();
       bValue = String(bValue || '').toLowerCase();
@@ -303,7 +305,25 @@ export default function Admin() {
     );
   };
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string, timezone?: string) => {
+    if (timezone) {
+      try {
+        // Convert UTC time to the event's timezone for display
+        const utcDate = new Date(dateString);
+        return utcDate.toLocaleDateString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+          timeZone: timezone
+        });
+      } catch (error) {
+        console.warn('Timezone formatting failed, using fallback:', error);
+      }
+    }
     return new Date(dateString).toLocaleDateString('en-US', {
       weekday: 'long',
       year: 'numeric',
@@ -375,7 +395,7 @@ export default function Admin() {
             <View style={styles.eventMetaItem}>
               <Calendar size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
               <Text style={[styles.eventMetaText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-                {formatDate(event.starts_at)}
+                {formatDate(event.starts_at, event.timezone)}
               </Text>
             </View>
             {event.location && (

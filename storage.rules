@@ -14,8 +14,8 @@ service firebase.storage {
         request.resource.contentType.matches('image/.*') &&
         // File size limit (10MB)
         request.resource.size < 10 * 1024 * 1024 &&
-        // File name must be safe
-        request.resource.name.matches('^uploads/[a-zA-Z0-9_-]+\\.[a-zA-Z0-9]+$');
+        // File name must be safe - more permissive pattern for profile photos
+        request.resource.name.matches('^uploads/[0-9]+_[a-zA-Z0-9_-]+\\.[a-zA-Z0-9]+$');
     }
     
     // ===== EVENT IMAGES =====

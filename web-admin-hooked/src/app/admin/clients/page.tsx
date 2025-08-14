@@ -2,156 +2,244 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Plus, Users } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ClientsTable } from '@/components/clients/ClientsTable';
 import { ClientFormSheet } from '@/components/clients/ClientFormSheet';
-import { ExportCsvButton } from '@/components/clients/ExportCsvButton';
-import { ColumnFilters } from '@/components/clients/ColumnFilters';
-import { listClients, deleteClient } from '@/lib/firestore/clients';
-import type { AdminClient } from '@/types/admin';
+import { FormViewerModal } from '@/components/FormViewerModal';
+import { EventViewerModal } from '@/components/EventViewerModal';
+import { AdminClientAPI } from '@/lib/firestore/clients';
+import { EventFormAPI } from '@/lib/firestore/eventForms';
+import { EventAPI } from '@/lib/firebaseApi';
+import { Plus, Search, Filter } from 'lucide-react';
+import type { AdminClient, EventForm } from '@/types/admin';
 
 export default function ClientsPage() {
   const [clients, setClients] = useState<AdminClient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [editingClient, setEditingClient] = useState<AdminClient | null>(null);
-  
-  // Filter and sort state
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [typeFilter, setTypeFilter] = useState<string[]>([]);
   const [sourceFilter, setSourceFilter] = useState<string[]>([]);
   const [eventFilter, setEventFilter] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState('createdAt');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  
+  // Modal states
+  const [showClientForm, setShowClientForm] = useState(false);
+  const [editingClient, setEditingClient] = useState<AdminClient | null>(null);
+  const [selectedForm, setSelectedForm] = useState<EventForm | null>(null);
+  const [isFormViewerOpen, setIsFormViewerOpen] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<any>(null);
+  const [isEventViewerOpen, setIsEventViewerOpen] = useState(false);
 
   useEffect(() => {
     loadClients();
   }, []);
 
   const loadClients = async () => {
+    setIsLoading(true);
     try {
-      setIsLoading(true);
-      const clientsData = await listClients();
+      const clientsData = await AdminClientAPI.getAll();
       setClients(clientsData);
     } catch (error) {
-      // Error loading clients
+      console.error('Failed to load clients:', error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleAddClient = () => {
-    setEditingClient(null);
-    setShowForm(true);
-  };
-
   const handleEditClient = (client: AdminClient) => {
     setEditingClient(client);
-    setShowForm(true);
+    setShowClientForm(true);
   };
 
   const handleDeleteClient = async (clientId: string) => {
-    if (window.confirm('Are you sure you want to delete this client?')) {
-      try {
-        await deleteClient(clientId);
-        await loadClients();
-      } catch (error) {
-        // Error deleting client
-      }
+    if (!confirm('Are you sure you want to delete this client?')) return;
+    
+    try {
+      await AdminClientAPI.delete(clientId);
+      await loadClients();
+    } catch (error) {
+      console.error('Failed to delete client:', error);
     }
   };
 
-  const handleFormSuccess = () => {
+  const handleViewForm = async (formId: string) => {
+    try {
+      const form = await EventFormAPI.get(formId);
+      if (form) {
+        setSelectedForm(form);
+        setIsFormViewerOpen(true);
+      }
+    } catch (error) {
+      console.error('Failed to load form:', error);
+    }
+  };
+
+  const handleViewEvent = async (eventId: string) => {
+    try {
+      const event = await EventAPI.get(eventId);
+      if (event) {
+        setSelectedEvent(event);
+        setIsEventViewerOpen(true);
+      }
+    } catch (error) {
+      console.error('Failed to load event:', error);
+    }
+  };
+
+  const handleClientFormSuccess = () => {
+    setShowClientForm(false);
+    setEditingClient(null);
     loadClients();
   };
 
+
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+          <p className="mt-2">Loading clients...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="container mx-auto py-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Clients Management
-          </h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Manage your client relationships and leads
-          </p>
+          <h1 className="text-2xl font-bold">Clients</h1>
+          <p className="text-gray-600 dark:text-gray-400">Manage your client relationships</p>
         </div>
-        <div className="flex items-center space-x-3">
-          <ExportCsvButton clients={clients} disabled={isLoading} />
-          <Button onClick={handleAddClient}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Client
-          </Button>
-        </div>
+        <Button onClick={() => setShowClientForm(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          Add Client
+        </Button>
       </div>
 
-      {/* Content */}
-      {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        </div>
-      ) : clients.length === 0 ? (
-        <div className="text-center py-12">
-          <div className="mx-auto h-12 w-12 text-gray-400">
-            <Users className="h-12 w-12" />
-          </div>
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-            No clients yet
-          </h3>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
-            Get started by adding your first client.
-          </p>
-          <Button onClick={handleAddClient}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Client
-          </Button>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {/* Filters */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm">
-            <ColumnFilters
-              searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
-              statusFilter={statusFilter}
-              onStatusFilterChange={setStatusFilter}
-              typeFilter={typeFilter}
-              onTypeFilterChange={setTypeFilter}
-              sourceFilter={sourceFilter}
-              onSourceFilterChange={setSourceFilter}
-              eventFilter={eventFilter}
-              onEventFilterChange={setEventFilter}
-              sortBy={sortBy}
-              onSortByChange={setSortBy}
-              sortOrder={sortOrder}
-              onSortOrderChange={setSortOrder}
-            />
-          </div>
-
-          {/* Table */}
-          <ClientsTable
-            clients={clients}
-            onEdit={handleEditClient}
-            onDelete={handleDeleteClient}
-            searchQuery={searchQuery}
-            statusFilter={statusFilter}
-            typeFilter={typeFilter}
-            sourceFilter={sourceFilter}
-            eventFilter={eventFilter}
-            sortBy={sortBy}
-            sortOrder={sortOrder}
+      {/* Filters */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div>
+          <Input
+            placeholder="Search clients..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full"
           />
         </div>
-      )}
+        
+        <Select value={statusFilter.length > 0 ? statusFilter[0] : "all"} onValueChange={(value) => setStatusFilter(value === "all" ? [] : [value])}>
+          <SelectTrigger>
+            <SelectValue placeholder="Filter by status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="Initial Discussion">Initial Discussion</SelectItem>
+            <SelectItem value="Negotiation">Negotiation</SelectItem>
+            <SelectItem value="Won">Won</SelectItem>
+            <SelectItem value="Lost">Lost</SelectItem>
+            <SelectItem value="Pre-Discussion">Pre-Discussion</SelectItem>
+          </SelectContent>
+        </Select>
 
-      {/* Client Form Sheet */}
+        <Select value={typeFilter.length > 0 ? typeFilter[0] : "all"} onValueChange={(value) => setTypeFilter(value === "all" ? [] : [value])}>
+          <SelectTrigger>
+            <SelectValue placeholder="Filter by type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Types</SelectItem>
+            <SelectItem value="Company">Company</SelectItem>
+            <SelectItem value="Wedding Organizer">Wedding Organizer</SelectItem>
+            <SelectItem value="Club / Bar">Club / Bar</SelectItem>
+            <SelectItem value="Restaurant">Restaurant</SelectItem>
+            <SelectItem value="Personal Host">Personal Host</SelectItem>
+            <SelectItem value="Other Organization">Other Organization</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={sourceFilter.length > 0 ? sourceFilter[0] : "all"} onValueChange={(value) => setSourceFilter(value === "all" ? [] : [value])}>
+          <SelectTrigger>
+            <SelectValue placeholder="Filter by source" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Sources</SelectItem>
+            <SelectItem value="Personal Connect">Personal Connect</SelectItem>
+            <SelectItem value="Instagram Inbound">Instagram Inbound</SelectItem>
+            <SelectItem value="Email">Email</SelectItem>
+            <SelectItem value="Other">Other</SelectItem>
+            <SelectItem value="Olim in TLV">Olim in TLV</SelectItem>
+            <SelectItem value="Contact Form">Contact Form</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={eventFilter.length > 0 ? eventFilter[0] : "all"} onValueChange={(value) => setEventFilter(value === "all" ? [] : [value])}>
+          <SelectTrigger>
+            <SelectValue placeholder="Filter by event" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Events</SelectItem>
+            <SelectItem value="House Party">House Party</SelectItem>
+            <SelectItem value="Club">Club</SelectItem>
+            <SelectItem value="Wedding">Wedding</SelectItem>
+            <SelectItem value="Meetup">Meetup</SelectItem>
+            <SelectItem value="High Tech Event">High Tech Event</SelectItem>
+            <SelectItem value="Retreat">Retreat</SelectItem>
+            <SelectItem value="Party">Party</SelectItem>
+            <SelectItem value="Conference">Conference</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Table */}
+      <ClientsTable
+        clients={clients}
+        onEdit={handleEditClient}
+        onDelete={handleDeleteClient}
+        onViewForm={handleViewForm}
+        onViewEvent={handleViewEvent}
+        searchQuery={searchQuery}
+        statusFilter={statusFilter}
+        typeFilter={typeFilter}
+        sourceFilter={sourceFilter}
+        eventFilter={eventFilter}
+        sortBy={sortBy}
+        sortOrder={sortOrder}
+      />
+
+      {/* Modals */}
       <ClientFormSheet
-        open={showForm}
-        onOpenChange={setShowForm}
+        open={showClientForm}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowClientForm(false);
+            setEditingClient(null);
+          }
+        }}
         client={editingClient}
-        onSuccess={handleFormSuccess}
+        onSuccess={handleClientFormSuccess}
+      />
+
+      <FormViewerModal
+        form={selectedForm}
+        isOpen={isFormViewerOpen}
+        onClose={() => {
+          setIsFormViewerOpen(false);
+          setSelectedForm(null);
+        }}
+      />
+
+      <EventViewerModal
+        event={selectedEvent}
+        isOpen={isEventViewerOpen}
+        onClose={() => {
+          setIsEventViewerOpen(false);
+          setSelectedEvent(null);
+        }}
       />
     </div>
   );
