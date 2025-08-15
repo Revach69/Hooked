@@ -16,7 +16,7 @@ interface EventViewerModalProps {
 export function EventViewerModal({ event, isOpen, onClose }: EventViewerModalProps) {
   if (!event) return null;
 
-  const formatDate = (dateInput: string | Date | any) => {
+  const formatDate = (dateInput: string | Date | { toDate?: () => Date; seconds?: number }) => {
     const date = toDate(dateInput);
     if (!date) return 'Invalid Date';
     return formatDateWithTimezone(date.toISOString());

@@ -28,7 +28,7 @@ export default function QRCodeDisplay({ joinLink, eventCode }: QRCodeDisplayProp
         }
       });
       setQrCodeUrl(qrDataUrl);
-    } catch (error) {
+    } catch {
       // Error generating QR code
     } finally {
       setIsLoading(false);

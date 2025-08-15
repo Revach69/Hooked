@@ -4,13 +4,10 @@ import { useState, useEffect } from 'react';
 import { ReportAPI, EventProfile, KickedUserAPI, type Report } from '@/lib/firebaseApi';
 import { 
   X, 
-  CheckCircle, 
   XCircle, 
   User, 
   Flag, 
   AlertTriangle,
-  Clock,
-  Check,
   Ban,
   ChevronDown
 } from 'lucide-react';
@@ -75,7 +72,7 @@ export default function ReportsModal({ isOpen, onClose, eventId, eventName }: Re
       );
 
       setReports(reportsWithProfiles);
-    } catch (error) {
+    } catch {
       // Error loading reports
     } finally {
       setIsLoading(false);
@@ -132,7 +129,7 @@ export default function ReportsModal({ isOpen, onClose, eventId, eventName }: Re
       
       // Reload reports
       await loadReports();
-    } catch (error) {
+    } catch {
       // Error processing report
     } finally {
       setProcessingReport(null);

@@ -1,8 +1,7 @@
-import { localEventTimeStringToUTCTimestamp, utcTimestampToLocalEventTimeString } from './timezoneUtils';
 import { twMerge } from 'tailwind-merge';
 import clsx from 'clsx';
 
-export function cn(...inputs: string[]) {
+export function cn(...inputs: (string | number | boolean | undefined | null | object)[]) {
   return twMerge(clsx(inputs))
 }
 

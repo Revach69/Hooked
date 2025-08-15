@@ -228,7 +228,7 @@ export const getAvailableTimezones = (): Array<{ value: string; label: string }>
 };
 
 // Helper function to safely convert any date/timestamp format to a Date object
-export const toDate = (dateInput: string | Date | any): Date | null => {
+export const toDate = (dateInput: string | Date | { toDate?: () => Date; seconds?: number }): Date | null => {
   if (!dateInput) return null;
   
   try {

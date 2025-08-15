@@ -88,7 +88,7 @@ export default function AnalyticsModal({
         averageAge,
         genderBreakdown
       });
-    } catch (error) {
+    } catch {
       // Error loading analytics
     } finally {
       setIsLoading(false);

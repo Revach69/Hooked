@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Edit, Trash2, Link, ExternalLink, Calendar, MapPin, Users, Mail, Phone } from 'lucide-react';
+import { Edit, Trash2, Link, Calendar, MapPin, Users, Mail, Phone } from 'lucide-react';
 import type { EventForm } from '@/types/admin';
 
 interface EventFormCardProps {

@@ -88,7 +88,7 @@ export default function EventCard({
       });
       setQrCodeUrl(qrDataUrl);
       return qrDataUrl;
-    } catch (error) {
+    } catch {
       // Error generating QR code
     } finally {
       setIsLoadingQR(false);
@@ -99,7 +99,7 @@ export default function EventCard({
     try {
       await navigator.clipboard.writeText(joinLink);
       // You could add a toast notification here
-    } catch (error) {
+    } catch {
       // Failed to copy
     }
   };
@@ -124,7 +124,7 @@ export default function EventCard({
     generateQRCode();
   }, []);
 
-  const formatDate = (dateInput: string | Date | any, timezone?: string) => {
+  const formatDate = (dateInput: string | Date | { toDate?: () => Date; seconds?: number }, timezone?: string) => {
     const date = toDate(dateInput);
     if (!date) return 'Invalid Date';
     

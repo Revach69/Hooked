@@ -26,7 +26,7 @@ const formatTimestamp = (timestamp: any): string => {
     }
     
     return date.toLocaleDateString();
-  } catch (error) {
+  } catch {
     return '';
   }
 };

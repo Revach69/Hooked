@@ -13,7 +13,6 @@ import {
   deleteField,
   Timestamp,
 } from 'firebase/firestore';
-import { localEventTimeStringToUTCTimestamp, utcTimestampToLocalEventTimeString } from './timezoneUtils';
 
 // Types matching the mobile app
 export interface Event {

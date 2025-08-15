@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Event } from '@/lib/firebaseApi';
-import { X, Save, Plus, Camera, Upload, Edit3 } from 'lucide-react';
+import { X, Save, Plus, Upload, Edit3 } from 'lucide-react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getStorageInstance } from '@/lib/firebaseConfig';
 import ImageEditor from './ImageEditor';
@@ -14,7 +14,6 @@ import {
   getUserTimezone, 
   localEventTimeStringToUTCTimestamp, 
   utcTimestampToLocalEventTimeString,
-  getAvailableTimezones,
   getTimezoneDisplayName
 } from '../lib/timezoneUtils';
 
@@ -393,8 +392,7 @@ export default function EventForm({
       // If imagePreview is null, it means the image was removed, so imageUrl stays null
 
       // Convert form datetime inputs (event's timezone) to UTC Date objects for Firestore
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const eventData: any = {
+      const eventData: Partial<Event> = {
         ...formData,
         starts_at: localEventTimeStringToUTCTimestamp(formData.starts_at, formData.timezone),
         start_date: localEventTimeStringToUTCTimestamp(formData.start_date, formData.timezone),
@@ -417,10 +415,18 @@ export default function EventForm({
 
       await onSave(eventData);
       onClose();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Error saving event
-      setErrors({ submit: `Failed to save event: ${error.message}` });
+      let message = 'Unknown error';
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'message' in error &&
+        typeof (error as { message?: unknown }).message === 'string'
+      ) {
+        message = (error as { message: string }).message;
+      }
+      setErrors({ submit: `Failed to save event: ${message}` });
     } finally {
       setIsLoading(false);
     }

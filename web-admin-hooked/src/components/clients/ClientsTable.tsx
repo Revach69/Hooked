@@ -14,7 +14,7 @@ import {
 } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Edit, Trash2, ChevronUp, ChevronDown, FileText, Calendar, ExternalLink } from 'lucide-react';
+import { Edit, Trash2, ChevronUp, ChevronDown, FileText, Calendar } from 'lucide-react';
 import type { AdminClient } from '@/types/admin';
 
 interface ClientsTableProps {
@@ -83,47 +83,75 @@ export function ClientsTable({
       }) as ColumnDef<AdminClient>,
       columnHelper.accessor('eventKind', {
         header: 'Event',
-        cell: ({ getValue }) => (
-          <div className="text-sm">{getValue()}</div>
-        ),
+        cell: ({ getValue }) => {
+          const value = getValue();
+          const isEmpty = !value || value === '-';
+          return (
+            <div className={`text-sm ${isEmpty ? 'bg-red-100' : ''}`}>{value || '-'}</div>
+          );
+        },
       }) as ColumnDef<AdminClient>,
       columnHelper.accessor('pocName', {
         header: 'Name of POC',
-        cell: ({ getValue }) => (
-          <div className="text-sm">{getValue()}</div>
-        ),
+        cell: ({ getValue }) => {
+          const value = getValue();
+          const isEmpty = !value || value === '-';
+          return (
+            <div className={`text-sm ${isEmpty ? 'bg-red-100' : ''}`}>{value || '-'}</div>
+          );
+        },
       }) as ColumnDef<AdminClient>,
       columnHelper.accessor('phone', {
         header: 'Phone',
-        cell: ({ getValue }) => (
-          <div className="text-sm">{getValue() || '-'}</div>
-        ),
+        cell: ({ getValue }) => {
+          const value = getValue();
+          const isEmpty = !value || value === '-';
+          return (
+            <div className={`text-sm ${isEmpty ? 'bg-red-100' : ''}`}>{value || '-'}</div>
+          );
+        },
       }) as ColumnDef<AdminClient>,
       columnHelper.accessor('email', {
         header: 'Email',
-        cell: ({ getValue }) => (
-          <div className="text-sm">{getValue() || '-'}</div>
-        ),
+        cell: ({ getValue }) => {
+          const value = getValue();
+          const isEmpty = !value || value === '-';
+          return (
+            <div className={`text-sm ${isEmpty ? 'bg-red-100' : ''}`}>{value || '-'}</div>
+          );
+        },
       }) as ColumnDef<AdminClient>,
       columnHelper.accessor('country', {
         header: 'Country',
-        cell: ({ getValue }) => (
-          <div className="text-sm">{getValue() || '-'}</div>
-        ),
+        cell: ({ getValue }) => {
+          const value = getValue();
+          const isEmpty = !value || value === '-';
+          return (
+            <div className={`text-sm ${isEmpty ? 'bg-red-100' : ''}`}>{value || '-'}</div>
+          );
+        },
       }) as ColumnDef<AdminClient>,
       columnHelper.accessor('expectedAttendees', {
         header: '# of Expected Attendees',
-        cell: ({ getValue }) => (
-          <div className="text-sm">{getValue() || '-'}</div>
-        ),
+        cell: ({ getValue }) => {
+          const value = getValue();
+          const isEmpty = value == null || value === '' || value === '-';
+          return (
+            <div className={`text-sm ${isEmpty ? 'bg-red-100' : ''}`}>{value || '-'}</div>
+          );
+        },
       }) as ColumnDef<AdminClient>,
       columnHelper.accessor('eventDate', {
         header: 'Date of Event',
-        cell: ({ getValue }) => (
-          <div className="text-sm">
-            {getValue() ? new Date(getValue()!).toLocaleDateString() : '-'}
-          </div>
-        ),
+        cell: ({ getValue }) => {
+          const value = getValue();
+          const isEmpty = !value;
+          return (
+            <div className={`text-sm ${isEmpty ? 'bg-red-100' : ''}`}>
+              {value ? new Date(value).toLocaleDateString() : '-'}
+            </div>
+          );
+        },
       }) as ColumnDef<AdminClient>,
       columnHelper.accessor('organizerFormSent', {
         header: 'Organizer Form Sent?',
@@ -191,11 +219,15 @@ export function ClientsTable({
       }) as ColumnDef<AdminClient>,
       columnHelper.accessor('description', {
         header: 'Description',
-        cell: ({ getValue }) => (
-          <div className="text-sm max-w-xs truncate" title={getValue() || ''}>
-            {getValue() || '-'}
-          </div>
-        ),
+        cell: ({ getValue }) => {
+          const value = getValue();
+          const isEmpty = !value || value === '-';
+          return (
+            <div className={`text-sm max-w-xs truncate ${isEmpty ? 'bg-red-100' : ''}`} title={value || ''}>
+              {value || '-'}
+            </div>
+          );
+        },
       }) as ColumnDef<AdminClient>,
       columnHelper.display({
         id: 'actions',

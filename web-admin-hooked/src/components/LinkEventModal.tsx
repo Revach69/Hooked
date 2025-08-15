@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Search, Users, Mail, Phone, Calendar, MapPin } from 'lucide-react';
+import { Search, Users, Mail, Phone, Calendar } from 'lucide-react';
 import type { Event, AdminClient } from '@/types/admin';
 
 interface LinkEventModalProps {

@@ -9,7 +9,7 @@ import { EventFormModal } from '@/components/EventFormModal';
 import { LinkFormModal } from '@/components/LinkFormModal';
 import { EventFormAPI } from '@/lib/firestore/eventForms';
 import { AdminClientAPI } from '@/lib/firestore/clients';
-import { FileText, Search, Filter } from 'lucide-react';
+import { FileText, Search } from 'lucide-react';
 import type { EventForm, AdminClient } from '@/types/admin';
 
 export default function FormsPage() {
@@ -78,9 +78,61 @@ export default function FormsPage() {
 
   const handleLinkFormToClient = async (formId: string, clientId: string) => {
     try {
-      // Update the form to link to the client
+      // Fetch the latest client and form data
+      const [client, form] = await Promise.all([
+        AdminClientAPI.get(clientId),
+        EventFormAPI.get(formId),
+      ]);
+      if (!client || !form) throw new Error('Client or form not found');
+
+      // Prepare updates for the client
+      const updates: Partial<AdminClient> = {};
+
+      // 1. fullName -> pocName
+      if (!client.pocName) updates.pocName = form.fullName;
+
+      // 2. email
+      if (!client.email) updates.email = form.email;
+
+      // 3. phone
+      if (!client.phone) updates.phone = form.phone;
+
+      // 4. expectedAttendees (convert string to number)
+      if (client.expectedAttendees == null) {
+        const mapExpectedAttendees = (val: string) => {
+          switch (val) {
+            case '<50': return 50;
+            case '51-100': return 75;
+            case '101-200': return 150;
+            case '201-300': return 250;
+            case '>300': return 350;
+            default:
+              const num = parseInt(val, 10);
+              return isNaN(num) ? null : num;
+          }
+        };
+        updates.expectedAttendees = mapExpectedAttendees(form.expectedAttendees);
+      }
+
+      // 5. eventDate
+      if (!client.eventDate) updates.eventDate = form.eventDate;
+
+      // 6. eventKind (eventType/otherEventType)
+      if (!client.eventKind) {
+        // Allow free text for 'Other' event types by casting as any
+        const eventKindValue = form.eventType === "Other" && form.otherEventType
+          ? form.otherEventType
+          : form.eventType;
+        updates.eventKind = eventKindValue as AdminClient["eventKind"] | string; // allow free text for custom event types
+      }
+
+      // Only update if there are fields to update
+      if (Object.keys(updates).length > 0) {
+        await AdminClientAPI.update(clientId, updates);
+      }
+
+      // Link the form to the client as before
       await EventFormAPI.update(formId, { linkedClientId: clientId });
-      // Update the client to link to the form
       await AdminClientAPI.linkForm(clientId, formId);
       await loadData();
     } catch (error) {

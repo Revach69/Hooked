@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useRef } from 'react';
-import { X, Move, RotateCcw, RotateCw, ZoomIn, ZoomOut, RotateCcw as ResetIcon } from 'lucide-react';
+import { X, RotateCcw, RotateCw, ZoomIn, ZoomOut, RotateCcw as ResetIcon } from 'lucide-react';
 
 interface ImageEditorProps {
   imageUrl: string;
@@ -19,6 +19,8 @@ export default function ImageEditor({ imageUrl, onSave, onCancel, aspectRatio = 
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [lastTouchDistance, setLastTouchDistance] = useState<number | null>(null);
+  const [lastTouchPosition, setLastTouchPosition] = useState<{ x: number; y: number } | null>(null);
   
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -28,8 +30,62 @@ export default function ImageEditor({ imageUrl, onSave, onCancel, aspectRatio = 
   const targetWidth = 500; // Slightly larger to account for different screen sizes
   const targetHeight = 192;
 
-  const handleZoomIn = () => setScale(prev => Math.min(prev + 0.1, 3));
-  const handleZoomOut = () => setScale(prev => Math.max(prev - 0.1, 0.1));
+  // Remove min/max limits for zoom
+  const handleZoomIn = () => setScale(prev => prev + 0.1);
+  const handleZoomOut = () => setScale(prev => Math.max(prev - 0.1, 0.01)); // Prevent negative/zero scale
+
+  // Mouse wheel/trackpad zoom
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY || e.detail || e.wheelDelta;
+    setScale(prev => {
+      let next = prev - delta * 0.001; // Invert for natural zoom
+      if (next < 0.01) next = 0.01;
+      return next;
+    });
+  };
+
+  // Touch gestures: pinch to zoom and drag
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      // Pinch start
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      setLastTouchDistance(Math.sqrt(dx * dx + dy * dy));
+    } else if (e.touches.length === 1) {
+      setIsDragging(true);
+      setLastTouchPosition({
+        x: e.touches[0].clientX - position.x,
+        y: e.touches[0].clientY - position.y
+      });
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && lastTouchDistance !== null) {
+      // Pinch to zoom
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const newDistance = Math.sqrt(dx * dx + dy * dy);
+      setScale(prev => {
+        let next = prev * (newDistance / lastTouchDistance);
+        if (next < 0.01) next = 0.01;
+        return next;
+      });
+      setLastTouchDistance(newDistance);
+    } else if (e.touches.length === 1 && isDragging && lastTouchPosition) {
+      setPosition({
+        x: e.touches[0].clientX - lastTouchPosition.x,
+        y: e.touches[0].clientY - lastTouchPosition.y
+      });
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    setIsDragging(false);
+    setLastTouchDistance(null);
+    setLastTouchPosition(null);
+  };
   const handleRotateLeft = () => setRotation(prev => prev - 90);
   const handleRotateRight = () => setRotation(prev => prev + 90);
   const handleReset = () => {
@@ -89,31 +145,22 @@ export default function ImageEditor({ imageUrl, onSave, onCancel, aspectRatio = 
     // Calculate optimal scale to fit image width to container width
     const containerWidth = 500; // Target container width
     const optimalScale = containerWidth / naturalWidth;
-    
-    // Image dimensions calculated
-    
-    // Set the scale to fit the width
     setScale(optimalScale);
-    
-    // Calculate center position to center the image
-    // Use the actual container dimensions for better centering
+
+    // Center the image in the blue container (not the whole editor)
     const containerElement = containerRef.current;
     if (containerElement) {
       const containerRect = containerElement.getBoundingClientRect();
-      const editorWidth = containerRect.width;
-      const editorHeight = containerRect.height;
-      
+      // Use the blue container's width/height
+      const containerW = containerRect.width;
+      const containerH = containerRect.height;
       const scaledWidth = naturalWidth * optimalScale;
       const scaledHeight = naturalHeight * optimalScale;
-      
-      // Calculate position to center the image
-      const centerX = (editorWidth - scaledWidth) / 2;
-      const centerY = (editorHeight - scaledHeight) / 2;
-      
-      // Image centered
-      
-      // Center the image initially
-      setPosition({ x: centerX, y: centerY });
+      // Center the image in the blue box
+      const centerX = (containerW - scaledWidth) / 2;
+      const centerY = (containerH - scaledHeight) / 2;
+      // The blue box is centered in the editor, so offset by its position
+      setPosition({ x: containerRect.left - containerElement.parentElement!.getBoundingClientRect().left + centerX, y: containerRect.top - containerElement.parentElement!.getBoundingClientRect().top + centerY });
     } else {
       // Fallback to approximate centering
       const scaledWidth = naturalWidth * optimalScale;
@@ -369,6 +416,10 @@ export default function ImageEditor({ imageUrl, onSave, onCancel, aspectRatio = 
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
               onMouseLeave={handleMouseUp}
+              onWheel={handleWheel}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
               style={{
                 cursor: isDragging ? 'grabbing' : 'grab'
               }}
@@ -442,9 +493,8 @@ export default function ImageEditor({ imageUrl, onSave, onCancel, aspectRatio = 
                     </button>
                     <input
                       type="range"
-                      min="0.1"
-                      max="3"
-                      step="0.1"
+                      min="0.01"
+                      step="0.01"
                       value={scale}
                       onChange={(e) => setScale(parseFloat(e.target.value))}
                       className="flex-1 slider"
