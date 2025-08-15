@@ -11,15 +11,39 @@ import {
   addDoc,
 } from 'firebase/firestore';
 import { signInAnonymously } from 'firebase/auth';
+import { localEventTimeStringToUTCTimestamp, utcTimestampToLocalEventTimeString } from './timezoneUtils';
+
+// Utility function to convert Firestore Timestamps to Date objects
+export const toDate = (dateInput: string | Date | { toDate?: () => Date; seconds?: number }): Date => {
+  if (!dateInput) return new Date();
+  try {
+    if (typeof dateInput === 'string') {
+      return new Date(dateInput);
+    } else if (dateInput instanceof Date) {
+      return dateInput;
+    } else if (typeof dateInput === 'object' && dateInput.toDate && typeof dateInput.toDate === 'function') {
+      // Firestore Timestamp
+      return dateInput.toDate();
+    } else if (typeof dateInput === 'object' && 'seconds' in dateInput) {
+      // Firestore Timestamp object with seconds
+      return new Date((dateInput as { seconds: number }).seconds * 1000);
+    } else {
+      return new Date(dateInput as string);
+    }
+  } catch (error) {
+    console.error('Error converting to Date:', dateInput, error);
+    return new Date();
+  }
+};
 
 // Types matching the Firestore structure
 export interface FirestoreEvent {
   id: string;
   name: string;
   description?: string;
-  starts_at: string;
-  start_date?: string; // Real event start time (for display purposes)
-  expires_at: string;
+  starts_at: string | Date | { toDate?: () => Date; seconds?: number };
+  start_date?: string | Date | { toDate?: () => Date; seconds?: number };
+  expires_at: string | Date | { toDate?: () => Date; seconds?: number };
   event_code: string;
   location?: string;
   organizer_email?: string;
@@ -79,9 +103,9 @@ export const EventAPI = {
   // Helper function to determine event status
   getEventStatus(event: FirestoreEvent): { status: string; color: string; bgColor: string } {
     const now = new Date();
-    const accessStartDate = new Date(event.starts_at);
-    const realStartDate = new Date(event.start_date || event.starts_at);
-    const expiryDate = new Date(event.expires_at);
+    const accessStartDate = toDate(event.starts_at);
+    const realStartDate = toDate(event.start_date || event.starts_at);
+    const expiryDate = toDate(event.expires_at);
 
     if (now < accessStartDate) {
       return { status: 'Upcoming', color: 'text-blue-600', bgColor: 'bg-blue-100' };
@@ -111,8 +135,8 @@ export const EventAPI = {
     };
 
     events.forEach(event => {
-      const accessStartDate = new Date(event.starts_at);
-      const endDate = new Date(event.expires_at);
+      const accessStartDate = toDate(event.starts_at);
+      const endDate = toDate(event.expires_at);
       
       if (now >= accessStartDate && now <= endDate) {
         categorized.active.push(event);

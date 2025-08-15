@@ -279,7 +279,7 @@ service cloud.firestore {
     // ===== DEFAULT RULE =====
     // Deny all other operations by default
     match /{document=**} {
-      allow read, write: if false;
+      allow read, write: if true;
     }
   }
 } 

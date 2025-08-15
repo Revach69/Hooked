@@ -1,0 +1,16 @@
+Would remove mobile-app/.DS_Store
+Would remove mobile-app/.env
+Would remove mobile-app/.expo/
+Would remove mobile-app/@revach__hooked.jks
+Would remove mobile-app/android/app/debug.keystore
+Would remove mobile-app/android/build/
+Would remove mobile-app/ios/.xcode.env.local
+Would remove mobile-app/ios/Hooked.xcodeproj/project.xcworkspace/
+Would remove mobile-app/ios/Pods/
+Would remove mobile-app/ios/build/
+Would remove mobile-app/ios/Hooked.xcworkspace/xcshareddata/
+Would remove mobile-app/lib/services/FirebaseMessagingService.ts
+Would remove mobile-app/lib/timezone/
+Would remove mobile-app/lib/utils/bridgeReadiness.ts
+Would remove mobile-app/lib/utils/firebaseLoader.ts
+Would remove mobile-app/plugins/

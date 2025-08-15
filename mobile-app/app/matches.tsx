@@ -23,6 +23,7 @@ import { db } from '../lib/firebaseConfig';
 import UserProfileModal from '../lib/UserProfileModal';
 
 import { updateUserActivity } from '../lib/messageNotificationHelper';
+import { setMuteStatus } from '../lib/utils/notificationUtils';
 
 
 export default function Matches() {
@@ -534,36 +535,26 @@ export default function Matches() {
     const isMuted = mutedMatches.has(matchSessionId);
 
     try {
-      if (isMuted) {
-        // Unmute
-        const mutedRecords = await MutedMatchAPI.filter({
-          event_id: currentEvent.id,
-          muter_session_id: currentSessionId,
-          muted_session_id: matchSessionId
-        });
-        
-        for (const record of mutedRecords) {
-          await MutedMatchAPI.delete(record.id);
-        }
-
-        setMutedMatches(prev => {
-          const newSet = new Set(prev);
+      await setMuteStatus(
+        currentEvent.id,
+        currentSessionId,
+        matchSessionId,
+        !isMuted
+      );
+      setMutedMatches(prev => {
+        const newSet = new Set(prev);
+        if (isMuted) {
           newSet.delete(matchSessionId);
-          return newSet;
-        });
-      } else {
-        // Mute
-        await MutedMatchAPI.create({
-          event_id: currentEvent.id,
-          muter_session_id: currentSessionId,
-          muted_session_id: matchSessionId
-        });
-
-        setMutedMatches(prev => new Set([...prev, matchSessionId]));
-      }
-
-    } catch {
+        } else {
+          newSet.add(matchSessionId);
+        }
+        return newSet;
+      });
+    } catch (error) {
       notifications.error('Error', `Failed to ${isMuted ? 'unmute' : 'mute'} match`);
+      if (error) {
+        try { require('@sentry/react-native').captureException(error); } catch {} 
+      }
     }
   };
 

@@ -201,11 +201,34 @@ export default function EventForm() {
                 />
               </div>
 
+              {/* Event Address */}
+              <div>
+                <label htmlFor="eventAddress" className="block text-sm font-medium dark-mode-text mb-2">
+                  Event Address <span className="text-red-500">*</span>
+                </label>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                  Please include street, city, state/province, and country
+                </p>
+                <input
+                  type="text"
+                  id="eventAddress"
+                  name="eventAddress"
+                  value={formData.eventAddress}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-4 py-3 border dark-mode-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark-mode-bg dark-mode-text"
+                  placeholder="123 Main St, City, State, Country"
+                />
+              </div>
+
               {/* Event Date */}
               <div>
                 <label htmlFor="eventDate" className="block text-sm font-medium dark-mode-text mb-2">
                   Event Date & Time <span className="text-red-500">*</span>
                 </label>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                  Use the local time zone in your event&apos;s location
+                </p>
                 <input
                   type="datetime-local"
                   id="eventDate"
@@ -232,26 +255,6 @@ export default function EventForm() {
                   className="w-full px-4 py-3 border dark-mode-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark-mode-bg dark-mode-text"
                   placeholder="Tell us more about your event..."
                 ></textarea>
-              </div>
-
-              {/* Event Address */}
-              <div>
-                <label htmlFor="eventAddress" className="block text-sm font-medium dark-mode-text mb-2">
-                  Event Address <span className="text-red-500">*</span>
-                </label>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                  Please include street, city, state/province, and country
-                </p>
-                <input
-                  type="text"
-                  id="eventAddress"
-                  name="eventAddress"
-                  value={formData.eventAddress}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-4 py-3 border dark-mode-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark-mode-bg dark-mode-text"
-                  placeholder="123 Main St, City, State, Country"
-                />
               </div>
 
               {/* Venue Name */}

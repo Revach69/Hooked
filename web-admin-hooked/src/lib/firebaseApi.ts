@@ -11,16 +11,18 @@ import {
   where,
   serverTimestamp,
   deleteField,
+  Timestamp,
 } from 'firebase/firestore';
+import { localEventTimeStringToUTCTimestamp, utcTimestampToLocalEventTimeString } from './timezoneUtils';
 
 // Types matching the mobile app
 export interface Event {
   id: string;
   name: string;
   description?: string;
-  starts_at: string;
-  start_date?: string; // Real event start time (for display purposes)
-  expires_at: string;
+  starts_at: Date | Timestamp | string; // Support both old string format and new Timestamp
+  start_date?: Date | Timestamp | string; // Real event start time (for display purposes)  
+  expires_at: Date | Timestamp | string; // Support both old string format and new Timestamp
   event_code: string;
   location?: string;
   organizer_email?: string;
@@ -29,9 +31,11 @@ export interface Event {
   event_type?: string;
   event_link?: string;
   is_private?: boolean;
-  timezone?: string; // Added for timezone support
-  created_at: string;
-  updated_at: string;
+  timezone?: string; // Event's timezone
+  country?: string; // Event's country
+  region?: string; // Database region for future use
+  created_at: Date | Timestamp | string; // Support both formats for backwards compatibility
+  updated_at: Date | Timestamp | string; // Support both formats for backwards compatibility
 }
 
 export interface EventProfile {

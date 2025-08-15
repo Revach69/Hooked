@@ -61,6 +61,7 @@ export default function FadeInImage({
     <Image
       {...imageProps}
       src={imageSrc}
+      alt={imageProps.alt ?? ''}
       className={`transition-opacity ${getDurationClass(fadeInDuration)} ${
         isLoaded ? 'opacity-100' : 'opacity-0'
       } ${className}`}

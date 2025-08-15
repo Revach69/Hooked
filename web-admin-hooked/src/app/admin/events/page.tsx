@@ -21,6 +21,7 @@ import * as QRCode from 'qrcode';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { formatDateWithTimezone } from '@/lib/utils';
+import { toDate } from '@/lib/timezoneUtils';
 
 // Dynamic imports to avoid SSR issues
 const AnalyticsModal = dynamic(() => import('@/components/AnalyticsModal'), { ssr: false });
@@ -267,8 +268,8 @@ export default function EventsPage() {
 
   const getEventStatus = (event: Event): { status: string; color: string; bgColor: string } => {
     const now = new Date();
-    const eventDate = new Date(event.starts_at);
-    const eventEndDate = new Date(event.expires_at);
+    const eventDate = toDate(event.starts_at);
+    const eventEndDate = toDate(event.expires_at);
 
     if (now < eventDate) {
       return { status: 'Upcoming', color: 'text-blue-600', bgColor: 'bg-blue-100' };
@@ -286,8 +287,8 @@ export default function EventsPage() {
     const past: Event[] = [];
 
     events.forEach(event => {
-      const eventDate = new Date(event.starts_at);
-      const eventEndDate = new Date(event.expires_at);
+      const eventDate = toDate(event.starts_at);
+      const eventEndDate = toDate(event.expires_at);
 
       if (now >= eventDate && now <= eventEndDate) {
         active.push(event);
@@ -301,8 +302,10 @@ export default function EventsPage() {
     return { active, future, past };
   };
 
-  const formatDate = (dateString: string, timezone?: string) => {
-    return formatDateWithTimezone(dateString, timezone);
+  const formatDate = (dateInput: string | Date | any, timezone?: string) => {
+    const date = toDate(dateInput);
+    if (!date) return 'Invalid Date';
+    return formatDateWithTimezone(date.toISOString(), timezone);
   };
 
   const renderEventCard = (event: Event) => {

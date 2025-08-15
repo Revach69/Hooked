@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { localEventTimeStringToUTCTimestamp, utcTimestampToLocalEventTimeString } from './timezoneUtils';
 
 export interface ContactFormData {
   fullName: string;
@@ -26,6 +27,7 @@ export interface EventFormData {
   posterPreference: string;
   eventVisibility: string;
   socialMedia: string;
+  eventTimezone?: string; // Added for timezone
 }
 
 export class EmailService {
@@ -167,15 +169,8 @@ export class EmailService {
     const finalEventType = eventType === 'Other' ? otherEventType : eventType;
 
     // Format the event date for display
-    const formattedEventDate = eventDate ? new Date(eventDate).toLocaleString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZoneName: 'short'
-    }) : 'Not specified';
+    const eventTimezone = data.eventTimezone || 'Asia/Jerusalem';
+    const formattedEventDate = eventDate ? utcTimestampToLocalEventTimeString(localEventTimeStringToUTCTimestamp(eventDate, eventTimezone), eventTimezone) : 'Not specified';
 
     const content = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">

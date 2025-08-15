@@ -6,16 +6,16 @@ import { X, Save, Plus, Camera, Upload, Edit3 } from 'lucide-react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getStorageInstance } from '@/lib/firebaseConfig';
 import ImageEditor from './ImageEditor';
-import { utcToLocalDateTimeString } from '../lib/utils';
 
 import { 
   getAvailableCountries, 
   getPrimaryTimezoneForCountry, 
   getTimezonesForCountry, 
   getUserTimezone, 
-  localDateTimeStringToUTC, 
-  formDateTimeToUTC,
-  getAvailableTimezones 
+  localEventTimeStringToUTCTimestamp, 
+  utcTimestampToLocalEventTimeString,
+  getAvailableTimezones,
+  getTimezoneDisplayName
 } from '../lib/timezoneUtils';
 
 interface EventFormProps {
@@ -37,12 +37,14 @@ export default function EventForm({
     location: '',
     starts_at: '', // When users can start accessing the event (early access)
     start_date: '', // Real event start time (for display)
-    end_date: '',
+    expires_at: '',
     description: '',
     event_type: '',
     event_link: '',
     is_private: false,
-    timezone: getUserTimezone() // Default to user's timezone
+    country: '', // Event's country
+    timezone: getUserTimezone(), // Derived from country
+    region: '' // Future feature: database region assignment
   });
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -66,18 +68,41 @@ export default function EventForm({
     setIsDragOver(false);
     
     if (event) {
+      const eventTimezone = event.timezone || getUserTimezone();
+      // Try to determine country from timezone
+      let eventCountry = '';
+      for (const [country, timezones] of Object.entries(getAvailableCountries().reduce((acc, country) => {
+        acc[country] = getTimezonesForCountry(country);
+        return acc;
+      }, {} as Record<string, string[]>))) {
+        if (timezones.includes(eventTimezone)) {
+          eventCountry = country;
+          break;
+        }
+      }
+      
       setFormData({
         name: event.name || '',
         event_code: event.event_code || '',
         location: event.location || '',
-        starts_at: event.starts_at ? utcToLocalDateTimeString(event.starts_at) : '',
-        start_date: event.start_date ? utcToLocalDateTimeString(event.start_date) : (event.starts_at ? utcToLocalDateTimeString(event.starts_at) : ''),
-        end_date: event.expires_at ? utcToLocalDateTimeString(event.expires_at) : '',
+        starts_at: (event.starts_at && typeof event.starts_at === 'object' && 'toDate' in event.starts_at)
+          ? utcTimestampToLocalEventTimeString(event.starts_at, eventTimezone)
+          : '',
+        start_date: (event.start_date && typeof event.start_date === 'object' && 'toDate' in event.start_date)
+          ? utcTimestampToLocalEventTimeString(event.start_date, eventTimezone)
+          : (event.starts_at && typeof event.starts_at === 'object' && 'toDate' in event.starts_at)
+            ? utcTimestampToLocalEventTimeString(event.starts_at, eventTimezone)
+            : '',
+        expires_at: (event.expires_at && typeof event.expires_at === 'object' && 'toDate' in event.expires_at)
+          ? utcTimestampToLocalEventTimeString(event.expires_at, eventTimezone)
+          : '',
         description: event.description || '',
         event_type: event.event_type || '',
         event_link: event.event_link || '',
         is_private: event.is_private || false,
-        timezone: event.timezone || getUserTimezone()
+        country: eventCountry,
+        timezone: eventTimezone,
+        region: event.region || ''
       });
       
       // Load existing image if available
@@ -92,12 +117,14 @@ export default function EventForm({
         location: '',
         starts_at: '',
         start_date: '',
-        end_date: '',
+        expires_at: '',
         description: '',
         event_type: '',
         event_link: '',
         is_private: false,
-        timezone: getUserTimezone()
+        country: '',
+        timezone: getUserTimezone(),
+        region: ''
       });
     }
     setErrors({});
@@ -222,6 +249,10 @@ export default function EventForm({
       newErrors.event_type = 'Event type is required';
     }
 
+    if (!formData.country) {
+      newErrors.country = 'Event country is required';
+    }
+
     if (!formData.starts_at) {
       newErrors.starts_at = 'Access start time is required';
     }
@@ -230,13 +261,13 @@ export default function EventForm({
       newErrors.start_date = 'Real event start time is required';
     }
 
-    if (!formData.end_date) {
-      newErrors.end_date = 'End date is required';
-    } else if (formData.starts_at && formData.end_date) {
+    if (!formData.expires_at) {
+      newErrors.expires_at = 'End date is required';
+    } else if (formData.starts_at && formData.expires_at) {
       const accessStartDate = new Date(formData.starts_at);
-      const endDate = new Date(formData.end_date);
+      const endDate = new Date(formData.expires_at);
       if (endDate <= accessStartDate) {
-        newErrors.end_date = 'End date must be after access start time';
+        newErrors.expires_at = 'End date must be after access start time';
       }
     }
 
@@ -361,17 +392,19 @@ export default function EventForm({
       }
       // If imagePreview is null, it means the image was removed, so imageUrl stays null
 
-      // Convert form datetime inputs (user's timezone) to event timezone, then to UTC for storage
+      // Convert form datetime inputs (event's timezone) to UTC Date objects for Firestore
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const eventData: any = {
         ...formData,
-        starts_at: formDateTimeToUTC(formData.starts_at, formData.timezone),
-        start_date: formDateTimeToUTC(formData.start_date, formData.timezone),
-        expires_at: formDateTimeToUTC(formData.end_date, formData.timezone),
+        starts_at: localEventTimeStringToUTCTimestamp(formData.starts_at, formData.timezone),
+        start_date: localEventTimeStringToUTCTimestamp(formData.start_date, formData.timezone),
+        expires_at: localEventTimeStringToUTCTimestamp(formData.expires_at, formData.timezone),
         event_type: formData.event_type,
         event_link: formData.event_link,
         is_private: formData.is_private,
+        country: formData.country,
         timezone: formData.timezone,
+        region: formData.region, // Building block for future database region assignment
       };
 
       // Handle image_url field
@@ -409,6 +442,93 @@ export default function EventForm({
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
+  };
+
+  const handleCountryChange = (country: string) => {
+    const timezone = getPrimaryTimezoneForCountry(country);
+    const region = getRegionForCountry(country); // Future feature
+    
+    setFormData(prev => ({ 
+      ...prev, 
+      country,
+      timezone,
+      region
+    }));
+    
+    if (errors.country) {
+      setErrors(prev => ({ ...prev, country: '' }));
+    }
+  };
+
+  // Future feature: Map countries to database regions
+  const getRegionForCountry = (country: string): string => {
+    // This is a building block for future database region assignment
+    const regionMapping: Record<string, string> = {
+      'United States': 'us-east',
+      'Canada': 'us-east',
+      'United Kingdom': 'europe-west',
+      'Germany': 'europe-west',
+      'France': 'europe-west',
+      'Spain': 'europe-west',
+      'Italy': 'europe-west',
+      'Netherlands': 'europe-west',
+      'Switzerland': 'europe-west',
+      'Austria': 'europe-west',
+      'Belgium': 'europe-west',
+      'Sweden': 'europe-west',
+      'Norway': 'europe-west',
+      'Denmark': 'europe-west',
+      'Finland': 'europe-west',
+      'Poland': 'europe-west',
+      'Czech Republic': 'europe-west',
+      'Hungary': 'europe-west',
+      'Romania': 'europe-west',
+      'Bulgaria': 'europe-west',
+      'Greece': 'europe-west',
+      'Turkey': 'europe-west',
+      'Russia': 'europe-west',
+      'Ukraine': 'europe-west',
+      'Belarus': 'europe-west',
+      'Israel': 'middle-east',
+      'UAE': 'middle-east',
+      'Saudi Arabia': 'middle-east',
+      'Qatar': 'middle-east',
+      'Kuwait': 'middle-east',
+      'Bahrain': 'middle-east',
+      'Oman': 'middle-east',
+      'Jordan': 'middle-east',
+      'Lebanon': 'middle-east',
+      'Egypt': 'middle-east',
+      'Japan': 'asia-east',
+      'South Korea': 'asia-east',
+      'China': 'asia-east',
+      'Hong Kong': 'asia-east',
+      'Taiwan': 'asia-east',
+      'Singapore': 'asia-southeast',
+      'Thailand': 'asia-southeast',
+      'Vietnam': 'asia-southeast',
+      'Malaysia': 'asia-southeast',
+      'Indonesia': 'asia-southeast',
+      'Philippines': 'asia-southeast',
+      'India': 'asia-south',
+      'Australia': 'australia',
+      'New Zealand': 'australia',
+      'Brazil': 'south-america',
+      'Argentina': 'south-america',
+      'Chile': 'south-america',
+      'Colombia': 'south-america',
+      'Peru': 'south-america',
+      'Venezuela': 'south-america',
+      'Mexico': 'us-east',
+      'South Africa': 'africa',
+      'Nigeria': 'africa',
+      'Kenya': 'africa',
+      'Morocco': 'africa',
+      'Tunisia': 'africa',
+      'Algeria': 'africa'
+    };
+    
+    return regionMapping[country] || 'global';
   };
 
   if (!isOpen) return null;
@@ -520,24 +640,37 @@ export default function EventForm({
             )}
           </div>
 
-          {/* Timezone Selection */}
+          {/* Country Selection */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Event Timezone
+              Event Country *
             </label>
             <select
-              value={formData.timezone}
-              onChange={(e) => handleInputChange('timezone', e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              value={formData.country}
+              onChange={(e) => handleCountryChange(e.target.value)}
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                errors.country 
+                  ? 'border-red-500 dark:border-red-400' 
+                  : 'border-gray-300 dark:border-gray-600'
+              } bg-white dark:bg-gray-700 text-gray-900 dark:text-white`}
             >
-              {getAvailableTimezones().map((tz) => (
-                <option key={tz.value} value={tz.value}>
-                  {tz.label}
+              <option value="">Select the country where this event takes place</option>
+              {getAvailableCountries().map((country) => (
+                <option key={country} value={country}>
+                  {country}
                 </option>
               ))}
             </select>
+            {formData.country && (
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Timezone: {getTimezoneDisplayName(formData.timezone)}
+              </p>
+            )}
+            {errors.country && (
+              <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.country}</p>
+            )}
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              Select the timezone where this event will take place
+              The event timezone will be automatically set based on the selected country
             </p>
           </div>
 
@@ -557,6 +690,11 @@ export default function EventForm({
                     : 'border-gray-300 dark:border-gray-600'
                 } bg-white dark:bg-gray-700 text-gray-900 dark:text-white`}
               />
+              {formData.timezone && (
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Enter time in event timezone: {getTimezoneDisplayName(formData.timezone)}
+                </p>
+              )}
               {errors.starts_at && (
                 <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.starts_at}</p>
               )}
@@ -576,6 +714,11 @@ export default function EventForm({
                     : 'border-gray-300 dark:border-gray-600'
                 } bg-white dark:bg-gray-700 text-gray-900 dark:text-white`}
               />
+              {formData.timezone && (
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Enter time in event timezone: {getTimezoneDisplayName(formData.timezone)}
+                </p>
+              )}
               {errors.start_date && (
                 <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.start_date}</p>
               )}
@@ -589,16 +732,21 @@ export default function EventForm({
             </label>
             <input
               type="datetime-local"
-              value={formData.end_date}
-              onChange={(e) => handleInputChange('end_date', e.target.value)}
+              value={formData.expires_at}
+              onChange={(e) => handleInputChange('expires_at', e.target.value)}
               className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                errors.end_date 
+                errors.expires_at 
                   ? 'border-red-500 dark:border-red-400' 
                   : 'border-gray-300 dark:border-gray-600'
               } bg-white dark:bg-gray-700 text-gray-900 dark:text-white`}
             />
-            {errors.end_date && (
-              <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.end_date}</p>
+            {formData.timezone && (
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Enter time in event timezone: {getTimezoneDisplayName(formData.timezone)}
+              </p>
+            )}
+            {errors.expires_at && (
+              <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.expires_at}</p>
             )}
           </div>
 

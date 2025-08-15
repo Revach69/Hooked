@@ -1,7 +1,8 @@
-import { type ClassValue, clsx } from "clsx"
-import { twMerge } from "tailwind-merge"
+import { localEventTimeStringToUTCTimestamp, utcTimestampToLocalEventTimeString } from './timezoneUtils';
+import { twMerge } from 'tailwind-merge';
+import clsx from 'clsx';
 
-export function cn(...inputs: ClassValue[]) {
+export function cn(...inputs: string[]) {
   return twMerge(clsx(inputs))
 }
 
@@ -31,32 +32,19 @@ export function formatDateWithTimezone(dateString: string, timezone?: string, op
   }
 }
 
-// Utility function to convert UTC date to local datetime string for form inputs
+// DEPRECATED: These functions had incorrect timezone offset calculations
+// Use the proper timezone utilities from timezoneUtils.ts instead
+
+/*
+// DEPRECATED - INCORRECT TIMEZONE LOGIC - DO NOT USE
 export function utcToLocalDateTimeString(utcDateString: string): string {
-  if (!utcDateString) return '';
-  
-  try {
-    const date = new Date(utcDateString);
-    const offset = date.getTimezoneOffset();
-    const localDate = new Date(date.getTime() + (offset * 60 * 1000));
-    return localDate.toISOString().slice(0, 16);
-  } catch (error) {
-    console.error('Error converting UTC to local datetime:', utcDateString, error);
-    return '';
-  }
+  // This function incorrectly adds timezone offset, causing time shifts
+  // Use utcToLocalDateTimeString from timezoneUtils.ts instead
 }
 
-// Utility function to convert local datetime string to UTC for storage
+// DEPRECATED - INCORRECT TIMEZONE LOGIC - DO NOT USE  
 export function localDateTimeStringToUTC(localDateTimeString: string): string {
-  if (!localDateTimeString) return '';
-  
-  try {
-    const localDate = new Date(localDateTimeString);
-    const offset = localDate.getTimezoneOffset();
-    const utcDate = new Date(localDate.getTime() + (offset * 60 * 1000));
-    return utcDate.toISOString();
-  } catch (error) {
-    console.error('Error converting local datetime to UTC:', localDateTimeString, error);
-    return '';
-  }
+  // This function incorrectly adds timezone offset, causing time shifts
+  // Use formDateTimeToUTC from timezoneUtils.ts instead
 }
+*/

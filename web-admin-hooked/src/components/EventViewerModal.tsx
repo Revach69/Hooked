@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Calendar, MapPin, Clock, Copy, Download } from 'lucide-react';
 import type { Event } from '@/types/admin';
 import { formatDateWithTimezone } from '@/lib/utils';
+import { toDate } from '@/lib/timezoneUtils';
 
 interface EventViewerModalProps {
   event: Event | null;
@@ -15,8 +16,10 @@ interface EventViewerModalProps {
 export function EventViewerModal({ event, isOpen, onClose }: EventViewerModalProps) {
   if (!event) return null;
 
-  const formatDate = (dateString: string) => {
-    return formatDateWithTimezone(dateString);
+  const formatDate = (dateInput: string | Date | any) => {
+    const date = toDate(dateInput);
+    if (!date) return 'Invalid Date';
+    return formatDateWithTimezone(date.toISOString());
   };
 
   const handleDownloadQR = async () => {
@@ -45,8 +48,8 @@ export function EventViewerModal({ event, isOpen, onClose }: EventViewerModalPro
 
   const getEventStatus = (event: Event): { status: string; color: string; bgColor: string } => {
     const now = new Date();
-    const eventDate = new Date(event.starts_at);
-    const eventEndDate = new Date(event.expires_at);
+    const eventDate = toDate(event.starts_at);
+    const eventEndDate = toDate(event.expires_at);
 
     if (now < eventDate) {
       return { status: 'Upcoming', color: 'text-blue-600', bgColor: 'bg-blue-100' };

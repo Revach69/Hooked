@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Event } from '@/lib/firebaseApi';
+import { toDate } from '@/lib/timezoneUtils';
 import { 
   Copy, 
   Download, 
@@ -37,8 +38,12 @@ interface EventCardProps {
 // Function to determine event status based on current time and event dates
 const getEventStatus = (event: Event): { status: string; color: string; bgColor: string } => {
   const now = new Date();
-  const startDate = new Date(event.starts_at);
-  const expiryDate = new Date(event.expires_at);
+  const startDate = toDate(event.starts_at);
+  const expiryDate = toDate(event.expires_at);
+
+  if (!startDate || !expiryDate) {
+    return { status: 'Unknown', color: 'text-gray-600', bgColor: 'bg-gray-100' };
+  }
 
   if (now < startDate) {
     return { status: 'Upcoming', color: 'text-blue-600', bgColor: 'bg-blue-100' };
@@ -119,12 +124,14 @@ export default function EventCard({
     generateQRCode();
   }, []);
 
-  const formatDate = (dateString: string, timezone?: string) => {
+  const formatDate = (dateInput: string | Date | any, timezone?: string) => {
+    const date = toDate(dateInput);
+    if (!date) return 'Invalid Date';
+    
     if (timezone) {
       try {
         // Convert UTC time to the event's timezone for display
-        const utcDate = new Date(dateString);
-        return utcDate.toLocaleDateString('en-US', {
+        return date.toLocaleDateString('en-US', {
           year: 'numeric',
           month: 'short',
           day: 'numeric',
@@ -137,7 +144,7 @@ export default function EventCard({
         console.warn('Timezone formatting failed, using fallback:', error);
       }
     }
-    return new Date(dateString).toLocaleDateString('en-US', {
+    return date.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',

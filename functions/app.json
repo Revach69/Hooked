@@ -1,3 +1,10 @@
 {
-  "expo": {}
+  "expo": {
+    "android": {
+      "package": "com.revach.functions"
+    },
+    "ios": {
+      "bundleIdentifier": "com.revach.functions"
+    }
+  }
 }
