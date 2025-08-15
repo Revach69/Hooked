@@ -40,6 +40,7 @@ export default function Home() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [manualCode, setManualCode] = useState('');
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isCheckingResume, setIsCheckingResume] = useState(true); // <-- NEW
 
 
   const { kickedUser, handleKickedUserClose } = useKickedUserCheck();
@@ -82,6 +83,7 @@ export default function Home() {
 
   const initializeApp = async () => {
     if (!MemoryManager.isComponentMounted(componentId) || isInitialized) {
+      setIsCheckingResume(false); // <-- NEW
       return;
     }
 
@@ -91,9 +93,8 @@ export default function Home() {
       const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
       
       if (eventId && sessionId) {
-        // User has an active session, redirect to discovery
         router.replace('/discovery');
-        return;
+        return; // navigation will unmount, no need to set isCheckingResume
       }
       
       // Simple initialization without complex async operations
@@ -115,6 +116,8 @@ export default function Home() {
       
     } catch {
       // Error during app initialization
+    } finally {
+      setIsCheckingResume(false); // <-- NEW
     }
   };
 
@@ -627,8 +630,34 @@ export default function Home() {
           eventName={kickedUser?.eventName || ''}
           adminNotes={kickedUser?.adminNotes || ''}
         />
-
-
+        {/* Subtle loading overlay for resume check */}
+        {isCheckingResume && (
+          <View style={{
+            ...StyleSheet.absoluteFillObject,
+            backgroundColor: isDark ? '#1a1a1a' : '#ffffff',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1000,
+          }}>
+            <View style={{ alignItems: 'center' }}>
+              <Image
+                source={require('../assets/icon.png')}
+                style={{ width: 120, height: 120, borderRadius: 30, marginBottom: 24 }}
+                resizeMode="contain"
+              />
+              <Text style={{
+                fontSize: 28,
+                fontWeight: '600',
+                color: isDark ? '#fff' : '#000',
+                textAlign: 'center',
+                marginBottom: 16,
+              }}>
+                Hooked
+              </Text>
+              <ActivityIndicator size="large" color={isDark ? '#fff' : '#000'} />
+            </View>
+          </View>
+        )}
       </LinearGradient>
     </SafeAreaView>
   );
