@@ -1,6 +1,7 @@
 import appCheck from '@react-native-firebase/app-check';
 import { Platform } from 'react-native';
 import * as Sentry from '@sentry/react-native';
+import Constants from 'expo-constants';
 
 let appCheckInitialized = false;
 
@@ -26,11 +27,11 @@ export async function initializeAppCheck(): Promise<void> {
       rnfbProvider.configure({
         android: {
           provider: 'debug',
-          debugToken: 'debug-token', // You can set a specific debug token if needed
+          debugToken: Constants.expoConfig?.extra?.APP_CHECK_DEBUG_TOKEN || '844F0D17-6C14-4701-B1E4-E7055ED7F9F2',
         },
         apple: {
           provider: 'debug',
-          debugToken: 'debug-token', // You can set a specific debug token if needed
+          debugToken: Constants.expoConfig?.extra?.APP_CHECK_DEBUG_TOKEN || '844F0D17-6C14-4701-B1E4-E7055ED7F9F2',
         },
       });
       
