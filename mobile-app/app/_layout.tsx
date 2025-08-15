@@ -18,7 +18,7 @@ Sentry.init({
 
 import React, { useEffect, useState } from 'react';
 import { Stack, useRouter } from 'expo-router';
-import { Text, View } from 'react-native';
+import { Text, View, Platform } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { NotificationProvider } from '../lib/contexts/NotificationContext';
 import { NotificationRouter } from '../lib/notifications/NotificationRouter';
@@ -209,8 +209,10 @@ async function mapMessageToEvent(
     return null; // don't notify sender
   }
 
-  // Get sender's session ID for mute checks
+  // Get sender's session ID and name for mute checks and display
   let senderSessionId: string | undefined;
+  let senderName = d.sender_name;
+  
   try {
     const { EventProfileAPI } = await import('../lib/firebaseApi');
     
@@ -222,6 +224,11 @@ async function mapMessageToEvent(
     const profilePromise = EventProfileAPI.get(d.from_profile_id);
     const senderProfile = await Promise.race([profilePromise, timeoutPromise]);
     senderSessionId = senderProfile?.session_id;
+    
+    // If sender_name is missing from message, get it from profile
+    if (!senderName && senderProfile?.first_name) {
+      senderName = senderProfile.first_name;
+    }
   } catch {
     // Continue without sender session ID if lookup fails
   }
@@ -232,7 +239,7 @@ async function mapMessageToEvent(
     createdAt: Date.parse(d.created_at ?? new Date().toISOString()),
     senderProfileId: d.from_profile_id,
     senderSessionId,
-    senderName: d.sender_name ?? undefined,
+    senderName: senderName || 'Someone',
     conversationId: d.to_profile_id, // or a composed id if you use one
     preview: d.content?.slice?.(0, 80),
   };
@@ -277,17 +284,23 @@ export default function RootLayout() {
 
 
 
-  // 2.6) Foreground notification policy - enable for both platforms
+  // 2.6) Foreground notification policy - prevent duplicate notifications on iOS
   useEffect(() => {
     if (!(Notifications as any).__hookedHandlerSet) {
       (Notifications as any).__hookedHandlerSet = true;
       Notifications.setNotificationHandler({
-        handleNotification: async () => ({
-          shouldPlaySound: true,   // Enable sound
-          shouldSetBadge: true,    // Keep badge
-          shouldShowBanner: true,  // Show banner on iOS
-          shouldShowList: true,    // Show in notification list
-        }),
+        handleNotification: async (notification) => {
+          // For iOS, don't show banner/sound when app is in foreground to prevent duplicates
+          // The custom toast system will handle foreground notifications
+          const isIOS = Platform.OS === 'ios';
+          
+          return {
+            shouldPlaySound: !isIOS,      // Disable sound on iOS (toast will handle)
+            shouldSetBadge: true,         // Keep badge on both platforms
+            shouldShowBanner: !isIOS,     // Disable banner on iOS (toast will handle)
+            shouldShowList: true,         // Show in notification list on both platforms
+          };
+        },
       });
     }
   }, []);

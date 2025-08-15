@@ -502,17 +502,47 @@ export default function Matches() {
               if (likeToDelete) {
                 // Delete this user's like, which will make it no longer mutual
                 await LikeAPI.delete(likeToDelete.id);
-                
                 // Also need to update the other user's like to set is_mutual to false
                 const otherLikes = await LikeAPI.filter({
                   event_id: currentEvent.id,
                   liker_session_id: matchSessionId,
                   liked_session_id: currentSessionId
                 });
-
                 if (otherLikes.length > 0) {
                   await LikeAPI.update(otherLikes[0].id, { is_mutual: false });
                 }
+
+                // --- NEW: Mark all messages between these users as seen ---
+                try {
+                  const { MessageAPI } = await import('../lib/firebaseApi');
+                  // Get all messages sent from match to current user
+                  const messagesFromMatch = await MessageAPI.filter({
+                    event_id: currentEvent.id,
+                    from_profile_id: matchSessionId,
+                    to_profile_id: currentSessionId
+                  });
+                  // Get all messages sent from current user to match
+                  const messagesToMatch = await MessageAPI.filter({
+                    event_id: currentEvent.id,
+                    from_profile_id: currentSessionId,
+                    to_profile_id: matchSessionId
+                  });
+                  // Mark all as seen
+                  await Promise.all([
+                    ...messagesFromMatch.map(msg =>
+                      !msg.seen ? MessageAPI.update(msg.id, { seen: true, seen_at: new Date().toISOString() }) : null
+                    ),
+                    ...messagesToMatch.map(msg =>
+                      !msg.seen ? MessageAPI.update(msg.id, { seen: true, seen_at: new Date().toISOString() }) : null
+                    )
+                  ]);
+                } catch (err) {
+                  // Ignore errors in marking as seen, but log for debugging
+                  if (typeof require !== 'undefined') {
+                    try { require('@sentry/react-native').captureException(err); } catch {}
+                  }
+                }
+                // --- END NEW ---
 
                 Alert.alert(
                   'Match Removed',

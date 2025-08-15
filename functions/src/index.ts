@@ -429,13 +429,35 @@ async function sendExpoPush(toTokens: string[], payload: { title: string; body?:
   // Generate aggregation key for deduplication
   const agg = payload?.data?.aggregationKey || payload?.data?.type || 'default';
   
+  // Determine Android channel based on notification type
+  const notificationType = payload?.data?.type;
+  let androidChannelId = 'default';
+  
+  if (notificationType === 'message') {
+    androidChannelId = 'messages';
+  } else if (notificationType === 'match') {
+    androidChannelId = 'matches';
+  }
+  
   for (const chunk of chunks) {
     const messages = chunk.map(to => ({
       to,
       sound: 'default',
+      priority: 'high',
       ...payload,
       collapseId: agg,       // Expo dedupe key
-      threadId: agg          // iOS grouping in Notification Center
+      threadId: agg,         // iOS grouping in Notification Center
+      channelId: androidChannelId,  // Android notification channel
+      android: {
+        channelId: androidChannelId,
+        priority: 'high',
+        sound: 'default',
+        vibrate: true
+      },
+      ios: {
+        sound: 'default',
+        badge: 1
+      }
     }));
     const resp = await fetch(EXPO_PUSH_URL, {
       method: 'POST',
@@ -520,8 +542,8 @@ async function processNotificationJobs(): Promise<void> {
           const appState = appStateDoc.exists ? appStateDoc.data() as any : null;
           
           if (appState?.isForeground === true && appState?.updatedAt) {
-            // Check if app state is recent (within 15 seconds)
-            const APP_STATE_TTL_SECONDS = 15;
+            // Check if app state is recent (within 30 seconds for better reliability)
+            const APP_STATE_TTL_SECONDS = 30;
             const appStateAge = Date.now() - appState.updatedAt.toDate().getTime();
             const isRecent = appStateAge < (APP_STATE_TTL_SECONDS * 1000);
             
@@ -682,14 +704,36 @@ export const notify = functions
       const agg = data?.aggregationKey || data?.type || 'default';
       
       for (const chunk of chunks) {
+        // Determine Android channel based on notification type
+        const notificationType = data?.type;
+        let androidChannelId = 'default';
+        
+        if (notificationType === 'message') {
+          androidChannelId = 'messages';
+        } else if (notificationType === 'match') {
+          androidChannelId = 'matches';
+        }
+        
         const messages = chunk.map(to => ({
           to,
           title,
           body,
           data,
           sound: 'default',
+          priority: 'high',
           collapseId: agg,       // Expo dedupe key
-          threadId: agg          // iOS grouping in Notification Center
+          threadId: agg,         // iOS grouping in Notification Center
+          channelId: androidChannelId,  // Android notification channel
+          android: {
+            channelId: androidChannelId,
+            priority: 'high',
+            sound: 'default',
+            vibrate: true
+          },
+          ios: {
+            sound: 'default',
+            badge: 1
+          }
         }));
         const resp = await fetch(EXPO_PUSH_URL, {
           method: 'POST',
@@ -772,7 +816,17 @@ export const onMutualLike = functions
         try {
           const appStateDoc = await admin.firestore().collection('app_states').doc(likerSession).get();
           appState = appStateDoc.exists ? appStateDoc.data() as any : null;
-          isForeground = appState?.isForeground === true;
+          
+          if (appState?.isForeground === true && appState?.updatedAt) {
+            // Check if app state is recent (within 30 seconds for better reliability)
+            const APP_STATE_TTL_SECONDS = 30;
+            const appStateAge = Date.now() - appState.updatedAt.toDate().getTime();
+            const isRecent = appStateAge < (APP_STATE_TTL_SECONDS * 1000);
+            
+            isForeground = isRecent;
+          } else {
+            isForeground = false;
+          }
         } catch (error) {
           console.log('Error reading app state for creator, assuming not in foreground:', error);
           isForeground = false;
@@ -833,7 +887,17 @@ export const onMutualLike = functions
         try {
           const appStateDoc = await admin.firestore().collection('app_states').doc(likedSession).get();
           appState = appStateDoc.exists ? appStateDoc.data() as any : null;
-          isForeground = appState?.isForeground === true;
+          
+          if (appState?.isForeground === true && appState?.updatedAt) {
+            // Check if app state is recent (within 30 seconds for better reliability)
+            const APP_STATE_TTL_SECONDS = 30;
+            const appStateAge = Date.now() - appState.updatedAt.toDate().getTime();
+            const isRecent = appStateAge < (APP_STATE_TTL_SECONDS * 1000);
+            
+            isForeground = isRecent;
+          } else {
+            isForeground = false;
+          }
         } catch (error) {
           console.log('Error reading app state for recipient, assuming not in foreground:', error);
           isForeground = false;

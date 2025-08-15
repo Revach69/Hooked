@@ -10,13 +10,25 @@ import { AsyncStorageUtils } from './asyncStorageUtils';
 export async function initializeNotificationChannels(): Promise<void> {
   if (Platform.OS === 'android') {
     try {
-      // Create notification channel for messages
-      await Notifications.setNotificationChannelAsync('messages', {
-        name: 'Messages',
+      // Create default notification channel
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'Hooked Notifications',
         description: 'Notifications for new messages and matches',
         importance: Notifications.AndroidImportance.HIGH,
         vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#FF231F7C',
+        lightColor: '#8b5cf6',
+        sound: 'default',
+        enableVibrate: true,
+        showBadge: true,
+      });
+
+      // Create notification channel for messages
+      await Notifications.setNotificationChannelAsync('messages', {
+        name: 'Messages',
+        description: 'Notifications for new messages',
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#8b5cf6',
         sound: 'default',
         enableVibrate: true,
         showBadge: true,
@@ -28,25 +40,13 @@ export async function initializeNotificationChannels(): Promise<void> {
         description: 'Notifications for new matches',
         importance: Notifications.AndroidImportance.HIGH,
         vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#FF231F7C',
+        lightColor: '#8b5cf6',
         sound: 'default',
         enableVibrate: true,
         showBadge: true,
       });
-
-      // Create notification channel for likes
-      await Notifications.setNotificationChannelAsync('likes', {
-        name: 'Likes',
-        description: 'Notifications for new likes',
-        importance: Notifications.AndroidImportance.DEFAULT,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#FF231F7C',
-        sound: 'default',
-        enableVibrate: true,
-        showBadge: true,
-      });
-    } catch {
-      // Error creating notification channels
+    } catch (error) {
+      console.error('Error creating notification channels:', error);
     }
   }
 }
