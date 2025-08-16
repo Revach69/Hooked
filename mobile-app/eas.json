@@ -6,6 +6,11 @@
   "build": {
     "development": {
       "developmentClient": true,
+      "env": {
+        "SENTRY_AUTH_TOKEN": "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",
+        "SENTRY_ORG": "hooked",
+        "SENTRY_PROJECT": "hooked"
+      },
       "distribution": "internal",
       "ios": {
         "resourceClass": "m-medium"
@@ -16,6 +21,11 @@
     },
     "preview": {
       "distribution": "internal",
+      "env": {
+        "SENTRY_AUTH_TOKEN": "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",
+        "SENTRY_ORG": "hooked",
+        "SENTRY_PROJECT": "hooked"
+      },
       "ios": {
         "resourceClass": "m-medium"
       },
@@ -25,6 +35,11 @@
     },
     "production": {
       "autoIncrement": true,
+      "env": {
+        "SENTRY_AUTH_TOKEN": "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",
+        "SENTRY_ORG": "hooked",
+        "SENTRY_PROJECT": "hooked"
+      },
       "ios": {
         "resourceClass": "m-medium",
         "env": {

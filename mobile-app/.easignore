@@ -7,7 +7,6 @@ yarn-error.log*
 # Build outputs
 android/
 ios/
-web/
 web-admin-hooked/
 hooked-website/
 

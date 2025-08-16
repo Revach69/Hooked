@@ -19,26 +19,10 @@ export async function initializeAppCheck(): Promise<void> {
     console.log('Initializing Firebase App Check...');
     
     if (__DEV__) {
-      // For development/debug builds, use debug tokens
-      console.log('Using App Check debug provider for development');
-      
-      // Initialize with debug provider
-      const rnfbProvider = appCheck().newReactNativeFirebaseAppCheckProvider();
-      rnfbProvider.configure({
-        android: {
-          provider: 'debug',
-          debugToken: Constants.expoConfig?.extra?.APP_CHECK_DEBUG_TOKEN || '844F0D17-6C14-4701-B1E4-E7055ED7F9F2',
-        },
-        apple: {
-          provider: 'debug',
-          debugToken: Constants.expoConfig?.extra?.APP_CHECK_DEBUG_TOKEN || '844F0D17-6C14-4701-B1E4-E7055ED7F9F2',
-        },
-      });
-      
-      await appCheck().initializeAppCheck({
-        provider: rnfbProvider,
-        isTokenAutoRefreshEnabled: true,
-      });
+      // Temporarily disable App Check for development
+      console.log('App Check disabled for development - skipping initialization');
+      appCheckInitialized = true;
+      return;
     } else {
       // For production builds, use platform-specific providers
       console.log('Using App Check production providers');

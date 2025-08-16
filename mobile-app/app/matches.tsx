@@ -41,6 +41,7 @@ export default function Matches() {
   const [isAppActive, setIsAppActive] = useState(true);
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
   const [mutedMatches, setMutedMatches] = useState<Set<string>>(new Set());
+  const [unmatchingUsers, setUnmatchingUsers] = useState<Set<string>>(new Set());
   // Single ref to hold all unsubscribe functions
   const listenersRef = useRef<{
     userProfile?: () => void;
@@ -473,6 +474,12 @@ export default function Matches() {
   const handleUnmatch = async (matchSessionId: string, matchName: string) => {
     if (!currentEvent?.id || !currentSessionId) return;
 
+    // Prevent double-clicking by checking if already unmatching
+    if (unmatchingUsers.has(matchSessionId)) {
+      console.log('Already unmatching this user, ignoring');
+      return;
+    }
+
     // Show confirmation alert first
     Alert.alert(
       'Unmatch',
@@ -486,72 +493,59 @@ export default function Matches() {
           text: 'Unmatch',
           style: 'destructive',
           onPress: async () => {
+            // Mark user as being unmatched to prevent double operations
+            setUnmatchingUsers(prev => new Set(prev).add(matchSessionId));
             try {
-              // Find the mutual like record between these two users
-              const mutualLikes = await LikeAPI.filter({
-                event_id: currentEvent.id,
-                is_mutual: true
+              // Find and delete ALL like records between these two users
+              // Need to check both profile IDs since session IDs might not match profile references
+              const matchProfile = matches.find(m => m.session_id === matchSessionId);
+              
+              console.log('Unmatching users:', { 
+                currentSessionId, 
+                matchSessionId,
+                currentProfileId: currentUserProfile?.id,
+                matchProfileId: matchProfile?.id
               });
 
-              // Find the like record where this user is involved with the match
-              const likeToDelete = mutualLikes.find(like => 
-                (like.liker_session_id === currentSessionId && like.liked_session_id === matchSessionId) ||
-                (like.liker_session_id === matchSessionId && like.liked_session_id === currentSessionId)
-              );
+              const allLikes = await LikeAPI.filter({
+                event_id: currentEvent.id
+              });
 
-              if (likeToDelete) {
-                // Delete this user's like, which will make it no longer mutual
-                await LikeAPI.delete(likeToDelete.id);
-                // Also need to update the other user's like to set is_mutual to false
-                const otherLikes = await LikeAPI.filter({
-                  event_id: currentEvent.id,
-                  liker_session_id: matchSessionId,
-                  liked_session_id: currentSessionId
-                });
-                if (otherLikes.length > 0) {
-                  await LikeAPI.update(otherLikes[0].id, { is_mutual: false });
-                }
-
-                // --- NEW: Mark all messages between these users as seen ---
-                try {
-                  const { MessageAPI } = await import('../lib/firebaseApi');
-                  // Get all messages sent from match to current user
-                  const messagesFromMatch = await MessageAPI.filter({
-                    event_id: currentEvent.id,
-                    from_profile_id: matchSessionId,
-                    to_profile_id: currentSessionId
-                  });
-                  // Get all messages sent from current user to match
-                  const messagesToMatch = await MessageAPI.filter({
-                    event_id: currentEvent.id,
-                    from_profile_id: currentSessionId,
-                    to_profile_id: matchSessionId
-                  });
-                  // Mark all as seen
-                  await Promise.all([
-                    ...messagesFromMatch.map(msg =>
-                      !msg.seen ? MessageAPI.update(msg.id, { seen: true, seen_at: new Date().toISOString() }) : null
-                    ),
-                    ...messagesToMatch.map(msg =>
-                      !msg.seen ? MessageAPI.update(msg.id, { seen: true, seen_at: new Date().toISOString() }) : null
-                    )
-                  ]);
-                } catch (err) {
-                  // Ignore errors in marking as seen, but log for debugging
-                  if (typeof require !== 'undefined') {
-                    try { require('@sentry/react-native').captureException(err); } catch {}
-                  }
-                }
-                // --- END NEW ---
-
-                Alert.alert(
-                  'Match Removed',
-                  'You have unmatched with this person. You can see them again in discovery.',
-                  [{ text: 'OK' }]
+              const likesToDelete = allLikes.filter(like => {
+                // Check both session_id based and profile_id based matches
+                const sessionMatch = (
+                  (like.liker_session_id === currentSessionId && like.liked_session_id === matchSessionId) ||
+                  (like.liker_session_id === matchSessionId && like.liked_session_id === currentSessionId)
                 );
-              }
-            } catch {
+                
+                const profileMatch = currentUserProfile?.id && matchProfile?.id && (
+                  (like.from_profile_id === currentUserProfile.id && like.to_profile_id === matchProfile.id) ||
+                  (like.from_profile_id === matchProfile.id && like.to_profile_id === currentUserProfile.id)
+                );
+
+                return sessionMatch || profileMatch;
+              });
+
+              console.log('Found likes to delete:', likesToDelete.length);
+              
+              // Delete all like records between these users
+              await Promise.all(likesToDelete.map(like => LikeAPI.delete(like.id)));
+
+              Alert.alert(
+                'Match Removed',
+                'You have unmatched with this person. You can see them again in discovery.',
+                [{ text: 'OK' }]
+              );
+            } catch (error) {
+              console.error('Unmatch error:', error);
               notifications.error('Error', 'Failed to unmatch');
+            } finally {
+              // Clear the unmatching state regardless of success/failure
+              setUnmatchingUsers(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(matchSessionId);
+                return newSet;
+              });
             }
           },
         },

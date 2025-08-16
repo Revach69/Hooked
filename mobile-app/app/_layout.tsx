@@ -22,10 +22,11 @@ import { Stack, useRouter } from 'expo-router';
 import { Text, View, Platform } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { NotificationProvider } from '../lib/contexts/NotificationContext';
-import { NotificationRouter } from '../lib/notifications/NotificationRouter';
+import { NotificationRouter, setCurrentSessionIdForDedup } from '../lib/notifications/NotificationRouter';
 import { useIsForegroundGetter } from '../lib/notifications/helpers';
 import CustomSplashScreen from '../lib/components/SplashScreen';
 import ErrorBoundary from '../lib/components/ErrorBoundary';
+import { CustomMatchToast } from '../lib/components/CustomMatchToast';
 import * as Notifications from 'expo-notifications';
 import { registerPushToken } from '../lib/notifications/registerPushToken';
 import { initializeNotificationChannels } from '../lib/notificationService';
@@ -148,13 +149,14 @@ async function getMyProfileId(): Promise<string | null> {
 }
 
 // Map Firestore Like doc -> MatchEvent (only for change.type === 'added')
-function mapLikeToMatchEvent(
+async function mapLikeToMatchEvent(
   docData: any,
-  mySession: string
-): MatchEvent | null {
+  mySession: string,
+  docId: string
+): Promise<MatchEvent | null> {
   const d = docData;
   
-  if (!d?.id || !d?.event_id || !d?.is_mutual) {
+  if (!d?.event_id || !d?.is_mutual) {
     return null;
   }
 
@@ -180,13 +182,28 @@ function mapLikeToMatchEvent(
 
   const otherSessionId = isCreator ? d.liked_session_id : d.liker_session_id;
 
+  // Fetch other user's name
+  let otherName: string | undefined;
+  try {
+    const { EventProfileAPI } = await import('../lib/firebaseApi');
+    const otherProfiles = await EventProfileAPI.filter({
+      session_id: otherSessionId,
+      event_id: d.event_id
+    });
+    if (otherProfiles.length > 0) {
+      otherName = otherProfiles[0].first_name || otherProfiles[0].name;
+    }
+  } catch (error) {
+    console.warn('Failed to fetch other user name for match notification:', error);
+  }
+
   const event = {
-    id: d.id,
+    id: docId,
     type: 'match' as const,
-    createdAt: Date.parse(d.created_at ?? new Date().toISOString()),
+    createdAt: d.created_at?.seconds ? d.created_at.seconds * 1000 : Date.now(),
     isCreator,
     otherSessionId,
-    otherName: d.other_name ?? undefined, // if you store it
+    otherName,
   };
   
   console.log('Created match event:', event);
@@ -418,6 +435,9 @@ export default function RootLayout() {
         return;
       }
       
+      // Set session ID for notification deduplication
+      setCurrentSessionIdForDedup(sessionId);
+      
       if (!myProfileId) {
         if (retryCount < maxRetries) {
           retryCount++;
@@ -454,14 +474,14 @@ export default function RootLayout() {
 
         const handleLikeSnap = (snap: any) => {
           console.log('handleLikeSnap called with', snap.docChanges().length, 'changes');
-          snap.docChanges().forEach((change: any) => {
+          snap.docChanges().forEach(async (change: any) => {
             console.log('Processing change:', { type: change.type, docId: change.doc.id });
             if (change.type !== 'added') {
               console.log('Skipping non-added change');
               return; // critical: only new like docs == second liker action
             }
             console.log('Processing added like document:', change.doc.data());
-            const ev = mapLikeToMatchEvent(change.doc.data(), sessionId);
+            const ev = await mapLikeToMatchEvent(change.doc.data(), sessionId, change.doc.id);
             if (ev) {
               console.log('Created match event, calling NotificationRouter');
               Sentry.addBreadcrumb({
@@ -597,6 +617,14 @@ export default function RootLayout() {
         <Toast 
           config={{
           /* eslint-disable react/prop-types */
+          matchSuccess: (props) => (
+            <CustomMatchToast
+              text1={props.text1}
+              text2={props.text2}
+              onPress={props.onPress}
+              onHide={props.onHide}
+            />
+          ),
           success: (props) => (
             <View style={{
               backgroundColor: '#4CAF50',

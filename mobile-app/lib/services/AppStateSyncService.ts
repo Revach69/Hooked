@@ -123,6 +123,12 @@ class AppStateSyncServiceClass {
       return;
     }
 
+    if (__DEV__) {
+      // Skip app state sync in development to avoid authentication errors
+      console.log('AppStateSyncService: Skipped in development mode');
+      return;
+    }
+
     try {
       const functions = getFunctions(app, 'us-central1');
       const setAppState = httpsCallable(functions, 'setAppState');
