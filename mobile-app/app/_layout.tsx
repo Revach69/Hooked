@@ -1,3 +1,4 @@
+import 'react-native-get-random-values';
 import * as Sentry from '@sentry/react-native';
 
 Sentry.init({

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -117,22 +117,13 @@ export const InAppAlert: React.FC<InAppAlertProps> = ({
     onClose();
   };
 
-  // Debug logging
-  console.log('InAppAlert render:', {
-    visible,
-    title,
-    message,
-    confirmText,
-    showCancelButton,
-    type
-  });
 
   const handleCancel = () => {
     onCancel?.();
     onClose();
   };
 
-  const styles = StyleSheet.create({
+  const styles = useMemo(() => StyleSheet.create({
     modalOverlay: {
       flex: 1,
       backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -240,7 +231,11 @@ export const InAppAlert: React.FC<InAppAlertProps> = ({
       paddingTop: 16,
       paddingBottom: 32,
     },
-  });
+  }), [isDark, message, children, getBackgroundColor, getBorderColor]);
+
+  if (!visible) {
+    return null;
+  }
 
   return (
     <Modal

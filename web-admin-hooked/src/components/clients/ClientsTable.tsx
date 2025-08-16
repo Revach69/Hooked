@@ -85,7 +85,7 @@ export function ClientsTable({
         header: 'Event',
         cell: ({ getValue }) => {
           const value = getValue();
-          const isEmpty = !value || value === '-';
+          const isEmpty = !value;
           return (
             <div className={`text-sm ${isEmpty ? 'bg-red-100' : ''}`}>{value || '-'}</div>
           );
@@ -135,7 +135,7 @@ export function ClientsTable({
         header: '# of Expected Attendees',
         cell: ({ getValue }) => {
           const value = getValue();
-          const isEmpty = value == null || value === '' || value === '-';
+          const isEmpty = value == null;
           return (
             <div className={`text-sm ${isEmpty ? 'bg-red-100' : ''}`}>{value || '-'}</div>
           );

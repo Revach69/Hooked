@@ -1098,6 +1098,12 @@ export default function Matches() {
                       shadowOpacity: 0.8,
                       shadowRadius: 16,
                       transform: [{ scale: 1.02 }],
+                    } : Platform.OS === 'android' ? {
+                      elevation: 16, // more prominent
+                      borderWidth: 4, // thicker border for Android
+                      borderColor: '#ef4444',
+                      backgroundColor: '#ffe5e5', // more visible bg
+                      shadowColor: '#ef4444',
                     } : {
                       elevation: 12,
                       shadowColor: '#ef4444',
@@ -1171,26 +1177,29 @@ export default function Matches() {
                         right: -4,
                         backgroundColor: '#ef4444',
                         borderRadius: 10,
-                        width: 20,
-                        height: 20,
+                        width: Platform.OS === 'android' ? 24 : 20,
+                        height: Platform.OS === 'android' ? 24 : 20,
                         justifyContent: 'center',
                         alignItems: 'center',
-                        borderWidth: 3,
+                        borderWidth: Platform.OS === 'android' ? 4 : 3,
                         borderColor: isDark ? '#1a1a1a' : '#ffffff',
                         ...(Platform.OS === 'ios' ? {
                           shadowColor: '#ef4444',
                           shadowOffset: { width: 0, height: 2 },
                           shadowOpacity: 0.8,
                           shadowRadius: 6,
+                        } : Platform.OS === 'android' ? {
+                          elevation: 8,
+                          shadowColor: '#ef4444',
                         } : {
                           elevation: 6,
                         })
                       }}>
                         <View style={{
-                          width: 8,
-                          height: 8,
+                          width: Platform.OS === 'android' ? 12 : 8,
+                          height: Platform.OS === 'android' ? 12 : 8,
                           backgroundColor: '#ffffff',
-                          borderRadius: 4,
+                          borderRadius: Platform.OS === 'android' ? 6 : 4,
                         }} />
                       </View>
                     )}

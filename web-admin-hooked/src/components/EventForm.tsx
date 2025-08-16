@@ -410,7 +410,7 @@ export default function EventForm({
         eventData.image_url = imageUrl;
       } else {
         // No image - set to null to remove the field
-        eventData.image_url = null;
+        eventData.image_url = undefined;
       }
 
       await onSave(eventData);

@@ -134,9 +134,8 @@ export async function showMatchNotification(options: MatchAlertOptions): Promise
     const userInApp = await isUserInApp(currentSessionId);
     
     if (!userInApp) {
-      // First liker is not in app, send push notification
-      const { sendMatchNotification } = await import('./notificationService');
-      await sendMatchNotification(currentSessionId, matchedUserName, isLiker);
+      // First liker is not in app, server will handle push notification
+      console.log('First liker not in app - server will handle push notification');
       return;
     }
     

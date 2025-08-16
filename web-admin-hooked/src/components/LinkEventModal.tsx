@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Checkbox } from '@/components/ui/checkbox';
 import { Search, Users, Mail, Phone, Calendar } from 'lucide-react';
 import type { Event, AdminClient } from '@/types/admin';
+import { toDate } from '@/lib/timezoneUtils';
 
 interface LinkEventModalProps {
   event: Event | null;
@@ -80,7 +81,12 @@ export function LinkEventModal({ event, clients, isOpen, onClose, onLink }: Link
             <div className="text-sm space-y-1">
               <div><strong>Event:</strong> {event.name}</div>
               <div><strong>Code:</strong> {event.event_code}</div>
-              <div><strong>Date:</strong> {formatDate(event.starts_at)}</div>
+              <div><strong>Date:</strong> {toDate(event.starts_at)?.toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+              }) || 'Invalid date'}</div>
               <div><strong>Location:</strong> {event.location}</div>
             </div>
           </div>

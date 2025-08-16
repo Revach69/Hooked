@@ -51,6 +51,10 @@ export function EventViewerModal({ event, isOpen, onClose }: EventViewerModalPro
     const eventDate = toDate(event.starts_at);
     const eventEndDate = toDate(event.expires_at);
 
+    if (!eventDate || !eventEndDate) {
+      return { status: 'Unknown', color: 'text-gray-600', bgColor: 'bg-gray-100' };
+    }
+
     if (now < eventDate) {
       return { status: 'Upcoming', color: 'text-blue-600', bgColor: 'bg-blue-100' };
     } else if (now >= eventDate && now <= eventEndDate) {

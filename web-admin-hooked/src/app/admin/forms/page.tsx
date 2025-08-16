@@ -123,7 +123,7 @@ export default function FormsPage() {
         const eventKindValue = form.eventType === "Other" && form.otherEventType
           ? form.otherEventType
           : form.eventType;
-        updates.eventKind = eventKindValue as AdminClient["eventKind"] | string; // allow free text for custom event types
+        updates.eventKind = eventKindValue; // allow free text for custom event types
       }
 
       // Only update if there are fields to update

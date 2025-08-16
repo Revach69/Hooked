@@ -1,4 +1,4 @@
-import { sendMessageNotification } from './notificationService';
+// Legacy sendMessageNotification removed - now handled by server-side Firebase Functions
 import Toast from 'react-native-toast-message';
 import { router } from 'expo-router';
 import { AsyncStorageUtils } from './asyncStorageUtils';
@@ -208,18 +208,8 @@ async function sendPushNotificationForMessage(recipientSessionId: string, sender
     const { status } = await Notifications.getPermissionsAsync();
     
     if (status === 'granted') {
-      // Send push notification using session-based system
-      const success = await sendMessageNotification(
-        recipientSessionId,
-        senderName,
-        `${senderName} sent you a message!`,
-        false
-      );
-      
-      if (!success) {
-        // If push notification fails, store for later
-        await storePendingMessageNotification(recipientSessionId, senderName);
-      }
+      // Server-side Firebase Functions will handle push notifications
+      console.log('Push notification permissions available - server will handle notification');
     } else {
       // If permissions not granted, store notification for later
       await storePendingMessageNotification(recipientSessionId, senderName);

@@ -37,7 +37,7 @@ export default function ImageEditor({ imageUrl, onSave, onCancel, aspectRatio = 
   // Mouse wheel/trackpad zoom
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
-    const delta = e.deltaY || e.detail || e.wheelDelta;
+    const delta = e.deltaY || (e as any).detail || (e as any).wheelDelta;
     setScale(prev => {
       let next = prev - delta * 0.001; // Invert for natural zoom
       if (next < 0.01) next = 0.01;

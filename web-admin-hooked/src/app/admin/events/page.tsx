@@ -271,6 +271,10 @@ export default function EventsPage() {
     const eventDate = toDate(event.starts_at);
     const eventEndDate = toDate(event.expires_at);
 
+    if (!eventDate || !eventEndDate) {
+      return { status: 'Unknown', color: 'text-gray-600', bgColor: 'bg-gray-100' };
+    }
+
     if (now < eventDate) {
       return { status: 'Upcoming', color: 'text-blue-600', bgColor: 'bg-blue-100' };
     } else if (now >= eventDate && now <= eventEndDate) {
@@ -289,6 +293,11 @@ export default function EventsPage() {
     events.forEach(event => {
       const eventDate = toDate(event.starts_at);
       const eventEndDate = toDate(event.expires_at);
+
+      if (!eventDate || !eventEndDate) {
+        past.push(event); // Put events with invalid dates in past category
+        return;
+      }
 
       if (now >= eventDate && now <= eventEndDate) {
         active.push(event);

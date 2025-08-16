@@ -2,7 +2,7 @@ export type AdminClient = {
   id: string;                  // Firestore doc id
   name: string;                // Name
   type: 'Company' | 'Wedding Organizer' | 'Club / Bar' | 'Restaurant' | 'Personal Host' | 'Other Organization';
-  eventKind: 'House Party' | 'Club' | 'Wedding' | 'Meetup' | 'High Tech Event' | 'Retreat' | 'Party' | 'Conference';
+  eventKind: 'House Party' | 'Club' | 'Wedding' | 'Meetup' | 'High Tech Event' | 'Retreat' | 'Party' | 'Conference' | string;
   pocName: string;             // Name of POC
   phone?: string | null;
   email?: string | null;
@@ -52,8 +52,8 @@ export type Event = {
   id: string;                  // Firestore doc id
   name: string;                // Event name
   event_code: string;          // Event code for joining
-  starts_at: string;           // ISO date string
-  expires_at: string;          // ISO date string
+  starts_at: string | Date | import('firebase/firestore').Timestamp;           // ISO date string, Date, or Timestamp
+  expires_at: string | Date | import('firebase/firestore').Timestamp;          // ISO date string, Date, or Timestamp
   location?: string;           // Event location (optional to match firebaseApi)
   event_type?: string;         // Event type
   description?: string;        // Event description

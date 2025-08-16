@@ -243,7 +243,7 @@ export const toDate = (dateInput: string | Date | { toDate?: () => Date; seconds
       // Firestore Timestamp object with seconds
       return new Date(dateInput.seconds * 1000);
     } else {
-      return new Date(dateInput);
+      return new Date(dateInput as string | number | Date);
     }
   } catch (error) {
     console.error('Error converting to Date:', dateInput, error);

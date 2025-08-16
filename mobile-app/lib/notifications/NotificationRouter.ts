@@ -154,7 +154,6 @@ export const NotificationRouter = {
         } else {
           console.log('Match recipient not in foreground - server will handle push notification');
         }
-        // If not in foreground, server will handle push notification
         return;
       }
     }
@@ -248,8 +247,9 @@ export const NotificationRouter = {
             }
           });
         }
+      } else {
+        console.log('Message recipient not in foreground - server will handle push notification');
       }
-      // If not in foreground, server will handle push notification
       return;
     }
   },

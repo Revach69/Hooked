@@ -1,4 +1,6 @@
-import * as functions from 'firebase-functions/v1';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
+import { onDocumentCreated, onDocumentWritten } from 'firebase-functions/v2/firestore';
 import * as admin from 'firebase-admin';
 import * as path from 'path';
 import fetch from 'node-fetch';
@@ -17,11 +19,10 @@ const db = admin.firestore();
 const FUNCTION_REGION = process.env.FUNCTION_REGION || 'us-central1';
 
 // Cloud Function to clean up expired profiles and anonymize data for analytics
-export const cleanupExpiredProfiles = functions
-  .region(FUNCTION_REGION)
-  .pubsub
-  .schedule('every 1 hours')
-  .onRun(async (context) => {
+export const cleanupExpiredProfiles = onSchedule({
+  schedule: 'every 1 hours',
+  region: FUNCTION_REGION,
+}, async (event) => {
     const now = admin.firestore.Timestamp.now();
     
     try {
@@ -183,7 +184,7 @@ export const cleanupExpiredProfiles = functions
       }
       
       console.log('Expired profiles cleanup completed successfully');
-      return { success: true, processedEvents: expiredEventsSnapshot.size };
+      console.log('Processed events:', expiredEventsSnapshot.size);
       
     } catch (error) {
       console.error('Error during expired profiles cleanup:', error);
@@ -232,11 +233,10 @@ function countMutualMatches(likesData: any[]): number {
 }
 
 // Cloud Function to handle profile expiration notifications
-export const sendProfileExpirationNotifications = functions
-  .region(FUNCTION_REGION)
-  .pubsub
-  .schedule('every 6 hours')
-  .onRun(async (context) => {
+export const sendProfileExpirationNotifications = onSchedule({
+  schedule: 'every 6 hours',
+  region: FUNCTION_REGION,
+}, async (event) => {
     const now = admin.firestore.Timestamp.now();
     const oneHourFromNow = new admin.firestore.Timestamp(now.seconds + 3600, now.nanoseconds);
     
@@ -273,7 +273,7 @@ export const sendProfileExpirationNotifications = functions
         }
       }
       
-      return { success: true, expiringEvents: expiringEventsSnapshot.size };
+      console.log('Expiring events processed:', expiringEventsSnapshot.size);
       
     } catch (error) {
       console.error('Error sending expiration notifications:', error);
@@ -282,19 +282,19 @@ export const sendProfileExpirationNotifications = functions
   });
 
 // Cloud Function to handle user profile saving
-export const saveUserProfile = functions
-  .region(FUNCTION_REGION)
-  .https.onCall(async (data, context) => {
+export const saveUserProfile = onCall({
+  region: FUNCTION_REGION,
+}, async (request) => {
   // Verify authentication
-  if (!context.auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated');
   }
   
-  const userId = context.auth.uid;
-  const { profileData } = data;
+  const userId = request.auth.uid;
+  const { profileData } = request.data;
   
   if (!profileData) {
-    throw new functions.https.HttpsError('invalid-argument', 'Profile data is required');
+    throw new HttpsError('invalid-argument', 'Profile data is required');
   }
   
   try {
@@ -311,20 +311,20 @@ export const saveUserProfile = functions
     
   } catch (error) {
     console.error('Error saving user profile:', error);
-    throw new functions.https.HttpsError('internal', 'Failed to save profile');
+    throw new HttpsError('internal', 'Failed to save profile');
   }
 });
 
 // Cloud Function to get user's saved profiles
-export const getUserSavedProfiles = functions
-  .region(FUNCTION_REGION)
-  .https.onCall(async (data, context) => {
+export const getUserSavedProfiles = onCall({
+  region: FUNCTION_REGION,
+}, async (request) => {
   // Verify authentication
-  if (!context.auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated');
   }
   
-  const userId = context.auth.uid;
+  const userId = request.auth.uid;
   
   try {
     const savedProfilesSnapshot = await db
@@ -342,23 +342,23 @@ export const getUserSavedProfiles = functions
     
   } catch (error) {
     console.error('Error getting user saved profiles:', error);
-    throw new functions.https.HttpsError('internal', 'Failed to get saved profiles');
+    throw new HttpsError('internal', 'Failed to get saved profiles');
   }
 });
 
 // Cloud Function to set admin claims for a user
-export const setAdminClaim = functions
-  .region(FUNCTION_REGION)
-  .https.onCall(async (data, context) => {
+export const setAdminClaim = onCall({
+  region: FUNCTION_REGION,
+}, async (request) => {
   // Verify authentication
-  if (!context.auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated');
   }
   
-  const { targetUserId, isAdmin } = data;
+  const { targetUserId, isAdmin } = request.data;
   
   if (!targetUserId || typeof isAdmin !== 'boolean') {
-    throw new functions.https.HttpsError('invalid-argument', 'targetUserId and isAdmin are required');
+    throw new HttpsError('invalid-argument', 'targetUserId and isAdmin are required');
   }
   
   try {
@@ -371,21 +371,21 @@ export const setAdminClaim = functions
     
   } catch (error) {
     console.error('Error setting admin claim:', error);
-    throw new functions.https.HttpsError('internal', 'Failed to set admin claim');
+    throw new HttpsError('internal', 'Failed to set admin claim');
   }
 });
 
 // Cloud Function to verify admin status
-export const verifyAdminStatus = functions
-  .region(FUNCTION_REGION)
-  .https.onCall(async (data, context) => {
+export const verifyAdminStatus = onCall({
+  region: FUNCTION_REGION,
+}, async (request) => {
   // Verify authentication
-  if (!context.auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated');
   }
   
-  const userId = context.auth.uid;
-  const userEmail = context.auth.token.email;
+  const userId = request.auth.uid;
+  const userEmail = request.auth.token.email;
   
   try {
     // Any authenticated user from Firebase Authentication is considered an admin
@@ -397,11 +397,11 @@ export const verifyAdminStatus = functions
     
   } catch (error) {
     console.error('Error verifying admin status:', error);
-    throw new functions.https.HttpsError('internal', 'Failed to verify admin status');
+    throw new HttpsError('internal', 'Failed to verify admin status');
   }
 });
 
-const REGION = FUNCTION_REGION;
+// Removed REGION constant - using FUNCTION_REGION directly
 
 // Shared helpers for push notifications
 async function fetchSessionTokens(sessionId: string) {
@@ -654,18 +654,17 @@ type NotifyBody = {
   data?: Record<string, any>;
 };
 
-function requireApiKey(req: functions.https.Request) {
+function requireApiKey(req: any) {
   const key = req.header('x-api-key');
-  const expected =
-    process.env.API_KEY || functions.config().hooked?.api_key;
+  const expected = process.env.API_KEY;
   if (!expected || key !== expected) {
-    throw new functions.https.HttpsError('permission-denied', 'Invalid API key');
+    throw new HttpsError('permission-denied', 'Invalid API key');
   }
 }
 
-export const notify = functions
-  .region(REGION)
-  .https.onRequest(async (req, res) => {
+export const notify = onRequest({
+  region: FUNCTION_REGION,
+}, async (req, res) => {
     try {
       if (req.method !== 'POST') {
         res.set('Allow', 'POST');
@@ -676,7 +675,7 @@ export const notify = functions
 
       const { recipientSessionId, title, body, data }: NotifyBody = req.body || {};
       if (!recipientSessionId || !title) {
-        throw new functions.https.HttpsError('invalid-argument', 'recipientSessionId and title required');
+        throw new HttpsError('invalid-argument', 'recipientSessionId and title required');
       }
 
       const db = admin.firestore();
@@ -752,18 +751,24 @@ export const notify = functions
     }
   }); 
 // Trigger: Mutual Match (likes)
-export const onMutualLike = functions
-  .region(REGION)
-  .firestore.document('likes/{likeId}')
-  .onWrite(async (change, context) => {
-    console.log('onMutualLike triggered:', { 
-      beforeExists: change.before.exists, 
-      afterExists: change.after.exists,
-      likeId: context.params.likeId
-    });
+export const onMutualLike = onDocumentWritten({
+  document: 'likes/{likeId}',
+  region: FUNCTION_REGION,
+}, async (event) => {
+  const change = event.data;
+  if (!change) {
+    console.log('onMutualLike: No change data, returning early');
+    return;
+  }
+  
+  console.log('onMutualLike triggered:', { 
+    beforeExists: change.before?.exists, 
+    afterExists: change.after?.exists,
+    likeId: event.params.likeId
+  });
 
-    const before = change.before.exists ? change.before.data() as any : null;
-    const after = change.after.exists ? change.after.data() as any : null;
+  const before = change.before?.exists ? change.before.data() as any : null;
+  const after = change.after?.exists ? change.after.data() as any : null;
     
     console.log('onMutualLike data:', { before, after });
     
@@ -950,12 +955,18 @@ export const onMutualLike = functions
   });
 
 // Trigger: New Message (messages)
-export const onMessageCreate = functions
-  .region(REGION)
-  .firestore.document('messages/{messageId}')
-  .onCreate(async (snap, context) => {
-    const d = snap.data() as any;
-    const messageId = d?.id || context.params.messageId;
+export const onMessageCreate = onDocumentCreated({
+  document: 'messages/{messageId}',
+  region: FUNCTION_REGION,
+}, async (event) => {
+  const snap = event.data;
+  if (!snap) {
+    console.log('onMessageCreate: No snap data, returning early');
+    return;
+  }
+  
+  const d = snap.data() as any;
+  const messageId = d?.id || event.params.messageId;
     const eventId = d?.event_id;
     const fromProfile = d?.from_profile_id;
     const toProfile = d?.to_profile_id;
@@ -1078,10 +1089,10 @@ export const onMessageCreate = functions
 // Expects: { token: string, platform: 'ios' | 'android', sessionId: string }
 // === Scheduled: Process Notification Jobs ===
 // Runs every minute to process queued notification jobs
-export const processNotificationJobsScheduled = functions
-  .region(FUNCTION_REGION)
-  .pubsub.schedule('every 1 minutes')
-  .onRun(async (context) => {
+export const processNotificationJobsScheduled = onSchedule({
+  schedule: 'every 1 minutes',
+  region: FUNCTION_REGION,
+}, async (event) => {
     console.log('Scheduled notification job processing started');
     await processNotificationJobs();
     console.log('Scheduled notification job processing completed');
@@ -1089,42 +1100,44 @@ export const processNotificationJobsScheduled = functions
 
 // === Trigger: Process Notification Jobs on Create ===
 // Processes jobs immediately when they're created (for faster delivery)
-export const processNotificationJobsOnCreate = functions
-  .region(FUNCTION_REGION)
-  .firestore.document('notification_jobs/{jobId}')
-  .onCreate(async (snap, context) => {
-    const job = snap.data() as NotificationJob;
-    if (job.status === 'queued') {
-      console.log('New notification job created, processing immediately');
-      await processNotificationJobs();
-    }
-  });
+export const processNotificationJobsOnCreate = onDocumentCreated({
+  document: 'notification_jobs/{jobId}',
+  region: FUNCTION_REGION,
+}, async (event) => {
+  const snap = event.data;
+  if (!snap) {
+    console.log('processNotificationJobsOnCreate: No snap data, returning early');
+    return;
+  }
+  
+  const job = snap.data() as NotificationJob;
+  if (job.status === 'queued') {
+    console.log('New notification job created, processing immediately');
+    await processNotificationJobs();
+  }
+});
 
-export const savePushToken = functions
-  .region(FUNCTION_REGION)
-  .runWith({
-    enforceAppCheck: true, // Reject requests with missing or invalid App Check tokens
-  })
-  .https.onCall(async (data, context) => {
-    // context.app contains data from App Check, including the app ID
-
-    const { token, platform, sessionId, installationId } = data;
+export const savePushToken = onCall({
+  region: FUNCTION_REGION,
+  enforceAppCheck: true,
+}, async (request) => {
+  const { token, platform, sessionId, installationId } = request.data;
 
     // Validate required fields
     if (typeof token !== 'string' || !token.trim()) {
-      throw new functions.https.HttpsError('invalid-argument', 'token is required and must be a string');
+      throw new HttpsError('invalid-argument', 'token is required and must be a string');
     }
     if (platform !== 'ios' && platform !== 'android') {
-      throw new functions.https.HttpsError('invalid-argument', "platform must be 'ios' or 'android'");
+      throw new HttpsError('invalid-argument', "platform must be 'ios' or 'android'");
     }
     if (typeof sessionId !== 'string' || !sessionId.trim()) {
-      throw new functions.https.HttpsError('invalid-argument', 'sessionId is required and must be a string');
+      throw new HttpsError('invalid-argument', 'sessionId is required and must be a string');
     }
 
     // Validate session ID format
     const sessionIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!sessionIdPattern.test(sessionId)) {
-      throw new functions.https.HttpsError('invalid-argument', 'Invalid session ID format');
+      throw new HttpsError('invalid-argument', 'Invalid session ID format');
     }
 
     try {
@@ -1163,40 +1176,37 @@ export const savePushToken = functions
 
       await batch.commit();
 
-      console.log('savePushToken: Successfully saved token for session:', sessionId, 'platform:', platform, 'appId:', context.app?.appId);
+      console.log('savePushToken: Successfully saved token for session:', sessionId, 'platform:', platform);
       return { success: true };
     } catch (error) {
       console.error('savePushToken: Error saving token:', error);
-      throw new functions.https.HttpsError('internal', 'Failed to save push token');
+      throw new HttpsError('internal', 'Failed to save push token');
     }
   });
 
 // === Callable: setAppState ===
 // Updates the app state (foreground/background) for a session with App Check validation
 // Expects: { sessionId: string, isForeground: boolean, installationId?: string }
-export const setAppState = functions
-  .region(FUNCTION_REGION)
-  .runWith({
-    enforceAppCheck: true, // Reject requests with missing or invalid App Check tokens
-  })
-  .https.onCall(async (data, context) => {
-    // context.app contains data from App Check, including the app ID
-
-    const { sessionId, isForeground, installationId } = data;
+// Note: No authentication required - app state tracking should work for all users
+export const setAppState = onCall({
+  region: FUNCTION_REGION,
+  enforceAppCheck: true,
+}, async (request) => {
+  const { sessionId, isForeground, installationId } = request.data;
 
     // Validate required fields
     if (typeof sessionId !== 'string' || !sessionId.trim()) {
-      throw new functions.https.HttpsError('invalid-argument', 'sessionId is required and must be a string');
+      throw new HttpsError('invalid-argument', 'sessionId is required and must be a string');
     }
 
     if (typeof isForeground !== 'boolean') {
-      throw new functions.https.HttpsError('invalid-argument', 'isForeground is required and must be a boolean');
+      throw new HttpsError('invalid-argument', 'isForeground is required and must be a boolean');
     }
 
     // Validate session ID format (optional but recommended)
     const sessionIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!sessionIdPattern.test(sessionId)) {
-      throw new functions.https.HttpsError('invalid-argument', 'Invalid session ID format');
+      throw new HttpsError('invalid-argument', 'Invalid session ID format');
     }
 
     try {
@@ -1207,53 +1217,49 @@ export const setAppState = functions
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      console.log('setAppState: Successfully updated app state for session:', sessionId, 'isForeground:', isForeground, 'appId:', context.app?.appId);
+      console.log('setAppState: Successfully updated app state for session:', sessionId, 'isForeground:', isForeground);
       return { success: true };
     } catch (error) {
       console.error('setAppState: Error updating app state:', error);
-      throw new functions.https.HttpsError('internal', 'Failed to update app state');
+      throw new HttpsError('internal', 'Failed to update app state');
     }
   });
 
 // === Callable: setMute ===
 // Sets mute status between two sessions with App Check validation
 // Expects: { event_id: string, muter_session_id: string, muted_session_id: string, muted: boolean }
-export const setMute = functions
-  .region(FUNCTION_REGION)
-  .runWith({
-    enforceAppCheck: true, // Reject requests with missing or invalid App Check tokens
-  })
-  .https.onCall(async (data, context) => {
-    // context.app contains data from App Check, including the app ID
-
-    const { event_id, muter_session_id, muted_session_id, muted } = data;
+export const setMute = onCall({
+  region: FUNCTION_REGION,
+  enforceAppCheck: true,
+}, async (request) => {
+  const { event_id, muter_session_id, muted_session_id, muted } = request.data;
 
     // Validate required fields
     if (typeof event_id !== 'string' || !event_id.trim()) {
-      throw new functions.https.HttpsError('invalid-argument', 'event_id is required and must be a string');
+      throw new HttpsError('invalid-argument', 'event_id is required and must be a string');
     }
 
     if (typeof muter_session_id !== 'string' || !muter_session_id.trim()) {
-      throw new functions.https.HttpsError('invalid-argument', 'muter_session_id is required and must be a string');
+      throw new HttpsError('invalid-argument', 'muter_session_id is required and must be a string');
     }
 
     if (typeof muted_session_id !== 'string' || !muted_session_id.trim()) {
-      throw new functions.https.HttpsError('invalid-argument', 'muted_session_id is required and must be a string');
+      throw new HttpsError('invalid-argument', 'muted_session_id is required and must be a string');
     }
 
     if (typeof muted !== 'boolean') {
-      throw new functions.https.HttpsError('invalid-argument', 'muted is required and must be a boolean');
+      throw new HttpsError('invalid-argument', 'muted is required and must be a boolean');
     }
 
     // Validate session ID formats
     const sessionIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!sessionIdPattern.test(muter_session_id) || !sessionIdPattern.test(muted_session_id)) {
-      throw new functions.https.HttpsError('invalid-argument', 'Invalid session ID format');
+      throw new HttpsError('invalid-argument', 'Invalid session ID format');
     }
 
     // Prevent self-muting
     if (muter_session_id === muted_session_id) {
-      throw new functions.https.HttpsError('invalid-argument', 'Cannot mute yourself');
+      throw new HttpsError('invalid-argument', 'Cannot mute yourself');
     }
 
     try {
@@ -1277,28 +1283,27 @@ export const setMute = functions
         event_id, 
         muter_session_id, 
         muted_session_id, 
-        muted,
-        appId: context.app?.appId
+        muted
       });
       
       return { success: true, muted };
     } catch (error) {
       console.error('setMute: Error updating mute status:', error);
-      throw new functions.https.HttpsError('internal', 'Failed to update mute status');
+      throw new HttpsError('internal', 'Failed to update mute status');
     }
   });
 
 // === Callable: updateAppState === (Legacy - for backward compatibility)
 // Updates the app state (foreground/background) for a session
 // Expects: { isForeground: boolean, sessionId?: string }
-export const updateAppState = functions
-  .region(FUNCTION_REGION)
-  .https.onCall(async (data, context) => {
-    const isForeground = data?.isForeground;
-    const sessionId = data?.sessionId;
+export const updateAppState = onCall({
+  region: FUNCTION_REGION,
+}, async (request) => {
+  const isForeground = request.data?.isForeground;
+  const sessionId = request.data?.sessionId;
 
     if (typeof isForeground !== 'boolean') {
-      throw new functions.https.HttpsError('invalid-argument', 'isForeground is required');
+      throw new HttpsError('invalid-argument', 'isForeground is required');
     }
 
     if (!sessionId) {
@@ -1317,30 +1322,26 @@ export const updateAppState = functions
       return { success: true };
     } catch (error) {
       console.error('updateAppState: Error updating app state:', error);
-      throw new functions.https.HttpsError('internal', 'Failed to update app state');
+      throw new HttpsError('internal', 'Failed to update app state');
     }
   });
 
 // === Callable: sendCrossDeviceNotification ===
 // Sends notifications across devices using the existing push token infrastructure
 // Expected payload: { type: 'match' | 'message' | 'generic', title: string, body: string, targetSessionId: string, data?: any }
-export const sendCrossDeviceNotification = functions
-  .region(FUNCTION_REGION)
-  .runWith({
-    enforceAppCheck: true, // Reject requests with missing or invalid App Check tokens
-  })
-  .https.onCall(async (data, context) => {
-    // context.app contains data from App Check, including the app ID
-
-    const { type, title, body, targetSessionId, senderSessionId, data: notificationData } = data;
+export const sendCrossDeviceNotification = onCall({
+  region: FUNCTION_REGION,
+  enforceAppCheck: true,
+}, async (request) => {
+  const { type, title, body, targetSessionId, senderSessionId, data: notificationData } = request.data;
 
     // Validate required fields
     if (!type || !title || !targetSessionId) {
-      throw new functions.https.HttpsError('invalid-argument', 'type, title, and targetSessionId are required');
+      throw new HttpsError('invalid-argument', 'type, title, and targetSessionId are required');
     }
 
     if (!['match', 'message', 'generic'].includes(type)) {
-      throw new functions.https.HttpsError('invalid-argument', 'type must be match, message, or generic');
+      throw new HttpsError('invalid-argument', 'type must be match, message, or generic');
     }
 
     try {
@@ -1395,8 +1396,7 @@ export const sendCrossDeviceNotification = functions
         type, 
         title, 
         tokensCount: tokens.length, 
-        result,
-        appId: context.app?.appId
+        result
       });
 
       return { 
@@ -1407,6 +1407,6 @@ export const sendCrossDeviceNotification = functions
 
     } catch (error) {
       console.error('Error sending cross-device notification:', error);
-      throw new functions.https.HttpsError('internal', 'Failed to send notification');
+      throw new HttpsError('internal', 'Failed to send notification');
     }
   });
