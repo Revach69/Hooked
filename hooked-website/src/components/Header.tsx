@@ -18,7 +18,7 @@ export default function Header() {
           {/* Logo */}
           <div className="flex-shrink-0">
             <Link href="/" className="flex items-center" aria-label="Hooked - Home">
-              <div className="relative w-[156px] h-[42px]">
+              <div className="relative w-[120px] h-[32px] md:w-[156px] md:h-[42px]">
                 <FadeInImage 
                   src="/Hooked Full Logo.png" 
                   alt="Hooked - Real-life dating app for events" 
