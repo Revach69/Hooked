@@ -27,6 +27,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
 import { storage } from '../../lib/firebaseConfig';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { Timestamp } from 'firebase/firestore';
 import { 
   getAvailableCountries, 
   getPrimaryTimezoneForCountry, 
@@ -197,9 +198,9 @@ export default function CreateEvent() {
         location: formData.location.trim(),
         event_code: formData.event_code.trim(),
         event_link: formData.event_link.trim(),
-        starts_at: startsAtUTC,
-        start_date: startDateUTC,
-        expires_at: expiresAtUTC,
+        starts_at: Timestamp.fromDate(new Date(startsAtUTC)),
+        start_date: Timestamp.fromDate(new Date(startDateUTC)),
+        expires_at: Timestamp.fromDate(new Date(expiresAtUTC)),
         organizer_email: AuthAPI.getCurrentUser()?.email || '',
         is_active: true, // Set events as active by default
         image_url: imageUrl, // Add image URL if uploaded

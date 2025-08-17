@@ -13,9 +13,9 @@ import {
   Platform,
 } from 'react-native';
 import { useNotifications } from '../lib/contexts/NotificationContext';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Heart, MessageCircle, Users, User, UserX, VolumeX, Volume2 } from 'lucide-react-native';
-import { EventProfileAPI, LikeAPI, EventAPI, MutedMatchAPI } from '../lib/firebaseApi';
+import { EventProfileAPI, LikeAPI, EventAPI } from '../lib/firebaseApi';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
@@ -55,6 +55,92 @@ export default function Matches() {
   useEffect(() => {
     initializeSession();
   }, []);
+
+  // Reload muted matches and refresh unread messages whenever user returns to this page
+  useFocusEffect(
+    React.useCallback(() => {
+      console.log('Matches page focused - checking if can reload muted matches and unread messages', {
+        platform: Platform.OS,
+        hasCurrentEvent: !!currentEvent?.id,
+        hasCurrentSessionId: !!currentSessionId
+      });
+      
+      // Try to get session data if not available
+      const reloadData = async () => {
+        try {
+          const eventId = currentEvent?.id || await AsyncStorageUtils.getItem<string>('currentEventId');
+          const sessionId = currentSessionId || await AsyncStorageUtils.getItem<string>('currentSessionId');
+          
+          if (eventId && sessionId) {
+            console.log('Reloading muted matches and unread messages with:', { eventId, sessionId });
+            
+            // Directly query Firestore for muted matches
+            const { collection, query, where, getDocs } = await import('firebase/firestore');
+            const { db } = await import('../lib/firebaseConfig');
+            
+            const mutedQuery = query(
+              collection(db, 'muted_matches'),
+              where('event_id', '==', eventId),
+              where('muter_session_id', '==', sessionId)
+            );
+            
+            const snapshot = await getDocs(mutedQuery);
+            const mutedSessionIds = snapshot.docs.map(doc => doc.data().muted_session_id);
+            
+            console.log('Focus: Found muted matches:', mutedSessionIds.length, mutedSessionIds);
+            setMutedMatches(new Set(mutedSessionIds));
+            
+            // Force refresh unread messages state when returning from chat (especially for Android)
+            if (currentUserProfile?.id) {
+              console.log('Focus: Refreshing unread messages state');
+              
+              // Query for unseen messages
+              const messagesQuery = query(
+                collection(db, 'messages'),
+                where('event_id', '==', eventId),
+                where('to_profile_id', '==', currentUserProfile.id),
+                where('seen', '==', false)
+              );
+              
+              const messagesSnapshot = await getDocs(messagesQuery);
+              const unseenMessages = messagesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+              
+              if (unseenMessages.length > 0) {
+                // Get sender session IDs
+                const unseenSessionIds = new Set<string>();
+                const { EventProfileAPI } = await import('../lib/firebaseApi');
+                
+                for (const message of unseenMessages) {
+                  try {
+                    const senderProfile = await EventProfileAPI.get((message as any).from_profile_id);
+                    if (senderProfile) {
+                      unseenSessionIds.add(senderProfile.session_id);
+                    }
+                  } catch {
+                    // Skip if profile not found
+                  }
+                }
+                
+                console.log('Focus: Found unseen messages from sessions:', Array.from(unseenSessionIds));
+                setUnreadMessages(unseenSessionIds);
+                setHasUnreadMessages(unseenSessionIds.size > 0);
+              } else {
+                console.log('Focus: No unseen messages found - clearing indicators');
+                setUnreadMessages(new Set());
+                setHasUnreadMessages(false);
+              }
+            }
+          } else {
+            console.log('Focus: Cannot reload data - missing eventId or sessionId');
+          }
+        } catch (error) {
+          console.error('Focus: Error reloading data:', error);
+        }
+      };
+      
+      reloadData();
+    }, [currentEvent?.id, currentSessionId, currentUserProfile?.id])
+  );
 
   // Track app state changes
   useEffect(() => {
@@ -118,6 +204,8 @@ export default function Matches() {
   */
 
   // Real-time message listener for unread indicators only (no toasts)
+  // This listener automatically updates match card highlighting when new messages arrive
+  // The highlighting will appear immediately without needing to leave and return to the page
   useEffect(() => {
     if (!currentEvent?.id || !currentUserProfile?.id) return;
 
@@ -150,18 +238,21 @@ export default function Matches() {
                 
                 // Add timeout to prevent hanging
                 const timeoutPromise = new Promise<never>((_, reject) => {
-                  setTimeout(() => reject(new Error('Sender profile loading timeout')), 10000); // 10 second timeout
+                  setTimeout(() => reject(new Error('Sender profile loading timeout')), 5000); // 5 second timeout
                 });
                 
-                const profilePromise = EventProfileAPI.filter({
-                  id: message.from_profile_id,
-                  event_id: currentEvent.id
-                });
+                // Use get() method instead of filter() to fetch profile by ID
+                const profilePromise = EventProfileAPI.get(message.from_profile_id);
                 
                 try {
-                  const senderProfiles = await Promise.race([profilePromise, timeoutPromise]);
-                  return senderProfiles.length > 0 ? senderProfiles[0].session_id : null;
-                } catch (error) {
+                  const senderProfile = await Promise.race([profilePromise, timeoutPromise]);
+                  if (senderProfile) {
+                    const senderSessionId = senderProfile.session_id;
+                    // Return all session IDs - we'll filter when rendering
+                    return senderSessionId;
+                  }
+                  return null;
+                } catch {
                   // If timeout or error, return null to avoid blocking the entire operation
                   return null;
                 }
@@ -174,9 +265,26 @@ export default function Matches() {
                 }
               });
               
+              console.log('🔴 Real-time unread messages update:', {
+                platform: Platform.OS,
+                totalUnseenMessages: unseenMessages.length,
+                sessionIdsWithUnread: Array.from(unseenSessionIds),
+                timestamp: new Date().toISOString()
+              });
+              
               setUnreadMessages(unseenSessionIds);
               setHasUnreadMessages(unseenSessionIds.size > 0);
+              
+              // Debug: Log current unread state after update
+              console.log('🔴 Updated unreadMessages state:', {
+                platform: Platform.OS,
+                unseenSessionIds: Array.from(unseenSessionIds),
+                totalMatches: matches.length,
+                matchSessionIds: matches.map(m => m.session_id),
+                willHighlight: matches.map(m => ({ name: m.first_name, sessionId: m.session_id, hasUnread: unseenSessionIds.has(m.session_id) }))
+              });
             } else {
+              console.log('No unseen messages found - clearing indicators', { platform: Platform.OS });
               setUnreadMessages(new Set());
               setHasUnreadMessages(false);
             }
@@ -192,7 +300,7 @@ export default function Matches() {
     };
 
     setupMessageListener();
-  }, [currentEvent?.id, currentUserProfile?.id]);
+  }, [currentEvent?.id, currentUserProfile?.id, matches]);
 
   // Consolidated listener setup with proper cleanup
   useEffect(() => {
@@ -223,14 +331,9 @@ export default function Matches() {
           setCurrentUserProfile(userProfile);
 
           if (!userProfile) {
-    
-            await AsyncStorageUtils.multiRemove([
-              'currentEventId',
-              'currentSessionId',
-              'currentEventCode',
-              'currentProfileColor',
-              'currentProfilePhotoUrl'
-            ]);
+            // User profile not found - redirect to home but keep session data
+            // Homepage restoration will handle this gracefully
+            console.log('User profile not found in real-time listener - redirecting to home');
             router.replace('/home');
             return;
           }
@@ -255,13 +358,10 @@ export default function Matches() {
               // Create a set of session IDs that have sent unseen messages
               const unseenSessionIds = new Set<string>();
               for (const message of unseenMessages) {
-                // Get the sender's session ID
-                const senderProfiles = await EventProfileAPI.filter({
-                  id: message.from_profile_id,
-                  event_id: currentEvent.id
-                });
-                if (senderProfiles.length > 0) {
-                  unseenSessionIds.add(senderProfiles[0].session_id);
+                // Get the sender's session ID using get() method instead of filter()
+                const senderProfile = await EventProfileAPI.get(message.from_profile_id);
+                if (senderProfile) {
+                  unseenSessionIds.add(senderProfile.session_id);
                 }
               }
               
@@ -345,7 +445,14 @@ export default function Matches() {
           }
 
           setMatches(matchedProfiles);
-                  } catch {
+          
+          // If there are no matches, clear unread messages indicator
+          if (matchedProfiles.length === 0) {
+            console.log('No matches found - clearing unread messages indicator');
+            setUnreadMessages(new Set());
+            setHasUnreadMessages(false);
+          }
+        } catch {
             // Error in matches listener
           }
               }, (error) => {
@@ -460,14 +567,25 @@ export default function Matches() {
     if (!currentEvent?.id || !currentSessionId) return;
 
     try {
-      // Load muted matches
-      const muted = await MutedMatchAPI.filter({
-        event_id: currentEvent.id,
-        muter_session_id: currentSessionId
-      });
-      setMutedMatches(new Set(muted.map(m => m.muted_session_id)));
-    } catch {
-      // Error loading muted matches
+      console.log('Loading muted matches for event:', currentEvent.id, 'session:', currentSessionId);
+      
+      // Directly query Firestore for muted matches
+      const { collection, query, where, getDocs } = await import('firebase/firestore');
+      const { db } = await import('../lib/firebaseConfig');
+      
+      const mutedQuery = query(
+        collection(db, 'muted_matches'),
+        where('event_id', '==', currentEvent.id),
+        where('muter_session_id', '==', currentSessionId)
+      );
+      
+      const snapshot = await getDocs(mutedQuery);
+      const mutedSessionIds = snapshot.docs.map(doc => doc.data().muted_session_id);
+      
+      console.log('Found muted matches:', mutedSessionIds.length, mutedSessionIds);
+      setMutedMatches(new Set(mutedSessionIds));
+    } catch (error) {
+      console.error('Error loading muted matches:', error);
     }
   };
 
@@ -531,6 +649,9 @@ export default function Matches() {
               // Delete all like records between these users
               await Promise.all(likesToDelete.map(like => LikeAPI.delete(like.id)));
 
+              // Immediately remove the unmatched user from the UI
+              setMatches(prevMatches => prevMatches.filter(m => m.session_id !== matchSessionId));
+
               Alert.alert(
                 'Match Removed',
                 'You have unmatched with this person. You can see them again in discovery.',
@@ -557,27 +678,89 @@ export default function Matches() {
     if (!currentEvent?.id || !currentSessionId) return;
 
     const isMuted = mutedMatches.has(matchSessionId);
+    console.log(`handleMuteMatch: ${isMuted ? 'unmuting' : 'muting'} match ${matchSessionId}`);
 
     try {
+      // Update UI immediately for better UX
+      setMutedMatches(prev => {
+        const newSet = new Set(prev);
+        if (isMuted) {
+          newSet.delete(matchSessionId);
+          console.log(`Optimistically removed ${matchSessionId} from muted matches`);
+        } else {
+          newSet.add(matchSessionId);
+          console.log(`Optimistically added ${matchSessionId} to muted matches`);
+        }
+        return newSet;
+      });
+
+      // Call the Firebase function to persist the mute status
+      console.log('Calling setMuteStatus with:', {
+        eventId: currentEvent.id,
+        muterSessionId: currentSessionId,
+        mutedSessionId: matchSessionId,
+        muted: !isMuted
+      });
+      
       await setMuteStatus(
         currentEvent.id,
         currentSessionId,
         matchSessionId,
         !isMuted
       );
+      
+      console.log(`Successfully ${isMuted ? 'unmuted' : 'muted'} match ${matchSessionId} on server`);
+      
+      // Verify after a longer delay to ensure Firebase has updated
+      setTimeout(async () => {
+        console.log('Verifying mute status was saved (after 3 seconds)...');
+        try {
+          const { collection, query, where, getDocs } = await import('firebase/firestore');
+          const { db } = await import('../lib/firebaseConfig');
+          
+          const mutedQuery = query(
+            collection(db, 'muted_matches'),
+            where('event_id', '==', currentEvent.id),
+            where('muter_session_id', '==', currentSessionId),
+            where('muted_session_id', '==', matchSessionId)
+          );
+          
+          const snapshot = await getDocs(mutedQuery);
+          const shouldBeMuted = !isMuted;
+          const actuallyMuted = !snapshot.empty;
+          
+          console.log(`Verification: Should be muted: ${shouldBeMuted}, Actually muted: ${actuallyMuted}`);
+          
+          if (shouldBeMuted !== actuallyMuted) {
+            console.error('Mute status verification failed! Reverting local state.');
+            // Reload all muted matches to sync with server
+            await loadMutedMatches();
+          } else {
+            console.log('Mute status verified successfully');
+          }
+        } catch (verifyError) {
+          console.error('Error verifying mute status:', verifyError);
+        }
+      }, 3000);
+    } catch (error) {
+      console.error(`Error ${isMuted ? 'unmuting' : 'muting'} match:`, error);
+      
+      // Revert optimistic update on error
       setMutedMatches(prev => {
         const newSet = new Set(prev);
         if (isMuted) {
-          newSet.delete(matchSessionId);
-        } else {
           newSet.add(matchSessionId);
+          console.log(`Reverted: re-added ${matchSessionId} to muted matches after error`);
+        } else {
+          newSet.delete(matchSessionId);
+          console.log(`Reverted: removed ${matchSessionId} from muted matches after error`);
         }
         return newSet;
       });
-    } catch (error) {
+      
       notifications.error('Error', `Failed to ${isMuted ? 'unmute' : 'mute'} match`);
       if (error) {
-        try { require('@sentry/react-native').captureException(error); } catch {} 
+        try { require('@sentry/react-native').captureException(error); } catch { /* ignore */ }
       }
     }
   };
@@ -589,19 +772,26 @@ export default function Matches() {
       const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
       
       if (!eventId || !sessionId) {
-
+        // No session data - redirect to home for normal flow
         router.replace('/home');
         return;
       }
 
       setCurrentSessionId(sessionId);
       
-      const events = await EventAPI.filter({ id: eventId });
+      // Add timeout to prevent indefinite hanging
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Event lookup timeout')), 15000); // 15 seconds
+      });
+      
+      const eventPromise = EventAPI.filter({ id: eventId });
+      const events = await Promise.race([eventPromise, timeoutPromise]);
+      
       if (events.length > 0) {
         setCurrentEvent(events[0]);
       } else {
-        // Event doesn't exist, clear all data and redirect to home
-
+        // Event doesn't exist - clear only after confirmation
+        console.log('Event not found, clearing session data');
         await AsyncStorageUtils.multiRemove([
           'currentEventId',
           'currentSessionId',
@@ -614,15 +804,20 @@ export default function Matches() {
       }
 
       // Verify that the user's profile actually exists in the database
-      const userProfiles = await EventProfileAPI.filter({
+      const profileTimeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Profile lookup timeout')), 15000); // 15 seconds
+      });
+      
+      const profilePromise = EventProfileAPI.filter({
         event_id: eventId,
         session_id: sessionId
       });
+      
+      const userProfiles = await Promise.race([profilePromise, profileTimeoutPromise]);
 
       if (userProfiles.length === 0) {
         // Profile doesn't exist in database (user left event and deleted profile)
-        // Clear all AsyncStorage data and redirect to home
-
+        console.log('User profile not found, clearing session data');
         await AsyncStorageUtils.multiRemove([
           'currentEventId',
           'currentSessionId',
@@ -638,16 +833,24 @@ export default function Matches() {
       await loadMutedMatches();
 
       // Matches are now handled by real-time listener
-    } catch {
-      // Error initializing matches session
-      // Clear data and redirect to home on error
-      await AsyncStorageUtils.multiRemove([
-        'currentEventId',
-        'currentSessionId',
-        'currentEventCode',
-        'currentProfileColor',
-        'currentProfilePhotoUrl'
-      ]);
+    } catch (error) {
+      console.error('Error initializing matches session:', error);
+      
+      // Don't clear session data on network/timeout errors
+      // Let user try again or return to home naturally
+      if (error instanceof Error) {
+        if (error.message.includes('timeout')) {
+          // Show loading failed state but keep session data
+          console.log('Initialization timeout - keeping session data for retry');
+          // You could show a retry button here instead of redirecting
+        } else {
+          // Log other errors but don't immediately clear session
+          console.log('Initialization error - redirecting to home but keeping session data');
+        }
+      }
+      
+      // Redirect to home but don't clear session data
+      // Homepage will handle session restoration
       router.replace('/home');
     } finally {
       setIsLoading(false);
@@ -1077,40 +1280,57 @@ export default function Matches() {
           <View style={styles.matchesList}>
             {matches.map((match) => {
               const hasUnreadMessage = unreadMessages.has(match.session_id);
+              
+              // Debug logging for unread message detection
+              if (hasUnreadMessage) {
+                console.log(`🔴 Match ${match.first_name} (${match.session_id}) has unread messages - Platform: ${Platform.OS}`);
+              }
+              
+              // Build styles step by step for better Android compatibility
+              let cardStyles: any[] = [styles.matchCard];
+              
+              if (hasUnreadMessage) {
+                console.log(`🔴 Applying highlight styles for ${match.first_name} on ${Platform.OS}`);
+                const highlightStyle = {
+                  borderWidth: 3,
+                  borderColor: '#8b5cf6',
+                  backgroundColor: isDark ? '#2d1b3d' : '#f3f0ff',
+                };
+                
+                if (Platform.OS === 'ios') {
+                  Object.assign(highlightStyle, {
+                    shadowColor: '#8b5cf6',
+                    shadowOffset: { width: 0, height: 6 },
+                    shadowOpacity: 0.8,
+                    shadowRadius: 16,
+                    transform: [{ scale: 1.02 }],
+                  });
+                } else {
+                  // Android specific styles
+                  Object.assign(highlightStyle, {
+                    elevation: 12,
+                    shadowColor: '#8b5cf6',
+                  });
+                }
+                
+                console.log(`🔴 Final highlight style for ${match.first_name}:`, highlightStyle);
+                cardStyles.push(highlightStyle);
+              }
+              
+              if (mutedMatches.has(match.session_id)) {
+                cardStyles.push({
+                  opacity: 0.6,
+                  backgroundColor: isDark ? '#1a1a1a' : '#f5f5f5',
+                  borderColor: isDark ? '#404040' : '#d1d5db',
+                  borderWidth: 1,
+                  borderStyle: 'dashed',
+                });
+              }
+              
               return (
                 <TouchableOpacity
                   key={match.id}
-                  style={[
-                    styles.matchCard,
-                    hasUnreadMessage && {
-                    borderWidth: 3,
-                    borderColor: '#ef4444',
-                    backgroundColor: isDark ? '#2d1b1b' : '#fef2f2',
-                    ...(Platform.OS === 'ios' ? {
-                      shadowColor: '#ef4444',
-                      shadowOffset: { width: 0, height: 6 },
-                      shadowOpacity: 0.8,
-                      shadowRadius: 16,
-                      transform: [{ scale: 1.02 }],
-                    } : Platform.OS === 'android' ? {
-                      elevation: 16, // more prominent
-                      borderWidth: 4, // thicker border for Android
-                      borderColor: '#ef4444',
-                      backgroundColor: '#ffe5e5', // more visible bg
-                      shadowColor: '#ef4444',
-                    } : {
-                      elevation: 12,
-                      shadowColor: '#ef4444',
-                    })
-                  },
-                  mutedMatches.has(match.session_id) && {
-                    opacity: 0.6,
-                    backgroundColor: isDark ? '#1a1a1a' : '#f5f5f5',
-                    borderColor: isDark ? '#404040' : '#d1d5db',
-                    borderWidth: 1,
-                    borderStyle: 'dashed',
-                  }
-                ]}
+                  style={cardStyles}
                 onPress={() => {
                   // Navigate to chat without marking messages as seen
                   router.push(`/chat?matchId=${match.session_id}&matchName=${match.first_name}`);
@@ -1161,40 +1381,6 @@ export default function Matches() {
                         })
                       }}>
                         <VolumeX size={12} color="#ffffff" />
-                      </View>
-                    )}
-                    {/* Red dot for both platforms */}
-                    {hasUnreadMessage && (
-                      <View style={{
-                        position: 'absolute',
-                        top: -4,
-                        right: -4,
-                        backgroundColor: '#ef4444',
-                        borderRadius: 10,
-                        width: Platform.OS === 'android' ? 24 : 20,
-                        height: Platform.OS === 'android' ? 24 : 20,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        borderWidth: Platform.OS === 'android' ? 4 : 3,
-                        borderColor: isDark ? '#1a1a1a' : '#ffffff',
-                        ...(Platform.OS === 'ios' ? {
-                          shadowColor: '#ef4444',
-                          shadowOffset: { width: 0, height: 2 },
-                          shadowOpacity: 0.8,
-                          shadowRadius: 6,
-                        } : Platform.OS === 'android' ? {
-                          elevation: 8,
-                          shadowColor: '#ef4444',
-                        } : {
-                          elevation: 6,
-                        })
-                      }}>
-                        <View style={{
-                          width: Platform.OS === 'android' ? 12 : 8,
-                          height: Platform.OS === 'android' ? 12 : 8,
-                          backgroundColor: '#ffffff',
-                          borderRadius: Platform.OS === 'android' ? 6 : 4,
-                        }} />
                       </View>
                     )}
                   </TouchableOpacity>

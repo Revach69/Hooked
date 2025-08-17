@@ -399,7 +399,7 @@ export function createSafeListener<T>(
   id: string,
   query: any,
   onNext: (data: T) => void,
-  onError?: (error: any) => void
+  onError?: (_error: any) => void
 ) {
   try {
     const unsubscribe = onSnapshot(

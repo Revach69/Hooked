@@ -557,7 +557,7 @@ export default function Consent() {
           event.id,
           event.name,
           sessionId,
-          event.expires_at
+          event.expires_at.toDate().toISOString()
         );
       } catch (error) {
         Sentry.captureException(error);

@@ -207,8 +207,8 @@ export default function EventDetails() {
 
   const getEventStatus = (event: Event) => {
     const now = new Date();
-    const startDate = new Date(event.starts_at);
-    const endDate = new Date(event.expires_at);
+    const startDate = event.starts_at.toDate();
+    const endDate = event.expires_at.toDate();
     
     if (now < startDate) return { text: 'Upcoming', color: '#3b82f6' };
     if (now >= startDate && now <= endDate) return { text: 'Active', color: '#10b981' };
@@ -453,14 +453,14 @@ export default function EventDetails() {
           <View style={styles.eventDetails}>
             <Calendar size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
             <Text style={styles.eventDetailText}>
-                              Starts: {formatDate(event.starts_at, event.timezone)}
+                              Starts: {formatDate(event.starts_at.toDate().toISOString(), event.timezone)}
             </Text>
           </View>
           
           <View style={styles.eventDetails}>
             <Clock size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
             <Text style={styles.eventDetailText}>
-                              Expires: {formatDate(event.expires_at, event.timezone)}
+                              Expires: {formatDate(event.expires_at.toDate().toISOString(), event.timezone)}
             </Text>
           </View>
         </View>

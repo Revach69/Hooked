@@ -27,6 +27,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
 import { storage } from '../../lib/firebaseConfig';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { Timestamp } from 'firebase/firestore';
 import { 
   getAvailableCountries, 
   getPrimaryTimezoneForCountry, 
@@ -81,9 +82,9 @@ export default function EditEvent() {
         location: eventData.location || '',
         event_code: eventData.event_code || '',
         event_link: eventData.event_link || '',
-        starts_at: new Date(eventData.starts_at),
-        start_date: eventData.start_date ? new Date(eventData.start_date) : new Date(eventData.starts_at),
-        expires_at: new Date(eventData.expires_at),
+        starts_at: eventData.starts_at.toDate(),
+        start_date: eventData.start_date ? eventData.start_date.toDate() : eventData.starts_at.toDate(),
+        expires_at: eventData.expires_at.toDate(),
         is_private: eventData.is_private || false,
         timezone: eventData.timezone || getUserTimezone(),
       });
@@ -231,9 +232,9 @@ export default function EditEvent() {
         location: formData.location.trim(),
         event_code: formData.event_code.trim(),
         event_link: formData.event_link.trim(),
-        starts_at: convertTimeToEventTimezone(formData.starts_at, formData.timezone),
-        start_date: convertTimeToEventTimezone(formData.start_date, formData.timezone), // Update start_date
-        expires_at: convertTimeToEventTimezone(formData.expires_at, formData.timezone),
+        starts_at: Timestamp.fromDate(new Date(convertTimeToEventTimezone(formData.starts_at, formData.timezone))),
+        start_date: Timestamp.fromDate(new Date(convertTimeToEventTimezone(formData.start_date, formData.timezone))), // Update start_date
+        expires_at: Timestamp.fromDate(new Date(convertTimeToEventTimezone(formData.expires_at, formData.timezone))),
         image_url: imageUrl, // Add image URL if uploaded or existing
         is_private: formData.is_private,
         timezone: formData.timezone, // Add timezone field

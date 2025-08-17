@@ -97,6 +97,7 @@ export default function EventsPage() {
   const [showLinkEvent, setShowLinkEvent] = useState(false);
   const [linkingEvent, setLinkingEvent] = useState<Event | null>(null);
   const [clients, setClients] = useState<AdminClient[]>([]);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Load events on mount
   useEffect(() => {
@@ -136,6 +137,7 @@ export default function EventsPage() {
   };
 
   const handleSaveEvent = async (eventData: Partial<Event>) => {
+    setSaveError(null);
     try {
       if (editingEvent) {
         await EventAPI.update(editingEvent.id, eventData);
@@ -154,7 +156,8 @@ export default function EventsPage() {
           is_private: eventData.is_private || false,
           is_active: eventData.is_active !== undefined ? eventData.is_active : true,
           organizer_email: eventData.organizer_email || '',
-          image_url: eventData.image_url,
+          // Only include image_url if it is a string or null
+          ...(typeof eventData.image_url === 'string' || eventData.image_url === null ? { image_url: eventData.image_url } : {}),
         };
         await EventAPI.create(newEventData);
       }
@@ -162,7 +165,12 @@ export default function EventsPage() {
       setEditingEvent(null);
       await loadEvents();
     } catch (error) {
-      // Error saving event
+      console.error('Failed to save event:', error);
+      setSaveError(
+        (error && typeof error === 'object' && 'message' in error)
+          ? (error as { message: string }).message
+          : 'Failed to save event. Please try again.'
+      );
     }
   };
 
@@ -610,15 +618,28 @@ export default function EventsPage() {
 
       {/* Modals */}
       {showEventForm && (
-        <EventForm
-          event={editingEvent}
-          isOpen={showEventForm}
-          onClose={() => {
-            setShowEventForm(false);
-            setEditingEvent(null);
-          }}
-          onSave={handleSaveEvent}
-        />
+        <>
+          <EventForm
+            event={editingEvent}
+            isOpen={showEventForm}
+            onClose={() => {
+              setShowEventForm(false);
+              setEditingEvent(null);
+            }}
+            onSave={handleSaveEvent}
+          />
+          {saveError && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center">
+              <div className="bg-red-100 border border-red-400 text-red-700 px-6 py-4 rounded shadow-xl max-w-md w-full">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="font-bold">Error</span>
+                  <button onClick={() => setSaveError(null)} className="text-red-700 hover:text-red-900">&times;</button>
+                </div>
+                <div>{saveError}</div>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {showAnalytics && analyticsEvent && (

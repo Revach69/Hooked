@@ -14,6 +14,7 @@ import { EventAPI } from '../lib/firebaseApi';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMobileAsyncOperation } from '../lib/hooks/useMobileErrorHandling';
 import MobileOfflineStatusBar from '../lib/components/MobileOfflineStatusBar';
+import { Timestamp } from 'firebase/firestore';
 
 export default function JoinPage() {
   const { code } = useLocalSearchParams<{ code: string }>();
@@ -66,7 +67,8 @@ export default function JoinPage() {
       }
 
       const foundEvent = events[0];
-      const nowUTC = new Date().toISOString(); // Current UTC time as ISO string
+      // Use Firebase Timestamp for platform-agnostic comparison
+      const nowTimestamp = Timestamp.now();
 
       if (!foundEvent.starts_at || !foundEvent.expires_at) {
         setError("This event is not configured correctly. Please contact the organizer.");
@@ -74,11 +76,11 @@ export default function JoinPage() {
         return;
       }
       
-
-      
-      if (nowUTC < foundEvent.starts_at) {
-        const accessTime = new Date(foundEvent.starts_at);
-        const realStartTime = foundEvent.start_date ? new Date(foundEvent.start_date) : accessTime;
+      // Compare using Timestamp seconds to avoid platform-specific timezone issues
+      if (nowTimestamp.seconds < foundEvent.starts_at.seconds) {
+        // Use toDate() only for display purposes in error messages
+        const accessTime = foundEvent.starts_at.toDate();
+        const realStartTime = foundEvent.start_date ? foundEvent.start_date.toDate() : accessTime;
         
         if (foundEvent.start_date && realStartTime > accessTime) {
           setError("This event hasn't opened for early access yet. Try again soon!");
@@ -89,7 +91,8 @@ export default function JoinPage() {
         return;
       }
 
-      if (nowUTC >= foundEvent.expires_at) {
+      // Use seconds comparison for expires_at to ensure consistency across platforms
+      if (nowTimestamp.seconds >= foundEvent.expires_at.seconds) {
         setError("This event has ended.");
         setIsLoading(false);
         return;

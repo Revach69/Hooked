@@ -79,11 +79,9 @@ export async function registerPushToken(sessionId: string): Promise<boolean> {
 
     // Call the savePushToken callable function
     try {
-      Sentry.addBreadcrumb({
-        message: 'Calling savePushToken Firebase function',
-        level: 'info',
-        category: 'push_notification'
-      });
+      // Note: Regular users are NOT authenticated to Firebase Auth
+      // Only App Check verification is required for security
+      console.log('Calling savePushToken with App Check verification (no user auth required)');
       
       const functions = getFunctions(app, 'us-central1');
       const savePushToken = httpsCallable(functions, 'savePushToken');
@@ -91,21 +89,37 @@ export async function registerPushToken(sessionId: string): Promise<boolean> {
       // Get installation ID
       const installationId = await getInstallationId();
       
-      await savePushToken({
+      console.log('Calling savePushToken with:', {
+        tokenPrefix: expoToken.data.substring(0, 50) + '...',
+        platform,
+        sessionId: sessionId.substring(0, 8) + '...',
+        installationId: installationId.substring(0, 8) + '...'
+      });
+      
+      const result = await savePushToken({
         token: expoToken.data,
         platform,
         sessionId,
         installationId
       });
       
+      console.log('savePushToken result:', result);
+      
       Sentry.addBreadcrumb({
         message: 'Push token registered successfully',
         level: 'info',
-        category: 'push_notification'
+        category: 'push_notification',
+        data: { result }
       });
       
       return true;
     } catch (callableError: any) {
+      console.error('savePushToken error:', {
+        code: callableError.code,
+        message: callableError.message,
+        details: callableError.details
+      });
+      
       Sentry.captureException(callableError, {
         tags: {
           operation: 'push_token_registration',
@@ -115,7 +129,9 @@ export async function registerPushToken(sessionId: string): Promise<boolean> {
           sessionId,
           platform,
           tokenLength: expoToken.data.length,
-          errorMessage: callableError.message
+          errorMessage: callableError.message,
+          errorCode: callableError.code,
+          errorDetails: callableError.details
         }
       });
       return false;

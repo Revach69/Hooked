@@ -199,15 +199,10 @@ export default function Discovery() {
           setCurrentUserProfile(userProfile);
 
           if (!userProfile) {
-            AsyncStorageUtils.multiRemove([
-              'currentEventId',
-              'currentSessionId',
-              'currentEventCode',
-              'currentProfileColor',
-              'currentProfilePhotoUrl'
-            ]).then(() => {
-              router.replace('/home');
-            });
+            // User profile not found - redirect to home but keep session data
+            // Homepage restoration will handle this gracefully
+            console.log('User profile not found in discovery listener - redirecting to home');
+            router.replace('/home');
             return;
           }
 
@@ -417,7 +412,8 @@ export default function Discovery() {
         // Load blocked profiles
         await loadBlockedProfiles(eventId, sessionId);
       } else {
-        // Event doesn't exist, clear all data and redirect to home
+        // Event doesn't exist - clear only after confirmation
+        console.log('Event not found in discovery, clearing session data');
         await AsyncStorageUtils.multiRemove([
           'currentEventId',
           'currentSessionId',
@@ -442,7 +438,8 @@ export default function Discovery() {
 
       if (userProfiles.length === 0) {
         // Profile doesn't exist in database (user left event and deleted profile)
-        // Clear all AsyncStorage data and redirect to home
+        // Clear session data only after confirming profile is truly gone
+        console.log('User profile not found in discovery initialization - clearing session data');
         await AsyncStorageUtils.multiRemove([
           'currentEventId',
           'currentSessionId',
@@ -463,14 +460,18 @@ export default function Discovery() {
 
       // Likes are now handled by real-time listener
     } catch (error) {
+      console.error('Error initializing discovery session:', error);
       Sentry.captureException(error);
-      await AsyncStorageUtils.multiRemove([
-        'currentEventId',
-        'currentSessionId',
-        'currentEventCode',
-        'currentProfileColor',
-        'currentProfilePhotoUrl'
-      ]);
+      
+      // Don't clear session data on network/timeout errors
+      // Let homepage restoration handle session recovery
+      if (error instanceof Error && error.message.includes('timeout')) {
+        console.log('Discovery initialization timeout - keeping session data for retry');
+      } else {
+        console.log('Discovery initialization error - redirecting to home but keeping session data');
+      }
+      
+      // Redirect to home but don't clear session data
       router.replace('/home');
       return;
     }

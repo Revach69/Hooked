@@ -14,24 +14,43 @@ const NOTIFICATION_COOLDOWN = 3000; // 3 seconds cooldown
  */
 export async function checkIfSenderIsMuted(senderSessionId: string): Promise<boolean> {
   try {
+    console.log('checkIfSenderIsMuted: checking for senderSessionId:', senderSessionId);
+    
     const currentSessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
     const currentEventId = await AsyncStorageUtils.getItem<string>('currentEventId');
     
+    console.log('checkIfSenderIsMuted: current session/event:', { currentSessionId, currentEventId });
+    
     if (!currentSessionId || !currentEventId) {
+      console.log('checkIfSenderIsMuted: missing session or event ID, returning false');
       return false; // Can't check mute status without session/event
     }
     
-    // Import MutedMatchAPI dynamically to avoid circular imports
-    const { MutedMatchAPI } = await import('./firebaseApi');
+    // Use direct Firestore query to check mute status
+    const { collection, query, where, getDocs } = await import('firebase/firestore');
+    const { db } = await import('./firebaseConfig');
     
-    const mutedRecords = await MutedMatchAPI.filter({
+    const mutedQuery = query(
+      collection(db, 'muted_matches'),
+      where('event_id', '==', currentEventId),
+      where('muter_session_id', '==', currentSessionId),
+      where('muted_session_id', '==', senderSessionId)
+    );
+    
+    const snapshot = await getDocs(mutedQuery);
+    const isMuted = !snapshot.empty;
+    
+    console.log('checkIfSenderIsMuted: query result:', {
       event_id: currentEventId,
       muter_session_id: currentSessionId,
-      muted_session_id: senderSessionId
+      muted_session_id: senderSessionId,
+      isMuted,
+      documentsFound: snapshot.size
     });
     
-    return mutedRecords.length > 0;
-  } catch {
+    return isMuted;
+  } catch (error) {
+    console.error('checkIfSenderIsMuted: error checking mute status:', error);
     return false; // If error checking mute status, don't block notifications
   }
 }
@@ -95,11 +114,11 @@ export async function showInAppMessageToast(senderName: string, senderSessionId:
     const config = Platform.OS === 'ios' ? {
       delay: 200,
       topOffset: 60,
-      visibilityTime: 5000,
+      visibilityTime: 3500,
     } : {
       delay: 0,
       topOffset: 40,
-      visibilityTime: 4000,
+      visibilityTime: 3500,
     };
     
     // Use a shorter delay for Android to ensure toast shows immediately
@@ -111,7 +130,7 @@ export async function showInAppMessageToast(senderName: string, senderSessionId:
         text1: `New message from ${senderName}`,
         text2: 'Tap to open chat',
         position: 'top',
-        visibilityTime: config.visibilityTime,
+        visibilityTime: 3500,
         autoHide: true,
         topOffset: config.topOffset,
         onPress: () => {
@@ -133,7 +152,7 @@ export async function showInAppMessageToast(senderName: string, senderSessionId:
         text1: 'New message received',
         text2: 'Tap to view',
         position: 'top',
-        visibilityTime: 4000,
+        visibilityTime: 3500,
         autoHide: true,
         topOffset: Platform.OS === 'ios' ? 60 : 40,
         onPress: () => {
@@ -166,11 +185,11 @@ export function showMatchToast(matchName: string): void {
     const config = Platform.OS === 'ios' ? {
       delay: 200,
       topOffset: 60,
-      visibilityTime: 5000,
+      visibilityTime: 3500,
     } : {
       delay: 0,
       topOffset: 40,
-      visibilityTime: 4000,
+      visibilityTime: 3500,
     };
     
     setTimeout(() => {
@@ -179,7 +198,7 @@ export function showMatchToast(matchName: string): void {
         text1: `You got Hooked with ${matchName}!`,
         text2: 'Tap to view matches',
         position: 'top',
-        visibilityTime: config.visibilityTime,
+        visibilityTime: 3500,
         autoHide: true,
         topOffset: config.topOffset,
         onPress: () => {

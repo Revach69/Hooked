@@ -1,12 +1,13 @@
-import appCheck from '@react-native-firebase/app-check';
+import { initializeAppCheck as firebaseInitializeAppCheck, getToken, ReCaptchaEnterpriseProvider, CustomProvider } from 'firebase/app-check';
+import { app } from './firebaseConfig';
 import { Platform } from 'react-native';
 import * as Sentry from '@sentry/react-native';
-import Constants from 'expo-constants';
 
 let appCheckInitialized = false;
+let appCheckInstance: any = null;
 
 /**
- * Initialize Firebase App Check for the mobile app
+ * Initialize Firebase App Check for the mobile app using Web SDK
  * This should be called early in the app lifecycle, before any callable functions are used
  */
 export async function initializeAppCheck(): Promise<void> {
@@ -16,37 +17,53 @@ export async function initializeAppCheck(): Promise<void> {
   }
 
   try {
-    console.log('Initializing Firebase App Check...');
+    console.log('Initializing Firebase App Check (Web SDK)...');
     
-    if (__DEV__) {
-      // Temporarily disable App Check for development
-      console.log('App Check disabled for development - skipping initialization');
+    const isProduction = process.env.EXPO_PUBLIC_ENV === 'production';
+    const debugToken = process.env.APP_CHECK_DEBUG_TOKEN;
+    const recaptchaSiteKey = process.env.EXPO_PUBLIC_RECAPTCHA_SITE_KEY;
+    
+    console.log('App Check environment:', {
+      isDev: __DEV__,
+      isProduction,
+      hasDebugToken: !!debugToken,
+      hasRecaptchaSiteKey: !!recaptchaSiteKey,
+      platform: Platform.OS
+    });
+    
+    if (__DEV__ && !isProduction) {
+      // Skip App Check in development for now - will re-enable after testing
+      console.log('Skipping App Check initialization in development mode');
       appCheckInitialized = true;
       return;
     } else {
-      // For production builds, use platform-specific providers
-      console.log('Using App Check production providers');
+      // For production builds, use reCAPTCHA Enterprise
+      console.log('Using App Check reCAPTCHA Enterprise provider for production');
       
-      const rnfbProvider = appCheck().newReactNativeFirebaseAppCheckProvider();
-      rnfbProvider.configure({
-        android: {
-          provider: 'playIntegrity', // Play Integrity API for Android
-        },
-        apple: {
-          provider: 'appAttestWithDeviceCheckFallback', // App Attest with DeviceCheck fallback for iOS
-        },
-      });
+      if (!recaptchaSiteKey) {
+        throw new Error('reCAPTCHA site key not found in environment variables');
+      }
       
-      await appCheck().initializeAppCheck({
-        provider: rnfbProvider,
+      const recaptchaProvider = new ReCaptchaEnterpriseProvider(recaptchaSiteKey);
+      
+      appCheckInstance = firebaseInitializeAppCheck(app, {
+        provider: recaptchaProvider,
         isTokenAutoRefreshEnabled: true,
       });
     }
     
     appCheckInitialized = true;
     
+    // Try to get a token immediately to verify it's working
+    try {
+      const appCheckTokenResponse = await getToken(appCheckInstance);
+      console.log('App Check token obtained successfully:', appCheckTokenResponse.token.substring(0, 20) + '...');
+    } catch (tokenError) {
+      console.error('Failed to get App Check token after initialization:', tokenError);
+    }
+    
     Sentry.addBreadcrumb({
-      message: 'Firebase App Check initialized successfully',
+      message: 'Firebase App Check (Web SDK) initialized successfully',
       level: 'info',
       category: 'app_check',
       data: { 
@@ -55,7 +72,7 @@ export async function initializeAppCheck(): Promise<void> {
       }
     });
     
-    console.log('Firebase App Check initialized successfully');
+    console.log('Firebase App Check (Web SDK) initialized successfully');
     
   } catch (error) {
     console.error('Failed to initialize Firebase App Check:', error);
@@ -88,13 +105,13 @@ export function isAppCheckInitialized(): boolean {
  */
 export async function getAppCheckToken(): Promise<string | null> {
   try {
-    if (!appCheckInitialized) {
+    if (!appCheckInitialized || !appCheckInstance) {
       console.warn('App Check not initialized, cannot get token');
       return null;
     }
     
-    const { token } = await appCheck().getToken();
-    return token;
+    const appCheckTokenResponse = await getToken(appCheckInstance);
+    return appCheckTokenResponse.token;
   } catch (error) {
     console.error('Failed to get App Check token:', error);
     Sentry.captureException(error);

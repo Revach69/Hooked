@@ -294,8 +294,8 @@ export default function Admin() {
 
   const getEventStatus = (event: Event) => {
     const now = new Date();
-    const eventDate = new Date(event.starts_at);
-    const eventEndDate = new Date(event.expires_at);
+    const eventDate = event.starts_at.toDate();
+    const eventEndDate = event.expires_at.toDate();
 
     if (now < eventDate) {
       return { status: 'Upcoming', color: '#3b82f6' };
@@ -313,8 +313,8 @@ export default function Admin() {
     const past: Event[] = [];
 
     events.forEach(event => {
-      const eventDate = new Date(event.starts_at);
-      const eventEndDate = new Date(event.expires_at);
+      const eventDate = event.starts_at.toDate();
+      const eventEndDate = event.expires_at.toDate();
 
       if (now >= eventDate && now <= eventEndDate) {
         active.push(event);
@@ -352,7 +352,7 @@ export default function Admin() {
             <View style={styles.eventMetaItem}>
               <Calendar size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
               <Text style={[styles.eventMetaText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
-                {formatDate(event.starts_at, event.timezone)}
+                {formatDate(event.starts_at.toDate().toISOString(), event.timezone)}
               </Text>
             </View>
             {event.location && (

@@ -7,10 +7,11 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "prebuild": "expo prebuild",
+    "prebuild": "./scripts/eas-build-pre-install.sh && expo prebuild",
     "build:android": "expo build:android",
     "build:ios": "expo build:ios",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "eas:setup-google-services": "./scripts/eas-build-pre-install.sh"
   },
   "dependencies": {
     "@expo/config-plugins": "~10.1.1",

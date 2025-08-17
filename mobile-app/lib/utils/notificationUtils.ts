@@ -97,15 +97,41 @@ export async function setMuteStatus(
   muted: boolean
 ): Promise<void> {
   try {
-    const setMuteCallable = httpsCallable(functions, 'setMute');
-    
-    await setMuteCallable({
+    // Note: No authentication required - muting works with session IDs only
+    console.log('setMuteStatus: Calling Firebase function with:', {
       event_id: eventId,
       muter_session_id: muterSessionId,
       muted_session_id: mutedSessionId,
       muted
     });
-  } catch (error) {
+    
+    const setMuteCallable = httpsCallable(functions, 'setMuteV2');
+    
+    const result = await setMuteCallable({
+      event_id: eventId,
+      muter_session_id: muterSessionId,
+      muted_session_id: mutedSessionId,
+      muted
+    });
+    
+    console.log('setMuteStatus: Firebase function response:', result.data);
+    
+    // Check if the function returned an error
+    if (result.data && !result.data.success) {
+      const errorMessage = result.data.error || 'Unknown error';
+      console.error('setMuteStatus: Function returned error:', errorMessage);
+      throw new Error(errorMessage);
+    }
+    
+  } catch (error: any) {
+    console.error('setMuteStatus: Error calling Firebase function:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      details: error.details
+    });
     Sentry.captureException(error);
+    // Re-throw the error so the caller knows it failed
+    throw error;
   }
 }

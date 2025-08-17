@@ -142,8 +142,8 @@ class MobileErrorHandler {
       maxRetries?: number;
       baseDelay?: number;
       operationName?: string;
-      shouldRetry?: (error: any, attempt: number) => boolean;
-      onRetry?: (error: any, attempt: number, delay: number) => void;
+      shouldRetry?: (_error: any, _attempt: number) => boolean;
+      onRetry?: (_error: any, _attempt: number, _delay: number) => void;
     } = {}
   ): Promise<T> {
     const {

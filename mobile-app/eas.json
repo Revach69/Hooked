@@ -7,9 +7,8 @@
     "development": {
       "developmentClient": true,
       "env": {
-        "SENTRY_AUTH_TOKEN": "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",
-        "SENTRY_ORG": "hooked",
-        "SENTRY_PROJECT": "hooked"
+        "EXPO_PUBLIC_ENV": "development",
+        "APP_CHECK_DEBUG_TOKEN": "844F0D17-6C14-4701-B1E4-E7055ED7F9F2"
       },
       "distribution": "internal",
       "ios": {
@@ -22,9 +21,7 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "SENTRY_AUTH_TOKEN": "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",
-        "SENTRY_ORG": "hooked",
-        "SENTRY_PROJECT": "hooked"
+        "EXPO_PUBLIC_ENV": "preview"
       },
       "ios": {
         "resourceClass": "m-medium"
@@ -36,9 +33,10 @@
     "production": {
       "autoIncrement": true,
       "env": {
-        "SENTRY_AUTH_TOKEN": "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",
-        "SENTRY_ORG": "hooked",
-        "SENTRY_PROJECT": "hooked"
+        "EXPO_PUBLIC_ENV": "production",
+        "GOOGLE_SERVICES_JSON": "$GOOGLE_SERVICES_JSON",
+        "GOOGLE_SERVICE_INFO_PLIST": "$GOOGLE_SERVICE_INFO_PLIST",
+        "APP_CHECK_DEBUG_TOKEN": "844F0D17-6C14-4701-B1E4-E7055ED7F9F2"
       },
       "ios": {
         "resourceClass": "m-medium",

@@ -406,12 +406,10 @@ export default function EventForm({
       };
 
       // Handle image_url field
-      if (imageUrl !== null) {
+      if (imageUrl && typeof imageUrl === 'string') {
         eventData.image_url = imageUrl;
-      } else {
-        // No image - set to null to remove the field
-        eventData.image_url = undefined;
       }
+      // Do NOT set image_url to null or undefined if no image
 
       await onSave(eventData);
       onClose();

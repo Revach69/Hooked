@@ -3,8 +3,8 @@ import { firebasePerformance, startTrace, stopTrace } from '../firebasePerforman
 
 // Types for Firebase Performance Web SDK
 interface Trace {
-  putAttribute: (name: string, value: string) => void;
-  putMetric: (name: string, value: number) => void;
+  putAttribute: (_name: string, _value: string) => void;
+  putMetric: (_name: string, _value: number) => void;
   stop: () => void;
 }
 

@@ -234,14 +234,14 @@ function countMutualMatches(likesData: any[]): number {
 
 // Cloud Function to handle profile expiration notifications
 export const sendProfileExpirationNotifications = onSchedule({
-  schedule: 'every 6 hours',
+  schedule: 'every 1 hours', // Changed from 6 hours to 1 hour
   region: FUNCTION_REGION,
 }, async (event) => {
     const now = admin.firestore.Timestamp.now();
     const oneHourFromNow = new admin.firestore.Timestamp(now.seconds + 3600, now.nanoseconds);
     
     try {
-      console.log('Checking for profiles expiring soon...');
+      console.log('Checking for events expiring in the next hour...');
       
       // Get events expiring in the next hour
       const expiringEventsSnapshot = await db
@@ -255,6 +255,9 @@ export const sendProfileExpirationNotifications = onSchedule({
       for (const eventDoc of expiringEventsSnapshot.docs) {
         const eventData = eventDoc.data();
         const eventId = eventDoc.id;
+        const eventName = eventData.name || 'Event';
+        
+        console.log(`Processing expiring event: ${eventName} (${eventId})`);
         
         // Get all active profiles for this event
         const profilesSnapshot = await db
@@ -263,17 +266,47 @@ export const sendProfileExpirationNotifications = onSchedule({
           .where('is_visible', '==', true)
           .get();
         
-        console.log(`Found ${profilesSnapshot.size} active profiles for expiring event ${eventId} (${eventData.name || 'Unknown Event'})`);
+        console.log(`Found ${profilesSnapshot.size} active profiles for expiring event ${eventName}`);
         
-        // Send notification to each profile (if you have FCM tokens stored)
+        // Send notification to each profile using the existing notification system
         for (const profileDoc of profilesSnapshot.docs) {
-          // Here you would send a push notification to the user
-          // This is a placeholder - implement based on your notification system
-          console.log(`Would send expiration notification to profile ${profileDoc.id} for event ${eventId}`);
+          const profileData = profileDoc.data();
+          const sessionId = profileData.session_id;
+          
+          if (!sessionId) {
+            console.warn(`Profile ${profileDoc.id} has no session_id, skipping notification`);
+            continue;
+          }
+          
+          try {
+            // Create notification job for this user
+            const notificationJob = {
+              type: 'generic',
+              subject_session_id: sessionId,
+              aggregationKey: `expiration:${eventId}:${sessionId}`,
+              title: `${eventName} is about to end`,
+              body: 'Go say hi or swap numbers now!',
+              data: {
+                type: 'event_expiration',
+                event_id: eventId,
+                event_name: eventName
+              },
+              attempts: 0,
+              status: 'queued',
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            };
+            
+            await db.collection('notification_jobs').add(notificationJob);
+            console.log(`Queued expiration notification for session ${sessionId} in event ${eventName}`);
+            
+          } catch (notificationError) {
+            console.error(`Failed to queue notification for session ${sessionId}:`, notificationError);
+          }
         }
       }
       
-      console.log('Expiring events processed:', expiringEventsSnapshot.size);
+      console.log(`Expiring events processed: ${expiringEventsSnapshot.size} events`);
       
     } catch (error) {
       console.error('Error sending expiration notifications:', error);
@@ -848,7 +881,7 @@ export const onMutualLike = onDocumentWritten({
             actor_session_id: likedSession,
             payload: {
               title: "You got Hooked!",
-              body: undefined,
+              body: "You got a match! Tap to start chatting.",
               data: { 
                 type: 'match', 
                 otherSessionId: likedSession,
@@ -870,7 +903,7 @@ export const onMutualLike = onDocumentWritten({
           actor_session_id: likedSession,
           payload: {
             title: "You got Hooked!",
-            body: undefined,
+            body: "You got a match! Tap to start chatting.",
             data: { 
               type: 'match', 
               otherSessionId: likedSession,
@@ -919,7 +952,7 @@ export const onMutualLike = onDocumentWritten({
             actor_session_id: likerSession,
             payload: {
               title: 'You got Hooked!',
-              body: undefined,
+              body: 'You got a match! Tap to start chatting.',
               data: { 
                 type: 'match', 
                 otherSessionId: likerSession,
@@ -941,7 +974,7 @@ export const onMutualLike = onDocumentWritten({
           actor_session_id: likerSession,
           payload: {
             title: 'You got Hooked!',
-            body: undefined,
+            body: 'You got a match! Tap to start chatting.',
             data: { 
               type: 'match', 
               otherSessionId: likerSession,
@@ -1055,7 +1088,17 @@ export const onMessageCreate = onDocumentCreated({
     try {
       const appStateDoc = await admin.firestore().collection('app_states').doc(toSession).get();
       appState = appStateDoc.exists ? appStateDoc.data() as any : null;
-      isForeground = appState?.isForeground === true;
+      
+      if (appState?.isForeground === true && appState?.updatedAt) {
+        // Check if app state is recent (within 30 seconds for better reliability)
+        const APP_STATE_TTL_SECONDS = 30;
+        const appStateAge = Date.now() - appState.updatedAt.toDate().getTime();
+        const isRecent = appStateAge < (APP_STATE_TTL_SECONDS * 1000);
+        
+        isForeground = isRecent;
+      } else {
+        isForeground = false;
+      }
     } catch (error) {
       console.log('Error reading app state for message recipient, assuming not in foreground:', error);
       isForeground = false;
@@ -1117,10 +1160,15 @@ export const processNotificationJobsOnCreate = onDocumentCreated({
   }
 });
 
-export const savePushToken = onCall({
-  region: FUNCTION_REGION,
-  enforceAppCheck: true,
-}, async (request) => {
+export const savePushToken = onCall(async (request) => {
+  console.log('savePushToken: Called with data (NO APP CHECK):', {
+    hasToken: !!request.data?.token,
+    tokenLength: request.data?.token?.length,
+    platform: request.data?.platform,
+    sessionId: request.data?.sessionId?.substring(0, 8) + '...',
+    hasInstallationId: !!request.data?.installationId
+  });
+  
   const { token, platform, sessionId, installationId } = request.data;
 
     // Validate required fields
@@ -1188,10 +1236,7 @@ export const savePushToken = onCall({
 // Updates the app state (foreground/background) for a session with App Check validation
 // Expects: { sessionId: string, isForeground: boolean, installationId?: string }
 // Note: No authentication required - app state tracking should work for all users
-export const setAppState = onCall({
-  region: FUNCTION_REGION,
-  enforceAppCheck: true,
-}, async (request) => {
+export const setAppState = onCall(async (request) => {
   const { sessionId, isForeground, installationId } = request.data;
 
     // Validate required fields
@@ -1226,72 +1271,49 @@ export const setAppState = onCall({
   });
 
 // === Callable: setMute ===
-// Sets mute status between two sessions with App Check validation
+// Sets mute status between two sessions - NO authentication required
 // Expects: { event_id: string, muter_session_id: string, muted_session_id: string, muted: boolean }
 export const setMute = onCall({
   region: FUNCTION_REGION,
-  enforceAppCheck: true,
 }, async (request) => {
-  const { event_id, muter_session_id, muted_session_id, muted } = request.data;
-
-    // Validate required fields
-    if (typeof event_id !== 'string' || !event_id.trim()) {
-      throw new HttpsError('invalid-argument', 'event_id is required and must be a string');
+  console.log('setMute: Function called with data:', request.data);
+  
+  try {
+    const { event_id, muter_session_id, muted_session_id, muted } = request.data;
+    
+    // Simple validation
+    if (!event_id || !muter_session_id || !muted_session_id || typeof muted !== 'boolean') {
+      console.error('setMute: Missing required fields');
+      return { success: false, error: 'Missing required fields' };
     }
 
-    if (typeof muter_session_id !== 'string' || !muter_session_id.trim()) {
-      throw new HttpsError('invalid-argument', 'muter_session_id is required and must be a string');
-    }
-
-    if (typeof muted_session_id !== 'string' || !muted_session_id.trim()) {
-      throw new HttpsError('invalid-argument', 'muted_session_id is required and must be a string');
-    }
-
-    if (typeof muted !== 'boolean') {
-      throw new HttpsError('invalid-argument', 'muted is required and must be a boolean');
-    }
-
-    // Validate session ID formats
-    const sessionIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    if (!sessionIdPattern.test(muter_session_id) || !sessionIdPattern.test(muted_session_id)) {
-      throw new HttpsError('invalid-argument', 'Invalid session ID format');
-    }
-
-    // Prevent self-muting
-    if (muter_session_id === muted_session_id) {
-      throw new HttpsError('invalid-argument', 'Cannot mute yourself');
-    }
-
-    try {
-      const docId = `${event_id}_${muter_session_id}_${muted_session_id}`;
-      
-      if (muted) {
-        // Create or update mute record
-        await admin.firestore().collection('muted_matches').doc(docId).set({
-          event_id,
-          muter_session_id,
-          muted_session_id,
-          created_at: admin.firestore.FieldValue.serverTimestamp(),
-          updated_at: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      } else {
-        // Remove mute record
-        await admin.firestore().collection('muted_matches').doc(docId).delete();
-      }
-
-      console.log('setMute: Successfully updated mute status:', { 
-        event_id, 
-        muter_session_id, 
-        muted_session_id, 
-        muted
+    const docId = `${event_id}_${muter_session_id}_${muted_session_id}`;
+    console.log('setMute: Document ID:', docId);
+    
+    if (muted) {
+      // Create mute record
+      await admin.firestore().collection('muted_matches').doc(docId).set({
+        event_id,
+        muter_session_id,
+        muted_session_id,
+        created_at: admin.firestore.FieldValue.serverTimestamp(),
+        updated_at: admin.firestore.FieldValue.serverTimestamp(),
       });
-      
-      return { success: true, muted };
-    } catch (error) {
-      console.error('setMute: Error updating mute status:', error);
-      throw new HttpsError('internal', 'Failed to update mute status');
+      console.log('setMute: Mute record created');
+    } else {
+      // Remove mute record
+      await admin.firestore().collection('muted_matches').doc(docId).delete();
+      console.log('setMute: Mute record deleted');
     }
-  });
+
+    console.log('setMute: Success!');
+    return { success: true, muted };
+    
+  } catch (error) {
+    console.error('setMute: Error:', error);
+    return { success: false, error: 'Internal error' };
+  }
+});
 
 // === Callable: updateAppState === (Legacy - for backward compatibility)
 // Updates the app state (foreground/background) for a session
@@ -1329,10 +1351,7 @@ export const updateAppState = onCall({
 // === Callable: sendCrossDeviceNotification ===
 // Sends notifications across devices using the existing push token infrastructure
 // Expected payload: { type: 'match' | 'message' | 'generic', title: string, body: string, targetSessionId: string, data?: any }
-export const sendCrossDeviceNotification = onCall({
-  region: FUNCTION_REGION,
-  enforceAppCheck: true,
-}, async (request) => {
+export const sendCrossDeviceNotification = onCall(async (request) => {
   const { type, title, body, targetSessionId, senderSessionId, data: notificationData } = request.data;
 
     // Validate required fields
@@ -1410,3 +1429,113 @@ export const sendCrossDeviceNotification = onCall({
       throw new HttpsError('internal', 'Failed to send notification');
     }
   });
+
+// === NEW Callable: setMuteV2 ===
+// Fresh function to avoid caching issues
+// Expects: { event_id: string, muter_session_id: string, muted_session_id: string, muted: boolean }
+export const setMuteV2 = onCall({
+  region: FUNCTION_REGION,
+}, async (request) => {
+  console.log('setMuteV2: Function called with data:', request.data);
+  
+  try {
+    const { event_id, muter_session_id, muted_session_id, muted } = request.data;
+    
+    // Simple validation
+    if (!event_id || !muter_session_id || !muted_session_id || typeof muted !== 'boolean') {
+      console.error('setMuteV2: Missing required fields');
+      return { success: false, error: 'Missing required fields' };
+    }
+
+    const docId = `${event_id}_${muter_session_id}_${muted_session_id}`;
+    console.log('setMuteV2: Document ID:', docId);
+    
+    if (muted) {
+      // Create mute record
+      await admin.firestore().collection('muted_matches').doc(docId).set({
+        event_id,
+        muter_session_id,
+        muted_session_id,
+        created_at: admin.firestore.FieldValue.serverTimestamp(),
+        updated_at: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      console.log('setMuteV2: Mute record created');
+    } else {
+      // Remove mute record
+      await admin.firestore().collection('muted_matches').doc(docId).delete();
+      console.log('setMuteV2: Mute record deleted');
+    }
+
+    console.log('setMuteV2: Success!');
+    return { success: true, muted };
+    
+  } catch (error) {
+    console.error('setMuteV2: Error:', error);
+    return { success: false, error: 'Internal error' };
+  }
+});
+
+// === Backup Callable: setMuteBackup ===
+// Alternative mute function in case setMute has persistent App Check issues
+export const setMuteBackup = onCall({
+  region: FUNCTION_REGION,
+}, async (request) => {
+  const { event_id, muter_session_id, muted_session_id, muted } = request.data;
+
+  // Validate required fields (same as setMute)
+  if (typeof event_id !== 'string' || !event_id.trim()) {
+    throw new HttpsError('invalid-argument', 'event_id is required and must be a string');
+  }
+
+  if (typeof muter_session_id !== 'string' || !muter_session_id.trim()) {
+    throw new HttpsError('invalid-argument', 'muter_session_id is required and must be a string');
+  }
+
+  if (typeof muted_session_id !== 'string' || !muted_session_id.trim()) {
+    throw new HttpsError('invalid-argument', 'muted_session_id is required and must be a string');
+  }
+
+  if (typeof muted !== 'boolean') {
+    throw new HttpsError('invalid-argument', 'muted is required and must be a boolean');
+  }
+
+  // Validate session ID format
+  const sessionIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!sessionIdPattern.test(muter_session_id) || !sessionIdPattern.test(muted_session_id)) {
+    throw new HttpsError('invalid-argument', 'Invalid session ID format');
+  }
+
+  if (muter_session_id === muted_session_id) {
+    throw new HttpsError('invalid-argument', 'Cannot mute yourself');
+  }
+
+  try {
+    const docId = `${event_id}_${muter_session_id}_${muted_session_id}`;
+
+    if (muted) {
+      // Create or update mute record
+      await admin.firestore().collection('muted_matches').doc(docId).set({
+        event_id,
+        muter_session_id,
+        muted_session_id,
+        created_at: admin.firestore.FieldValue.serverTimestamp(),
+        updated_at: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } else {
+      // Remove mute record
+      await admin.firestore().collection('muted_matches').doc(docId).delete();
+    }
+
+    console.log('setMuteBackup: Successfully updated mute status:', { 
+      event_id, 
+      muter_session_id, 
+      muted_session_id, 
+      muted
+    });
+
+    return { success: true, muted };
+  } catch (error) {
+    console.error('setMuteBackup: Error updating mute status:', error);
+    throw new HttpsError('internal', 'Failed to update mute status');
+  }
+});

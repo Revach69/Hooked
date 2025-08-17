@@ -18,7 +18,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.hookedapp.app",
-      "googleServicesFile": "./GoogleService-Info.plist",
+      "googleServicesFile": "./ios/Hooked/GoogleService-Info.plist",
       "associatedDomains": [
         "applinks:www.hooked-app.com"
       ],
@@ -39,7 +39,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.hookedapp.app",
-      "googleServicesFile": "./google-services.json",
+      "googleServicesFile": "./android/app/google-services.json",
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -56,7 +56,14 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "@sentry/react-native/expo",
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "hooked",
+          "project": "hooked",
+          "url": "https://sentry.io/"
+        }
+      ],
       "expo-router",
       [
         "expo-notifications",
@@ -78,10 +85,10 @@
         "@react-native-firebase/app",
         {
           "android": {
-            "googleServicesFile": "./google-services.json"
+            "googleServicesFile": "./android/app/google-services.json"
           },
           "ios": {
-            "googleServicesPlist": "./GoogleService-Info.plist"
+            "googleServicesPlist": "./ios/Hooked/GoogleService-Info.plist"
           }
         }
       ], 
@@ -107,7 +114,6 @@
         "appId": "1:741889428835:web:d5f88b43a503c9e6351756",
         "measurementId": "G-6YHKXLN806"
       },
-      "APP_CHECK_DEBUG_TOKEN": "844F0D17-6C14-4701-B1E4-E7055ED7F9F2",
       "router": {},
       "eas": {
         "projectId": "7a1de260-e3cb-4cbb-863c-1557213d69f0"

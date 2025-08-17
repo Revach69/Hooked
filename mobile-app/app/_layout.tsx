@@ -1,25 +1,38 @@
 import 'react-native-get-random-values';
 import * as Sentry from '@sentry/react-native';
 
-Sentry.init({
-  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
-  enableAutoPerformanceTracing: true,
-  tracesSampleRate: __DEV__ ? 1.0 : 0.2, // Lower sample rate in production
-  enableAutoSessionTracking: true,
-  debug: false, // Disable debug in production
-  environment: process.env.EXPO_PUBLIC_ENV || (__DEV__ ? 'development' : 'production'),
-  release: `${process.env.EXPO_PUBLIC_APP_ID ?? 'hooked'}@${process.env.EXPO_PUBLIC_APP_VERSION ?? '1.0.0'}`,
-  beforeSend(event) {
-    return event; // keep for future filtering
-  },
-});
+// Only initialize Sentry if DSN is available
+if (process.env.EXPO_PUBLIC_SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+    enableAutoPerformanceTracing: true,
+    tracesSampleRate: __DEV__ ? 1.0 : 0.2, // Lower sample rate in production
+    enableAutoSessionTracking: true,
+    debug: __DEV__, // Enable debug in development for troubleshooting
+    environment: process.env.EXPO_PUBLIC_ENV || (__DEV__ ? 'development' : 'production'),
+    release: `${process.env.EXPO_PUBLIC_APP_ID ?? 'hooked'}@${process.env.EXPO_PUBLIC_APP_VERSION ?? '1.0.0'}`,
+    beforeSend(event) {
+      // Add extra context for physical device debugging
+      if (event.contexts) {
+        event.contexts.device = {
+          ...event.contexts.device,
+          simulator: __DEV__,
+        };
+      }
+      return event;
+    },
+  });
+} else {
+  console.warn('Sentry DSN not configured - error reporting disabled');
+}
 
 // Initialize React Native Firebase - but only after app is ready
 // import '../lib/firebaseNativeConfig';
 
 import React, { useEffect, useState } from 'react';
 import { Stack, useRouter } from 'expo-router';
-import { Text, View, Platform } from 'react-native';
+import { Platform } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Toast from 'react-native-toast-message';
 import { NotificationProvider } from '../lib/contexts/NotificationContext';
 import { NotificationRouter, setCurrentSessionIdForDedup } from '../lib/notifications/NotificationRouter';
@@ -191,7 +204,7 @@ async function mapLikeToMatchEvent(
       event_id: d.event_id
     });
     if (otherProfiles.length > 0) {
-      otherName = otherProfiles[0].first_name || otherProfiles[0].name;
+      otherName = otherProfiles[0].first_name || (otherProfiles[0] as any).name;
     }
   } catch (error) {
     console.warn('Failed to fetch other user name for match notification:', error);
@@ -213,11 +226,12 @@ async function mapLikeToMatchEvent(
 // Map Firestore Message doc -> MessageEvent (recipient only)
 async function mapMessageToEvent(
   docData: any,
-  myProfileId: string
+  myProfileId: string,
+  docId: string
 ): Promise<MessageEvent | null> {
   const d = docData;
   
-  if (!d?.id || !d?.event_id) {
+  if (!d?.event_id) {
     return null;
   }
   if (d.to_profile_id !== myProfileId) {
@@ -241,18 +255,33 @@ async function mapMessageToEvent(
     
     const profilePromise = EventProfileAPI.get(d.from_profile_id);
     const senderProfile = await Promise.race([profilePromise, timeoutPromise]);
-    senderSessionId = senderProfile?.session_id;
+    
+    // If sender profile doesn't exist (deleted), don't show notification
+    if (!senderProfile) {
+      console.log('mapMessageToEvent: sender profile not found (deleted), skipping notification');
+      return null;
+    }
+    
+    senderSessionId = senderProfile.session_id;
+    
+    console.log('mapMessageToEvent: sender profile lookup result:', {
+      fromProfileId: d.from_profile_id,
+      senderSessionId,
+      senderName: senderProfile?.first_name
+    });
     
     // If sender_name is missing from message, get it from profile
     if (!senderName && senderProfile?.first_name) {
       senderName = senderProfile.first_name;
     }
-  } catch {
-    // Continue without sender session ID if lookup fails
+  } catch (error) {
+    console.warn('mapMessageToEvent: error looking up sender profile:', error);
+    // If we can't look up the sender profile, don't show notification
+    return null;
   }
 
   const event = {
-    id: d.id,
+    id: docId,
     type: 'message' as const,
     createdAt: Date.parse(d.created_at ?? new Date().toISOString()),
     senderProfileId: d.from_profile_id,
@@ -313,9 +342,9 @@ export default function RootLayout() {
           const isIOS = Platform.OS === 'ios';
           
           return {
-            shouldPlaySound: !isIOS,      // Disable sound on iOS (toast will handle)
+            shouldPlaySound: false,      // Disable sound - toast will handle
             shouldSetBadge: true,         // Keep badge on both platforms
-            shouldShowBanner: !isIOS,     // Disable banner on iOS (toast will handle)
+            shouldShowBanner: false,      // Disable banner - toast will handle foreground
             shouldShowList: true,         // Show in notification list on both platforms
           };
         },
@@ -327,8 +356,8 @@ export default function RootLayout() {
   useEffect(() => {
     const initializeApp = async () => {
       try {
-        // Add a delay to ensure JS thread is ready (especially for iOS simulator)
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Add a delay to ensure JS thread is ready (especially for iOS devices)
+        await new Promise(resolve => setTimeout(resolve, 1000));
         
         // Initialize Firebase native config first
         await import('../lib/firebaseNativeConfig');
@@ -340,14 +369,30 @@ export default function RootLayout() {
         // Initialize Firebase App Check (required for callable functions)
         await initializeAppCheck();
         
+        // Initialize Firebase Auth (sign in anonymously)
+        const { AuthService } = await import('../lib/services/AuthService');
+        await AuthService.initialize();
+        
         // Initialize notification channels for Android
         await initializeNotificationChannels();
+        
+        // Request notification permissions early on iOS physical devices
+        if (Platform.OS === 'ios') {
+          try {
+            const { status: existingStatus } = await Notifications.getPermissionsAsync();
+            if (existingStatus !== 'granted') {
+              await Notifications.requestPermissionsAsync();
+            }
+          } catch (permError) {
+            console.warn('Failed to request notification permissions:', permError);
+          }
+        }
         
         // Initialize Firebase notification service
         await FirebaseNotificationService.initialize();
         
-        // Additional delay to ensure everything is properly initialized
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Additional delay to ensure everything is properly initialized on physical devices
+        await new Promise(resolve => setTimeout(resolve, 1500));
         setAppIsReady(true);
       } catch (error) {
         Sentry.captureException(error, {
@@ -386,13 +431,17 @@ export default function RootLayout() {
         });
         
         // Register push token
+        console.log('About to register push token for session:', sessionId.substring(0, 8) + '...');
         const success = await registerPushToken(sessionId);
         
         if (!success) {
+          console.error('Push token registration failed for session:', sessionId.substring(0, 8) + '...');
           Sentry.addBreadcrumb({
             message: 'Push token registration failed',
             level: 'warning'
           });
+        } else {
+          console.log('Push token registration successful for session:', sessionId.substring(0, 8) + '...');
         }
         
         // Start app state sync
@@ -480,7 +529,24 @@ export default function RootLayout() {
               console.log('Skipping non-added change');
               return; // critical: only new like docs == second liker action
             }
-            console.log('Processing added like document:', change.doc.data());
+            
+            // Only process matches that are very recent (within last 30 seconds)
+            // This prevents showing notifications for old matches when app reloads
+            const likeData = change.doc.data();
+            const matchTime = likeData.created_at?.toDate?.() || new Date(likeData.created_at?.seconds * 1000 || Date.now());
+            const now = new Date();
+            const thirtySecondsAgo = new Date(now.getTime() - 30 * 1000);
+            
+            if (matchTime < thirtySecondsAgo) {
+              console.log('Skipping old match for notification:', {
+                matchId: change.doc.id,
+                matchTime: matchTime.toISOString(),
+                threshold: thirtySecondsAgo.toISOString()
+              });
+              return; // Skip old matches
+            }
+            
+            console.log('Processing recent like document:', change.doc.data());
             const ev = await mapLikeToMatchEvent(change.doc.data(), sessionId, change.doc.id);
             if (ev) {
               console.log('Created match event, calling NotificationRouter');
@@ -552,7 +618,24 @@ export default function RootLayout() {
         unsubMsgs = onSnapshot(qMsgs, (snap) => {
           snap.docChanges().forEach(async (change: any) => {
             if (change.type !== 'added') return;
-            const ev = await mapMessageToEvent(change.doc.data(), myProfileId);
+            
+            // Only process messages that are very recent (within last 30 seconds)
+            // This prevents showing toasts for old messages when app reloads
+            const messageData = change.doc.data();
+            const messageTime = messageData.created_at?.toDate?.() || new Date(messageData.created_at);
+            const now = new Date();
+            const thirtySecondsAgo = new Date(now.getTime() - 30 * 1000);
+            
+            if (messageTime < thirtySecondsAgo) {
+              console.log('Skipping old message for toast notification:', {
+                messageId: change.doc.id,
+                messageTime: messageTime.toISOString(),
+                threshold: thirtySecondsAgo.toISOString()
+              });
+              return; // Skip old messages
+            }
+            
+            const ev = await mapMessageToEvent(change.doc.data(), myProfileId, change.doc.id);
             if (ev) {
               Sentry.addBreadcrumb({
                 message: 'Firebase listener detected new message event',
@@ -606,98 +689,71 @@ export default function RootLayout() {
   }
 
   return (
-    <ErrorBoundary>
-      <NotificationProvider>
-        <Stack 
-          screenOptions={{ 
-            headerShown: false,
-            gestureEnabled: false,  // Disable swipe gestures
-          }} 
-        />
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ErrorBoundary>
+        <NotificationProvider>
+          <Stack 
+            screenOptions={{ 
+              headerShown: false,
+              gestureEnabled: false,  // Disable swipe gestures
+            }} 
+          />
         <Toast 
           config={{
           /* eslint-disable react/prop-types */
           matchSuccess: (props) => (
             <CustomMatchToast
-              text1={props.text1}
+              text1={props.text1 || ''}
               text2={props.text2}
               onPress={props.onPress}
-              onHide={props.onHide}
+              onHide={props.hide}
+            />
+          ),
+          messageSuccess: (props) => (
+            <CustomMatchToast
+              text1={props.text1 || ''}
+              text2={props.text2}
+              onPress={props.onPress}
+              onHide={props.hide}
             />
           ),
           success: (props) => (
-            <View style={{
-              backgroundColor: '#4CAF50',
-              padding: 15,
-              marginHorizontal: 20,
-              marginTop: 50,
-              borderRadius: 10,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.25,
-              shadowRadius: 3.84,
-              elevation: 5,
-            }}>
-              <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>
-                {props.text1}
-              </Text>
-              {props.text2 && (
-                <Text style={{ color: 'white', fontSize: 14, marginTop: 4 }}>
-                  {props.text2}
-                </Text>
-              )}
-                          </View>
-            ),
+            <CustomMatchToast
+              text1={props.text1 || ''}
+              text2={props.text2}
+              onPress={props.onPress}
+              onHide={props.hide}
+            />
+          ),
           info: (props) => (
-            <View style={{
-              backgroundColor: '#2196F3',
-              padding: 15,
-              marginHorizontal: 20,
-              marginTop: 50,
-              borderRadius: 10,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.25,
-              shadowRadius: 3.84,
-              elevation: 5,
-            }}>
-              <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>
-                {props.text1}
-              </Text>
-              {props.text2 && (
-                <Text style={{ color: 'white', fontSize: 14, marginTop: 4 }}>
-                  {props.text2}
-                </Text>
-              )}
-                          </View>
-            ),
+            <CustomMatchToast
+              text1={props.text1 || ''}
+              text2={props.text2}
+              onPress={props.onPress}
+              onHide={props.hide}
+            />
+          ),
           error: (props) => (
-            <View style={{
-              backgroundColor: '#F44336',
-              padding: 15,
-              marginHorizontal: 20,
-              marginTop: 50,
-              borderRadius: 10,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.25,
-              shadowRadius: 3.84,
-              elevation: 5,
-            }}>
-              <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>
-                {props.text1}
-              </Text>
-              {props.text2 && (
-                <Text style={{ color: 'white', fontSize: 14, marginTop: 4 }}>
-                  {props.text2}
-                </Text>
-              )}
-                          </View>
-            ),
+            <CustomMatchToast
+              text1={props.text1 || ''}
+              text2={props.text2}
+              onPress={props.onPress}
+              onHide={props.hide}
+            />
+          ),
+          warning: (props) => (
+            <CustomMatchToast
+              text1={props.text1 || ''}
+              text2={props.text2}
+              onPress={props.onPress}
+              onHide={props.hide}
+            />
+          ),
           /* eslint-enable react/prop-types */
         }}
         />
-      </NotificationProvider>
-    </ErrorBoundary>
+        </NotificationProvider>
+      </ErrorBoundary>
+    </GestureHandlerRootView>
   );
 }

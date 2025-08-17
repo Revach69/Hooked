@@ -139,11 +139,19 @@ export default function Profile() {
     }
     
     try {
-      const events = await EventAPI.filter({ id: eventId });
+      // Add timeout to prevent hanging indefinitely
+      const eventTimeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Event loading timeout')), 15000); // 15 second timeout
+      });
+      
+      const eventPromise = EventAPI.filter({ id: eventId });
+      const events = await Promise.race([eventPromise, eventTimeoutPromise]);
+      
       if (events.length > 0) {
         setCurrentEvent(events[0]);
       } else {
-        // Event doesn't exist, clear all data and redirect to home
+        // Event doesn't exist - clear only after confirmation
+        console.log('Event not found in profile, clearing session data');
         await AsyncStorageUtils.multiRemove([
           'currentEventId',
           'currentSessionId',
@@ -155,16 +163,23 @@ export default function Profile() {
         return;
       }
 
-      const profiles = await EventProfileAPI.filter({ 
+      // Add timeout for profile lookup
+      const profileTimeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Profile loading timeout')), 15000); // 15 second timeout
+      });
+      
+      const profilePromise = EventProfileAPI.filter({ 
         session_id: sessionId,
         event_id: eventId 
       });
+      const profiles = await Promise.race([profilePromise, profileTimeoutPromise]);
       
       if (profiles.length > 0) {
         setProfile(profiles[0]);
       } else {
         // Profile doesn't exist in database (user left event and deleted profile)
-        // Clear all AsyncStorage data and redirect to home
+        // Clear session data only after confirming profile is truly gone
+        console.log('User profile not found in profile initialization - clearing session data');
         await AsyncStorageUtils.multiRemove([
           'currentEventId',
           'currentSessionId',
@@ -176,15 +191,18 @@ export default function Profile() {
         return;
       }
     } catch (error) {
+      console.error('Error initializing profile session:', error);
       Sentry.captureException(error);
-      // Clear data and redirect to home on error
-      await AsyncStorageUtils.multiRemove([
-        'currentEventId',
-        'currentSessionId',
-        'currentEventCode',
-        'currentProfileColor',
-        'currentProfilePhotoUrl'
-      ]);
+      
+      // Don't clear session data on network/timeout errors
+      // Let homepage restoration handle session recovery
+      if (error instanceof Error && error.message.includes('timeout')) {
+        console.log('Profile initialization timeout - keeping session data for retry');
+      } else {
+        console.log('Profile initialization error - redirecting to home but keeping session data');
+      }
+      
+      // Redirect to home but don't clear session data
       router.replace('/home');
       return;
     }

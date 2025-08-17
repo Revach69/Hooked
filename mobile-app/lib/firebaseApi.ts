@@ -9,7 +9,8 @@ import {
   query, 
   where, 
   orderBy, 
-  serverTimestamp
+  serverTimestamp,
+  Timestamp
 } from 'firebase/firestore';
 import { ref, getDownloadURL, uploadBytes } from 'firebase/storage';
 import { 
@@ -95,9 +96,9 @@ export interface Event {
   id: string;
   name: string;
   description?: string;
-  starts_at: string;
-  start_date?: string; // Real event start time (for display purposes)
-  expires_at: string;
+  starts_at: Timestamp;
+  start_date?: Timestamp; // Real event start time (for display purposes)
+  expires_at: Timestamp;
   event_code: string;
   location?: string;
   organizer_email?: string;
@@ -107,8 +108,8 @@ export interface Event {
   event_link?: string; // Added for event link
   is_private?: boolean; // Added for private events
   timezone?: string; // Added for timezone support
-  created_at: string;
-  updated_at: string;
+  created_at: Timestamp;
+  updated_at: Timestamp;
 }
 
 export interface EventProfile {
@@ -246,8 +247,8 @@ export const EventAPI = {
         return {
           id: docRef.id,
           ...data,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          created_at: Timestamp.now(),
+          updated_at: Timestamp.now()
         };
       });
     }, { operation: 'Create event' });

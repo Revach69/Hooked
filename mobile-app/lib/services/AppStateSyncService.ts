@@ -9,7 +9,7 @@ class AppStateSyncServiceClass {
   private sessionId: string | null = null;
   private isRunning = false;
   private debounceTimeout: ReturnType<typeof setTimeout> | null = null;
-  private appStateListener: ((status: AppStateStatus) => void) | null = null;
+  private appStateListener: ((_status: AppStateStatus) => void) | null = null;
 
   /**
    * Start syncing app state changes to Firestore
@@ -54,7 +54,7 @@ class AppStateSyncServiceClass {
 
     AppState.addEventListener('change', this.appStateListener);
 
-    console.log('AppStateSyncService: Started for session:', sessionId);
+    if (__DEV__) console.log('AppStateSyncService: Started for session:', sessionId);
   }
 
   /**
@@ -85,7 +85,7 @@ class AppStateSyncServiceClass {
     this.isRunning = false;
     this.sessionId = null;
 
-    console.log('AppStateSyncService: Stopped');
+    if (__DEV__) console.log('AppStateSyncService: Stopped');
   }
 
   /**
@@ -123,13 +123,16 @@ class AppStateSyncServiceClass {
       return;
     }
 
-    if (__DEV__) {
+    const isProduction = process.env.EXPO_PUBLIC_ENV === 'production';
+    
+    if (__DEV__ && !isProduction) {
       // Skip app state sync in development to avoid authentication errors
-      console.log('AppStateSyncService: Skipped in development mode');
+      if (__DEV__) console.log('AppStateSyncService: Skipped in development mode');
       return;
     }
 
     try {
+      // Note: No authentication required - app state tracking works with session IDs only
       const functions = getFunctions(app, 'us-central1');
       const setAppState = httpsCallable(functions, 'setAppState');
       

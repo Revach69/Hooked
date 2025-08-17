@@ -21,6 +21,13 @@ config.transformer.minifierConfig = {
   mangle: {
     keep_fnames: true,
   },
+  // Remove console.log statements in production builds
+  ...(process.env.NODE_ENV === 'production' && {
+    compress: {
+      drop_console: true,
+      drop_debugger: true,
+    }
+  })
 };
 
 module.exports = config;

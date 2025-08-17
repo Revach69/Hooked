@@ -62,6 +62,22 @@ export default function Chat() {
   // Single ref to hold unsubscribe function
   const listenerRef = useRef<(() => void) | null>(null);
 
+  const loadMuteStatus = useCallback(async () => {
+    if (!currentEventId || !currentSessionId || !matchId) return;
+
+    try {
+      // Check if match is muted
+      const mutedRecords = await MutedMatchAPI.filter({
+        event_id: currentEventId,
+        muter_session_id: currentSessionId,
+        muted_session_id: matchId as string
+      });
+      setIsMuted(mutedRecords.length > 0);
+    } catch {
+      // Error loading mute status
+    }
+  }, [currentEventId, currentSessionId, matchId]);
+
   const initializeChat = useCallback(async () => {
     try {
       const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
@@ -135,23 +151,7 @@ export default function Chat() {
       notifications.error('Error', 'Failed to load chat');
       router.back();
     }
-  }, [matchId, notifications]);
-
-  const loadMuteStatus = async () => {
-    if (!currentEventId || !currentSessionId || !matchId) return;
-
-    try {
-      // Check if match is muted
-      const mutedRecords = await MutedMatchAPI.filter({
-        event_id: currentEventId,
-        muter_session_id: currentSessionId,
-        muted_session_id: matchId as string
-      });
-      setIsMuted(mutedRecords.length > 0);
-    } catch {
-      // Error loading mute status
-    }
-  };
+  }, [matchId, notifications, loadMuteStatus]);
 
   const handleMuteMatch = async () => {
     if (!currentEventId || !currentSessionId || !matchId) return;
@@ -247,11 +247,23 @@ export default function Chat() {
     if (currentEventId && currentSessionId && matchId && !isLoading) {
       const markMessagesAsSeen = async () => {
         try {
+          console.log('Marking messages as seen for chat:', {
+            platform: Platform.OS,
+            eventId: currentEventId,
+            matchId,
+            currentSessionId
+          });
           const { markMessagesAsSeen } = await import('../lib/messageNotificationHelper');
           await markMessagesAsSeen(currentEventId, matchId as string, currentSessionId);
-      
-        } catch {
-          // Error marking messages as seen
+          
+          // Force a small delay for Android to ensure Firestore updates are processed
+          if (Platform.OS === 'android') {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+          
+          console.log('Messages marked as seen successfully');
+        } catch (error) {
+          console.error('Error marking messages as seen:', error);
         }
       };
       
