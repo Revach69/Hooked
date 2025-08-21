@@ -16,14 +16,14 @@ const {
   doc 
 } = require('firebase/firestore');
 
-// Firebase configuration
+// Firebase configuration - should use environment variables
 const firebaseConfig = {
-  apiKey: "AIzaSyDkVAo_xXbBHy8FYwFtMQA66aju08qK_yE",
-  authDomain: "hooked-69.firebaseapp.com",
-  projectId: "hooked-69",
-  storageBucket: "hooked-69.firebasestorage.app",
-  messagingSenderId: "741889428835",
-  appId: "1:741889428835:web:d5f88b43a503c9e6351756"
+  apiKey: process.env.FIREBASE_API_KEY || "YOUR_API_KEY_HERE",
+  authDomain: process.env.FIREBASE_AUTH_DOMAIN || "YOUR_AUTH_DOMAIN_HERE",
+  projectId: process.env.FIREBASE_PROJECT_ID || "YOUR_PROJECT_ID_HERE",
+  storageBucket: process.env.FIREBASE_STORAGE_BUCKET || "YOUR_STORAGE_BUCKET_HERE",
+  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || "YOUR_SENDER_ID_HERE",
+  appId: process.env.FIREBASE_APP_ID || "YOUR_APP_ID_HERE"
 };
 
 // Initialize Firebase
