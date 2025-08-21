@@ -11,12 +11,12 @@ import { attemptFirebaseRecovery } from './firebaseRecovery';
 import { getErrorMessage } from './mobileErrorHandler';
 import NetInfo from '@react-native-community/netinfo';
 import * as Sentry from '@sentry/react-native';
-import { NotificationManager } from './services/NotificationManager';
+import Toast from 'react-native-toast-message';
 
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
-  onError?: (error: Error, errorInfo: any) => void;
+  onError?: (_error: Error, _errorInfo: any) => void;
 }
 
 interface State {
@@ -149,10 +149,15 @@ class FirebaseErrorBoundary extends Component<Props, State> {
       await this.checkNetworkStatus();
       
       if (this.state.networkStatus === 'disconnected') {
-        NotificationManager.warning(
-          'No Internet Connection',
-          'Please check your internet connection and try again.'
-        );
+        Toast.show({
+          type: 'error',
+          text1: 'No Internet Connection',
+          text2: 'Please check your internet connection and try again.',
+          position: 'top',
+          visibilityTime: 3500,
+          autoHide: true,
+          topOffset: 0,
+        });
         return;
       }
 
@@ -162,10 +167,15 @@ class FirebaseErrorBoundary extends Component<Props, State> {
       if (recoverySuccess) {
         this.resetErrorBoundary();
       } else {
-        NotificationManager.error(
-          'Recovery Failed',
-          'Unable to recover from the error. Please try restarting the app.'
-        );
+        Toast.show({
+          type: 'error',
+          text1: 'Recovery Failed',
+          text2: 'Unable to recover from the error. Please try restarting the app.',
+          position: 'top',
+          visibilityTime: 3500,
+          autoHide: true,
+          topOffset: 0,
+        });
       }
     } catch (error) {
       Sentry.captureException(error as Error, {
@@ -174,10 +184,15 @@ class FirebaseErrorBoundary extends Component<Props, State> {
           context: 'manualRetry'
         }
       });
-      NotificationManager.error(
-        'Error',
-        'An unexpected error occurred. Please try again.'
-      );
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'An unexpected error occurred. Please try again.',
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
     } finally {
       this.setState({ isRecovering: false });
     }
@@ -187,11 +202,15 @@ class FirebaseErrorBoundary extends Component<Props, State> {
     // For restart confirmation, we'll show a persistent error notification with action button
     // In the notification system, we can add an action button in the future
     // For now, we'll just reset the error boundary directly
-    NotificationManager.info(
-      'Restarting App',
-      'Resetting the app to resolve the issue...',
-      { duration: 2000 }
-    );
+    Toast.show({
+      type: 'info',
+      text1: 'Restarting App',
+      text2: 'Resetting the app to resolve the issue...',
+      position: 'top',
+      visibilityTime: 2000,
+      autoHide: true,
+      topOffset: 0,
+    });
     
     setTimeout(() => {
       this.resetErrorBoundary();

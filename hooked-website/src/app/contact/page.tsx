@@ -46,11 +46,11 @@ export default function Contact() {
           message: ''
         });
       } else {
-        const errorData = await response.json();
+        await response.json();
         // Form submission error
         setSubmitStatus('error');
       }
-    } catch (error) {
+    } catch {
       // Network error
       setSubmitStatus('error');
     } finally {

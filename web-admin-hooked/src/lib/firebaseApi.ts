@@ -9,6 +9,7 @@ import {
   deleteDoc,
   query,
   where,
+  orderBy,
   serverTimestamp,
   deleteField,
   Timestamp,
@@ -35,6 +36,36 @@ export interface Event {
   region?: string; // Database region for future use
   created_at: Date | Timestamp | string; // Support both formats for backwards compatibility
   updated_at: Date | Timestamp | string; // Support both formats for backwards compatibility
+  expired?: boolean; // New field to track if event has expired and been processed
+  analytics_id?: string; // Reference to analytics data for expired events
+}
+
+export interface EventAnalytics {
+  id: string;
+  event_id: string;
+  event_name: string;
+  event_date: string; // ISO string of event start date
+  event_location?: string;
+  event_timezone?: string;
+  total_profiles: number;
+  gender_breakdown: {
+    male: number;
+    female: number;
+    other: number;
+  };
+  age_stats: {
+    average: number;
+    min: number;
+    max: number;
+  };
+  total_matches: number;
+  total_messages: number;
+  engagement_metrics: {
+    profiles_with_matches: number;
+    profiles_with_messages: number;
+    average_messages_per_match: number;
+  };
+  created_at: Timestamp;
 }
 
 export interface EventProfile {
@@ -449,5 +480,63 @@ export const ReportAPI = {
   async delete(id: string): Promise<void> {
     const dbInstance = getDbInstance();
     await deleteDoc(doc(dbInstance, 'reports', id));
+  },
+};
+
+// EventAnalytics API
+export const EventAnalytics = {
+  async filter(filters: Partial<EventAnalytics> = {}): Promise<EventAnalytics[]> {
+    const dbInstance = getDbInstance();
+    let q = query(collection(dbInstance, 'event_analytics'));
+    
+    if (filters.event_id) {
+      q = query(q, where('event_id', '==', filters.event_id));
+    }
+    if (filters.id) {
+      q = query(q, where('__name__', '==', filters.id));
+    }
+    
+    q = query(q, orderBy('created_at', 'desc'));
+    
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as EventAnalytics);
+  },
+
+  async get(id: string): Promise<EventAnalytics | null> {
+    const dbInstance = getDbInstance();
+    const docSnap = await getDoc(doc(dbInstance, 'event_analytics', id));
+    if (!docSnap.exists()) return null;
+    return { id: docSnap.id, ...docSnap.data() } as EventAnalytics;
+  },
+
+  async getByEventId(eventId: string): Promise<EventAnalytics | null> {
+    const dbInstance = getDbInstance();
+    const q = query(
+      collection(dbInstance, 'event_analytics'),
+      where('event_id', '==', eventId)
+    );
+    
+    const snapshot = await getDocs(q);
+    if (snapshot.empty) return null;
+    
+    const doc = snapshot.docs[0];
+    return { id: doc.id, ...doc.data() } as EventAnalytics;
+  },
+
+  async delete(id: string): Promise<void> {
+    const dbInstance = getDbInstance();
+    await deleteDoc(doc(dbInstance, 'event_analytics', id));
+  },
+
+  async deleteByEventId(eventId: string): Promise<void> {
+    const dbInstance = getDbInstance();
+    const q = query(
+      collection(dbInstance, 'event_analytics'),
+      where('event_id', '==', eventId)
+    );
+    
+    const snapshot = await getDocs(q);
+    const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+    await Promise.all(deletePromises);
   },
 }; 

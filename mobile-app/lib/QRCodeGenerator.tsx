@@ -12,7 +12,7 @@ import QRCode from 'react-native-qrcode-svg';
 import { Download, Share2 } from 'lucide-react-native';
 import ViewShot from 'react-native-view-shot';
 import * as Sentry from '@sentry/react-native';
-import { useNotifications } from './contexts/NotificationContext';
+import Toast from 'react-native-toast-message';
 
 interface QRCodeGeneratorProps {
   eventCode: string;
@@ -25,9 +25,8 @@ export default function QRCodeGenerator({ eventCode, eventName, onClose }: QRCod
   const isDark = colorScheme === 'dark';
   const qrRef = useRef<any>(null);
   const viewShotRef = useRef<ViewShot>(null);
-  const notifications = useNotifications();
 
-  const joinLink = `https://www.hooked-app.com/join-instant?code=${eventCode}`;
+  const joinLink = `https://hooked-app.com/join-instant?code=${eventCode}`;
 
   const handleDownload = async () => {
     try {
@@ -52,7 +51,15 @@ export default function QRCodeGenerator({ eventCode, eventName, onClose }: QRCod
       }
     } catch (error) {
       Sentry.captureException(error);
-      notifications.error('Error', 'Failed to download QR code. Please try again.');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to download QR code. Please try again.',
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
     }
   };
 
@@ -65,7 +72,15 @@ export default function QRCodeGenerator({ eventCode, eventName, onClose }: QRCod
       });
     } catch (error) {
       Sentry.captureException(error);
-      notifications.error('Error', 'Failed to share. Please try again.');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to share. Please try again.',
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
     }
   };
 

@@ -7,9 +7,12 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "splash": {
+      "image": "./assets/icon.png",
+      "resizeMode": "contain",
       "backgroundColor": "#ffffff",
       "dark": {
-        "backgroundColor": "#1a1a1a"
+        "backgroundColor": "#1a1a1a",
+        "image": "./assets/icon.png"
       }
     },
     "assetBundlePatterns": [
@@ -18,13 +21,13 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.hookedapp.app",
-      "googleServicesFile": "./ios/Hooked/GoogleService-Info.plist",
       "associatedDomains": [
+        "applinks:hooked-app.com",
         "applinks:www.hooked-app.com"
       ],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSCameraUsageDescription": "Hooked needs camera access to let you take profile photos for your dating profile at events.",
+        "NSCameraUsageDescription": "Hooked needs camera access to let you take profile photos and scan QR codes at events.",
         "NSPhotoLibraryUsageDescription": "Hooked needs photo library access to let you select existing photos for your dating profile at events.",
         "NSUserNotificationUsageDescription": "Hooked needs notification access to send you alerts about new matches and messages at events.",
         "UIBackgroundModes": ["remote-notification"]
@@ -40,16 +43,29 @@
       },
       "package": "com.hookedapp.app",
       "googleServicesFile": "./android/app/google-services.json",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "category": ["BROWSABLE", "DEFAULT"],
+          "data": [
+            {
+              "scheme": "https",
+              "host": "hooked-app.com"
+            },
+            {
+              "scheme": "https", 
+              "host": "www.hooked-app.com"
+            }
+          ]
+        }
+      ],
       "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.READ_MEDIA_IMAGES",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.VIBRATE",
         "android.permission.INTERNET",
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
         "android.permission.POST_NOTIFICATIONS",
-        "android.permission.WAKE_LOCK",
-        "android.permission.RECEIVE_BOOT_COMPLETED"
+        "android.permission.VIBRATE"
       ]
     },
     "web": {
@@ -81,17 +97,7 @@
           "androidSound": "default"
         }
       ],
-      [
-        "@react-native-firebase/app",
-        {
-          "android": {
-            "googleServicesFile": "./android/app/google-services.json"
-          },
-          "ios": {
-            "googleServicesPlist": "./ios/Hooked/GoogleService-Info.plist"
-          }
-        }
-      ], 
+ 
       [
         "expo-build-properties",
         {

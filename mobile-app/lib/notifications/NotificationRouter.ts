@@ -23,12 +23,77 @@ function dedupeKey(ev: AnyEvent) {
 
 // Helper to get current session (will be set by _layout.tsx)
 let currentSessionIdForDedup: string | null = null;
+
 function getCurrentSessionId(): string {
   return currentSessionIdForDedup || 'unknown';
 }
 
-export function setCurrentSessionIdForDedup(sessionId: string) {
+export function setCurrentSessionIdForDedup(sessionId: string | null) {
+  const previousSession = currentSessionIdForDedup;
   currentSessionIdForDedup = sessionId;
+  
+  console.log('NotificationRouter: Session ID updated:', {
+    previous: previousSession,
+    new: sessionId
+  });
+  
+  // Clear seen notifications cache when session changes
+  if (previousSession !== sessionId) {
+    console.log('NotificationRouter: Session changed, clearing notification cache');
+    seen.clear();
+  }
+}
+
+// Function to ensure session ID is available
+async function ensureSessionId(): Promise<string | null> {
+  if (currentSessionIdForDedup) {
+    return currentSessionIdForDedup;
+  }
+  
+  // Try to load from AsyncStorage as fallback
+  try {
+    const { AsyncStorageUtils } = await import('../asyncStorageUtils');
+    const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
+    if (sessionId) {
+      setCurrentSessionIdForDedup(sessionId);
+      return sessionId;
+    }
+  } catch (error) {
+    console.warn('NotificationRouter: Failed to load session ID from storage:', error);
+  }
+  
+  return null;
+}
+
+// Function to clear notification cache for re-matches
+export async function clearMatchNotificationCache(sessionId1: string, sessionId2: string) {
+  try {
+    const sessions = [sessionId1, sessionId2].sort();
+    const persistentKey = `match_notification_${sessions[0]}_${sessions[1]}`;
+    await AsyncStorage.removeItem(persistentKey);
+    
+    // Also clear memory cache
+    const matchKey = `match:${sessions[0]}:${sessions[1]}`;
+    const singleMatchKey = `match_${matchKey}`;
+    seen.delete(singleMatchKey);
+    
+    console.log(`Cleared match notification cache for sessions ${sessions[0]} and ${sessions[1]}`);
+    
+    Sentry.addBreadcrumb({
+      message: 'Cleared match notification cache for re-match',
+      level: 'info',
+      category: 'notification',
+      data: { sessionId1: sessions[0], sessionId2: sessions[1] }
+    });
+  } catch (error) {
+    console.warn('Failed to clear match notification cache:', error);
+    Sentry.captureException(error, {
+      tags: {
+        operation: 'notification_cache_clear',
+        source: 'NotificationRouter'
+      }
+    });
+  }
 }
 
 async function isCooling(ev: AnyEvent) {
@@ -52,20 +117,48 @@ async function isCooling(ev: AnyEvent) {
 
 let getFg: (() => boolean) | undefined;
 let gotoMatches: (() => void) | undefined;
+let isInitialized = false;
+let pendingNotifications: AnyEvent[] = [];
 
 export const NotificationRouter = {
   init(args: InitArgs) {
     getFg = args.getIsForeground;
     gotoMatches = args.navigateToMatches;
+    isInitialized = true;
+    console.log('NotificationRouter initialized');
+    
+    // Process any pending notifications
+    if (pendingNotifications.length > 0) {
+      console.log(`Processing ${pendingNotifications.length} pending notifications`);
+      const toProcess = [...pendingNotifications];
+      pendingNotifications = [];
+      
+      // Process with small delays to avoid overwhelming the system
+      toProcess.forEach((notification, index) => {
+        setTimeout(() => {
+          this.handleIncoming(notification);
+        }, index * 100); // 100ms between each notification
+      });
+    }
+  },
+
+  isReady(): boolean {
+    return isInitialized && !!getFg && !!gotoMatches;
   },
 
   async handleIncoming(ev: AnyEvent) {
+    // Ensure we have a session ID
+    const sessionId = await ensureSessionId();
+    
     // Add console logging for debugging
     console.log('NotificationRouter.handleIncoming called:', {
       type: ev.type,
       id: ev.id,
       isCreator: ev.type === 'match' ? ev.isCreator : undefined,
-      senderName: ev.type === 'message' ? ev.senderName : undefined
+      senderName: ev.type === 'message' ? ev.senderName : undefined,
+      isReady: this.isReady(),
+      hasSessionId: !!sessionId,
+      currentSessionId: sessionId
     });
 
     Sentry.addBreadcrumb({
@@ -76,16 +169,35 @@ export const NotificationRouter = {
         eventType: ev.type,
         eventId: ev.id,
         isCreator: ev.type === 'match' ? ev.isCreator : undefined,
-        senderName: ev.type === 'message' ? ev.senderName : undefined
+        senderName: ev.type === 'message' ? ev.senderName : undefined,
+        isReady: this.isReady(),
+        hasSessionId: !!sessionId
       }
     });
     
-    if (!getFg) {
+    if (!sessionId) {
+      console.warn('NotificationRouter: No session ID available, queuing notification for later');
+      pendingNotifications.push(ev);
+      return;
+    }
+    
+    if (!this.isReady()) {
+      console.warn('NotificationRouter: not fully initialized, queueing notification');
       Sentry.addBreadcrumb({
-        message: 'NotificationRouter: getFg not initialized',
-        level: 'warning',
-        category: 'notification'
+        message: 'NotificationRouter: not fully initialized, queueing notification',
+        level: 'info',
+        category: 'notification',
+        data: { 
+          isInitialized, 
+          hasForegroundGetter: !!getFg, 
+          hasNavigator: !!gotoMatches,
+          pendingCount: pendingNotifications.length + 1
+        }
       });
+      
+      // Queue the notification for processing when router is ready
+      pendingNotifications.push(ev);
+      console.log(`Queued notification, total pending: ${pendingNotifications.length}`);
       return;
     }
     
@@ -128,8 +240,8 @@ export const NotificationRouter = {
         
         if (lastShown) {
           const lastShownTime = parseInt(lastShown, 10);
-          // Only allow one notification per match per 24 hours
-          if (now - lastShownTime < 24 * 60 * 60 * 1000) {
+          // Only allow one notification per match per 1 hour (reduced from 24h for re-matches)
+          if (now - lastShownTime < 60 * 60 * 1000) {
             console.log(`Match notification already shown for this pair, skipping (last shown: ${new Date(lastShownTime).toISOString()})`);
             return;
           }
@@ -175,7 +287,7 @@ export const NotificationRouter = {
         return;
       } else {
         // First liker (recipient) - check if in foreground for client-side notification
-        const isForeground = getFg();
+        const isForeground = getFg?.() ?? false;
         Sentry.addBreadcrumb({
           message: 'NotificationRouter: match recipient processing',
           level: 'info',
@@ -285,7 +397,7 @@ export const NotificationRouter = {
         console.log('NotificationRouter: no senderSessionId available, cannot check mute status');
       }
 
-      const isForeground = getFg();
+      const isForeground = getFg?.() ?? false;
       Sentry.addBreadcrumb({
         message: 'NotificationRouter: handling message event',
         level: 'info',
@@ -311,29 +423,59 @@ export const NotificationRouter = {
           category: 'notification',
           data: { senderName: name }
         });
-        try {
-          Toast.show({
-            type: 'messageSuccess',
-            text1: `You got a message from ${name}`,
-            text2: ev.preview,
-            position: 'top',
-            visibilityTime: 3500,
-            autoHide: true,
-            topOffset: 0,
-            onPress: () => {
-              Toast.hide();
-              // Navigate to specific chat
-              try {
-                const { router } = require('expo-router');
-                router.push({
-                  pathname: '/chat',
-                  params: {
-                    matchId: ev.senderSessionId,
-                    matchName: name
-                  }
-                });
-              } catch (navError) {
-                console.warn('Failed to navigate to chat:', navError);
+        
+        // Add small delay to prevent toast errors during app state transitions
+        // This prevents the error toast when transitioning from background to foreground
+        setTimeout(async () => {
+          // Double-check that we're still in foreground after delay
+          const stillForeground = getFg?.() ?? false;
+          if (!stillForeground) {
+            console.log('NotificationRouter: App state changed during delay, skipping toast');
+            return;
+          }
+          
+          // Check if user is currently in chat with this sender
+          try {
+            const { AsyncStorageUtils } = await import('../asyncStorageUtils');
+            const currentChatSessionId = await AsyncStorageUtils.getItem<string>('currentChatSessionId');
+            console.log('NotificationRouter: Current chat check:', {
+              currentChatSessionId,
+              senderSessionId: ev.senderSessionId,
+              isInSameChat: currentChatSessionId === ev.senderSessionId
+            });
+            
+            if (currentChatSessionId === ev.senderSessionId) {
+              console.log('NotificationRouter: User is in chat with sender, skipping toast notification');
+              return;
+            }
+          } catch (error) {
+            console.log('NotificationRouter: Error checking current chat, showing toast anyway:', error);
+          }
+          
+          try {
+            Toast.show({
+              type: 'messageSuccess',
+              text1: `You got a message from ${name}`,
+              text2: ev.preview,
+              position: 'top',
+              visibilityTime: 3500,
+              autoHide: true,
+              topOffset: 0,
+              onPress: () => {
+                Toast.hide();
+                // Navigate to specific chat with sender's session ID
+                try {
+                  const { router } = require('expo-router');
+                  // Use the partner parameter format to match push notification routing
+                  router.push({
+                    pathname: '/chat',
+                    params: {
+                      matchId: ev.senderSessionId,
+                      matchName: ev.senderName || 'Someone'
+                    }
+                  });
+                } catch (navError) {
+                  console.warn('Failed to navigate to chat:', navError);
                 Sentry.captureException(navError, {
                   tags: {
                     operation: 'navigation',
@@ -343,20 +485,21 @@ export const NotificationRouter = {
               }
             }
           });
-        } catch (error) {
-          console.error('Error showing message toast:', error);
-          Sentry.captureException(error, {
-            tags: {
-              operation: 'notification_display',
-              type: 'message_toast'
-            },
-            extra: {
-              eventId: ev.id,
-              senderName: ev.senderName,
-              senderSessionId: ev.senderSessionId
-            }
-          });
-        }
+          } catch (error) {
+            console.error('Error showing message toast:', error);
+            Sentry.captureException(error, {
+              tags: {
+                operation: 'notification_display',
+                type: 'message_toast'
+              },
+              extra: {
+                eventId: ev.id,
+                senderName: ev.senderName,
+                senderSessionId: ev.senderSessionId
+              }
+            });
+          }
+        }, 100); // 100ms delay to allow app state to stabilize
       } else {
         console.log('Message recipient not in foreground - server will handle push notification');
       }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import {
   Modal,
   useColorScheme,
 } from 'react-native';
-import { useNotifications } from '../lib/contexts/NotificationContext';
+import Toast from 'react-native-toast-message';
 import { router } from 'expo-router';
 import { Heart, Filter, Users, User, MessageCircle, X } from 'lucide-react-native';
 import { EventProfileAPI, LikeAPI, EventAPI, BlockedMatchAPI } from '../lib/firebaseApi';
@@ -45,7 +45,6 @@ const EXTENDED_INTERESTS = [
 export default function Discovery() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const notifications = useNotifications();
   
   // Performance monitoring
   const { 
@@ -84,9 +83,104 @@ export default function Discovery() {
     mutualMatches?: () => void;
   }>({});
 
+  // Define initializeSession function first
+  const initializeSession = useCallback(async () => {
+    const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
+    const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
+    const profilePhotoUrl = await AsyncStorageUtils.getItem<string>('currentProfilePhotoUrl');
+  
+    if (!eventId || !sessionId) {
+      router.replace('/home');
+      return;
+    }
+
+    setCurrentSessionId(sessionId);
+    
+    try {
+      // Add timeout to prevent hanging indefinitely
+      const eventTimeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Event loading timeout')), 15000); // 15 second timeout
+      });
+      
+      const eventPromise = EventAPI.filter({ id: eventId });
+      const events = await Promise.race([eventPromise, eventTimeoutPromise]);
+      
+      if (events.length > 0) {
+        setCurrentEvent(events[0]);
+        // Load blocked profiles
+        await loadBlockedProfiles(eventId, sessionId);
+      } else {
+        // Event doesn't exist - clear only after confirmation
+        console.log('Event not found in discovery, clearing session data');
+        await AsyncStorageUtils.multiRemove([
+          'currentEventId',
+          'currentSessionId',
+          'currentEventCode',
+          'currentProfileColor',
+          'currentProfilePhotoUrl'
+        ]);
+        router.replace('/home');
+        return;
+      }
+
+      // Verify that the user's profile actually exists in the database
+      const profileTimeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Profile loading timeout')), 15000); // 15 second timeout
+      });
+      
+      const profilePromise = EventProfileAPI.filter({
+        event_id: eventId,
+        session_id: sessionId
+      });
+      const userProfiles = await Promise.race([profilePromise, profileTimeoutPromise]);
+
+      if (userProfiles.length === 0) {
+        // Profile doesn't exist in database (user left event and deleted profile)
+        console.log('User profile not found in discovery, clearing session data');
+        await AsyncStorageUtils.multiRemove([
+          'currentEventId',
+          'currentSessionId',
+          'currentEventCode',
+          'currentProfileColor',
+          'currentProfilePhotoUrl'
+        ]);
+        router.replace('/home');
+        return;
+      }
+      
+      // For photos set up display, we need to check if profilePhotoUrl is in storage
+      // If it's not, then the user needs to reselect their photo
+      if (!profilePhotoUrl) {
+        console.log('No profile photo URL found in storage, redirecting to profile setup');
+        router.replace('/profile'); // Let them select a photo again
+        return;
+      }
+      
+      // All checks passed - session is valid
+    } catch (error) {
+      Sentry.captureException(error);
+      
+      // Only clear data if we're certain something is wrong
+      // For network errors, just redirect without clearing
+      if (error instanceof Error && error.message === 'Event loading timeout') {
+        console.log('Event loading timed out - redirecting to home but keeping session data');
+      } else if (error instanceof Error && error.message === 'Profile loading timeout') {
+        console.log('Profile loading timed out - redirecting to home but keeping session data');
+      } else {
+        console.error('Error in initializeSession:', error);
+      }
+      
+      // Redirect to home but don't clear session data
+      router.replace('/home');
+      return;
+    }
+    setIsLoading(false);
+  }, []);
+
+  // Use initializeSession in useEffect
   useEffect(() => {
     initializeSession();
-  }, []);
+  }, [initializeSession]);
 
   // Cleanup all listeners on unmount
   useEffect(() => {
@@ -243,7 +337,7 @@ export default function Discovery() {
     };
   }, [currentEvent?.id, currentSessionId]);
 
-  const setupOtherListeners = () => {
+  function setupOtherListeners() {
     if (!currentEvent?.id || !currentSessionId) return;
 
     // Prevent multiple listener creation
@@ -321,7 +415,7 @@ export default function Discovery() {
     } catch (error) {
       Sentry.captureException(error);
     }
-  };
+  }
 
   const cleanupAllListeners = () => {
     try {
@@ -384,103 +478,13 @@ export default function Discovery() {
   // Apply filters whenever profiles or currentUserProfile changes
   useEffect(() => {
     applyFilters();
-  }, [profiles, currentUserProfile, filters, blockedProfiles]);
+  }, [profiles, currentUserProfile, filters]);
 
-  const initializeSession = async () => {
-          const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
-      const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
-      const profilePhotoUrl = await AsyncStorageUtils.getItem<string>('currentProfilePhotoUrl');
-    
-    if (!eventId || !sessionId) {
-      router.replace('/home');
-      return;
-    }
-
-    setCurrentSessionId(sessionId);
-    
-    try {
-      // Add timeout to prevent hanging indefinitely
-      const eventTimeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Event loading timeout')), 15000); // 15 second timeout
-      });
-      
-      const eventPromise = EventAPI.filter({ id: eventId });
-      const events = await Promise.race([eventPromise, eventTimeoutPromise]);
-      
-      if (events.length > 0) {
-        setCurrentEvent(events[0]);
-        // Load blocked profiles
-        await loadBlockedProfiles(eventId, sessionId);
-      } else {
-        // Event doesn't exist - clear only after confirmation
-        console.log('Event not found in discovery, clearing session data');
-        await AsyncStorageUtils.multiRemove([
-          'currentEventId',
-          'currentSessionId',
-          'currentEventCode',
-          'currentProfileColor',
-          'currentProfilePhotoUrl'
-        ]);
-        router.replace('/home');
-        return;
-      }
-
-      // Verify that the user's profile actually exists in the database
-      const profileTimeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Profile loading timeout')), 15000); // 15 second timeout
-      });
-      
-      const profilePromise = EventProfileAPI.filter({
-        event_id: eventId,
-        session_id: sessionId
-      });
-      const userProfiles = await Promise.race([profilePromise, profileTimeoutPromise]);
-
-      if (userProfiles.length === 0) {
-        // Profile doesn't exist in database (user left event and deleted profile)
-        // Clear session data only after confirming profile is truly gone
-        console.log('User profile not found in discovery initialization - clearing session data');
-        await AsyncStorageUtils.multiRemove([
-          'currentEventId',
-          'currentSessionId',
-          'currentEventCode',
-          'currentProfileColor',
-          'currentProfilePhotoUrl'
-        ]);
-        router.replace('/home');
-        return;
-      }
-
-      // Check if user has completed profile creation (has profile photo)
-      if (!profilePhotoUrl) {
-        // User hasn't completed profile creation, redirecting to consent
-        router.replace('/consent');
-        return;
-      }
-
-      // Likes are now handled by real-time listener
-    } catch (error) {
-      console.error('Error initializing discovery session:', error);
-      Sentry.captureException(error);
-      
-      // Don't clear session data on network/timeout errors
-      // Let homepage restoration handle session recovery
-      if (error instanceof Error && error.message.includes('timeout')) {
-        console.log('Discovery initialization timeout - keeping session data for retry');
-      } else {
-        console.log('Discovery initialization error - redirecting to home but keeping session data');
-      }
-      
-      // Redirect to home but don't clear session data
-      router.replace('/home');
-      return;
-    }
-    setIsLoading(false);
-  };
+  // Duplicate initializeSession function removed - already defined above
 
 
 
-  const applyFilters = () => {
+  function applyFilters() {
     if (!currentUserProfile) {
       setFilteredProfiles([]);
       return;
@@ -489,12 +493,12 @@ export default function Discovery() {
     let tempFiltered = profiles.filter(otherUser => {
       // Mutual Gender Interest Check - based on user's profile preferences
       const iAmInterestedInOther =
-        (currentUserProfile.interested_in === 'everybody') ||
+        (currentUserProfile.interested_in === 'everyone') ||
         (currentUserProfile.interested_in === 'men' && otherUser.gender_identity === 'man') ||
         (currentUserProfile.interested_in === 'women' && otherUser.gender_identity === 'woman');
 
       const otherIsInterestedInMe =
-        (otherUser.interested_in === 'everybody') ||
+        (otherUser.interested_in === 'everyone') ||
         (otherUser.interested_in === 'men' && currentUserProfile.gender_identity === 'man') ||
         (otherUser.interested_in === 'women' && currentUserProfile.gender_identity === 'woman');
       
@@ -518,7 +522,7 @@ export default function Discovery() {
     });
 
     setFilteredProfiles(tempFiltered);
-  };
+  }
 
   const handleLike = async (likedProfile: any) => {
     if (likedProfiles.has(likedProfile.session_id) || !currentUserProfile) return;
@@ -533,7 +537,15 @@ export default function Discovery() {
 
     // Check if both profiles are visible (required by Firestore rules)
     if (!currentUserProfile.is_visible || !likedProfile.is_visible) {
-      notifications.warning("Both profiles must be visible to like someone. Please make sure your profile is visible in settings.");
+      Toast.show({
+        type: 'warning',
+        text1: 'Profile Not Visible',
+        text2: 'Both profiles must be visible to like someone. Please make sure your profile is visible in settings.',
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
       return;
     }
 
@@ -606,7 +618,15 @@ export default function Discovery() {
       });
       
       // Show user-friendly error message
-      notifications.error("Unable to like this person. Please try again.");
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Unable to like this person. Please try again.',
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
     }
   };
   

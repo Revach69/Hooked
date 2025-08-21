@@ -1,0 +1,74 @@
+name: Auto-merge Hotfix to Develop
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+jobs:
+  auto-merge-hotfix:
+    if: github.event.pull_request.merged && startsWith(github.head_ref, 'hotfix/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create back-merge PR to develop
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const branchName = `auto-merge-hotfix-${context.payload.pull_request.number}-${Date.now()}`;
+            
+            // Create a new branch from main
+            await github.rest.git.createRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: `refs/heads/${branchName}`,
+              sha: context.payload.pull_request.merge_commit_sha
+            });
+
+            // Create PR to develop
+            const pr = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🔄 Auto-merge hotfix: ${context.payload.pull_request.title}`,
+              head: branchName,
+              base: 'develop',
+              body: `This PR automatically merges the hotfix from #${context.payload.pull_request.number} into develop branch.
+              
+              **Original Hotfix:** ${context.payload.pull_request.title}
+              **Hotfix Branch:** ${context.payload.pull_request.head.ref}
+              **Merge Commit:** ${context.payload.pull_request.merge_commit_sha}
+              
+              🤖 This is an automated PR. Please review for any potential conflicts.`
+            });
+
+            console.log(`Created back-merge PR: #${pr.data.number}`);
+
+      - name: Comment on original hotfix PR
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.issues.createComment({
+              issue_number: context.payload.pull_request.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `✅ **Hotfix merged to main!**
+              
+              🔄 A back-merge PR to \`develop\` has been automatically created to ensure the hotfix doesn't regress in future releases.
+              
+              📋 **Next steps:**
+              1. Review the auto-created back-merge PR
+              2. Merge it to complete the hotfix flow
+              3. Consider cherry-picking to active feature branches if needed`
+            });

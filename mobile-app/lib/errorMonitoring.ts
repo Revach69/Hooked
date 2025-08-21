@@ -398,7 +398,7 @@ export const listenerManager = new ListenerManager();
 export function createSafeListener<T>(
   id: string,
   query: any,
-  onNext: (data: T) => void,
+  onNext: (_data: T) => void,
   onError?: (_error: any) => void
 ) {
   try {
@@ -508,7 +508,7 @@ export class ErrorRecovery {
 
 // Network-aware error handling
 export class NetworkAwareErrorHandler {
-  static async handleError(error: any, operation: string): Promise<void> {
+  static async handleError(error: any, _operation: string): Promise<void> {
     const netInfo = await NetInfo.fetch();
     
     if (!netInfo.isConnected) {

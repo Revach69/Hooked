@@ -79,7 +79,7 @@ export class EmailService {
   }
 
   async sendEventFormEmail(data: EventFormData): Promise<void> {
-    const { fullName, email, phone, eventAddress, venueName, eventType, otherEventType, expectedAttendees, eventName, eventDate, posterPreference, eventVisibility, socialMedia } = data;
+    const { fullName, email, phone, eventAddress, venueName, eventType, otherEventType, expectedAttendees, eventName, eventDate, posterPreference, eventVisibility } = data;
 
     // Validate required fields
     if (!fullName || !email || !phone || !eventAddress || !venueName || !eventType || !expectedAttendees || !eventName || !eventDate || !posterPreference || !eventVisibility) {

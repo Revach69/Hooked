@@ -10,6 +10,42 @@ const recentNotifications = new Map<string, number>();
 const NOTIFICATION_COOLDOWN = 3000; // 3 seconds cooldown
 
 /**
+ * Check if user is currently in the chat with a specific sender
+ */
+async function checkIfInCurrentChat(senderSessionId: string): Promise<boolean> {
+  try {
+    // Check if there's a way to get the current route from expo-router
+    const { router } = await import('expo-router');
+    
+    // Router pathname and params are not directly accessible in expo-router
+    // Use the AsyncStorage fallback approach instead
+    
+    // Fallback: Check if we have stored the current chat session
+    const currentChatSessionId = await AsyncStorageUtils.getItem<string>('currentChatSessionId');
+    return currentChatSessionId === senderSessionId;
+    
+  } catch (error) {
+    console.log('Error checking current chat:', error);
+    return false; // If we can't determine, allow the toast to show
+  }
+}
+
+/**
+ * Set the current chat session (call this when entering a chat)
+ */
+export async function setCurrentChatSession(senderSessionId: string | null): Promise<void> {
+  try {
+    if (senderSessionId) {
+      await AsyncStorageUtils.setItem('currentChatSessionId', senderSessionId);
+    } else {
+      await AsyncStorageUtils.removeItem('currentChatSessionId');
+    }
+  } catch (error) {
+    console.log('Error setting current chat session:', error);
+  }
+}
+
+/**
  * Check if sender is muted by the current user
  */
 export async function checkIfSenderIsMuted(senderSessionId: string): Promise<boolean> {
@@ -91,6 +127,13 @@ export async function showInAppMessageToast(senderName: string, senderSessionId:
     if (isMuted) {
       return; // Don't show toast if muted
     }
+    
+    // APPROACH #1: Check if user is currently in the chat with this sender
+    const isInCurrentChat = await checkIfInCurrentChat(senderSessionId);
+    if (isInCurrentChat) {
+      return; // Don't show toast if user is viewing this chat
+    }
+    
     // Check for recent notification to prevent duplicates
     const notificationKey = `message_${senderName}_${senderSessionId}`;
     const now = Date.now();
@@ -104,11 +147,14 @@ export async function showInAppMessageToast(senderName: string, senderSessionId:
     recentNotifications.set(notificationKey, now);
     
     // Clean up old entries (older than 10 seconds)
-    for (const [key, timestamp] of recentNotifications.entries()) {
+    const entriesToDelete = [];
+    for (const [key, timestamp] of Array.from(recentNotifications.entries())) {
       if (now - timestamp > 10000) {
-        recentNotifications.delete(key);
+        entriesToDelete.push(key);
       }
     }
+    // Delete entries outside the iteration to avoid modifying during iteration
+    entriesToDelete.forEach(key => recentNotifications.delete(key));
     
     // Platform-specific configurations
     const config = Platform.OS === 'ios' ? {
@@ -121,10 +167,16 @@ export async function showInAppMessageToast(senderName: string, senderSessionId:
       visibilityTime: 3500,
     };
     
-    // Use a shorter delay for Android to ensure toast shows immediately
-    const delay = Platform.OS === 'android' ? 100 : config.delay;
+    // APPROACH #2: Add delay for iOS to allow message to be marked as seen
+    const delay = Platform.OS === 'ios' ? 150 : (Platform.OS === 'android' ? 100 : config.delay);
     
-    setTimeout(() => {
+    setTimeout(async () => {
+      // Double-check if user is still in the current chat after delay
+      const stillInCurrentChat = await checkIfInCurrentChat(senderSessionId);
+      if (stillInCurrentChat) {
+        return; // Don't show toast if user is still viewing this chat
+      }
+      
       Toast.show({
         type: 'info',
         text1: `New message from ${senderName}`,

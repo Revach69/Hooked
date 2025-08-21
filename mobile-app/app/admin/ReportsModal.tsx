@@ -85,7 +85,7 @@ export default function ReportsModal({ visible, onClose, eventId, eventName }: R
     } finally {
       setIsLoading(false);
     }
-  }, [eventId]);
+  }, [eventId, onClose]);
 
   useEffect(() => {
     if (visible) {

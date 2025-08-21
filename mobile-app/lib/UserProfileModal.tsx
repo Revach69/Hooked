@@ -18,7 +18,7 @@ interface UserProfileModalProps {
   visible: boolean;
   profile: any;
   onClose: () => void;
-  onLike?: (profile: any) => void;
+  onLike?: (_profile: any) => void;
   isLiked?: boolean;
 }
 

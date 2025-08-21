@@ -5,20 +5,37 @@
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
+    "start:dev": "cp .env.development .env && expo start",
+    "start:staging": "cp .env.staging .env && expo start",
+    "start:prod": "cp .env.production .env && expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "prebuild": "./scripts/eas-build-pre-install.sh && expo prebuild",
+    "prebuild:dev": "cp .env.development .env && npm run prebuild",
+    "prebuild:staging": "cp .env.staging .env && npm run prebuild",
+    "prebuild:prod": "cp .env.production .env && npm run prebuild",
     "build:android": "expo build:android",
     "build:ios": "expo build:ios",
+    "build:dev": "cp .env.development .env && eas build --profile development",
+    "build:staging": "cp .env.staging .env && eas build --profile staging",
+    "build:prod": "cp .env.production .env && eas build --profile production",
+    "firebase:dev": "firebase use development",
+    "firebase:staging": "firebase use staging",
+    "firebase:prod": "firebase use production",
+    "env:dev": "cp .env.development .env && firebase use development",
+    "env:staging": "cp .env.staging .env && firebase use staging",
+    "env:prod": "cp .env.production .env && firebase use production",
     "lint": "eslint .",
-    "eas:setup-google-services": "./scripts/eas-build-pre-install.sh"
+    "eas:setup-google-services": "./scripts/eas-build-pre-install.sh",
+    "generate:mock-profiles": "node scripts/generate-mock-profiles.js",
+    "clean:test-profiles": "node scripts/clean-test-profiles.js"
   },
   "dependencies": {
     "@expo/config-plugins": "~10.1.1",
     "@expo/metro-runtime": "^5.0.4",
     "@expo/prebuild-config": "~9.0.0",
     "@hookform/resolvers": "^4.1.2",
-    "@react-native-async-storage/async-storage": "2.1.2",
+    "@react-native-async-storage/async-storage": "^2.1.2",
     "@react-native-community/datetimepicker": "8.4.1",
     "@react-native-community/netinfo": "11.4.1",
     "@react-native-community/slider": "4.5.6",
@@ -37,6 +54,7 @@
     "date-fns": "^3.6.0",
     "expo": "^53.0.20",
     "expo-build-properties": "^0.14.8",
+    "expo-camera": "^16.1.11",
     "expo-constants": "~17.1.7",
     "expo-dev-client": "~5.2.4",
     "expo-image-picker": "~16.1.4",
@@ -46,7 +64,6 @@
     "expo-router": "~5.1.4",
     "expo-status-bar": "~2.2.3",
     "expo-system-ui": "~5.0.10",
-    "firebase": "^12.1.0",
     "html5-qrcode": "^2.3.8",
     "jsqr": "^1.4.0",
     "lucide-react-native": "0.525.0",
@@ -63,7 +80,6 @@
     "react-native-toast-message": "^2.3.3",
     "react-native-url-polyfill": "^2.0.0",
     "react-native-view-shot": "4.0.3",
-    "uuid": "^7.0.3",
     "zod": "^3.24.2"
   },
   "devDependencies": {
@@ -77,8 +93,10 @@
     "eslint-plugin-react": "^7.37.4",
     "eslint-plugin-react-hooks": "^5.0.0",
     "eslint-plugin-react-refresh": "^0.4.18",
+    "firebase": "^12.1.0",
     "globals": "^15.14.0",
-    "typescript": "~5.8.3"
+    "typescript": "~5.8.3",
+    "uuid": "^11.1.0"
   },
   "expo": {
     "doctor": {

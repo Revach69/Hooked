@@ -16,7 +16,7 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import { SurveyService } from '../lib/surveyService';
-import { useNotifications } from '../lib/contexts/NotificationContext';
+import Toast from 'react-native-toast-message';
 
 
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -30,7 +30,6 @@ export default function SurveyScreen() {
   
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const notifications = useNotifications();
   
   const [formData, setFormData] = useState({
     easeOfUse: 0,
@@ -48,7 +47,15 @@ export default function SurveyScreen() {
     if (eventId) {
       SurveyService.isSurveyValid(eventId).then((isValid: boolean) => {
         if (!isValid) {
-          notifications.error('This survey is no longer available. Surveys are only available between 2-26 hours after an event ends.');
+          Toast.show({
+            type: 'error',
+            text1: 'Survey Unavailable',
+            text2: 'This survey is no longer available. Surveys are only available between 2-26 hours after an event ends.',
+            position: 'top',
+            visibilityTime: 3500,
+            autoHide: true,
+            topOffset: 0,
+          });
           router.replace('/home');
         }
       });
@@ -80,7 +87,15 @@ export default function SurveyScreen() {
 
   const handleSubmit = async () => {
     if (!validateForm()) {
-      notifications.warning('Please fill in all required fields before submitting.');
+      Toast.show({
+        type: 'warning',
+        text1: 'Missing Fields',
+        text2: 'Please fill in all required fields before submitting.',
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
       return;
     }
 
@@ -99,11 +114,27 @@ export default function SurveyScreen() {
         }
       );
 
-      notifications.success('Thank you! Your feedback helps us improve Hooked for everyone!');
+      Toast.show({
+        type: 'success',
+        text1: 'Thank You!',
+        text2: 'Your feedback helps us improve Hooked for everyone!',
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
       router.replace('/home');
     } catch {
       // Failed to submit feedback
-      notifications.error('Failed to submit feedback. Please try again.');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to submit feedback. Please try again.',
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -136,7 +167,7 @@ export default function SurveyScreen() {
     label 
   }: { 
     value: number; 
-    onChange: (value: number) => void; 
+    onChange: (_value: number) => void; 
     error?: string;
     label: string;
   }) => (
@@ -171,7 +202,7 @@ export default function SurveyScreen() {
     label 
   }: { 
     value: string; 
-    onChange: (value: string) => void; 
+    onChange: (_value: string) => void; 
     error?: string;
     label: string;
   }) => (
@@ -224,7 +255,7 @@ export default function SurveyScreen() {
     label 
   }: { 
     value: string; 
-    onChange: (value: string) => void; 
+    onChange: (_value: string) => void; 
     error?: string;
     label: string;
   }) => (

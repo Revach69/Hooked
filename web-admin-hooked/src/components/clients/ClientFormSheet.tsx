@@ -220,7 +220,7 @@ export function ClientFormSheet({ open, onOpenChange, client, onSuccess }: Clien
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg w-full overflow-y-auto">
+      <DialogContent className="max-w-lg w-full max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {client ? 'Edit Client' : 'Add New Client'}

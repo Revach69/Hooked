@@ -15,16 +15,17 @@ import {
   Modal,
   ActivityIndicator,
 } from 'react-native';
-import { useNotifications } from '../lib/contexts/NotificationContext';
+import Toast from 'react-native-toast-message';
 import { ArrowLeft, Send, Flag, X, VolumeX, Volume2, UserX } from 'lucide-react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { collection, query, where, orderBy, onSnapshot, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, getDocs, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '../lib/firebaseConfig';
 import { EventProfileAPI, MessageAPI, ReportAPI, MutedMatchAPI, LikeAPI } from '../lib/firebaseApi';
 import UserProfileModal from '../lib/UserProfileModal';
 import { formatTime } from '../lib/utils';
+import { setCurrentChatSession } from '../lib/messageNotificationHelper';
 
 interface ChatMessage {
   id: string;
@@ -36,7 +37,6 @@ interface ChatMessage {
 }
 
 export default function Chat() {
-  const notifications = useNotifications();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const params = useLocalSearchParams();
@@ -84,7 +84,15 @@ export default function Chat() {
       const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
       
       if (!sessionId || !eventId || !matchId) {
-        notifications.error('Error', 'Missing session information');
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: 'Missing session information',
+          position: 'top',
+          visibilityTime: 3500,
+          autoHide: true,
+          topOffset: 0,
+        });
         router.back();
         return;
       }
@@ -148,10 +156,18 @@ export default function Chat() {
 
       setIsLoading(false);
     } catch {
-      notifications.error('Error', 'Failed to load chat');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to load chat',
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
       router.back();
     }
-  }, [matchId, notifications, loadMuteStatus]);
+  }, [matchId, loadMuteStatus]);
 
   const handleMuteMatch = async () => {
     if (!currentEventId || !currentSessionId || !matchId) return;
@@ -178,8 +194,19 @@ export default function Chat() {
         });
         setIsMuted(true);
       }
-    } catch {
-      notifications.error('Error', `Failed to ${isMuted ? 'unmute' : 'mute'} match`);
+    } catch (error) {
+      console.error('Error toggling mute status:', error);
+      // Use Toast instead of notifications to match message toast design
+      const Toast = require('react-native-toast-message').default;
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: `Failed to ${isMuted ? 'unmute' : 'mute'} match`,
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
     }
   };
 
@@ -226,11 +253,29 @@ export default function Chat() {
                   await LikeAPI.update(otherLikes[0].id, { is_mutual: false });
                 }
 
-                notifications.success('Unmatched', `You have unmatched with ${matchName}.`);
+                Toast.show({
+                  type: 'success',
+                  text1: 'Unmatched',
+                  text2: `You have unmatched with ${matchName}.`,
+                  position: 'top',
+                  visibilityTime: 3500,
+                  autoHide: true,
+                  topOffset: 0,
+                });
                 router.back(); // Go back to matches
               }
             } catch {
-              notifications.error('Error', 'Failed to unmatch');
+              // Use Toast instead of notifications to match message toast design
+              const Toast = require('react-native-toast-message').default;
+              Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: 'Failed to unmatch',
+                position: 'top',
+                visibilityTime: 3500,
+                autoHide: true,
+                topOffset: 0,
+              });
             }
           },
         },
@@ -242,7 +287,22 @@ export default function Chat() {
     initializeChat();
   }, [initializeChat]);
 
-  // Mark messages as seen when entering chat
+  // Handle screen focus/unfocus to set/clear current chat session
+  useFocusEffect(
+    useCallback(() => {
+      // Screen is focused - set current chat session
+      if (matchId) {
+        setCurrentChatSession(matchId as string);
+      }
+      
+      return () => {
+        // Screen is unfocused - clear current chat session
+        setCurrentChatSession(null);
+      };
+    }, [matchId])
+  );
+
+  // Mark messages as seen when entering chat and set current chat session
   useEffect(() => {
     if (currentEventId && currentSessionId && matchId && !isLoading) {
       const markMessagesAsSeen = async () => {
@@ -253,6 +313,10 @@ export default function Chat() {
             matchId,
             currentSessionId
           });
+          
+          // Set current chat session to prevent toasts for this chat
+          await setCurrentChatSession(matchId as string);
+          
           const { markMessagesAsSeen } = await import('../lib/messageNotificationHelper');
           await markMessagesAsSeen(currentEventId, matchId as string, currentSessionId);
           
@@ -271,13 +335,15 @@ export default function Chat() {
     }
   }, [currentEventId, currentSessionId, matchId, isLoading]);
 
-  // Cleanup listener on unmount
+  // Cleanup listener on unmount and clear current chat session
   useEffect(() => {
     return () => {
       if (listenerRef.current) {
         listenerRef.current();
         listenerRef.current = null;
       }
+      // Clear current chat session when leaving chat
+      setCurrentChatSession(null);
     };
   }, []);
 
@@ -455,13 +521,108 @@ export default function Chat() {
     };
   }, [currentEventId, currentSessionId, matchId, hasShownUnavailableAlert, processedMessageIds]);
 
+  // Real-time unmatch detection listener
+  useEffect(() => {
+    if (!currentEventId || !currentSessionId || !matchId) return;
 
+    let matchListenerUnsubscribe: (() => void) | null = null;
+
+    const setupMatchListener = async () => {
+      try {
+        console.log('Setting up match status listener for chat validation');
+        
+        // Query for mutual likes between current user and match
+        const likesQuery = query(
+          collection(db, 'likes'),
+          where('event_id', '==', currentEventId),
+          where('is_mutual', '==', true)
+        );
+
+        matchListenerUnsubscribe = onSnapshot(likesQuery, (snapshot) => {
+          try {
+            // Check if there's still a mutual like between these users
+            const mutualLikes = snapshot.docs.map(doc => doc.data());
+            const hasValidMatch = mutualLikes.some(like => 
+              (like.liker_session_id === currentSessionId && like.liked_session_id === matchId) ||
+              (like.liker_session_id === matchId && like.liked_session_id === currentSessionId)
+            );
+
+            if (!hasValidMatch) {
+              console.log('Match no longer exists - redirecting user out of chat');
+              
+              // Show notification that match was removed
+              Toast.show({
+                type: 'info',
+                text1: 'Match Removed',
+                text2: 'This conversation is no longer available',
+                position: 'top',
+                visibilityTime: 3500,
+                autoHide: true,
+                topOffset: 0,
+              });
+
+              // Redirect to matches page after a brief delay
+              setTimeout(() => {
+                router.replace('/matches');
+              }, 1000);
+            }
+          } catch (error) {
+            console.error('Error in match status listener:', error);
+          }
+        }, (error) => {
+          console.error('Match status listener error:', error);
+        });
+        
+      } catch (error) {
+        console.error('Error setting up match status listener:', error);
+      }
+    };
+
+    setupMatchListener();
+
+    return () => {
+      if (matchListenerUnsubscribe) {
+        matchListenerUnsubscribe();
+        matchListenerUnsubscribe = null;
+      }
+    };
+  }, [currentEventId, currentSessionId, matchId]);
 
   const sendMessage = async () => {
     if (!newMessage.trim() || !currentEventId || !currentSessionId || !matchId) return;
 
     setIsSending(true);
     try {
+      // First check if the match still exists before sending message
+      const likesSnapshot = await getDocs(query(
+        collection(db, 'likes'),
+        where('event_id', '==', currentEventId),
+        where('is_mutual', '==', true)
+      ));
+      
+      const mutualLikes = likesSnapshot.docs.map(doc => doc.data());
+      const hasValidMatch = mutualLikes.some(like => 
+        (like.liker_session_id === currentSessionId && like.liked_session_id === matchId) ||
+        (like.liker_session_id === matchId && like.liked_session_id === currentSessionId)
+      );
+      
+      if (!hasValidMatch) {
+        Toast.show({
+          type: 'error',
+          text1: 'Match Removed',
+          text2: 'This conversation is no longer available',
+          position: 'top',
+          visibilityTime: 3500,
+          autoHide: true,
+          topOffset: 0,
+        });
+        
+        // Redirect to matches page
+        setTimeout(() => {
+          router.replace('/matches');
+        }, 1000);
+        return;
+      }
       // Get current user's profile to get the profile ID
       const currentUserProfiles = await EventProfileAPI.filter({
         session_id: currentSessionId,
@@ -469,7 +630,15 @@ export default function Chat() {
       });
       
       if (currentUserProfiles.length === 0) {
-        notifications.error('Error', 'User profile not found');
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: 'User profile not found',
+          position: 'top',
+          visibilityTime: 3500,
+          autoHide: true,
+          topOffset: 0,
+        });
         return;
       }
       
@@ -482,7 +651,15 @@ export default function Chat() {
       });
       
       if (matchProfiles.length === 0) {
-        notifications.error('Error', 'Match profile not found');
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: 'Match profile not found',
+          position: 'top',
+          visibilityTime: 3500,
+          autoHide: true,
+          topOffset: 0,
+        });
         return;
       }
       
@@ -516,7 +693,15 @@ export default function Chat() {
         // Error handling notification - don't block message sending
       }
     } catch {
-      notifications.error('Error', 'Failed to send message');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to send message',
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
     } finally {
       setIsSending(false);
     }
@@ -524,12 +709,28 @@ export default function Chat() {
 
   const submitReport = async () => {
     if (!reportReason.trim()) {
-      notifications.warning('Error', 'Please provide a reason for the report');
+      Toast.show({
+        type: 'warning',
+        text1: 'Missing Information',
+        text2: 'Please provide a reason for the report',
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
       return;
     }
 
     if (!currentEventId || !currentSessionId || !matchId || !matchProfile) {
-      notifications.warning('Error', 'Missing information for report');
+      Toast.show({
+        type: 'warning',
+        text1: 'Missing Information',
+        text2: 'Missing information for report',
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
       return;
     }
 
@@ -547,15 +748,28 @@ export default function Chat() {
 
       await ReportAPI.create(reportData);
       
-      notifications.success(
-        'Report Submitted',
-        'Thank you for your report. We will review it shortly.'
-      );
+      Toast.show({
+        type: 'success',
+        text1: 'Report Submitted',
+        text2: 'Thank you for your report. We will review it shortly.',
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
       
       setShowReportModal(false);
       setReportReason('');
     } catch {
-      notifications.error('Error', 'Failed to submit report');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to submit report',
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
     } finally {
       setIsSubmittingReport(false);
     }

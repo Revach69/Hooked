@@ -1,0 +1,442 @@
+[
+  {
+    "id": 1000,
+    "description": "Hooked App User Flow Test",
+    "crawlStage": "crawl",
+    "contextDescriptor": {
+      "condition": "app_under_test_shown"
+    },
+    "actions": [
+      {
+        "description": "Wait for app to load",
+        "eventType": "WAIT",
+        "delayTime": 3000
+      },
+      {
+        "description": "Take screenshot of home screen",
+        "eventType": "TAKE_SCREENSHOT",
+        "screenshotName": "01_home_screen"
+      },
+      {
+        "description": "Click Enter Code Manually button",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "text": "Enter Code Manually"
+          }
+        ]
+      },
+      {
+        "description": "Wait for modal to fully open",
+        "eventType": "WAIT",
+        "delayTime": 2000
+      },
+      {
+        "description": "Enter event code 'test' using accessibility label",
+        "eventType": "VIEW_TEXT_CHANGED",
+        "replacementText": "test",
+        "elementDescriptors": [
+          {
+            "contentDescription": "Event Code Input"
+          }
+        ]
+      },
+      {
+        "description": "Click Submit button",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "text": "Submit"
+          }
+        ]
+      },
+      {
+        "description": "Wait for event to load",
+        "eventType": "WAIT",
+        "delayTime": 2000
+      },
+      {
+        "description": "Take screenshot after joining event",
+        "eventType": "TAKE_SCREENSHOT",
+        "screenshotName": "02_after_join_event"
+      },
+      {
+        "description": "Look for profile creation screen",
+        "eventType": "VIEW_CLICKED",
+        "visionText": "Create Profile",
+        "optional": true
+      },
+      {
+        "description": "Click on add photo button",
+        "eventType": "VIEW_CLICKED",
+        "visionText": "Add Photo",
+        "optional": true
+      },
+      {
+        "description": "Alternative: Click camera icon",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "contentDescriptionRegex": ".*camera.*|.*photo.*"
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Select photo from gallery",
+        "eventType": "VIEW_CLICKED",
+        "visionText": "Choose from Library",
+        "optional": true
+      },
+      {
+        "description": "Select first photo in gallery",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "className": "android.widget.ImageView",
+            "groupViewChildPosition": 0
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Confirm photo selection",
+        "eventType": "VIEW_CLICKED",
+        "visionText": "Choose",
+        "optional": true
+      },
+      {
+        "description": "Wait for photo upload",
+        "eventType": "WAIT",
+        "delayTime": 3000
+      },
+      {
+        "description": "Enter name in profile",
+        "eventType": "VIEW_TEXT_CHANGED",
+        "replacementText": "Test User",
+        "elementDescriptors": [
+          {
+            "text": "Enter your name"
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Enter age",
+        "eventType": "VIEW_TEXT_CHANGED",
+        "replacementText": "25",
+        "elementDescriptors": [
+          {
+            "text": "Age"
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Select gender - tap on gender field",
+        "eventType": "VIEW_CLICKED",
+        "visionText": "Gender",
+        "optional": true
+      },
+      {
+        "description": "Select Female gender option",
+        "eventType": "VIEW_CLICKED",
+        "visionText": "Female",
+        "optional": true
+      },
+      {
+        "description": "Select interested in field",
+        "eventType": "VIEW_CLICKED",
+        "visionText": "Interested In",
+        "optional": true
+      },
+      {
+        "description": "Select Men option",
+        "eventType": "VIEW_CLICKED",
+        "visionText": "Men",
+        "optional": true
+      },
+      {
+        "description": "Alternative: Select Both option",
+        "eventType": "VIEW_CLICKED",
+        "visionText": "Both",
+        "optional": true
+      },
+      {
+        "description": "Click Continue or Next",
+        "eventType": "VIEW_CLICKED",
+        "visionText": "Continue",
+        "optional": true
+      },
+      {
+        "description": "Alternative: Click Save Profile",
+        "eventType": "VIEW_CLICKED",
+        "visionText": "Save Profile",
+        "optional": true
+      },
+      {
+        "description": "Wait for profile creation",
+        "eventType": "WAIT",
+        "delayTime": 3000
+      },
+      {
+        "description": "Take screenshot of profile created",
+        "eventType": "TAKE_SCREENSHOT",
+        "screenshotName": "03_profile_created"
+      },
+      {
+        "description": "Navigate to discovery/matching screen",
+        "eventType": "VIEW_CLICKED",
+        "visionText": "Discovery",
+        "optional": true
+      },
+      {
+        "description": "Alternative: Look for swipe cards",
+        "eventType": "VIEW_CLICKED",
+        "visionText": "Start Matching",
+        "optional": true
+      },
+      {
+        "description": "Wait for discovery screen",
+        "eventType": "WAIT",
+        "delayTime": 2000
+      },
+      {
+        "description": "Take screenshot of discovery screen",
+        "eventType": "TAKE_SCREENSHOT",
+        "screenshotName": "04_discovery_screen"
+      },
+      {
+        "description": "Tap like button",
+        "eventType": "VIEW_CLICKED",
+        "visionText": "Like",
+        "optional": true
+      },
+      {
+        "description": "Alternative: Tap heart icon for like",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "contentDescriptionRegex": ".*like.*|.*heart.*"
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Wait after like action",
+        "eventType": "WAIT",
+        "delayTime": 2000
+      },
+      {
+        "description": "Take screenshot after like",
+        "eventType": "TAKE_SCREENSHOT",
+        "screenshotName": "05_after_like_action"
+      },
+      {
+        "description": "Navigate to matches screen",
+        "eventType": "VIEW_CLICKED",
+        "visionText": "Matches",
+        "optional": true
+      },
+      {
+        "description": "Wait for matches screen",
+        "eventType": "WAIT",
+        "delayTime": 2000
+      },
+      {
+        "description": "Take screenshot of matches screen",
+        "eventType": "TAKE_SCREENSHOT",
+        "screenshotName": "06_matches_screen"
+      },
+      {
+        "description": "Try to open a chat (if match exists)",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "className": "RCTView"
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Wait for chat screen",
+        "eventType": "WAIT",
+        "delayTime": 2000
+      },
+      {
+        "description": "Take screenshot of chat screen",
+        "eventType": "TAKE_SCREENSHOT",
+        "screenshotName": "07_chat_screen"
+      },
+      {
+        "description": "Send a test message",
+        "eventType": "VIEW_TEXT_CHANGED",
+        "replacementText": "Hello! This is a test message from Robo script.",
+        "elementDescriptors": [
+          {
+            "text": "Type a message..."
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Send message",
+        "eventType": "VIEW_CLICKED",
+        "visionText": "Send",
+        "optional": true
+      },
+      {
+        "description": "Wait after sending message",
+        "eventType": "WAIT",
+        "delayTime": 2000
+      },
+      {
+        "description": "Take screenshot after message sent",
+        "eventType": "TAKE_SCREENSHOT",
+        "screenshotName": "08_message_sent"
+      },
+      {
+        "description": "Navigate to profile screen",
+        "eventType": "VIEW_CLICKED",
+        "visionText": "Profile",
+        "optional": true
+      },
+      {
+        "description": "Take screenshot of profile screen",
+        "eventType": "TAKE_SCREENSHOT",
+        "screenshotName": "09_profile_screen"
+      },
+      {
+        "description": "Check notifications by pulling down",
+        "eventType": "ONE_POINT_GESTURE",
+        "coordinates": "(50%,10%)->(50%,50%)",
+        "optional": true
+      },
+      {
+        "description": "Wait to see notifications",
+        "eventType": "WAIT",
+        "delayTime": 3000
+      },
+      {
+        "description": "Take final screenshot",
+        "eventType": "TAKE_SCREENSHOT",
+        "screenshotName": "10_final_state"
+      }
+    ]
+  },
+  {
+    "id": 1001,
+    "description": "Handle camera permissions",
+    "contextDescriptor": {
+      "condition": "element_present",
+      "visionText": "camera"
+    },
+    "maxNumberOfRuns": 5,
+    "priority": 2,
+    "actions": [
+      {
+        "description": "Allow camera access",
+        "eventType": "VIEW_CLICKED",
+        "visionText": "Allow"
+      }
+    ]
+  },
+  {
+    "id": 1002,
+    "description": "Handle photo library permissions",
+    "contextDescriptor": {
+      "condition": "element_present",
+      "visionText": "photos"
+    },
+    "maxNumberOfRuns": 5,
+    "priority": 2,
+    "actions": [
+      {
+        "description": "Allow photo library access",
+        "eventType": "VIEW_CLICKED",
+        "visionText": "Allow"
+      }
+    ]
+  },
+  {
+    "id": 1003,
+    "description": "Handle notification permissions",
+    "contextDescriptor": {
+      "condition": "element_present",
+      "visionText": "notifications"
+    },
+    "maxNumberOfRuns": 5,
+    "priority": 2,
+    "actions": [
+      {
+        "description": "Allow notifications",
+        "eventType": "VIEW_CLICKED",
+        "visionText": "Allow"
+      }
+    ]
+  },
+  {
+    "id": 1004,
+    "description": "Generic permission handler",
+    "contextDescriptor": {
+      "condition": "element_present",
+      "visionText": "Allow"
+    },
+    "maxNumberOfRuns": 10,
+    "priority": 1,
+    "actions": [
+      {
+        "description": "Allow any permission",
+        "eventType": "VIEW_CLICKED",
+        "visionText": "Allow"
+      }
+    ]
+  },
+  {
+    "id": 1005,
+    "description": "Ensure correct text input for event code",
+    "crawlStage": "crawl",
+    "priority": 3,
+    "maxNumberOfRuns": 1,
+    "contextDescriptor": {
+      "condition": "element_present",
+      "elementDescriptors": [
+        {
+          "text": "Enter Event Code"
+        }
+      ]
+    },
+    "actions": [
+      {
+        "description": "Clear any existing text first",
+        "eventType": "VIEW_LONG_CLICKED",
+        "elementDescriptors": [
+          {
+            "contentDescription": "Event Code Input"
+          }
+        ],
+        "delayTime": 500,
+        "optional": true
+      },
+      {
+        "description": "Enter only 'test' in the correct field",
+        "eventType": "VIEW_TEXT_CHANGED",
+        "replacementText": "test",
+        "elementDescriptors": [
+          {
+            "contentDescription": "Event Code Input"
+          }
+        ]
+      },
+      {
+        "description": "Immediately submit after entering code",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "text": "Submit"
+          }
+        ]
+      }
+    ]
+  }
+]

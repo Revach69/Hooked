@@ -55,7 +55,7 @@ export default function EventsClient() {
       // Filter out private events - they should not be displayed on the IRL page
       const publicEvents = eventsData.filter(event => !event.is_private);
       setEvents(publicEvents);
-    } catch (error) {
+    } catch {
       // Error loading events
     } finally {
       setLoading(false);

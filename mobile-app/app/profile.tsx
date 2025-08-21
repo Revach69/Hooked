@@ -18,7 +18,7 @@ import {
   Switch,
   KeyboardAvoidingView
 } from 'react-native';
-import { useNotifications } from '../lib/contexts/NotificationContext';
+import Toast from 'react-native-toast-message';
 import { router, useFocusEffect } from 'expo-router';
 import { Clock, Users, LogOut, Edit, User, AlertCircle, MessageCircle } from 'lucide-react-native';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
@@ -33,7 +33,6 @@ import * as Sentry from '@sentry/react-native';
 export default function Profile() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const notifications = useNotifications();
   const [profile, setProfile] = useState<any>(null);
   const [currentEvent, setCurrentEvent] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -125,7 +124,15 @@ export default function Profile() {
     // Ensure Firebase is initialized
     const firebaseReady = await ensureFirebaseReady();
     if (!firebaseReady) {
-      notifications.error("Connection Error", "Unable to connect to the server. Please check your internet connection and try again.");
+      Toast.show({
+        type: 'error',
+        text1: 'Connection Error',
+        text2: 'Unable to connect to the server. Please check your internet connection and try again.',
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
       router.replace('/home');
       return;
     }
@@ -230,7 +237,15 @@ export default function Profile() {
         ]
       );
     } catch {
-      notifications.error("Error", "Failed to open photo options. Please try again.");
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to open photo options. Please try again.',
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
     }
   };
 
@@ -263,7 +278,15 @@ export default function Profile() {
         await processImageAsset(result.assets[0]);
       }
     } catch {
-      notifications.error("Error", "Failed to capture photo. Please try again.");
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to capture photo. Please try again.',
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
     }
   };
 
@@ -296,7 +319,15 @@ export default function Profile() {
         await processImageAsset(result.assets[0]);
       }
     } catch {
-      notifications.error("Error", "Failed to pick image. Please try again.");
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to pick image. Please try again.',
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
     }
   };
 
@@ -304,7 +335,15 @@ export default function Profile() {
     // Validate file size (10MB limit)
     if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
       Sentry.captureException(new Error(`File too large: ${asset.fileSize}`));
-      notifications.warning("File Too Large", "Image must be smaller than 10MB.");
+      Toast.show({
+        type: 'warning',
+        text1: 'File Too Large',
+        text2: 'Image must be smaller than 10MB.',
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
       return;
     }
 
@@ -383,7 +422,15 @@ export default function Profile() {
         }
       }
       
-      notifications.error("Upload Failed", `Failed to upload photo: ${errorMessage}. Please try again.`);
+      Toast.show({
+        type: 'error',
+        text1: 'Upload Failed',
+        text2: `Failed to upload photo: ${errorMessage}. Please try again.`,
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
       // Clear temp photo on error
       setTempPhotoUri(null);
     } finally {
@@ -461,7 +508,15 @@ export default function Profile() {
 
   const handleSubmitReport = async () => {
     if (!selectedUserToReport || !reportExplanation.trim()) {
-      notifications.warning("Missing Information", "Please provide a report explanation.");
+      Toast.show({
+        type: 'warning',
+        text1: 'Missing Information',
+        text2: 'Please provide a report explanation.',
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
       return;
     }
 
@@ -481,7 +536,15 @@ export default function Profile() {
       }
       
       if (!isConnected) {
-        notifications.error("No Internet Connection", "Please check your internet connection and try again.");
+        Toast.show({
+          type: 'error',
+          text1: 'No Internet Connection',
+          text2: 'Please check your internet connection and try again.',
+          position: 'top',
+          visibilityTime: 3500,
+          autoHide: true,
+          topOffset: 0,
+        });
         setSubmittingReport(false);
         return;
       }
@@ -494,7 +557,15 @@ export default function Profile() {
 
       
       if (!eventId || !sessionId) {
-        notifications.error("Error", "Session information not found. Please try again.");
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: 'Session information not found. Please try again.',
+          position: 'top',
+          visibilityTime: 3500,
+          autoHide: true,
+          topOffset: 0,
+        });
         return;
       }
 
@@ -562,7 +633,15 @@ export default function Profile() {
         }
       }
       
-      notifications.error("Error", errorMessage);
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: errorMessage,
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
     } finally {
       setSubmittingReport(false);
     }
@@ -642,7 +721,15 @@ export default function Profile() {
             } catch (error) {
       Sentry.captureException(error);
               // Error deleting profile
-              notifications.error("Error", "Failed to delete profile. Please try again.");
+              Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: 'Failed to delete profile. Please try again.',
+                position: 'top',
+                visibilityTime: 3500,
+                autoHide: true,
+                topOffset: 0,
+              });
             }
           }
         }
@@ -703,16 +790,29 @@ export default function Profile() {
       setEventVisible(value);
       
       // Show success message
-      notifications.success(
-        value ? "Profile Visible" : "Profile Hidden",
-        value 
-          ? "Your profile is now visible to other users. You can see and be seen by other users in discovery." 
-          : "Your profile is now hidden. You won't see other users in discovery, but you can still access your matches and chat with them."
-      );
+      Toast.show({
+        type: 'success',
+        text1: value ? 'Profile Visible' : 'Profile Hidden',
+        text2: value 
+          ? 'Your profile is now visible to other users. You can see and be seen by other users in discovery.' 
+          : 'Your profile is now hidden. You won\'t see other users in discovery, but you can still access your matches and chat with them.',
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
       
     } catch (error) {
       Sentry.captureException(error);
-      notifications.error("Error", "Failed to update visibility. Please try again.");
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to update visibility. Please try again.',
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
       // Revert the toggle if update failed
       setEventVisible(!value);
     }
@@ -822,19 +922,22 @@ export default function Profile() {
     detailValueContainer: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: 8,
+      gap: 1,
+      justifyContent: 'flex-end',
+      marginLeft: 'auto',
+      paddingLeft: 16,
     },
     detailValue: {
       fontSize: 16,
       color: isDark ? '#e5e7eb' : '#374151',
     },
     genderOption: {
-      paddingVertical: 8,
-      paddingHorizontal: 12,
+      paddingVertical: 6,
+      paddingHorizontal: 10,
       borderRadius: 20,
       borderWidth: 1,
       borderColor: isDark ? '#374151' : '#e5e7eb',
-      marginRight: 10,
+      marginRight: 6,
       marginBottom: 8,
     },
     genderOptionSelected: {
@@ -1218,7 +1321,7 @@ export default function Profile() {
             accessibilityHint="Tap to change your profile photo"
           >
             {isUploadingPhoto ? (
-              <View style={styles.photoContainer}>
+              <>
                 {tempPhotoUri ? (
                   <Image
                     source={{ uri: tempPhotoUri }}
@@ -1235,7 +1338,8 @@ export default function Profile() {
                 <View style={styles.uploadOverlay}>
                   <ActivityIndicator size="small" color="white" />
                 </View>
-              </View>
+              </>
+            
             ) : profile.profile_photo_url ? (
               <Image
                 source={{ uri: profile.profile_photo_url }}
@@ -1398,7 +1502,7 @@ export default function Profile() {
                 placeholder="No bio yet. Add one!"
                 multiline
               />
-              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 8 }}>
                 <TouchableOpacity onPress={handleSaveAboutMe} disabled={saving} style={styles.saveButton}><Text style={styles.saveButtonText}>Save</Text></TouchableOpacity>
                 <TouchableOpacity onPress={() => { setEditingAboutMe(false); setAboutMe(profile.about_me || ''); }} style={styles.cancelButton}><Text style={styles.cancelButtonText}>Cancel</Text></TouchableOpacity>
               </View>
@@ -1558,7 +1662,7 @@ export default function Profile() {
                 </View>
               )}
               
-              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 8 }}>
                 <TouchableOpacity onPress={handleSaveHeight} disabled={saving} style={styles.saveButton}><Text style={styles.saveButtonText}>Save</Text></TouchableOpacity>
                 <TouchableOpacity onPress={() => { 
                   setEditingHeight(false); 

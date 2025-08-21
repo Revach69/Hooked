@@ -1,5 +1,8 @@
 {
   "projects": {
+    "production": "hooked-69",
+    "staging": "hooked-staging",
+    "development": "hooked-development",
     "default": "hooked-69"
   }
 }

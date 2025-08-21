@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,10 +12,9 @@ import {
   AppState,
   Platform,
 } from 'react-native';
-import { useNotifications } from '../lib/contexts/NotificationContext';
 import { router, useFocusEffect } from 'expo-router';
 import { Heart, MessageCircle, Users, User, UserX, VolumeX, Volume2 } from 'lucide-react-native';
-import { EventProfileAPI, LikeAPI, EventAPI } from '../lib/firebaseApi';
+import { EventProfileAPI, LikeAPI, EventAPI, MessageAPI, MutedMatchAPI } from '../lib/firebaseApi';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
@@ -27,7 +26,6 @@ import { setMuteStatus } from '../lib/utils/notificationUtils';
 
 
 export default function Matches() {
-  const notifications = useNotifications();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const [matches, setMatches] = useState<any[]>([]);
@@ -405,7 +403,7 @@ export default function Matches() {
     return () => clearInterval(activityInterval);
   }, [currentSessionId, isAppActive]);
 
-  const setupMatchesListener = () => {
+  function setupMatchesListener() {
     if (!currentEvent?.id || !currentSessionId) return;
 
     try {
@@ -428,9 +426,10 @@ export default function Matches() {
           );
 
           // Get the other person's session ID for each match (remove duplicates)
-          const otherSessionIds = [...new Set(userMatches.map(like => 
+          const sessionIdsMap = userMatches.map(like => 
             like.liker_session_id === currentSessionId ? like.liked_session_id : like.liker_session_id
-          ))];
+          );
+          const otherSessionIds = Array.from(new Set(sessionIdsMap));
 
           // Get profiles for all matched users
           const matchedProfiles: any[] = [];
@@ -506,13 +505,60 @@ export default function Matches() {
         where('is_mutual', '==', true)
       );
 
-      const mutualMatchesUnsubscribe = onSnapshot(mutualMatchesQuery, async () => {
+      const mutualMatchesUnsubscribe = onSnapshot(mutualMatchesQuery, async (snapshot) => {
         try {
-          // Note: Notifications are now handled globally in _layout.tsx
-          // This listener only updates the matches list for display purposes
+          console.log('Matches screen: Processing mutual matches snapshot changes');
           
-        } catch {
-          // Error in mutual matches listener
+          // Process document changes for real-time match notifications
+          for (const change of snapshot.docChanges()) {
+            if (change.type === 'added') {
+              const matchData = change.doc.data();
+              console.log('Matches screen: New mutual match detected:', {
+                docId: change.doc.id,
+                likerSessionId: matchData.liker_session_id,
+                recipientSessionId: matchData.recipient_session_id,
+                currentSession: currentSessionId
+              });
+              
+              // Only trigger notification if this user is the recipient (not the creator)
+              if (matchData.recipient_session_id === currentSessionId) {
+                // Get the liker's profile for notification
+                let likerName = 'Someone';
+                try {
+                  const { EventProfileAPI } = await import('../lib/firebaseApi');
+                  const likerProfiles = await EventProfileAPI.filter({
+                    session_id: matchData.liker_session_id,
+                    event_id: currentEvent?.id
+                  });
+                  if (likerProfiles.length > 0) {
+                    likerName = likerProfiles[0].first_name || 'Someone';
+                  }
+                } catch (profileError) {
+                  console.warn('Failed to get liker profile for match notification:', profileError);
+                }
+                
+                // Import and trigger match notification
+                try {
+                  const { NotificationRouter } = await import('../lib/notifications/NotificationRouter');
+                  await NotificationRouter.handleIncoming({
+                    type: 'match',
+                    id: change.doc.id,
+                    createdAt: matchData.created_at?.toDate?.()?.getTime() || Date.now(),
+                    isCreator: false, // This user is the recipient
+                    otherSessionId: matchData.liker_session_id,
+                    otherName: likerName
+                  });
+                } catch (notificationError) {
+                  console.error('Failed to trigger match notification:', notificationError);
+                }
+              }
+            }
+          }
+          
+          // Matches list will be updated automatically by the Firestore listener
+          
+        } catch (error) {
+          console.error('Error in mutual matches listener:', error);
         }
       }, (error) => {
         // Handle Firestore listener errors gracefully
@@ -530,7 +576,7 @@ export default function Matches() {
     } catch {
       // Error setting up matches listener
     }
-  };
+  }
 
   const cleanupAllListeners = () => {
     try {
@@ -563,7 +609,7 @@ export default function Matches() {
     }
   };
 
-  const loadMutedMatches = async () => {
+  const loadMutedMatches = useCallback(async () => {
     if (!currentEvent?.id || !currentSessionId) return;
 
     try {
@@ -587,7 +633,7 @@ export default function Matches() {
     } catch (error) {
       console.error('Error loading muted matches:', error);
     }
-  };
+  }, [currentEvent?.id, currentSessionId]);
 
   const handleUnmatch = async (matchSessionId: string, matchName: string) => {
     if (!currentEvent?.id || !currentSessionId) return;
@@ -649,8 +695,63 @@ export default function Matches() {
               // Delete all like records between these users
               await Promise.all(likesToDelete.map(like => LikeAPI.delete(like.id)));
 
+              // Delete all messages between these users
+              if (currentUserProfile?.id && matchProfile?.id) {
+                try {
+                  console.log('Deleting messages between users:', {
+                    currentProfileId: currentUserProfile.id,
+                    matchProfileId: matchProfile.id
+                  });
+                  
+                  const allMessages = await MessageAPI.filter({
+                    event_id: currentEvent.id
+                  });
+                  
+                  const messagesToDelete = allMessages.filter(message => {
+                    return (
+                      (message.from_profile_id === currentUserProfile.id && message.to_profile_id === matchProfile.id) ||
+                      (message.from_profile_id === matchProfile.id && message.to_profile_id === currentUserProfile.id)
+                    );
+                  });
+                  
+                  console.log('Found messages to delete:', messagesToDelete.length);
+                  
+                  // Delete all messages between these users
+                  await Promise.all(messagesToDelete.map(message => MessageAPI.delete(message.id)));
+                  
+                  // Clear any muted match records
+                  const mutedRecords = await MutedMatchAPI.filter({
+                    event_id: currentEvent.id,
+                    muter_session_id: currentSessionId,
+                    muted_session_id: matchSessionId
+                  });
+                  
+                  await Promise.all(mutedRecords.map(record => MutedMatchAPI.delete(record.id)));
+                  
+                } catch (error) {
+                  console.warn('Failed to delete messages or muted records:', error);
+                  // Continue with unmatch even if message deletion fails
+                }
+              }
+
+              // Clear notification cache to allow notifications for re-matches
+              try {
+                const { clearMatchNotificationCache } = await import('../lib/notifications/NotificationRouter');
+                await clearMatchNotificationCache(currentSessionId, matchSessionId);
+                console.log('Cleared notification cache for unmatched users');
+              } catch (error) {
+                console.warn('Failed to clear notification cache:', error);
+              }
+
               // Immediately remove the unmatched user from the UI
               setMatches(prevMatches => prevMatches.filter(m => m.session_id !== matchSessionId));
+              
+              // Also remove from unread messages to clear the red dot
+              setUnreadMessages(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(matchSessionId);
+                return newSet;
+              });
 
               Alert.alert(
                 'Match Removed',
@@ -659,7 +760,17 @@ export default function Matches() {
               );
             } catch (error) {
               console.error('Unmatch error:', error);
-              notifications.error('Error', 'Failed to unmatch');
+              // Use Toast instead of notifications to match message toast design
+              const Toast = require('react-native-toast-message').default;
+              Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: 'Failed to unmatch',
+                position: 'top',
+                visibilityTime: 3500,
+                autoHide: true,
+                topOffset: 0,
+              });
             } finally {
               // Clear the unmatching state regardless of success/failure
               setUnmatchingUsers(prev => {
@@ -758,14 +869,24 @@ export default function Matches() {
         return newSet;
       });
       
-      notifications.error('Error', `Failed to ${isMuted ? 'unmute' : 'mute'} match`);
+      // Use Toast instead of notifications to match message toast design
+      const Toast = require('react-native-toast-message').default;
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: `Failed to ${isMuted ? 'unmute' : 'mute'} match`,
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
       if (error) {
         try { require('@sentry/react-native').captureException(error); } catch { /* ignore */ }
       }
     }
   };
 
-  const initializeSession = async () => {
+  async function initializeSession() {
     try {
       setIsLoading(true);
       const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
@@ -855,7 +976,7 @@ export default function Matches() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }
 
   // Remove the old loadMatches function since we're using real-time listeners now
 
@@ -883,7 +1004,7 @@ export default function Matches() {
 
     try {
       // Optimistically update UI
-      setLikedProfiles(prev => new Set([...prev, likedProfile.session_id]));
+      setLikedProfiles(prev => new Set([...Array.from(prev), likedProfile.session_id]));
 
       const newLike = await LikeAPI.create({
         event_id: eventId,

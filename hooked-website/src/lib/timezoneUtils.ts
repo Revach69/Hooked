@@ -226,7 +226,7 @@ export function localEventTimeStringToUTCTimestamp(localDateTime: string, eventT
   const [hour, minute] = timePart.split(':').map(Number);
   const eventDate = new Date(Date.UTC(year, month - 1, day, hour, minute));
   const formatter = new Intl.DateTimeFormat('en-US', { timeZone: eventTimezone, hour: '2-digit', hour12: false });
-  const parts = formatter.formatToParts(eventDate);
+  formatter.formatToParts(eventDate);
   const utcDate = new Date(eventDate.toLocaleString('en-US', { timeZone: 'UTC' }));
   return Timestamp.fromDate(utcDate);
 }

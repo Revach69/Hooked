@@ -22,7 +22,8 @@ import { db, storage } from './firebaseConfig';
 import { auth } from './firebaseAuth';
 import { trace } from './firebasePerformance';
 import * as Sentry from '@sentry/react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AsyncStorageUtils } from './asyncStorageUtils';
+import { Platform } from 'react-native';
 
 // Enhanced retry mechanism with network connectivity checks and memory safety
 export async function firebaseRetry<T>(
@@ -110,6 +111,36 @@ export interface Event {
   timezone?: string; // Added for timezone support
   created_at: Timestamp;
   updated_at: Timestamp;
+  expired?: boolean; // New field to track if event has expired and been processed
+  analytics_id?: string; // Reference to analytics data for expired events
+}
+
+export interface EventAnalytics {
+  id: string;
+  event_id: string;
+  event_name: string;
+  event_date: string; // ISO string of event start date
+  event_location?: string;
+  event_timezone?: string;
+  total_profiles: number;
+  gender_breakdown: {
+    male: number;
+    female: number;
+    other: number;
+  };
+  age_stats: {
+    average: number;
+    min: number;
+    max: number;
+  };
+  total_matches: number;
+  total_messages: number;
+  engagement_metrics: {
+    profiles_with_matches: number;
+    profiles_with_messages: number;
+    average_messages_per_match: number;
+  };
+  created_at: Timestamp;
 }
 
 export interface EventProfile {
@@ -691,16 +722,23 @@ export const BlockedMatchAPI = {
 export const MutedMatchAPI = {
   async create(data: Omit<MutedMatch, 'id' | 'created_at'>): Promise<MutedMatch> {
     return firebaseRetry(async () => {
-      const docRef = await addDoc(collection(db, 'muted_matches'), {
-        ...data,
-        created_at: serverTimestamp()
-      });
-      
-      return {
-        id: docRef.id,
-        ...data,
-        created_at: new Date().toISOString()
-      };
+      try {
+        console.log('Creating muted match record:', data);
+        const docRef = await addDoc(collection(db, 'muted_matches'), {
+          ...data,
+          created_at: serverTimestamp()
+        });
+        
+        console.log('Muted match created successfully:', docRef.id);
+        return {
+          id: docRef.id,
+          ...data,
+          created_at: new Date().toISOString()
+        };
+      } catch (error) {
+        console.error('Error creating muted match:', error);
+        throw error;
+      }
     }, { operation: 'Mute match' });
   },
 
@@ -780,18 +818,8 @@ export const ReportAPI = {
       
       // If not authenticated, only allow filtering by session ID
       if (!isAuthenticated) {
-        // Get current session ID from AsyncStorage
-        const sessionIdData = await AsyncStorage.getItem('currentSessionId');
-        let sessionId: string | null = null;
-        
-        if (sessionIdData) {
-          try {
-            const parsed = JSON.parse(sessionIdData);
-            sessionId = parsed.value || parsed.sessionId || (typeof parsed === 'string' ? parsed : null);
-          } catch {
-            sessionId = typeof sessionIdData === 'string' ? sessionIdData.trim() : null;
-          }
-        }
+        // Get current session ID using AsyncStorageUtils for consistent format handling
+        const sessionId = await AsyncStorageUtils.getItemWithLegacyFallback<string>('currentSessionId');
         
         if (!sessionId) {
           return []; // No session ID, return empty array
@@ -924,40 +952,67 @@ export const StorageAPI = {
           throw new Error(`Failed to download remote file: ${downloadError instanceof Error ? downloadError.message : 'Unknown error'}`);
         }
       } else {
-        // Handle local file URI
+        // Handle local file URI with platform-specific blob creation
         try {
-          // For React Native, we need to handle local files differently
-          // Convert file URI to blob using XMLHttpRequest for better compatibility
-          const blob = await new Promise<Blob>((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            xhr.open('GET', file.uri, true);
-            xhr.responseType = 'blob';
-            
-            xhr.onload = () => {
-              if (xhr.status === 200) {
-                resolve(xhr.response);
-              } else {
-                reject(new Error(`Failed to read file: ${xhr.status}`));
+          let blob: Blob;
+          
+          if (Platform.OS === 'android') {
+            // Android: Use fetch API which handles content:// URIs better
+            try {
+              const response = await fetch(file.uri);
+              if (!response.ok) {
+                throw new Error(`Failed to read Android file: ${response.status} ${response.statusText}`);
               }
-            };
-            
-            xhr.onerror = () => {
-              reject(new Error('Failed to read file'));
-            };
-            
-            // Add timeout
-            xhr.timeout = 10000;
-            xhr.ontimeout = () => {
-              reject(new Error('File read timeout'));
-            };
-            
-            xhr.send();
-          });
+              blob = await response.blob();
+            } catch (fetchError) {
+              Sentry.captureException(fetchError);
+              throw new Error(`Android file access failed: ${fetchError instanceof Error ? fetchError.message : 'Unknown error'}`);
+            }
+          } else {
+            // iOS: Use XMLHttpRequest which works well with file:// URIs
+            blob = await new Promise<Blob>((resolve, reject) => {
+              const xhr = new XMLHttpRequest();
+              xhr.open('GET', file.uri, true);
+              xhr.responseType = 'blob';
+              
+              xhr.onload = () => {
+                if (xhr.status === 200) {
+                  resolve(xhr.response);
+                } else {
+                  reject(new Error(`Failed to read iOS file: ${xhr.status}`));
+                }
+              };
+              
+              xhr.onerror = () => {
+                reject(new Error('iOS file read failed'));
+              };
+              
+              // Add timeout
+              xhr.timeout = 10000;
+              xhr.ontimeout = () => {
+                reject(new Error('iOS file read timeout'));
+              };
+              
+              xhr.send();
+            });
+          }
           
           await uploadBytes(storageRef, blob, { contentType: file.type });
         } catch (uploadError) {
-          Sentry.captureException(uploadError);
-          throw new Error(`Failed to upload local file: ${uploadError instanceof Error ? uploadError.message : 'Unknown error'}`);
+          Sentry.captureException(uploadError, {
+            tags: {
+              operation: 'file_upload',
+              platform: Platform.OS,
+              source: 'StorageAPI_uploadFile'
+            },
+            extra: {
+              fileUri: file.uri.substring(0, 50) + '...',
+              fileName: file.name,
+              fileType: file.type,
+              fileSize: file.fileSize
+            }
+          });
+          throw new Error(`Failed to upload ${Platform.OS} file: ${uploadError instanceof Error ? uploadError.message : 'Unknown error'}`);
         }
       }
       
@@ -1123,6 +1178,89 @@ export const AdminClientAPI = {
 
   async delete(id: string): Promise<void> {
     await deleteDoc(doc(db, 'adminClients', id));
+  },
+};
+
+// EventAnalytics API
+export const EventAnalyticsAPI = {
+  async create(data: Omit<EventAnalytics, 'id' | 'created_at'>): Promise<EventAnalytics> {
+    return await firebaseRetry(async () => {
+      const analyticsData = {
+        ...data,
+        created_at: serverTimestamp(),
+      };
+      
+      const docRef = await addDoc(collection(db, 'event_analytics'), analyticsData);
+      
+      return { 
+        id: docRef.id, 
+        ...data,
+        created_at: Timestamp.now()
+      } as EventAnalytics;
+    }, { operation: 'Create event analytics' });
+  },
+
+  async filter(filters: Partial<EventAnalytics> = {}): Promise<EventAnalytics[]> {
+    return await firebaseRetry(async () => {
+      const colRef = collection(db, 'event_analytics');
+      let constraints = [];
+      
+      if (filters.event_id) {
+        constraints.push(where('event_id', '==', filters.event_id));
+      }
+      if (filters.id) {
+        constraints.push(where('__name__', '==', filters.id));
+      }
+      
+      constraints.push(orderBy('created_at', 'desc'));
+      
+      const q = query(colRef, ...constraints);
+      
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as EventAnalytics);
+    }, { operation: 'Filter event analytics' });
+  },
+
+  async get(id: string): Promise<EventAnalytics | null> {
+    return await firebaseRetry(async () => {
+      const docSnap = await getDoc(doc(db, 'event_analytics', id));
+      if (!docSnap.exists()) return null;
+      return { id: docSnap.id, ...docSnap.data() } as EventAnalytics;
+    }, { operation: 'Get event analytics' });
+  },
+
+  async getByEventId(eventId: string): Promise<EventAnalytics | null> {
+    return await firebaseRetry(async () => {
+      const q = query(
+        collection(db, 'event_analytics'),
+        where('event_id', '==', eventId)
+      );
+      
+      const snapshot = await getDocs(q);
+      if (snapshot.empty) return null;
+      
+      const doc = snapshot.docs[0];
+      return { id: doc.id, ...doc.data() } as EventAnalytics;
+    }, { operation: 'Get event analytics by event ID' });
+  },
+
+  async delete(id: string): Promise<void> {
+    return await firebaseRetry(async () => {
+      await deleteDoc(doc(db, 'event_analytics', id));
+    }, { operation: 'Delete event analytics' });
+  },
+
+  async deleteByEventId(eventId: string): Promise<void> {
+    return await firebaseRetry(async () => {
+      const q = query(
+        collection(db, 'event_analytics'),
+        where('event_id', '==', eventId)
+      );
+      
+      const snapshot = await getDocs(q);
+      const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+      await Promise.all(deletePromises);
+    }, { operation: 'Delete event analytics by event ID' });
   },
 };
 

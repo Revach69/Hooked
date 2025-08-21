@@ -54,9 +54,7 @@
       <true/>
     </dict>
     <key>NSCameraUsageDescription</key>
-    <string>Hooked needs camera access to let you take profile photos for your dating profile at events.</string>
-    <key>NSMicrophoneUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your microphone</string>
+    <string>Hooked needs camera access to let you take profile photos and scan QR codes at events.</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Hooked needs photo library access to let you select existing photos for your dating profile at events.</string>
     <key>NSUserActivityTypes</key>

@@ -5,7 +5,7 @@ import mobileErrorHandler, {
   getErrorMessage, 
   getOfflineQueueLength 
 } from '../mobileErrorHandler';
-import { NotificationManager } from '../services/NotificationManager';
+import Toast from 'react-native-toast-message';
 
 export const useMobileErrorHandling = () => {
   const [isOnline, setIsOnline] = useState(mobileErrorHandler.getOnlineStatus());
@@ -125,15 +125,15 @@ export const useMobileAsyncOperation = () => {
 
   const showErrorAlert = useCallback((error: any, onRetry?: () => void) => {
     const message = getErrorMessage(error);
-    NotificationManager.error(
-      'Error',
-      message,
-      {
-        // If there's a retry function, we could potentially add it as an action
-        // For now, the error will be persistent allowing user to manually retry
-        persistent: true
-      }
-    );
+    Toast.show({
+      type: 'error',
+      text1: 'Error',
+      text2: message,
+      position: 'top',
+      visibilityTime: 5000, // longer visibility for persistent errors
+      autoHide: true,
+      topOffset: 0,
+    });
     
     // If onRetry is provided, we could call it after a delay or via some other mechanism
     // This would need to be handled differently in the notification system
