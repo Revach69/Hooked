@@ -8,17 +8,17 @@ import { Platform } from 'react-native';
 
 // Firebase configuration with platform-specific app IDs
 const firebaseConfig = {
-  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || 'AIzaSyDkVAo_xXbBHy8FYwFtMQA66aju08qK_yE',
-  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || 'hooked-69.firebaseapp.com',
-  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || 'hooked-69',
-  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET || 'hooked-69.firebasestorage.app',
-  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '741889428835',
-  // Use platform-specific app IDs (kept from your original code)
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY!,
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN!,
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID!,
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET!,
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID!,
+  // Use platform-specific app IDs (fallback to general app ID if not specified)
   appId:
     Platform.OS === 'ios'
-      ? process.env.EXPO_PUBLIC_FIREBASE_APP_ID_IOS || '1:741889428835:ios:85c8cffc54475305351756'
-      : process.env.EXPO_PUBLIC_FIREBASE_APP_ID_ANDROID || '1:741889428835:android:783f31087e5bdcd7351756',
-  measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID || 'G-6YHKXLN806',
+      ? (process.env.EXPO_PUBLIC_FIREBASE_APP_ID_IOS || process.env.EXPO_PUBLIC_FIREBASE_APP_ID)!
+      : (process.env.EXPO_PUBLIC_FIREBASE_APP_ID_ANDROID || process.env.EXPO_PUBLIC_FIREBASE_APP_ID)!,
+  measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID!,
 };
 
 // Lazy initialization to prevent JS thread errors
