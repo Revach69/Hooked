@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { EventProfile, Like, Message } from '@/lib/firebaseApi';
+import { EventProfile, Like, Message, EventAPI, EventAnalytics } from '@/lib/firebaseApi';
 import { X, Users, Heart, MessageCircle, Calendar } from 'lucide-react';
 
 interface AnalyticsModalProps {
@@ -51,6 +51,26 @@ export default function AnalyticsModal({
   const loadAnalytics = async () => {
     setIsLoading(true);
     try {
+      // First check if this is an expired event with preserved analytics
+      const event = await EventAPI.get(eventId);
+      
+      if (event?.expired && event.analytics_id) {
+        // Load preserved analytics data
+        const savedAnalytics = await EventAnalytics.get(event.analytics_id);
+        
+        if (savedAnalytics) {
+          setAnalytics({
+            totalProfiles: savedAnalytics.total_profiles,
+            mutualMatches: savedAnalytics.total_matches,
+            messagesSent: savedAnalytics.total_messages,
+            averageAge: savedAnalytics.age_stats.average,
+            genderBreakdown: savedAnalytics.gender_breakdown
+          });
+          return;
+        }
+      }
+
+      // For active events or if preserved analytics not found, calculate real-time
       const [profiles, likes, messages] = await Promise.all([
         EventProfile.filter({ event_id: eventId }),
         Like.filter({ event_id: eventId }),

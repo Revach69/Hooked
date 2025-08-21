@@ -65,6 +65,25 @@ export default function ClientsPage() {
     }
   };
 
+  const handleUpdateClient = async (clientId: string, field: string, value: any) => {
+    try {
+      const client = clients.find(c => c.id === clientId);
+      if (!client) return;
+      
+      const updateData = { [field]: value };
+      await AdminClientAPI.update(clientId, updateData);
+      
+      // Update local state immediately for better UX
+      setClients(prev => prev.map(c => 
+        c.id === clientId ? { ...c, [field]: value } : c
+      ));
+    } catch (error) {
+      console.error('Failed to update client:', error);
+      // Reload clients on error to ensure consistency
+      await loadClients();
+    }
+  };
+
   const handleViewForm = async (formId: string) => {
     try {
       const form = await EventFormAPI.get(formId);
@@ -200,6 +219,7 @@ export default function ClientsPage() {
         clients={clients}
         onEdit={handleEditClient}
         onDelete={handleDeleteClient}
+        onUpdate={handleUpdateClient}
         onViewForm={handleViewForm}
         onViewEvent={handleViewEvent}
         searchQuery={searchQuery}

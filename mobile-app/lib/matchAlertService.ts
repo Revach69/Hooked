@@ -1,7 +1,7 @@
 import { Alert, AppState } from 'react-native';
 import { router } from 'expo-router';
 import { AsyncStorageUtils } from './asyncStorageUtils';
-import { NotificationManager } from './services/NotificationManager';
+import Toast from 'react-native-toast-message';
 
 interface MatchAlertOptions {
   matchedUserName: string;
@@ -117,9 +117,19 @@ export async function showMatchToast(matchedUserName: string): Promise<void> {
     }
   }
   
-  // Use new notification system
-  NotificationManager.match(matchedUserName, () => {
-    router.push('/matches');
+  // Use Toast notification system
+  Toast.show({
+    type: 'matchSuccess',
+    text1: `You got Hooked with ${matchedUserName}!`,
+    text2: 'Tap to start chatting',
+    position: 'top',
+    visibilityTime: 3500,
+    autoHide: true,
+    topOffset: 0,
+    onPress: () => {
+      Toast.hide();
+      router.push('/matches');
+    }
   });
 }
 

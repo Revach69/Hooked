@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AsyncStorageUtils } from '../asyncStorageUtils';
 import * as Application from 'expo-application';
 import { Platform } from 'react-native';
 import { v4 as uuidv4 } from 'uuid';
@@ -13,28 +14,24 @@ const INSTALLATION_ID_KEY = 'installationId';
  */
 export async function getOrCreateSessionId(): Promise<string> {
   try {
-    // Try to get existing session ID
-    const existingSessionId = await AsyncStorage.getItem(SESSION_ID_KEY);
+    // Try to get existing session ID using AsyncStorageUtils for compatibility
+    const existingSessionId = await AsyncStorageUtils.getItemWithLegacyFallback<string>(SESSION_ID_KEY);
     
     if (existingSessionId) {
-      // Parse the stored value (handle different storage formats)
-      const sessionId = parseStoredValue(existingSessionId);
-      if (sessionId) {
-        Sentry.addBreadcrumb({
-          message: 'Retrieved existing session ID',
-          level: 'info',
-          category: 'session',
-          data: { sessionId: sessionId.substring(0, 8) + '...' }
-        });
-        return sessionId;
-      }
+      Sentry.addBreadcrumb({
+        message: 'Retrieved existing session ID',
+        level: 'info',
+        category: 'session',
+        data: { sessionId: existingSessionId.substring(0, 8) + '...' }
+      });
+      return existingSessionId;
     }
     
     // Generate new session ID
     const newSessionId = uuidv4();
     
-    // Store the session ID
-    await AsyncStorage.setItem(SESSION_ID_KEY, newSessionId);
+    // Store the session ID using AsyncStorageUtils for consistency
+    await AsyncStorageUtils.setItem(SESSION_ID_KEY, newSessionId);
     
     Sentry.addBreadcrumb({
       message: 'Generated new session ID',
@@ -138,7 +135,7 @@ export async function getSessionAndInstallationIds(): Promise<{
  */
 export async function clearSessionId(): Promise<void> {
   try {
-    await AsyncStorage.removeItem(SESSION_ID_KEY);
+    await AsyncStorageUtils.removeItem(SESSION_ID_KEY);
     Sentry.addBreadcrumb({
       message: 'Session ID cleared',
       level: 'info',

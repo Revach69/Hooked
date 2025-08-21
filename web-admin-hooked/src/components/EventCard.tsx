@@ -45,6 +45,11 @@ const getEventStatus = (event: Event): { status: string; color: string; bgColor:
     return { status: 'Unknown', color: 'text-gray-600', bgColor: 'bg-gray-100' };
   }
 
+  // Check if event is expired and processed
+  if (event.expired === true) {
+    return { status: 'Expired (Archived)', color: 'text-amber-600', bgColor: 'bg-amber-100' };
+  }
+
   if (now < startDate) {
     return { status: 'Upcoming', color: 'text-blue-600', bgColor: 'bg-blue-100' };
   } else if (now >= startDate && now <= expiryDate) {
@@ -70,7 +75,7 @@ export default function EventCard({
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const [isLoadingQR, setIsLoadingQR] = useState(false);
 
-  const joinLink = `https://www.hooked-app.com/join-instant?code=${event.event_code}`;
+  const joinLink = `https://hooked-app.com/join-instant?code=${event.event_code}`;
   const eventStatus = getEventStatus(event);
 
   const generateQRCode = async () => {

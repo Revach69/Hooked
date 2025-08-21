@@ -13,7 +13,7 @@ import {
   TextInput,
   FlatList,
 } from 'react-native';
-import { useNotifications } from '../lib/contexts/NotificationContext';
+import Toast from 'react-native-toast-message';
 import { router } from 'expo-router';
 import { 
   Users, 
@@ -51,7 +51,6 @@ import ClientFormModal from './admin/ClientFormModal';
 type TabType = 'events' | 'clients';
 
 export default function Admin() {
-  const notifications = useNotifications();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const [activeTab, setActiveTab] = useState<TabType>('events');
@@ -190,7 +189,15 @@ export default function Admin() {
               await AdminClientAPI.delete(clientId);
               await loadClients();
             } catch {
-              notifications.error('Error', 'Failed to delete client');
+              Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: 'Failed to delete client',
+                position: 'top',
+                visibilityTime: 3500,
+                autoHide: true,
+                topOffset: 0,
+              });
             }
           }
         }

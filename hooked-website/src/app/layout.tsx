@@ -76,6 +76,28 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        {/* Preload critical images for faster loading */}
+        <link 
+          rel="preload" 
+          href="/Hooked Full Logo.png" 
+          as="image" 
+          type="image/png"
+        />
+        <link 
+          rel="preload" 
+          href="/Site Image.png" 
+          as="image" 
+          type="image/png"
+          media="(max-width: 767px)"
+        />
+        <link 
+          rel="preload" 
+          href="/about - hero.JPG" 
+          as="image" 
+          type="image/jpeg"
+          media="(max-width: 767px)"
+        />
+        
         {/* Structured Data for Organization */}
         <script
           type="application/ld+json"

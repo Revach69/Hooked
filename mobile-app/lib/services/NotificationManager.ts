@@ -18,7 +18,7 @@ export interface NotificationConfig {
   queueProcessingInterval: number;
 }
 
-type NotificationListener = (notifications: NotificationItem[]) => void;
+type NotificationListener = (_notifications: NotificationItem[]) => void;
 
 class NotificationManagerClass {
   private notifications: NotificationItem[] = [];

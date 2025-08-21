@@ -17,7 +17,7 @@ import {
   Linking,
   Platform,
 } from 'react-native';
-import { useNotifications } from '../lib/contexts/NotificationContext';
+import Toast from 'react-native-toast-message';
 import { router } from 'expo-router';
 import { EventProfileAPI, EventAPI, StorageAPI } from '../lib/firebaseApi';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
@@ -41,7 +41,6 @@ function generateUUID() {
 }
 
 export default function Consent() {
-  const notifications = useNotifications();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const [event, setEvent] = useState<any>(null);
@@ -118,7 +117,15 @@ export default function Consent() {
     const fetchEvent = async () => {
       const firebaseReady = await ensureFirebaseReady();
       if (!firebaseReady) {
-        notifications.error("Connection Error", "Unable to connect to the server. Please check your internet connection and try again.");
+        Toast.show({
+          type: 'error',
+          text1: 'Connection Error',
+          text2: 'Unable to connect to the server. Please check your internet connection and try again.',
+          position: 'top',
+          visibilityTime: 3500,
+          autoHide: true,
+          topOffset: 0,
+        });
         router.replace('/home');
         return;
       }
@@ -137,12 +144,28 @@ export default function Consent() {
           setEvent(foundEvent);
         } else {
           Sentry.captureException(new Error(`No event found with ID: ${eventId}`));
-          notifications.error("Error", "Event not found. Please try again.");
+          Toast.show({
+            type: 'error',
+            text1: 'Error',
+            text2: 'Event not found. Please try again.',
+            position: 'top',
+            visibilityTime: 3500,
+            autoHide: true,
+            topOffset: 0,
+          });
           router.replace('/home');
         }
       } catch (error) {
         Sentry.captureException(error);
-        notifications.error("Error", "Failed to load event information. Please try again.");
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: 'Failed to load event information. Please try again.',
+          position: 'top',
+          visibilityTime: 3500,
+          autoHide: true,
+          topOffset: 0,
+        });
         router.replace('/home');
       }
     };
@@ -218,7 +241,15 @@ export default function Consent() {
         ]
       );
     } catch {
-      notifications.error("Error", "Failed to open photo options. Please try again.");
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to open photo options. Please try again.',
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
     }
   };
 
@@ -481,7 +512,15 @@ export default function Consent() {
     // Validate that we have the event data
     if (!event || !event.id || !event.expires_at) {
       Sentry.captureException(new Error(`Event data is missing or invalid: ${JSON.stringify(event)}`));
-      notifications.error("Error", "Event information is missing. Please try again.");
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Event information is missing. Please try again.',
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
       return;
     }
     
@@ -562,6 +601,25 @@ export default function Consent() {
       } catch (error) {
         Sentry.captureException(error);
         // Don't fail the entire process for this
+      }
+      
+      // Refresh GlobalNotificationService and register push token now that session exists
+      try {
+        console.log('Profile created, refreshing notification services');
+        
+        // Register push token for new session
+        const { registerPushToken } = await import('../lib/notifications/registerPushToken');
+        await registerPushToken(sessionId);
+        
+        // Refresh GlobalNotificationService to set up listeners with new session
+        const { GlobalNotificationService } = await import('../lib/services/GlobalNotificationService');
+        await GlobalNotificationService.refreshSession();
+        
+        console.log('Notification services refreshed successfully');
+      } catch (error) {
+        console.error('Failed to refresh notification services:', error);
+        Sentry.captureException(error);
+        // Don't fail the profile creation for this
       }
       
       // Navigate to discovery page

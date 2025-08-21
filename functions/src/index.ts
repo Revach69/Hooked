@@ -18,23 +18,26 @@ const db = admin.firestore();
 // Get region from environment or default to us-central1
 const FUNCTION_REGION = process.env.FUNCTION_REGION || 'us-central1';
 
-// Cloud Function to clean up expired profiles and anonymize data for analytics
-export const cleanupExpiredProfiles = onSchedule({
+// Cloud Function to clean up expired events and preserve analytics data
+export const cleanupExpiredEvents = onSchedule({
   schedule: 'every 1 hours',
   region: FUNCTION_REGION,
 }, async (event) => {
     const now = admin.firestore.Timestamp.now();
+    // Add 30-minute grace period as requested
+    const thirtyMinutesAgo = new admin.firestore.Timestamp(now.seconds - (30 * 60), now.nanoseconds);
     
     try {
-      console.log('Starting expired profiles cleanup...');
+      console.log('Starting expired events cleanup with 30-minute grace period...');
       
-      // Get all expired events
+      // Get events that expired more than 30 minutes ago and haven't been processed yet
       const expiredEventsSnapshot = await db
         .collection('events')
-        .where('expires_at', '<', now)
+        .where('expires_at', '<', thirtyMinutesAgo)
+        .where('expired', '!=', true) // Only get events that haven't been processed
         .get();
       
-      console.log(`Found ${expiredEventsSnapshot.size} expired events`);
+      console.log(`Found ${expiredEventsSnapshot.size} expired events to process`);
       
       for (const eventDoc of expiredEventsSnapshot.docs) {
         const eventData = eventDoc.data();
@@ -42,195 +45,204 @@ export const cleanupExpiredProfiles = onSchedule({
         
         console.log(`Processing expired event: ${eventId} (${eventData.name})`);
         
-        // Get all profiles for this event
-        const profilesSnapshot = await db
-          .collection('event_profiles')
-          .where('event_id', '==', eventId)
-          .get();
-        
-        console.log(`Found ${profilesSnapshot.size} profiles to process for event ${eventId}`);
-        
-        // Create analytics data before deleting profiles
-        const analyticsData = {
-          event_id: eventId,
-          event_name: eventData.name || 'Unknown Event',
-          total_profiles: profilesSnapshot.size,
-          profiles_by_gender: {} as Record<string, number>,
-          profiles_by_age_group: {} as Record<string, number>,
-          average_age: 0,
-          total_likes: 0,
-          total_matches: 0,
-          total_messages: 0,
-          cleanup_timestamp: now,
-        };
-        
-        let totalAge = 0;
-        const profileIds: string[] = [];
-        
-        // Process profiles for analytics
-        for (const profileDoc of profilesSnapshot.docs) {
-          const profileData = profileDoc.data();
-          profileIds.push(profileDoc.id);
-          
-          // Count by gender
-          const gender = profileData.gender_identity || 'unknown';
-          analyticsData.profiles_by_gender[gender] = (analyticsData.profiles_by_gender[gender] || 0) + 1;
-          
-          // Count by age group
-          const age = profileData.age || 0;
-          totalAge += age;
-          const ageGroup = getAgeGroup(age);
-          analyticsData.profiles_by_age_group[ageGroup] = (analyticsData.profiles_by_age_group[ageGroup] || 0) + 1;
+        // Generate and save analytics before deletion
+        const analyticsId = await generateEventAnalytics(eventId, eventData);
+        if (!analyticsId) {
+          console.warn(`Failed to generate analytics for event ${eventId}, skipping cleanup`);
+          continue;
         }
         
-        // Calculate average age
-        if (profilesSnapshot.size > 0) {
-          analyticsData.average_age = Math.round(totalAge / profilesSnapshot.size);
-        }
+        // Delete all user-related data
+        await deleteEventUserData(eventId);
         
-        // Get likes data for this event
-        const likesSnapshot = await db
-          .collection('likes')
-          .where('event_id', '==', eventId)
-          .get();
+        // Mark event as expired and link to analytics
+        await db.collection('events').doc(eventId).update({
+          expired: true,
+          analytics_id: analyticsId,
+          updated_at: admin.firestore.FieldValue.serverTimestamp()
+        });
         
-        analyticsData.total_likes = likesSnapshot.size;
-        
-        // Count mutual matches
-        const likesData = likesSnapshot.docs.map(doc => doc.data());
-        const mutualMatches = countMutualMatches(likesData);
-        analyticsData.total_matches = mutualMatches;
-        
-        // Get messages data for this event
-        const messagesSnapshot = await db
-          .collection('messages')
-          .where('event_id', '==', eventId)
-          .get();
-        
-        analyticsData.total_messages = messagesSnapshot.size;
-        
-        // Save analytics data
-        await db
-          .collection('analytics')
-          .doc(eventId)
-          .set(analyticsData);
-        
-        console.log(`Saved analytics data for event ${eventId}`);
-        
-        // Delete all related data in batches
-        const batchSize = 500;
-        
-        // Delete profiles in batches
-        for (let i = 0; i < profileIds.length; i += batchSize) {
-          const batch = db.batch();
-          const batchIds = profileIds.slice(i, i + batchSize);
-          
-          for (const profileId of batchIds) {
-            batch.delete(db.collection('event_profiles').doc(profileId));
-          }
-          
-          await batch.commit();
-          console.log(`Deleted batch of ${batchIds.length} profiles for event ${eventId}`);
-        }
-        
-        // Delete likes in batches
-        const likeIds = likesSnapshot.docs.map(doc => doc.id);
-        for (let i = 0; i < likeIds.length; i += batchSize) {
-          const batch = db.batch();
-          const batchIds = likeIds.slice(i, i + batchSize);
-          
-          for (const likeId of batchIds) {
-            batch.delete(db.collection('likes').doc(likeId));
-          }
-          
-          await batch.commit();
-          console.log(`Deleted batch of ${batchIds.length} likes for event ${eventId}`);
-        }
-        
-        // Delete messages in batches
-        const messageIds = messagesSnapshot.docs.map(doc => doc.id);
-        for (let i = 0; i < messageIds.length; i += batchSize) {
-          const batch = db.batch();
-          const batchIds = messageIds.slice(i, i + batchSize);
-          
-          for (const messageId of batchIds) {
-            batch.delete(db.collection('messages').doc(messageId));
-          }
-          
-          await batch.commit();
-          console.log(`Deleted batch of ${batchIds.length} messages for event ${eventId}`);
-        }
-        
-        // Delete contact shares in batches
-        const contactSharesSnapshot = await db
-          .collection('contact_shares')
-          .where('event_id', '==', eventId)
-          .get();
-        
-        const contactShareIds = contactSharesSnapshot.docs.map(doc => doc.id);
-        for (let i = 0; i < contactShareIds.length; i += batchSize) {
-          const batch = db.batch();
-          const batchIds = contactShareIds.slice(i, i + batchSize);
-          
-          for (const shareId of batchIds) {
-            batch.delete(db.collection('contact_shares').doc(shareId));
-          }
-          
-          await batch.commit();
-          console.log(`Deleted batch of ${batchIds.length} contact shares for event ${eventId}`);
-        }
-        
-        console.log(`Completed cleanup for event ${eventId}`);
+        console.log(`Successfully processed expired event ${eventId}`);
       }
       
-      console.log('Expired profiles cleanup completed successfully');
+      console.log('Expired events cleanup completed successfully');
       console.log('Processed events:', expiredEventsSnapshot.size);
       
     } catch (error) {
-      console.error('Error during expired profiles cleanup:', error);
+      console.error('Error during expired events cleanup:', error);
       throw error;
     }
   });
 
-// Helper function to get age group
-function getAgeGroup(age: number): string {
-  if (age < 18) return 'under_18';
-  if (age < 25) return '18_24';
-  if (age < 35) return '25_34';
-  if (age < 45) return '35_44';
-  if (age < 55) return '45_54';
-  if (age < 65) return '55_64';
-  return '65_plus';
+// Helper function to generate analytics for an event
+async function generateEventAnalytics(eventId: string, eventData: any): Promise<string | null> {
+  try {
+    // Get all data in parallel
+    const [profilesSnapshot, likesSnapshot, messagesSnapshot] = await Promise.all([
+      db.collection('event_profiles').where('event_id', '==', eventId).get(),
+      db.collection('likes').where('event_id', '==', eventId).get(),
+      db.collection('messages').where('event_id', '==', eventId).get()
+    ]);
+    
+    const profiles = profilesSnapshot.docs.map(doc => doc.data());
+    const likes = likesSnapshot.docs.map(doc => doc.data());
+    const messages = messagesSnapshot.docs.map(doc => doc.data());
+    
+    // Calculate analytics
+    const totalProfiles = profiles.length;
+    const mutualLikes = likes.filter(like => like.is_mutual);
+    const totalMatches = mutualLikes.length;
+    const totalMessages = messages.length;
+    
+    // Gender breakdown using updated categories
+    const genderBreakdown = profiles.reduce((acc, profile) => {
+      const gender = profile.gender_identity?.toLowerCase();
+      if (gender === 'male' || gender === 'm' || gender === 'man') {
+        acc.male++;
+      } else if (gender === 'female' || gender === 'f' || gender === 'woman') {
+        acc.female++;
+      } else {
+        acc.other++;
+      }
+      return acc;
+    }, { male: 0, female: 0, other: 0 });
+    
+    // Age statistics
+    const validAges = profiles
+      .map(profile => profile.age)
+      .filter(age => age && age > 0 && age < 150);
+    
+    const ageStats = validAges.length > 0 ? {
+      average: Math.round(validAges.reduce((sum, age) => sum + age, 0) / validAges.length),
+      min: Math.min(...validAges),
+      max: Math.max(...validAges)
+    } : { average: 0, min: 0, max: 0 };
+    
+    // Engagement metrics
+    const profilesWithMatches = new Set(
+      mutualLikes.flatMap(like => [like.liker_session_id, like.liked_session_id])
+    ).size;
+    
+    const profilesWithMessages = new Set(
+      messages.flatMap(msg => {
+        // Get session IDs from messages
+        const fromProfile = profiles.find(p => p.id === msg.from_profile_id);
+        const toProfile = profiles.find(p => p.id === msg.to_profile_id);
+        return [fromProfile?.session_id, toProfile?.session_id].filter(Boolean);
+      })
+    ).size;
+    
+    const averageMessagesPerMatch = totalMatches > 0 
+      ? Math.round((totalMessages / totalMatches) * 100) / 100 
+      : 0;
+    
+    // Create analytics document
+    const analyticsData = {
+      event_id: eventId,
+      event_name: eventData.name || 'Unknown Event',
+      event_date: eventData.starts_at ? eventData.starts_at.toDate().toISOString() : new Date().toISOString(),
+      event_location: eventData.location || null,
+      event_timezone: eventData.timezone || null,
+      total_profiles: totalProfiles,
+      gender_breakdown: genderBreakdown,
+      age_stats: ageStats,
+      total_matches: totalMatches,
+      total_messages: totalMessages,
+      engagement_metrics: {
+        profiles_with_matches: profilesWithMatches,
+        profiles_with_messages: profilesWithMessages,
+        average_messages_per_match: averageMessagesPerMatch
+      },
+      created_at: admin.firestore.FieldValue.serverTimestamp()
+    };
+    
+    // Save to event_analytics collection
+    const analyticsRef = await db.collection('event_analytics').add(analyticsData);
+    
+    console.log(`Generated analytics for event ${eventId}:`, {
+      totalProfiles,
+      totalMatches,
+      totalMessages,
+      analyticsId: analyticsRef.id
+    });
+    
+    return analyticsRef.id;
+  } catch (error) {
+    console.error(`Failed to generate analytics for event ${eventId}:`, error);
+    return null;
+  }
 }
 
-// Helper function to count mutual matches
-function countMutualMatches(likesData: any[]): number {
-  const likeMap = new Map<string, Set<string>>();
+// Helper function to delete all user data for an event
+async function deleteEventUserData(eventId: string): Promise<void> {
+  const batchSize = 500;
   
-  // Build like map
-  for (const like of likesData) {
-    const fromId = like.from_profile_id;
-    const toId = like.to_profile_id;
+  try {
+    // Get all collections that need cleanup
+    const [
+      profilesSnapshot,
+      likesSnapshot, 
+      messagesSnapshot,
+      reportsSnapshot,
+      mutedMatchesSnapshot,
+      kickedUsersSnapshot
+    ] = await Promise.all([
+      db.collection('event_profiles').where('event_id', '==', eventId).get(),
+      db.collection('likes').where('event_id', '==', eventId).get(),
+      db.collection('messages').where('event_id', '==', eventId).get(),
+      db.collection('reports').where('event_id', '==', eventId).get(),
+      db.collection('muted_matches').where('event_id', '==', eventId).get(),
+      db.collection('kicked_users').where('event_id', '==', eventId).get()
+    ]);
     
-    if (!likeMap.has(fromId)) {
-      likeMap.set(fromId, new Set());
-    }
-    likeMap.get(fromId)!.add(toId);
+    // Delete profiles
+    await deleteBatch(profilesSnapshot.docs, 'event_profiles', batchSize);
+    
+    // Delete likes
+    await deleteBatch(likesSnapshot.docs, 'likes', batchSize);
+    
+    // Delete messages 
+    await deleteBatch(messagesSnapshot.docs, 'messages', batchSize);
+    
+    // Delete reports
+    await deleteBatch(reportsSnapshot.docs, 'reports', batchSize);
+    
+    // Delete muted matches
+    await deleteBatch(mutedMatchesSnapshot.docs, 'muted_matches', batchSize);
+    
+    // Delete kicked users
+    await deleteBatch(kickedUsersSnapshot.docs, 'kicked_users', batchSize);
+    
+    console.log(`Successfully deleted all user data for event ${eventId}`);
+    
+  } catch (error) {
+    console.error(`Failed to delete user data for event ${eventId}:`, error);
+    throw error;
   }
-  
-  // Count mutual matches
-  let mutualMatches = 0;
-  for (const [fromId, likedProfiles] of likeMap) {
-    for (const toId of likedProfiles) {
-      if (likeMap.has(toId) && likeMap.get(toId)!.has(fromId)) {
-        mutualMatches++;
-      }
-    }
-  }
-  
-  // Divide by 2 since each match is counted twice
-  return Math.floor(mutualMatches / 2);
 }
+
+// Helper function to delete documents in batches
+async function deleteBatch(docs: any[], collectionName: string, batchSize: number): Promise<void> {
+  if (docs.length === 0) return;
+  
+  for (let i = 0; i < docs.length; i += batchSize) {
+    const batch = db.batch();
+    const batchDocs = docs.slice(i, i + batchSize);
+    
+    batchDocs.forEach(doc => {
+      batch.delete(doc.ref);
+    });
+    
+    await batch.commit();
+    console.log(`Deleted batch of ${batchDocs.length} ${collectionName} (${Math.min(i + batchSize, docs.length)}/${docs.length})`);
+    
+    // Small delay between batches
+    if (i + batchSize < docs.length) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  }
+}
+
 
 // Cloud Function to handle profile expiration notifications
 export const sendProfileExpirationNotifications = onSchedule({
@@ -441,13 +453,20 @@ async function fetchSessionTokens(sessionId: string) {
   const snap = await admin.firestore()
     .collection('push_tokens')
     .where('sessionId', '==', sessionId)
+    .orderBy('updatedAt', 'desc')  // Get most recent tokens first
+    .limit(2)  // Limit to 2 tokens per session (iOS + Android)
     .get();
-  const tokens: string[] = [];
+  
+  // Deduplicate tokens and only return unique ones
+  const uniqueTokens = new Set<string>();
   snap.forEach(d => {
     const data = d.data() as any;
-    if (typeof data?.token === 'string' && data.token) tokens.push(data.token);
+    if (typeof data?.token === 'string' && data.token) {
+      uniqueTokens.add(data.token);
+    }
   });
-  return tokens;
+  
+  return Array.from(uniqueTokens);
 }
 
 
@@ -514,6 +533,25 @@ async function onceOnly(key: string) {
 
 // Queue management functions
 async function enqueueNotificationJob(job: Omit<NotificationJob, 'attempts' | 'status' | 'createdAt' | 'updatedAt'>): Promise<void> {
+  // Check for duplicate jobs with same aggregationKey in the last 30 seconds
+  const thirtySecondsAgo = new Date(Date.now() - 30000);
+  const duplicateCheck = await admin.firestore()
+    .collection('notification_jobs')
+    .where('aggregationKey', '==', job.aggregationKey)
+    .where('subject_session_id', '==', job.subject_session_id)
+    .where('createdAt', '>', thirtySecondsAgo)
+    .limit(1)
+    .get();
+  
+  if (!duplicateCheck.empty) {
+    console.log('Duplicate notification job detected, skipping:', { 
+      type: job.type, 
+      subject: job.subject_session_id, 
+      aggregationKey: job.aggregationKey 
+    });
+    return;
+  }
+  
   const jobDoc: NotificationJob = {
     ...job,
     attempts: 0,
@@ -844,129 +882,41 @@ export const onMutualLike = onDocumentWritten({
 
     console.log('onMutualLike: Proceeding with notification logic');
 
-    // Send to second liker (creator) - only if not in foreground
-    {
-      try {
-        console.log('Checking app state for creator (second liker):', likerSession);
-        let isForeground = false;
-        let appState = null;
-        
-        try {
-          const appStateDoc = await admin.firestore().collection('app_states').doc(likerSession).get();
-          appState = appStateDoc.exists ? appStateDoc.data() as any : null;
-          
-          if (appState?.isForeground === true && appState?.updatedAt) {
-            // Check if app state is recent (within 30 seconds for better reliability)
-            const APP_STATE_TTL_SECONDS = 30;
-            const appStateAge = Date.now() - appState.updatedAt.toDate().getTime();
-            const isRecent = appStateAge < (APP_STATE_TTL_SECONDS * 1000);
-            
-            isForeground = isRecent;
-          } else {
-            isForeground = false;
-          }
-        } catch (error) {
-          console.log('Error reading app state for creator, assuming not in foreground:', error);
-          isForeground = false;
-        }
-        
-        console.log('Creator app state:', { isForeground, appState });
-        
-        if (!isForeground) {
-          console.log('Enqueuing match notification for creator (not in foreground)');
-          await enqueueNotificationJob({
-            type: 'match',
-            event_id: eventId,
-            subject_session_id: likerSession,
-            actor_session_id: likedSession,
-            payload: {
-              title: "You got Hooked!",
-              body: "You got a match! Tap to start chatting.",
-              data: { 
-                type: 'match', 
-                otherSessionId: likedSession,
-                aggregationKey: `match:${eventId}:${likerSession}`
-              }
-            },
-            aggregationKey: `match:${eventId}:${likerSession}`
-          });
-        } else {
-          console.log('Creator is in foreground - client will handle notification');
-        }
-      } catch (error) {
-        console.error('Error checking app state for creator:', error);
-        // If error checking app state, enqueue notification (fail safe)
-        await enqueueNotificationJob({
-          type: 'match',
-          event_id: eventId,
-          subject_session_id: likerSession,
-          actor_session_id: likedSession,
-          payload: {
-            title: "You got Hooked!",
-            body: "You got a match! Tap to start chatting.",
-            data: { 
-              type: 'match', 
-              otherSessionId: likedSession,
-              aggregationKey: `match:${eventId}:${likerSession}`
-            }
-          },
-          aggregationKey: `match:${eventId}:${likerSession}`
-        });
-      }
-    }
+    // SKIP notification for second liker (creator) - they created the match in-app
+    // The second liker who creates the match should NOT get a push notification
+    // They will see an alert/toast in the app instead
+    console.log('Skipping push notification for creator (second liker):', likerSession);
+    console.log('Creator created the match in-app and will see an alert/toast instead');
 
     // Send to first liker (recipient) - only if not in foreground
     {
+      console.log('Checking app state for recipient (first liker):', likedSession);
+      let isForeground = false;
+      let appState = null;
+      
       try {
-        console.log('Checking app state for recipient (first liker):', likedSession);
-        let isForeground = false;
-        let appState = null;
+        const appStateDoc = await admin.firestore().collection('app_states').doc(likedSession).get();
+        appState = appStateDoc.exists ? appStateDoc.data() as any : null;
         
-        try {
-          const appStateDoc = await admin.firestore().collection('app_states').doc(likedSession).get();
-          appState = appStateDoc.exists ? appStateDoc.data() as any : null;
+        if (appState?.isForeground === true && appState?.updatedAt) {
+          // Check if app state is recent (within 30 seconds for better reliability)
+          const APP_STATE_TTL_SECONDS = 30;
+          const appStateAge = Date.now() - appState.updatedAt.toDate().getTime();
+          const isRecent = appStateAge < (APP_STATE_TTL_SECONDS * 1000);
           
-          if (appState?.isForeground === true && appState?.updatedAt) {
-            // Check if app state is recent (within 30 seconds for better reliability)
-            const APP_STATE_TTL_SECONDS = 30;
-            const appStateAge = Date.now() - appState.updatedAt.toDate().getTime();
-            const isRecent = appStateAge < (APP_STATE_TTL_SECONDS * 1000);
-            
-            isForeground = isRecent;
-          } else {
-            isForeground = false;
-          }
-        } catch (error) {
-          console.log('Error reading app state for recipient, assuming not in foreground:', error);
+          isForeground = isRecent;
+        } else {
           isForeground = false;
         }
-        
-        console.log('Recipient app state:', { isForeground, appState });
-        
-        if (!isForeground) {
-          console.log('Enqueuing match notification for recipient (not in foreground)');
-          await enqueueNotificationJob({
-            type: 'match',
-            event_id: eventId,
-            subject_session_id: likedSession,
-            actor_session_id: likerSession,
-            payload: {
-              title: 'You got Hooked!',
-              body: 'You got a match! Tap to start chatting.',
-              data: { 
-                type: 'match', 
-                otherSessionId: likerSession,
-                aggregationKey: `match:${eventId}:${likedSession}`
-              }
-            },
-            aggregationKey: `match:${eventId}:${likedSession}`
-          });
-        } else {
-          console.log('Recipient is in foreground - client will handle notification');
-        }
       } catch (error) {
-        console.error('Error checking app state for recipient:', error);
-        // If error checking app state, enqueue notification (fail safe)
+        console.log('Error reading app state for recipient, assuming not in foreground:', error);
+        isForeground = false;
+      }
+      
+      console.log('Recipient app state:', { isForeground, appState });
+      
+      if (!isForeground) {
+        console.log('Enqueuing match notification for recipient (not in foreground)');
         await enqueueNotificationJob({
           type: 'match',
           event_id: eventId,
@@ -983,6 +933,8 @@ export const onMutualLike = onDocumentWritten({
           },
           aggregationKey: `match:${eventId}:${likedSession}`
         });
+      } else {
+        console.log('Recipient is in foreground - client will handle notification');
       }
     }
   });
@@ -1117,6 +1069,7 @@ export const onMessageCreate = onDocumentCreated({
           data: { 
             type: 'message', 
             conversationId: toProfile,
+            partnerSessionId: fromSession,
             aggregationKey: `message:${eventId}:${toProfile}`
           }
         },

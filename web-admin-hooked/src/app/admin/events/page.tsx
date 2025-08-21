@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { EventAPI, EventProfile, Like, Message, type Event } from '@/lib/firebaseApi';
+import { EventAPI, EventProfile, Like, Message, EventAnalytics, type Event } from '@/lib/firebaseApi';
 import { AdminClientAPI } from '@/lib/firestore/clients';
 import type { AdminClient } from '@/types/admin';
 import { 
@@ -175,13 +175,32 @@ export default function EventsPage() {
   };
 
   const handleDeleteEvent = async (eventId: string) => {
-    if (window.confirm('Are you sure you want to delete this event?')) {
+    const event = events.find(e => e.id === eventId);
+    if (!event) return;
+
+    const isExpiredEvent = event.expired === true;
+    const confirmMessage = isExpiredEvent 
+      ? 'Are you sure you want to permanently delete this expired event and its analytics data? This action cannot be undone.'
+      : 'Are you sure you want to delete this event? This will remove all associated data.';
+
+    if (window.confirm(confirmMessage)) {
       try {
-        await EventAPI.delete(eventId);
+        if (isExpiredEvent) {
+          // For expired events, delete both the event and its analytics data
+          await Promise.all([
+            EventAPI.delete(eventId),
+            event.analytics_id ? EventAnalytics.delete(event.analytics_id) : Promise.resolve()
+          ]);
+        } else {
+          // For active/upcoming events, just delete the event (will also trigger cleanup of user data)
+          await EventAPI.delete(eventId);
+        }
+        
         await loadEvents();
-          } catch {
-      // Error deleting event
-    }
+      } catch (error) {
+        console.error('Error deleting event:', error);
+        alert('Failed to delete event. Please try again.');
+      }
     }
   };
 
@@ -241,7 +260,7 @@ export default function EventsPage() {
       const event = events.find(e => e.id === eventId);
       if (!event) return;
 
-      const joinLink = `${window.location.origin}/join?code=${event.event_code}`;
+      const joinLink = `https://hooked-app.com/join-instant?code=${event.event_code}`;
       const qrDataUrl = await QRCode.toDataURL(joinLink, {
         width: 300,
         margin: 2,
@@ -372,7 +391,7 @@ export default function EventsPage() {
                 <div className="flex flex-col items-center">
                   <div className="w-48 h-48 bg-white rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-600 flex items-center justify-center">
                     <QRCodeGenerator 
-                      joinLink={`${window.location.origin}/join?code=${event.event_code}`} 
+                      joinLink={`https://hooked-app.com/join-instant?code=${event.event_code}`} 
                       eventCode={event.event_code} 
                     />
                   </div>

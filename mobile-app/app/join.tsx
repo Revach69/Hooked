@@ -122,8 +122,15 @@ export default function JoinPage() {
       await AsyncStorageUtils.setItem('currentSessionId', sessionId);
       await AsyncStorageUtils.setItem('currentEventCode', event.event_code);
 
-      // Register for push notifications (now handled by centralized system in _layout.tsx)
-      // Push token registration moved to app initialization for better reliability
+      // Update NotificationRouter with new session ID
+      try {
+        const { setCurrentSessionIdForDedup } = await import('../lib/notifications/NotificationRouter');
+        setCurrentSessionIdForDedup(sessionId);
+        console.log('NotificationRouter updated with new session ID');
+      } catch (error) {
+        console.error('Failed to update NotificationRouter:', error);
+        // Don't fail the join process for this
+      }
 
       // Navigate to consent page
       router.replace('/consent');

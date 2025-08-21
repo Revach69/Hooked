@@ -11,7 +11,6 @@ import {
   addDoc,
 } from 'firebase/firestore';
 import { signInAnonymously } from 'firebase/auth';
-import { localEventTimeStringToUTCTimestamp, utcTimestampToLocalEventTimeString } from './timezoneUtils';
 
 // Utility function to convert Firestore Timestamps to Date objects
 export const toDate = (dateInput: string | Date | { toDate?: () => Date; seconds?: number }): Date => {

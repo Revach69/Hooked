@@ -218,10 +218,10 @@ export const safeAsyncOperation = async <T>(
 };
 
 // Debounce utility to prevent excessive function calls
-export function debounce<T extends (...args: any[]) => any>(
+export function debounce<T extends (..._args: any[]) => any>(
   func: T,
   wait: number
-): (...args: Parameters<T>) => void {
+): (..._args: Parameters<T>) => void {
   let timeout: ReturnType<typeof setTimeout> | null = null;
   
   return (...args: Parameters<T>) => {
@@ -233,10 +233,10 @@ export function debounce<T extends (...args: any[]) => any>(
 };
 
 // Throttle utility to limit function execution frequency
-export const throttle = <T extends (...args: any[]) => any>(
+export const throttle = <T extends (..._args: any[]) => any>(
   func: T,
   limit: number
-): ((...args: Parameters<T>) => void) => {
+): ((..._args: Parameters<T>) => void) => {
   let inThrottle: boolean = false;
   
   return (...args: Parameters<T>) => {

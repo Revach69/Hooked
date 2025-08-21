@@ -14,6 +14,7 @@ import {
 } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Edit, Trash2, ChevronUp, ChevronDown, FileText, Calendar } from 'lucide-react';
 import type { AdminClient } from '@/types/admin';
 
@@ -21,6 +22,7 @@ interface ClientsTableProps {
   clients: AdminClient[];
   onEdit: (client: AdminClient) => void;
   onDelete: (clientId: string) => void;
+  onUpdate: (clientId: string, field: string, value: any) => void;
   onViewForm?: (formId: string) => void;
   onViewEvent?: (eventId: string) => void;
   searchQuery: string;
@@ -33,6 +35,45 @@ interface ClientsTableProps {
 }
 
 const columnHelper = createColumnHelper<AdminClient>();
+
+const CLIENT_TYPES = [
+  'Company',
+  'Wedding Organizer',
+  'Club / Bar',
+  'Restaurant',
+  'Personal Host',
+  'Other Organization'
+] as const;
+
+const EVENT_KINDS = [
+  'House Party',
+  'Club',
+  'Wedding',
+  'Meetup',
+  'High Tech Event',
+  'Retreat',
+  'Party',
+  'Conference'
+] as const;
+
+const STATUS_OPTIONS = [
+  'Initial Discussion',
+  'Negotiation',
+  'Won',
+  'Lost',
+  'Pre-Discussion'
+] as const;
+
+const SOURCE_OPTIONS = [
+  'Personal Connect',
+  'Instagram Inbound',
+  'Email',
+  'Other',
+  'Olim in TLV',
+  'Contact Form'
+] as const;
+
+const ORGANIZER_FORM_OPTIONS = ['Yes', 'No'] as const;
 
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -53,6 +94,7 @@ export function ClientsTable({
   clients, 
   onEdit, 
   onDelete, 
+  onUpdate,
   onViewForm,
   onViewEvent,
   searchQuery, 
@@ -77,17 +119,44 @@ export function ClientsTable({
       }) as ColumnDef<AdminClient>,
       columnHelper.accessor('type', {
         header: 'Type',
-        cell: ({ getValue }) => (
-          <div className="text-sm">{getValue()}</div>
+        cell: ({ getValue, row }) => (
+          <Select
+            value={getValue()}
+            onValueChange={(value) => onUpdate(row.original.id, 'type', value)}
+          >
+            <SelectTrigger className="h-8 w-full border-none shadow-none p-1 focus:ring-0 hover:bg-gray-100">
+              <SelectValue className="text-sm" />
+            </SelectTrigger>
+            <SelectContent>
+              {CLIENT_TYPES.map((type) => (
+                <SelectItem key={type} value={type}>
+                  {type}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         ),
       }) as ColumnDef<AdminClient>,
       columnHelper.accessor('eventKind', {
         header: 'Event',
-        cell: ({ getValue }) => {
+        cell: ({ getValue, row }) => {
           const value = getValue();
-          const isEmpty = !value;
           return (
-            <div className={`text-sm ${isEmpty ? 'bg-red-100' : ''}`}>{value || '-'}</div>
+            <Select
+              value={value}
+              onValueChange={(newValue) => onUpdate(row.original.id, 'eventKind', newValue)}
+            >
+              <SelectTrigger className="h-8 w-full border-none shadow-none p-1 focus:ring-0 hover:bg-gray-100">
+                <SelectValue className="text-sm" />
+              </SelectTrigger>
+              <SelectContent>
+                {EVENT_KINDS.map((eventKind) => (
+                  <SelectItem key={eventKind} value={eventKind}>
+                    {eventKind}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           );
         },
       }) as ColumnDef<AdminClient>,
@@ -159,7 +228,21 @@ export function ClientsTable({
           const hasForm = row.original.linkedFormId;
           return (
             <div className="flex items-center gap-2">
-              <div className="text-sm">{getValue() || '-'}</div>
+              <Select
+                value={getValue() || 'No'}
+                onValueChange={(value) => onUpdate(row.original.id, 'organizerFormSent', value)}
+              >
+                <SelectTrigger className="h-8 w-16 border-none shadow-none p-1 focus:ring-0 hover:bg-gray-100">
+                  <SelectValue className="text-sm" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ORGANIZER_FORM_OPTIONS.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {hasForm && onViewForm && (
                 <Button
                   variant="ghost"
@@ -205,16 +288,47 @@ export function ClientsTable({
       }) as ColumnDef<AdminClient>,
       columnHelper.accessor('status', {
         header: 'Status',
-        cell: ({ getValue }) => (
-          <Badge className={getStatusColor(getValue())}>
-            {getValue()}
-          </Badge>
+        cell: ({ getValue, row }) => (
+          <Select
+            value={getValue()}
+            onValueChange={(value) => onUpdate(row.original.id, 'status', value)}
+          >
+            <SelectTrigger className="h-8 w-full border-none shadow-none p-1 focus:ring-0 hover:bg-gray-100">
+              <Badge className={getStatusColor(getValue())}>
+                {getValue()}
+              </Badge>
+            </SelectTrigger>
+            <SelectContent>
+              {STATUS_OPTIONS.map((status) => (
+                <SelectItem key={status} value={status}>
+                  <Badge className={getStatusColor(status)}>
+                    {status}
+                  </Badge>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         ),
       }) as ColumnDef<AdminClient>,
       columnHelper.accessor('source', {
         header: 'Source',
-        cell: ({ getValue }) => (
-          <div className="text-sm">{getValue() || '-'}</div>
+        cell: ({ getValue, row }) => (
+          <Select
+            value={getValue() || 'none'}
+            onValueChange={(value) => onUpdate(row.original.id, 'source', value === 'none' ? null : value)}
+          >
+            <SelectTrigger className="h-8 w-full border-none shadow-none p-1 focus:ring-0 hover:bg-gray-100">
+              <SelectValue className="text-sm" placeholder="-" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">-</SelectItem>
+              {SOURCE_OPTIONS.map((source) => (
+                <SelectItem key={source} value={source}>
+                  {source}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         ),
       }) as ColumnDef<AdminClient>,
       columnHelper.accessor('description', {
@@ -343,20 +457,32 @@ export function ClientsTable({
               {table.getRowModel().rows.map((row) => (
                 <tr
                   key={row.id}
-                  className="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
-                  onClick={() => onEdit(row.original)}
+                  className="hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
-                  {row.getVisibleCells().map((cell) => (
-                    <td
-                      key={cell.id}
-                      className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100"
-                    >
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </td>
-                  ))}
+                  {row.getVisibleCells().map((cell) => {
+                    const isSelectField = ['type', 'eventKind', 'organizerFormSent', 'status', 'source'].includes(cell.column.id);
+                    return (
+                      <td
+                        key={cell.id}
+                        onClick={(e) => {
+                          // Allow clicking on non-select cells to edit
+                          if (!isSelectField && cell.column.id !== 'actions') {
+                            onEdit(row.original);
+                          }
+                        }}
+                        className={`px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 ${
+                          !isSelectField && cell.column.id !== 'actions' 
+                            ? 'cursor-pointer hover:bg-blue-50' 
+                            : ''
+                        }`}
+                      >
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext()
+                        )}
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>

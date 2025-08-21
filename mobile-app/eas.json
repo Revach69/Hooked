@@ -7,8 +7,7 @@
     "development": {
       "developmentClient": true,
       "env": {
-        "EXPO_PUBLIC_ENV": "development",
-        "APP_CHECK_DEBUG_TOKEN": "844F0D17-6C14-4701-B1E4-E7055ED7F9F2"
+        "EXPO_PUBLIC_ENV": "development"
       },
       "distribution": "internal",
       "ios": {
@@ -16,6 +15,19 @@
       },
       "android": {
         "resourceClass": "medium"
+      }
+    },
+    "staging": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_ENV": "staging"
+      },
+      "ios": {
+        "resourceClass": "m-medium"
+      },
+      "android": {
+        "resourceClass": "medium",
+        "buildType": "apk"
       }
     },
     "preview": {
@@ -35,8 +47,7 @@
       "env": {
         "EXPO_PUBLIC_ENV": "production",
         "GOOGLE_SERVICES_JSON": "$GOOGLE_SERVICES_JSON",
-        "GOOGLE_SERVICE_INFO_PLIST": "$GOOGLE_SERVICE_INFO_PLIST",
-        "APP_CHECK_DEBUG_TOKEN": "844F0D17-6C14-4701-B1E4-E7055ED7F9F2"
+        "GOOGLE_SERVICE_INFO_PLIST": "$GOOGLE_SERVICE_INFO_PLIST"
       },
       "ios": {
         "resourceClass": "m-medium",
@@ -54,6 +65,10 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "ascAppId": "6748921014"
+      }
+    }
   }
 }

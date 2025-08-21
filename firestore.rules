@@ -164,9 +164,18 @@ service cloud.firestore {
       // ✅ Anyone can read muted matches (for mobile app filtering)
       allow read: if true;
       
-      // ✅ Deny public writes - only callable functions can access
-      allow write: if false;  // only callable/Admin writes
-      allow delete: if false; // only callable/Admin deletes
+      // ✅ Anyone can create muted match records (mobile app muting)
+      allow create: if 
+        // Ensure required fields are present
+        request.resource.data.event_id is string &&
+        request.resource.data.muter_session_id is string &&
+        request.resource.data.muted_session_id is string;
+      
+      // ✅ Users can delete their own muted matches (unmuting)
+      allow delete: if true; // Simplified for mobile app since no Firebase Auth
+      
+      // ✅ No updates allowed (muting is create/delete only)
+      allow update: if false;
     }
 
     // ===== USERS COLLECTION =====

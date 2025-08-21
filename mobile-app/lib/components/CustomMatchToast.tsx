@@ -95,28 +95,8 @@ export const CustomMatchToast: React.FC<CustomMatchToastProps> = ({
   const translateY = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(1)).current;
   
-  // Auto-dismiss after 3.5 seconds
-  React.useEffect(() => {
-    const timer = setTimeout(() => {
-      Animated.parallel([
-        Animated.timing(translateY, {
-          toValue: -200,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacity, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        Toast.hide();
-        onHide?.();
-      });
-    }, 3500);
-    
-    return () => clearTimeout(timer);
-  }, [translateY, opacity, onHide]);
+  // Note: Auto-dismiss is handled by react-native-toast-message's autoHide and visibilityTime
+  // No need for custom auto-dismiss timer to avoid conflicts
 
   const onGestureEvent = Animated.event(
     [{ nativeEvent: { translationY: translateY } }],

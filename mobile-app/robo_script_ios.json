@@ -1,0 +1,519 @@
+[
+  {
+    "id": 1000,
+    "description": "Hooked App User Flow Test for iOS",
+    "crawlStage": "crawl",
+    "contextDescriptor": {
+      "condition": "app_under_test_shown"
+    },
+    "actions": [
+      {
+        "description": "Wait for app to load",
+        "eventType": "WAIT",
+        "delayTime": 3000
+      },
+      {
+        "description": "Take screenshot of home screen",
+        "eventType": "TAKE_SCREENSHOT",
+        "screenshotName": "01_home_screen"
+      },
+      {
+        "description": "Click on event code input field",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "text": "Enter Event Code"
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Wait for keyboard",
+        "eventType": "WAIT",
+        "delayTime": 1000
+      },
+      {
+        "description": "Enter event code test - t",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "text": "t"
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Enter event code test - e",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "text": "e"
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Enter event code test - s",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "text": "s"
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Enter event code test - t",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "text": "t"
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Click Join Event button",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "text": "Join Event"
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Wait for event to load",
+        "eventType": "WAIT",
+        "delayTime": 3000
+      },
+      {
+        "description": "Take screenshot after joining event",
+        "eventType": "TAKE_SCREENSHOT",
+        "screenshotName": "02_after_join_event"
+      },
+      {
+        "description": "Click Create Profile button",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "text": "Create Profile"
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Click on add photo button",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "text": "Add Photo"
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Alternative: Click on camera icon",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "contentDescription": "Add photo"
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Select photo from gallery option",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "text": "Choose from Library"
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Wait for photo picker",
+        "eventType": "WAIT",
+        "delayTime": 2000
+      },
+      {
+        "description": "Tap first photo in gallery",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "className": "XCUIElementTypeImage"
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Confirm photo selection",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "text": "Choose"
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Wait for photo upload",
+        "eventType": "WAIT",
+        "delayTime": 3000
+      },
+      {
+        "description": "Click name input field",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "text": "Enter your name"
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Wait for keyboard",
+        "eventType": "WAIT",
+        "delayTime": 1000
+      },
+      {
+        "description": "Clear field and enter name",
+        "eventType": "VIEW_LONG_CLICKED",
+        "elementDescriptors": [
+          {
+            "text": "Enter your name"
+          }
+        ],
+        "delayTime": 1000,
+        "optional": true
+      },
+      {
+        "description": "Click age input field",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "text": "Age"
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Select gender field",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "text": "Gender"
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Select Female option",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "text": "Female"
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Select interested in field",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "text": "Interested In"
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Select Men option",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "text": "Men"
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Click Continue",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "text": "Continue"
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Wait for profile creation",
+        "eventType": "WAIT",
+        "delayTime": 3000
+      },
+      {
+        "description": "Take screenshot of profile created",
+        "eventType": "TAKE_SCREENSHOT",
+        "screenshotName": "03_profile_created"
+      },
+      {
+        "description": "Navigate to discovery screen",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "text": "Discovery"
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Wait for discovery screen",
+        "eventType": "WAIT",
+        "delayTime": 2000
+      },
+      {
+        "description": "Take screenshot of discovery screen",
+        "eventType": "TAKE_SCREENSHOT",
+        "screenshotName": "04_discovery_screen"
+      },
+      {
+        "description": "Tap like button",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "text": "Like"
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Alternative: Tap heart icon",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "contentDescription": "Like"
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Wait after like action",
+        "eventType": "WAIT",
+        "delayTime": 2000
+      },
+      {
+        "description": "Take screenshot after like",
+        "eventType": "TAKE_SCREENSHOT",
+        "screenshotName": "05_after_like_action"
+      },
+      {
+        "description": "Navigate to matches screen",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "text": "Matches"
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Wait for matches screen",
+        "eventType": "WAIT",
+        "delayTime": 2000
+      },
+      {
+        "description": "Take screenshot of matches screen",
+        "eventType": "TAKE_SCREENSHOT",
+        "screenshotName": "06_matches_screen"
+      },
+      {
+        "description": "Try to open first chat",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "className": "XCUIElementTypeCell"
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Wait for chat screen",
+        "eventType": "WAIT",
+        "delayTime": 2000
+      },
+      {
+        "description": "Take screenshot of chat screen",
+        "eventType": "TAKE_SCREENSHOT",
+        "screenshotName": "07_chat_screen"
+      },
+      {
+        "description": "Click message input field",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "text": "Type a message..."
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Send message button",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "text": "Send"
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Wait after sending message",
+        "eventType": "WAIT",
+        "delayTime": 2000
+      },
+      {
+        "description": "Take screenshot after message sent",
+        "eventType": "TAKE_SCREENSHOT",
+        "screenshotName": "08_message_sent"
+      },
+      {
+        "description": "Navigate to profile screen",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "text": "Profile"
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Take screenshot of profile screen",
+        "eventType": "TAKE_SCREENSHOT",
+        "screenshotName": "09_profile_screen"
+      },
+      {
+        "description": "Swipe down for notifications",
+        "eventType": "VIEW_SWIPED",
+        "swipeDirection": "Down",
+        "elementDescriptors": [
+          {
+            "className": "XCUIElementTypeWindow"
+          }
+        ],
+        "optional": true
+      },
+      {
+        "description": "Wait to see notifications",
+        "eventType": "WAIT",
+        "delayTime": 3000
+      },
+      {
+        "description": "Take final screenshot",
+        "eventType": "TAKE_SCREENSHOT",
+        "screenshotName": "10_final_state"
+      }
+    ]
+  },
+  {
+    "id": 1001,
+    "description": "Handle iOS notification permissions",
+    "contextDescriptor": {
+      "condition": "element_present",
+      "elementDescriptors": [
+        {
+          "textRegex": ".*[Nn]otifications.*"
+        }
+      ]
+    },
+    "maxNumberOfRuns": 5,
+    "priority": 2,
+    "actions": [
+      {
+        "description": "Allow notifications",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "text": "Allow"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 1002,
+    "description": "Handle iOS photo library permissions",
+    "contextDescriptor": {
+      "condition": "element_present",
+      "elementDescriptors": [
+        {
+          "textRegex": ".*[Pp]hotos.*"
+        }
+      ]
+    },
+    "maxNumberOfRuns": 5,
+    "priority": 2,
+    "actions": [
+      {
+        "description": "Allow photo access",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "textRegex": "Allow.*"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 1003,
+    "description": "Handle iOS camera permissions",
+    "contextDescriptor": {
+      "condition": "element_present",
+      "elementDescriptors": [
+        {
+          "textRegex": ".*[Cc]amera.*"
+        }
+      ]
+    },
+    "maxNumberOfRuns": 5,
+    "priority": 2,
+    "actions": [
+      {
+        "description": "Allow camera access",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "text": "OK"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 1004,
+    "description": "Generic iOS permission handler",
+    "contextDescriptor": {
+      "condition": "element_present",
+      "elementDescriptors": [
+        {
+          "text": "Allow"
+        }
+      ]
+    },
+    "maxNumberOfRuns": 10,
+    "priority": 1,
+    "actions": [
+      {
+        "description": "Allow any permission",
+        "eventType": "VIEW_CLICKED",
+        "elementDescriptors": [
+          {
+            "text": "Allow"
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -2,7 +2,7 @@
 
 import Header from "../../components/Header";
 import AnimatedArrow from "../../components/AnimatedArrow";
-import FadeInImage from "../../components/FadeInImage";
+import MobileOptimizedImage from "../../components/MobileOptimizedImage";
 import { useEffect, useState, useRef } from "react";
 
 export default function About() {
@@ -65,7 +65,7 @@ export default function About() {
             {/* Right side - hero image */}
             <div className="flex justify-center lg:justify-end">
               <div className="relative w-[300px] h-[384px] md:w-[400px] md:h-[384px]">
-                <FadeInImage 
+                <MobileOptimizedImage 
                   src="/about - hero.JPG" 
                   alt="Hooked - Meet in the moment" 
                   fill
@@ -75,6 +75,8 @@ export default function About() {
                   }}
                   priority
                   fadeInDuration={50}
+                  fallbackText="👫 Real connections"
+                  sizes="(max-width: 768px) 300px, 400px"
                 />
               </div>
             </div>

@@ -72,45 +72,6 @@ export const InAppAlert: React.FC<InAppAlertProps> = ({
     }
   };
 
-  const getBorderColor = () => {
-    if (isDark) {
-      switch (type) {
-        case 'success': return '#10b981';
-        case 'warning': return '#f59e0b';
-        case 'error': return '#ef4444';
-        case 'info':
-        default: return '#3b82f6';
-      }
-    } else {
-      switch (type) {
-        case 'success': return '#10b981';
-        case 'warning': return '#f59e0b';
-        case 'error': return '#ef4444';
-        case 'info':
-        default: return '#3b82f6';
-      }
-    }
-  };
-
-  const getBackgroundColor = () => {
-    if (isDark) {
-      switch (type) {
-        case 'success': return '#1f2937';
-        case 'warning': return '#1f2937';
-        case 'error': return '#1f2937';
-        case 'info':
-        default: return '#1f2937';
-      }
-    } else {
-      switch (type) {
-        case 'success': return '#f0fdf4';
-        case 'warning': return '#fffbeb';
-        case 'error': return '#fef2f2';
-        case 'info':
-        default: return '#eff6ff';
-      }
-    }
-  };
 
   const handleConfirm = () => {
     onConfirm?.();
@@ -123,7 +84,48 @@ export const InAppAlert: React.FC<InAppAlertProps> = ({
     onClose();
   };
 
-  const styles = useMemo(() => StyleSheet.create({
+  const styles = useMemo(() => {
+    const getBorderColor = () => {
+      if (isDark) {
+        switch (type) {
+          case 'success': return '#10b981';
+          case 'warning': return '#f59e0b';
+          case 'error': return '#ef4444';
+          case 'info':
+          default: return '#3b82f6';
+        }
+      } else {
+        switch (type) {
+          case 'success': return '#10b981';
+          case 'warning': return '#f59e0b';
+          case 'error': return '#ef4444';
+          case 'info':
+          default: return '#3b82f6';
+        }
+      }
+    };
+
+    const getBackgroundColor = () => {
+      if (isDark) {
+        switch (type) {
+          case 'success': return '#1f2937';
+          case 'warning': return '#1f2937';
+          case 'error': return '#1f2937';
+          case 'info':
+          default: return '#1f2937';
+        }
+      } else {
+        switch (type) {
+          case 'success': return '#f0fdf4';
+          case 'warning': return '#fffbeb';
+          case 'error': return '#fef2f2';
+          case 'info':
+          default: return '#eff6ff';
+        }
+      }
+    };
+
+    return StyleSheet.create({
     modalOverlay: {
       flex: 1,
       backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -231,7 +233,8 @@ export const InAppAlert: React.FC<InAppAlertProps> = ({
       paddingTop: 16,
       paddingBottom: 32,
     },
-  }), [isDark, message, children, getBackgroundColor, getBorderColor]);
+    });
+  }, [isDark, type, message, children]);
 
   if (!visible) {
     return null;

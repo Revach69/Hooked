@@ -13,7 +13,7 @@ export default function FadeInImage({
   ...imageProps
 }: FadeInImageProps) {
   const [isLoaded, setIsLoaded] = useState(false);
-  const [hasError, setHasError] = useState(false);
+  const [, setHasError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
 
   const handleLoad = () => {

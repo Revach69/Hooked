@@ -17,7 +17,7 @@ import { router } from 'expo-router';
 import { QrCode, X } from 'lucide-react-native';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 
-import * as ImagePicker from 'expo-image-picker';
+import QRCodeScanner from '../lib/components/QRCodeScanner';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -26,7 +26,7 @@ import { SurveyService } from '../lib/surveyService';
 import { MemoryManager } from '../lib/utils';
 import { useKickedUserCheck } from '../lib/hooks/useKickedUserCheck';
 import KickedUserModal from './KickedUserModal';
-import { useNotifications } from '../lib/contexts/NotificationContext';
+import Toast from 'react-native-toast-message';
 import * as Sentry from '@sentry/react-native';
 
 
@@ -44,7 +44,6 @@ export default function Home() {
 
 
   const { kickedUser, handleKickedUserClose } = useKickedUserCheck();
-  const notifications = useNotifications();
   const componentId = useRef('Home-' + Date.now()).current;
   const initializationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const manualCodeInputRef = useRef<TextInput>(null);
@@ -81,7 +80,7 @@ export default function Home() {
     }
   }, [activeModal]);
 
-  const initializeApp = async () => {
+  async function initializeApp() {
     if (!MemoryManager.isComponentMounted(componentId) || isInitialized) {
       setIsCheckingResume(false); // <-- NEW
       return;
@@ -119,7 +118,7 @@ export default function Home() {
     } finally {
       setIsCheckingResume(false); // <-- NEW
     }
-  };
+  }
 
   const checkNotificationPermissions = async () => {
     try {
@@ -135,9 +134,9 @@ export default function Home() {
     } catch (error) {
       Sentry.captureException(error);
     }
-  };
+  }
 
-  const checkForSurvey = async () => {
+  async function checkForSurvey() {
     if (!MemoryManager.isComponentMounted(componentId)) return;
     
     try {
@@ -161,50 +160,18 @@ export default function Home() {
     } catch {
               // Error checking for survey
     }
+  }
+
+
+
+  const handleCameraAccess = () => {
+    if (!MemoryManager.isComponentMounted(componentId)) return;
+    setActiveModal('qrScanner');
   };
 
-
-
-  const handleCameraAccess = async () => {
-    if (!MemoryManager.isComponentMounted(componentId)) return;
-    
-    try {
-      setIsProcessing(true);
-      
-      // Request camera permissions
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Camera permission is required to scan QR codes.');
-        setIsProcessing(false);
-        return;
-      }
-
-      // Launch camera
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
-        allowsMultipleSelection: false,
-      });
-
-      if (!result.canceled && result.assets && result.assets[0]) {
-        Alert.alert(
-          'QR Code Detected',
-          'Camera functionality is working! For now, please use the manual code entry option.',
-          [
-            { text: 'OK', onPress: () => closeModal() },
-            { text: 'Enter Code Manually', onPress: () => openModal('manualCodeEntry') }
-          ]
-        );
-      }
-    } catch {
-              // Camera access error
-    } finally {
-      if (MemoryManager.isComponentMounted(componentId)) {
-        setIsProcessing(false);
-      }
-    }
+  const handleQRScan = (data: string) => {
+    closeModal();
+    handleEventAccess(data);
   };
 
   const handleEventAccess = (eventCode: string) => {
@@ -230,7 +197,15 @@ export default function Home() {
       handleEventAccess(manualCode.trim());
       closeModal();
     } else {
-      notifications.warning("Please enter a valid event code.");
+      Toast.show({
+        type: 'warning',
+        text1: 'Invalid Code',
+        text2: 'Please enter a valid event code.',
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
     }
   };
 
@@ -621,6 +596,19 @@ export default function Home() {
               </TouchableOpacity>
             </View>
           </View>
+        </Modal>
+
+        {/* QR Code Scanner Modal */}
+        <Modal
+          visible={activeModal === 'qrScanner'}
+          animationType="slide"
+          transparent={false}
+          onRequestClose={closeModal}
+        >
+          <QRCodeScanner
+            onScan={handleQRScan}
+            onClose={closeModal}
+          />
         </Modal>
 
         {/* Kicked User Modal */}

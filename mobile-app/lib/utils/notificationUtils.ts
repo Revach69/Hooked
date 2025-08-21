@@ -88,7 +88,7 @@ export async function setAppState(isForeground: boolean, sessionId: string): Pro
 }
 
 /**
- * Set mute status between sessions
+ * Set mute status between sessions using direct Firestore API
  */
 export async function setMuteStatus(
   eventId: string, 
@@ -97,39 +97,37 @@ export async function setMuteStatus(
   muted: boolean
 ): Promise<void> {
   try {
-    // Note: No authentication required - muting works with session IDs only
-    console.log('setMuteStatus: Calling Firebase function with:', {
+    console.log('setMuteStatus: Using direct Firestore API with:', {
       event_id: eventId,
       muter_session_id: muterSessionId,
       muted_session_id: mutedSessionId,
       muted
     });
     
-    const setMuteCallable = httpsCallable(functions, 'setMuteV2');
+    const { MutedMatchAPI } = await import('../firebaseApi');
     
-    const result = await setMuteCallable({
-      event_id: eventId,
-      muter_session_id: muterSessionId,
-      muted_session_id: mutedSessionId,
-      muted
-    });
-    
-    console.log('setMuteStatus: Firebase function response:', result.data);
-    
-    // Check if the function returned an error
-    if (result.data && !result.data.success) {
-      const errorMessage = result.data.error || 'Unknown error';
-      console.error('setMuteStatus: Function returned error:', errorMessage);
-      throw new Error(errorMessage);
+    if (muted) {
+      // Create mute record
+      await MutedMatchAPI.create({
+        event_id: eventId,
+        muter_session_id: muterSessionId,
+        muted_session_id: mutedSessionId
+      });
+      console.log('setMuteStatus: Successfully created mute record');
+    } else {
+      // Remove mute record(s)
+      const mutedRecords = await MutedMatchAPI.filter({
+        event_id: eventId,
+        muter_session_id: muterSessionId,
+        muted_session_id: mutedSessionId
+      });
+      
+      await Promise.all(mutedRecords.map(record => MutedMatchAPI.delete(record.id)));
+      console.log('setMuteStatus: Successfully removed', mutedRecords.length, 'mute record(s)');
     }
     
   } catch (error: any) {
-    console.error('setMuteStatus: Error calling Firebase function:', error);
-    console.error('Error details:', {
-      message: error.message,
-      code: error.code,
-      details: error.details
-    });
+    console.error('setMuteStatus: Error with direct Firestore API:', error);
     Sentry.captureException(error);
     // Re-throw the error so the caller knows it failed
     throw error;

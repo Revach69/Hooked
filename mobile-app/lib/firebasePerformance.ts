@@ -138,10 +138,10 @@ class FirebasePerformance {
       }
 
       const trace: Trace = {
-        putAttribute: (name: string, value: string) => {
+        putAttribute: (_name: string, _value: string) => {
           // Network trace attribute set
         },
-        putMetric: (name: string, value: number) => {
+        putMetric: (_name: string, _value: number) => {
                       // Network trace metric set
         },
         stop: () => {

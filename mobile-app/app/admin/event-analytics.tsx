@@ -14,7 +14,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { 
   ArrowLeft
 } from 'lucide-react-native';
-import { EventAPI, EventProfileAPI, LikeAPI, MessageAPI } from '../../lib/firebaseApi';
+import { EventAPI, EventProfileAPI, LikeAPI, MessageAPI, EventAnalyticsAPI } from '../../lib/firebaseApi';
 
 interface AnalyticsData {
   totalProfiles: number;
@@ -47,6 +47,7 @@ export default function EventAnalytics() {
   
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isExpiredEvent, setIsExpiredEvent] = useState(false);
 
   const loadAnalytics = useCallback(async () => {
     try {
@@ -59,7 +60,70 @@ export default function EventAnalytics() {
         router.back();
         return;
       }
-      // Event data loaded successfully
+
+      // Check if event is expired and has been processed
+      if (eventData.expired && eventData.analytics_id) {
+        console.log('Loading preserved analytics for expired event:', eventData.analytics_id);
+        setIsExpiredEvent(true);
+        
+        // Load preserved analytics data
+        const savedAnalytics = await EventAnalyticsAPI.get(eventData.analytics_id);
+        if (savedAnalytics) {
+          // Convert preserved analytics to display format
+          const genderDistribution = {
+            male: savedAnalytics.gender_breakdown.male,
+            female: savedAnalytics.gender_breakdown.female,
+            other: savedAnalytics.gender_breakdown.other,
+          };
+
+          // Convert age stats to age distribution buckets
+          const ageDistribution = {
+            '18-25': 0, // We don't have this granular data in preserved analytics
+            '26-35': 0,
+            '36-45': 0,
+            '45+': 0,
+          };
+
+          // Calculate engagement rate from preserved metrics
+          const engagementRate = savedAnalytics.total_profiles > 0 
+            ? ((savedAnalytics.engagement_metrics.profiles_with_matches + savedAnalytics.engagement_metrics.profiles_with_messages) / (savedAnalytics.total_profiles * 2)) * 100
+            : 0;
+
+          // Placeholder activity data since we don't preserve this
+          const hourlyActivity: { [key: string]: number } = {};
+          for (let i = 0; i < 24; i++) {
+            hourlyActivity[`${i}:00`] = 0;
+          }
+
+          const dailyActivity: { [key: string]: number } = {};
+          const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+          days.forEach(day => {
+            dailyActivity[day] = 0;
+          });
+
+          setAnalytics({
+            totalProfiles: savedAnalytics.total_profiles,
+            totalLikes: 0, // Not preserved separately
+            totalMatches: savedAnalytics.total_matches,
+            totalMessages: savedAnalytics.total_messages,
+            activeUsers: savedAnalytics.engagement_metrics.profiles_with_matches + savedAnalytics.engagement_metrics.profiles_with_messages,
+            engagementRate,
+            averageLikesPerUser: 0, // Not preserved
+            averageMessagesPerUser: savedAnalytics.engagement_metrics.average_messages_per_match,
+            genderDistribution,
+            ageDistribution,
+            hourlyActivity,
+            dailyActivity,
+          });
+          return;
+        } else {
+          Alert.alert('Error', 'Preserved analytics data not found');
+          return;
+        }
+      }
+
+      // For active events, calculate analytics in real-time
+      setIsExpiredEvent(false);
       
       // Load all data for this event
       const [profiles, likes, messages] = await Promise.all([
@@ -123,7 +187,8 @@ export default function EventAnalytics() {
         hourlyActivity,
         dailyActivity,
       });
-    } catch {
+    } catch (error) {
+      console.error('Failed to load analytics:', error);
       Alert.alert('Error', 'Failed to load analytics');
     } finally {
       setIsLoading(false);
@@ -355,6 +420,11 @@ export default function EventAnalytics() {
           <Text style={styles.headerTitle}>Event Analytics</Text>
           {eventName && (
             <Text style={styles.eventName}>{eventName}</Text>
+          )}
+          {isExpiredEvent && (
+            <Text style={[styles.eventName, { color: '#f59e0b', fontStyle: 'italic' }]}>
+              Preserved Analytics (Event Expired)
+            </Text>
           )}
         </View>
       </View>
