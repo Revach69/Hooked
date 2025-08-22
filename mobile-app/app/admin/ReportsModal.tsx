@@ -206,8 +206,16 @@ export default function ReportsModal({ visible, onClose, eventId, eventName }: R
       transparent={true}
       onRequestClose={onClose}
     >
-      <View style={styles.modalOverlay}>
-        <View style={[styles.modalContent, { backgroundColor: isDark ? '#2d2d2d' : 'white' }]}>
+      <TouchableOpacity 
+        style={styles.modalOverlay}
+        activeOpacity={1}
+        onPress={onClose}
+      >
+        <TouchableOpacity 
+          style={[styles.modalContent, { backgroundColor: isDark ? '#2d2d2d' : 'white' }]}
+          activeOpacity={1}
+          onPress={(e) => e.stopPropagation()}
+        >
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerInfo}>
@@ -529,8 +537,8 @@ export default function ReportsModal({ visible, onClose, eventId, eventName }: R
               </View>
             )}
           </ScrollView>
-        </View>
-      </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
 
       {/* Admin Notes Dialog */}
       {showAdminNotesDialog && pendingAction && (
@@ -540,8 +548,16 @@ export default function ReportsModal({ visible, onClose, eventId, eventName }: R
           animationType="fade"
           onRequestClose={handleCancelAction}
         >
-          <View style={styles.dialogOverlay}>
-            <View style={[styles.dialogContent, { backgroundColor: isDark ? '#2d2d2d' : 'white' }]}>
+          <TouchableOpacity 
+            style={styles.dialogOverlay}
+            activeOpacity={1}
+            onPress={handleCancelAction}
+          >
+            <TouchableOpacity 
+              style={[styles.dialogContent, { backgroundColor: isDark ? '#2d2d2d' : 'white' }]}
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+            >
               <Text style={[styles.dialogTitle, { color: isDark ? '#ffffff' : '#1f2937' }]}>
                 {pendingAction.type === 'accept' ? 'Remove User' : 'Dismiss Report'}
               </Text>
@@ -596,8 +612,8 @@ export default function ReportsModal({ visible, onClose, eventId, eventName }: R
                   )}
                 </TouchableOpacity>
               </View>
-            </View>
-          </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
         </Modal>
       )}
     </Modal>

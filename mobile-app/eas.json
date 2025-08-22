@@ -10,6 +10,7 @@
         "EXPO_PUBLIC_ENV": "development"
       },
       "distribution": "internal",
+      "config": "app.development.json",
       "ios": {
         "resourceClass": "m-medium"
       },

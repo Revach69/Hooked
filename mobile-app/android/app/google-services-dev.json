@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "474843121153",
+    "project_id": "hooked-development",
+    "storage_bucket": "hooked-development.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:474843121153:android:30283be65abcc48883a200",
+        "android_client_info": {
+          "package_name": "com.hooked.hookeddev"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB8b0CtloeB4XGrFeN7mX27C2h9sQ-I_RA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -25,6 +25,7 @@ import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { ensureFirebaseReady } from '../lib/firebaseReady';
 import { EventProfileAPI, EventAPI, ReportAPI, StorageAPI, LikeAPI, MessageAPI } from '../lib/firebaseApi';
 import * as ImagePicker from 'expo-image-picker';
+import { ImageCacheService } from '../lib/services/ImageCacheService';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { checkSimpleNetworkConnectivity } from '../lib/utils';
 import * as Sentry from '@sentry/react-native';
@@ -66,12 +67,15 @@ export default function Profile() {
   const [reportExplanation, setReportExplanation] = useState('');
   const [submittingReport, setSubmittingReport] = useState(false);
   const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [matchedUserIds, setMatchedUserIds] = useState<Set<string>>(new Set());
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
+  const [cachedProfileImageUri, setCachedProfileImageUri] = useState<string | null>(null);
+  const [cachedUserImageUris, setCachedUserImageUris] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
     initializeSession();
-    
-
+    // Initialize image cache service
+    ImageCacheService.initialize();
   }, []);
 
   // Check for unseen messages
@@ -124,16 +128,16 @@ export default function Profile() {
     // Ensure Firebase is initialized
     const firebaseReady = await ensureFirebaseReady();
     if (!firebaseReady) {
-      Toast.show({
-        type: 'error',
-        text1: 'Connection Error',
-        text2: 'Unable to connect to the server. Please check your internet connection and try again.',
-        position: 'top',
-        visibilityTime: 3500,
-        autoHide: true,
-        topOffset: 0,
-      });
-      router.replace('/home');
+      Alert.alert(
+        'Connection Error',
+        'Unable to connect to the server. Please check your internet connection and try again.',
+        [
+          {
+            text: 'OK',
+            onPress: () => router.replace('/home')
+          }
+        ]
+      );
       return;
     }
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -183,6 +187,22 @@ export default function Profile() {
       
       if (profiles.length > 0) {
         setProfile(profiles[0]);
+        
+        // Cache user's own profile image
+        const userProfile = profiles[0];
+        if (userProfile.profile_photo_url && currentEvent) {
+          try {
+            const cachedUri = await ImageCacheService.getCachedImageUri(
+              userProfile.profile_photo_url,
+              currentEvent.id,
+              userProfile.session_id
+            );
+            setCachedProfileImageUri(cachedUri);
+          } catch (error) {
+            console.warn('Failed to cache profile image:', error);
+            setCachedProfileImageUri(userProfile.profile_photo_url);
+          }
+        }
       } else {
         // Profile doesn't exist in database (user left event and deleted profile)
         // Clear session data only after confirming profile is truly gone
@@ -268,7 +288,7 @@ export default function Profile() {
         mediaTypes: 'images',
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.6, // Reduced quality for faster upload
+        quality: 0.4, // Optimized for fast upload
         allowsMultipleSelection: false,
         base64: false,
         exif: false,
@@ -309,7 +329,7 @@ export default function Profile() {
         mediaTypes: 'images',
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.6, // Reduced quality for faster upload
+        quality: 0.4, // Optimized for fast upload
         allowsMultipleSelection: false,
         base64: false,
         exif: false,
@@ -332,13 +352,13 @@ export default function Profile() {
   };
 
   const processImageAsset = async (asset: any) => {
-    // Validate file size (10MB limit)
-    if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
+    // Consistent 5MB file size limit
+    if (asset.fileSize && asset.fileSize > 5 * 1024 * 1024) {
       Sentry.captureException(new Error(`File too large: ${asset.fileSize}`));
       Toast.show({
         type: 'warning',
         text1: 'File Too Large',
-        text2: 'Image must be smaller than 10MB.',
+        text2: 'Image must be smaller than 5MB. Please choose a smaller image.',
         position: 'top',
         visibilityTime: 3500,
         autoHide: true,
@@ -350,33 +370,29 @@ export default function Profile() {
     // Show thumbnail immediately
     setTempPhotoUri(asset.uri);
     
-    // Start upload in background
+    // Start upload with progress indicator
     setIsUploadingPhoto(true);
     
     try {
-      // Check network connectivity before upload
-      const { checkNetworkConnectivityWithTimeout } = await import('../lib/utils');
-      const isConnected = await checkNetworkConnectivityWithTimeout(5000);
-      
-      if (!isConnected) {
-        throw new Error('No internet connection. Please check your network and try again.');
-      }
+      // Optimize image for faster upload
+      const { ImageOptimizationService } = await import('../lib/services/ImageOptimizationService');
+      const optimizedUri = await ImageOptimizationService.optimizeProfilePhoto(asset.uri);
 
-      // Create file object for upload with proper naming
+      // Create file object for upload with optimized image
       const fileObject = {
-        uri: asset.uri,
+        uri: optimizedUri,
         name: `profile-photo-${Date.now()}.jpg`,
         type: 'image/jpeg',
-        fileSize: asset.fileSize
+        fileSize: asset.fileSize // Note: Original size, optimized will be smaller
       };
 
-      // Upload to Firebase Storage with retry logic and timeout
+      // Upload to Firebase Storage with simplified retry logic and timeout
       let uploadAttempts = 0;
-      const maxAttempts = 3;
+      const maxAttempts = 2; // Reduced from 3 attempts
       
-      // Add timeout to prevent hanging indefinitely
+      // Reduced timeout from 30s to 25s for faster feedback
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Photo upload timeout')), 30000); // 30 second timeout
+        setTimeout(() => reject(new Error('Upload timeout - please try again')), 25000);
       });
       
       while (uploadAttempts < maxAttempts) {
@@ -399,8 +415,8 @@ export default function Profile() {
             throw uploadError;
           }
           
-          // Wait before retrying (exponential backoff)
-          const waitTime = 1000 * uploadAttempts;
+          // Wait before retrying (shorter fixed delay)
+          const waitTime = 2000; // Fixed 2 second delay
           await new Promise(resolve => setTimeout(resolve, waitTime));
         }
       }
@@ -485,7 +501,66 @@ export default function Profile() {
         return iAmInterestedInOther && otherIsInterestedInMe;
       });
 
-      setAllUsers(filteredUsers);
+      // Load matches to prioritize them at the top
+      const likes = await LikeAPI.filter({
+        event_id: eventId,
+        is_mutual: true
+      });
+      
+      // Get current user's mutual matches
+      const currentUserMatches = likes.filter(like => 
+        like.liker_session_id === sessionId || like.liked_session_id === sessionId
+      );
+      
+      // Create a set of matched user session IDs
+      const matchedSessionIds = new Set(
+        currentUserMatches.map(like => 
+          like.liker_session_id === sessionId ? like.liked_session_id : like.liker_session_id
+        )
+      );
+      
+      // Sort users: matches first, then others
+      const sortedUsers = filteredUsers.sort((a, b) => {
+        const aIsMatch = matchedSessionIds.has(a.session_id);
+        const bIsMatch = matchedSessionIds.has(b.session_id);
+        
+        // Matches first
+        if (aIsMatch && !bIsMatch) return -1;
+        if (!aIsMatch && bIsMatch) return 1;
+        
+        // If both are matches or both are not matches, sort alphabetically
+        return a.first_name.localeCompare(b.first_name);
+      });
+
+      setAllUsers(sortedUsers);
+      setMatchedUserIds(matchedSessionIds);
+      
+      // Cache user profile images for report modal
+      if (currentEvent && sortedUsers.length > 0) {
+        const cacheUserImages = async () => {
+          const newCachedUris = new Map<string, string>();
+          
+          for (const user of sortedUsers) {
+            if (user.profile_photo_url) {
+              try {
+                const cachedUri = await ImageCacheService.getCachedImageUri(
+                  user.profile_photo_url,
+                  currentEvent.id,
+                  user.session_id
+                );
+                newCachedUris.set(user.session_id, cachedUri);
+              } catch (error) {
+                console.warn('Failed to cache user image:', user.session_id, error);
+                newCachedUris.set(user.session_id, user.profile_photo_url);
+              }
+            }
+          }
+          
+          setCachedUserImageUris(newCachedUris);
+        };
+        
+        cacheUserImages();
+      }
     } catch (error) {
       Sentry.captureException(error);
               // Error loading users for report
@@ -633,15 +708,11 @@ export default function Profile() {
         }
       }
       
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: errorMessage,
-        position: 'top',
-        visibilityTime: 3500,
-        autoHide: true,
-        topOffset: 0,
-      });
+      Alert.alert(
+        'Error',
+        errorMessage,
+        [{ text: 'OK' }]
+      );
     } finally {
       setSubmittingReport(false);
     }
@@ -666,39 +737,55 @@ export default function Profile() {
               
               if (eventId && sessionId) {
                 // Delete all likes where this user is the liker
-                const likesAsLiker = await LikeAPI.filter({
-                  event_id: eventId,
-                  liker_session_id: sessionId
-                });
-                for (const like of likesAsLiker) {
-                  await LikeAPI.delete(like.id);
+                try {
+                  const likesAsLiker = await LikeAPI.filter({
+                    event_id: eventId,
+                    liker_session_id: sessionId
+                  });
+                  for (const like of likesAsLiker) {
+                    await LikeAPI.delete(like.id);
+                  }
+                } catch (error) {
+                  console.warn('Failed to delete likes as liker:', error);
                 }
 
                 // Delete all likes where this user is the liked
-                const likesAsLiked = await LikeAPI.filter({
-                  event_id: eventId,
-                  liked_session_id: sessionId
-                });
-                for (const like of likesAsLiked) {
-                  await LikeAPI.delete(like.id);
+                try {
+                  const likesAsLiked = await LikeAPI.filter({
+                    event_id: eventId,
+                    liked_session_id: sessionId
+                  });
+                  for (const like of likesAsLiked) {
+                    await LikeAPI.delete(like.id);
+                  }
+                } catch (error) {
+                  console.warn('Failed to delete likes as liked:', error);
                 }
 
                 // Delete all messages where this user is the sender
-                const messagesAsSender = await MessageAPI.filter({
-                  event_id: eventId,
-                  from_profile_id: sessionId
-                });
-                for (const message of messagesAsSender) {
-                  await MessageAPI.delete(message.id);
+                try {
+                  const messagesAsSender = await MessageAPI.filter({
+                    event_id: eventId,
+                    from_profile_id: sessionId
+                  });
+                  for (const message of messagesAsSender) {
+                    await MessageAPI.delete(message.id);
+                  }
+                } catch (error) {
+                  console.warn('Failed to delete messages as sender:', error);
                 }
 
                 // Delete all messages where this user is the recipient
-                const messagesAsRecipient = await MessageAPI.filter({
-                  event_id: eventId,
-                  to_profile_id: sessionId
-                });
-                for (const message of messagesAsRecipient) {
-                  await MessageAPI.delete(message.id);
+                try {
+                  const messagesAsRecipient = await MessageAPI.filter({
+                    event_id: eventId,
+                    to_profile_id: sessionId
+                  });
+                  for (const message of messagesAsRecipient) {
+                    await MessageAPI.delete(message.id);
+                  }
+                } catch (error) {
+                  console.warn('Failed to delete messages as recipient:', error);
                 }
               }
 
@@ -707,29 +794,38 @@ export default function Profile() {
                 await EventProfileAPI.delete(profile.id);
               }
 
-              // Clear all session data
-              await AsyncStorageUtils.multiRemove([
-                'currentEventId',
-                'currentSessionId',
-                'currentEventCode',
-                'currentProfileColor',
-                'currentProfilePhotoUrl'
-              ]);
+              // Clear image cache for this profile
+              try {
+                if (eventId && sessionId) {
+                  await ImageCacheService.clearProfileCache(sessionId, eventId);
+                }
+              } catch (cacheError) {
+                console.warn('Failed to clear image cache:', cacheError);
+              }
+              
+              // Use SessionCleanupService for comprehensive cleanup
+              const { SessionCleanupService } = await import('../lib/services/SessionCleanupService');
+              await SessionCleanupService.clearSession('profile_deleted');
+              
+              // Verify cleanup was successful
+              const verification = await SessionCleanupService.verifySessionCleared();
+              if (!verification.isCleared) {
+                console.warn('Session cleanup incomplete:', verification.remainingData);
+                // Try force cleanup as fallback
+                await SessionCleanupService.forceCleanupAll();
+              }
               
               router.replace('/home');
-      return;
+              return;
             } catch (error) {
-      Sentry.captureException(error);
-              // Error deleting profile
-              Toast.show({
-                type: 'error',
-                text1: 'Error',
-                text2: 'Failed to delete profile. Please try again.',
-                position: 'top',
-                visibilityTime: 3500,
-                autoHide: true,
-                topOffset: 0,
-              });
+              console.error('Error during profile deletion:', error);
+              Sentry.captureException(error);
+              // Error deleting profile - use Alert for critical errors
+              Alert.alert(
+                'Error',
+                `Failed to delete profile: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`,
+                [{ text: 'OK' }]
+              );
             }
           }
         }
@@ -1096,11 +1192,12 @@ export default function Profile() {
     reportButton: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: '#f59e0b',
-      paddingVertical: 12,
+      justifyContent: 'center',
+      paddingVertical: 15,
       paddingHorizontal: 20,
-      borderRadius: 10,
-      marginTop: 10,
+      borderRadius: 12,
+      marginBottom: 10,
+      backgroundColor: '#f59e0b',
     },
     reportButtonText: {
       color: 'white',
@@ -1140,7 +1237,7 @@ export default function Profile() {
     },
     bulletText: {
       fontSize: 14,
-      color: isDark ? '#e5e7eb' : '#374151',
+      color: isDark ? '#9ca3af' : '#6b7280',
     },
     actionsSection: {
       marginTop: 20,
@@ -1247,6 +1344,13 @@ export default function Profile() {
       textAlign: 'center',
       marginBottom: 15,
     },
+    sectionHeader: {
+      fontSize: 14,
+      fontWeight: '600',
+      marginTop: 8,
+      marginBottom: 8,
+      textAlign: 'center',
+    },
     reportUserInfo: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1342,7 +1446,7 @@ export default function Profile() {
             
             ) : profile.profile_photo_url ? (
               <Image
-                source={{ uri: profile.profile_photo_url }}
+                source={{ uri: cachedProfileImageUri || profile.profile_photo_url }}
                 onError={() => {}}
                 style={styles.profilePhoto}
                 resizeMode="cover"
@@ -1526,8 +1630,16 @@ export default function Profile() {
           </View>
         </View>
         <Modal visible={showInterests} transparent animationType="slide" onRequestClose={() => setShowInterests(false)}>
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalCard}>
+          <TouchableOpacity 
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowInterests(false)}
+          >
+            <TouchableOpacity 
+              style={styles.modalCard}
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+            >
               <Text style={{ fontWeight: 'bold', fontSize: 18, marginBottom: 16 }}>Select up to 3 interests</Text>
               
               <ScrollView 
@@ -1586,8 +1698,8 @@ export default function Profile() {
                 <TouchableOpacity onPress={handleSaveInterests} disabled={saving} style={styles.saveButton}><Text style={styles.saveButtonText}>Save</Text></TouchableOpacity>
                 <TouchableOpacity onPress={() => { setShowInterests(false); setInterests(profile.interests || []); setShowExtendedInterests(false); }} style={styles.cancelButton}><Text style={styles.cancelButtonText}>Cancel</Text></TouchableOpacity>
               </View>
-            </View>
-          </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
         </Modal>
         {/* Height */}
         <View style={styles.card}>
@@ -1677,13 +1789,6 @@ export default function Profile() {
             <Text style={{ color: isDark ? '#9ca3af' : '#6b7280', marginTop: 8 }}>{profile.height_cm ? `${profile.height_cm} cm` : 'Height not defined yet'}</Text>
           )}
         </View>
-        {/* Report User Button */}
-        <View style={styles.card}>
-          <TouchableOpacity style={styles.reportButton} onPress={handleReportUser}>
-            <AlertCircle size={20} color="white" />
-            <Text style={styles.reportButtonText}>Report a User</Text>
-          </TouchableOpacity>
-        </View>
 
         {/* Info Cards */}
         <View style={styles.card}>
@@ -1710,6 +1815,11 @@ export default function Profile() {
           </View>
         </View>
 
+        {/* Report User Button */}
+        <TouchableOpacity style={styles.reportButton} onPress={handleReportUser}>
+          <AlertCircle size={20} color="white" />
+          <Text style={styles.reportButtonText}>Report a User</Text>
+        </TouchableOpacity>
 
         {/* Actions */}
         <View style={styles.actionsSection}>
@@ -1725,26 +1835,35 @@ export default function Profile() {
 
       {/* Report User Modal */}
       <Modal visible={showReportModal} transparent animationType="slide" onRequestClose={() => setShowReportModal(false)}>
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+        <TouchableOpacity 
           style={styles.modalOverlay}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+          activeOpacity={1}
+          onPress={() => setShowReportModal(false)}
         >
-          <ScrollView 
-            contentContainerStyle={styles.modalScrollContainer}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-            onScrollBeginDrag={() => Keyboard.dismiss()}
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+            style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
           >
-            <View style={styles.modalCard}>
+            <TouchableOpacity 
+              style={styles.modalCard}
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+            >
               {reportStep === 'select' ? (
                 <>
                   <Text style={styles.modalTitle}>Select User to Report</Text>
+                  {matchedUserIds.size > 0 && (
+                    <Text style={[styles.sectionHeader, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+                      Your Matches ({matchedUserIds.size})
+                    </Text>
+                  )}
                   <FlatList
                     data={allUsers}
                     keyExtractor={(item) => item.id}
-                    scrollEnabled={false}
-                    style={{ maxHeight: 200 }} // Limit list height
+                    scrollEnabled={true}
+                    style={{ maxHeight: 250 }}
+                    showsVerticalScrollIndicator={true}
                     renderItem={({ item }) => (
                       <TouchableOpacity
                         style={styles.userListItem}
@@ -1752,8 +1871,8 @@ export default function Profile() {
                       >
                         <View style={styles.userListPhoto}>
                           {item.profile_photo_url ? (
-                            <Image source={{ uri: item.profile_photo_url }}
-              onError={() => {}} style={styles.userListPhotoImage} />
+                            <Image source={{ uri: cachedUserImageUris.get(item.session_id) || item.profile_photo_url }}
+                              onError={() => {}} style={styles.userListPhotoImage} />
                           ) : (
                             <View style={[styles.userListPhotoFallback, { backgroundColor: item.profile_color || '#cccccc' }]}>
                               <Text style={styles.userListPhotoFallbackText}>{item.first_name[0]}</Text>
@@ -1761,7 +1880,12 @@ export default function Profile() {
                           )}
                         </View>
                         <View style={styles.userListInfo}>
-                          <Text style={styles.userListName}>{item.first_name}</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Text style={styles.userListName}>{item.first_name}</Text>
+                            {matchedUserIds.has(item.session_id) && (
+                              <MessageCircle size={16} color="#10b981" style={{ marginLeft: 6 }} />
+                            )}
+                          </View>
                           <Text style={styles.userListAge}>{item.age} years old</Text>
                         </View>
                       </TouchableOpacity>
@@ -1780,8 +1904,8 @@ export default function Profile() {
                   <View style={styles.reportUserInfo}>
                     <View style={styles.userListPhoto}>
                       {selectedUserToReport?.profile_photo_url ? (
-                        <Image source={{ uri: selectedUserToReport.profile_photo_url }}
-              onError={() => {}} style={styles.userListPhotoImage} />
+                        <Image source={{ uri: cachedUserImageUris.get(selectedUserToReport.session_id) || selectedUserToReport.profile_photo_url }}
+                          onError={() => {}} style={styles.userListPhotoImage} />
                       ) : (
                         <View style={[styles.userListPhotoFallback, { backgroundColor: selectedUserToReport?.profile_color || '#cccccc' }]}>
                           <Text style={styles.userListPhotoFallbackText}>{selectedUserToReport?.first_name[0]}</Text>
@@ -1834,9 +1958,9 @@ export default function Profile() {
                   </View>
                 </>
               )}
-            </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
+        </TouchableOpacity>
       </Modal>
       {/* Bottom Navigation */}
       <View style={styles.bottomNavigation}>

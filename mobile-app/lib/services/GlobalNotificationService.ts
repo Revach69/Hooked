@@ -16,45 +16,30 @@ class GlobalNotificationServiceClass {
   private currentEventId: string | null = null;
 
   /**
-   * Initialize global notification listeners that work across all screens (with retry)
+   * Initialize global notification listeners (non-blocking, event-driven)
+   * NO RETRIES - if no session exists, initialization is deferred until session becomes available
    */
-  async initialize(maxRetries: number = 10): Promise<void> {
+  async initialize(): Promise<void> {
     try {
-      console.log('GlobalNotificationService: Starting initialization with retry mechanism');
+      console.log('GlobalNotificationService: Starting non-blocking initialization');
       
-      // Try to get session with retry
-      for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        // Get current session and event IDs
-        this.currentSessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
-        this.currentEventId = await AsyncStorageUtils.getItem<string>('currentEventId');
-        
-        if (this.currentSessionId && this.currentEventId) {
-          console.log(`GlobalNotificationService: Session found on attempt ${attempt}`);
-          break;
-        }
-        
-        if (attempt === maxRetries) {
-          console.log('GlobalNotificationService: No session after all retries, will wait for session');
-          return; // Don't throw, just return - will be retried when session is available
-        }
-        
-        // Wait with exponential backoff (100ms, 200ms, 400ms, etc., max 3 seconds)
-        const delay = Math.min(Math.pow(2, attempt - 1) * 100, 3000);
-        console.log(`GlobalNotificationService: No session on attempt ${attempt}, retrying in ${delay}ms`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
+      // Quick check - NO RETRIES during app startup
+      this.currentSessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
+      this.currentEventId = await AsyncStorageUtils.getItem<string>('currentEventId');
       
       if (!this.currentSessionId || !this.currentEventId) {
-        console.log('GlobalNotificationService: Missing session/event ID after retries');
-        return;
+        console.log('GlobalNotificationService: No session/event available yet - initialization deferred');
+        console.log('Will initialize when session becomes available via refreshSession()');
+        this.isInitialized = false;
+        return; // Exit immediately - don't block app startup
       }
       
-      console.log('GlobalNotificationService: Setting up listeners for:', {
+      console.log('GlobalNotificationService: Session available, setting up listeners for:', {
         sessionId: this.currentSessionId,
         eventId: this.currentEventId
       });
       
-      // Set up global listeners
+      // Set up global listeners only if we have session/event
       await this.setupMatchListener();
       await this.setupMessageListener();
       

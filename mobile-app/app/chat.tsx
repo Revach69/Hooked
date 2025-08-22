@@ -24,6 +24,7 @@ import { collection, query, where, orderBy, onSnapshot, getDocs, serverTimestamp
 import { db } from '../lib/firebaseConfig';
 import { EventProfileAPI, MessageAPI, ReportAPI, MutedMatchAPI, LikeAPI } from '../lib/firebaseApi';
 import UserProfileModal from '../lib/UserProfileModal';
+import DropdownMenu from '../components/DropdownMenu';
 import { formatTime } from '../lib/utils';
 import { setCurrentChatSession } from '../lib/messageNotificationHelper';
 
@@ -1116,41 +1117,30 @@ export default function Chat() {
               </View>
             </TouchableOpacity>
             
-            <View style={styles.headerActions}>
-              <TouchableOpacity
-                style={styles.headerActionButton}
-                onPress={handleMuteMatch}
-                accessibilityRole="button"
-                accessibilityLabel={isMuted ? 'Unmute match' : 'Mute match'}
-                accessibilityHint={isMuted ? 'Unmute notifications from this match' : 'Mute notifications from this match'}
-              >
-                {isMuted ? (
-                  <Volume2 size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
-                ) : (
-                  <VolumeX size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
-                )}
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.headerActionButton}
-                onPress={() => setShowReportModal(true)}
-                accessibilityRole="button"
-                accessibilityLabel="Report user"
-                accessibilityHint="Report this user for inappropriate behavior"
-              >
-                <Flag size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.headerActionButton}
-                onPress={() => handleUnmatch(matchId as string, matchProfile?.first_name || matchName || 'match')}
-                accessibilityRole="button"
-                accessibilityLabel="Unmatch"
-                accessibilityHint="Remove this match and return them to discovery"
-              >
-                <UserX size={20} color="#dc2626" />
-              </TouchableOpacity>
-            </View>
+            <DropdownMenu
+              items={[
+                {
+                  id: 'mute',
+                  label: isMuted ? 'Unmute' : 'Mute',
+                  icon: isMuted ? Volume2 : VolumeX,
+                  onPress: handleMuteMatch,
+                },
+                {
+                  id: 'unmatch',
+                  label: 'Unmatch',
+                  icon: UserX,
+                  onPress: () => handleUnmatch(matchId as string, matchProfile?.first_name || matchName || 'match'),
+                },
+                {
+                  id: 'report',
+                  label: 'Report',
+                  icon: Flag,
+                  onPress: () => setShowReportModal(true),
+                  destructive: true,
+                },
+              ]}
+              triggerStyle={styles.headerActionButton}
+            />
           </View>
 
           {/* Messages */}
@@ -1180,7 +1170,7 @@ export default function Chat() {
               style={styles.textInput}
               value={newMessage}
               onChangeText={setNewMessage}
-              placeholder="Type a message..."
+              placeholder="Type message..."
               placeholderTextColor={isDark ? '#9ca3af' : '#6b7280'}
               multiline
               maxLength={500}

@@ -79,7 +79,7 @@ export default function CreateEvent() {
         mediaTypes: 'images',
         allowsEditing: true,
         aspect: [16, 9],
-        quality: 0.8,
+        quality: 0.5, // Optimized for admin uploads
       });
 
       if (!result.canceled && result.assets[0]) {
@@ -94,22 +94,32 @@ export default function CreateEvent() {
     try {
       setUploadingImage(true);
       
-      // Convert image URI to blob
-      const response = await fetch(imageUri);
+      // Optimize image for event banners
+      const { ImageOptimizationService } = await import('../../lib/services/ImageOptimizationService');
+      const optimizedUri = await ImageOptimizationService.optimizeEventBanner(imageUri);
+      
+      // Convert optimized image URI to blob
+      const response = await fetch(optimizedUri);
       const blob = await response.blob();
       
       // Create unique filename
       const filename = `events/${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
       const storageRef = ref(storage, filename);
       
-      // Upload to Firebase Storage using Firebase v9+ API
-      await uploadBytes(storageRef, blob);
+      // Upload to Firebase Storage with timeout
+      const uploadPromise = uploadBytes(storageRef, blob);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Upload timeout')), 25000)
+      );
+      
+      await Promise.race([uploadPromise, timeoutPromise]);
       
       // Get download URL
       const downloadURL = await getDownloadURL(storageRef);
       return downloadURL;
-    } catch {
-      Alert.alert('Error', 'Failed to upload image. Please try again.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      Alert.alert('Upload Failed', `Failed to upload image: ${message}. Please try again.`);
       return null;
     } finally {
       setUploadingImage(false);

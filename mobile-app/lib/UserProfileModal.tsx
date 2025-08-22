@@ -19,10 +19,12 @@ interface UserProfileModalProps {
   profile: any;
   onClose: () => void;
   onLike?: (_profile: any) => void;
+  onSkip?: (_profile: any) => void;
   isLiked?: boolean;
+  isSkipped?: boolean;
 }
 
-export default function UserProfileModal({ visible, profile, onClose, onLike, isLiked = false }: UserProfileModalProps) {
+export default function UserProfileModal({ visible, profile, onClose, onLike, onSkip, isLiked = false, isSkipped = false }: UserProfileModalProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
@@ -110,18 +112,35 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, is
       color: isDark ? '#9ca3af' : '#6b7280',
       marginLeft: 6,
     },
-    likeButton: {
-      backgroundColor: isLiked ? '#10b981' : '#8b5cf6',
-      borderRadius: 25,
-      paddingVertical: 12,
-      paddingHorizontal: 24,
+    buttonsContainer: {
       flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
+      gap: 12,
       marginTop: 16,
       marginBottom: 8,
     },
-    likeButtonText: {
+    skipButton: {
+      flex: 1,
+      backgroundColor: '#6b7280',
+      borderRadius: 25,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      opacity: isSkipped ? 0.5 : 1,
+    },
+    likeButton: {
+      flex: 1,
+      backgroundColor: isLiked ? '#10b981' : '#8b5cf6',
+      borderRadius: 25,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      opacity: isLiked ? 0.5 : 1,
+    },
+    buttonText: {
       color: 'white',
       fontSize: 16,
       fontWeight: '600',
@@ -174,6 +193,12 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, is
     }
   };
 
+  const handleSkipPress = () => {
+    if (onSkip) {
+      onSkip(profile);
+    }
+  };
+
   return (
     <Modal
       visible={visible}
@@ -182,8 +207,16 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, is
       onRequestClose={onClose}
       accessibilityViewIsModal={true}
     >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
+      <TouchableOpacity 
+        style={styles.modalOverlay}
+        activeOpacity={1}
+        onPress={onClose}
+      >
+        <TouchableOpacity 
+          style={styles.modalContent}
+          activeOpacity={1}
+          onPress={(e) => e.stopPropagation()}
+        >
           {/* Close Button */}
           <TouchableOpacity style={styles.closeButton} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close profile" accessibilityHint="Close the profile modal">
             <X size={24} color="white" />
@@ -220,26 +253,50 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, is
                 </View>
               )}
               
-              {/* Like Button */}
-              {onLike && (
-                <TouchableOpacity 
-                  style={styles.likeButton} 
-                  onPress={handleLikePress}
-                  disabled={isLiked}
-                  accessibilityRole="button"
-                  accessibilityLabel={isLiked ? 'Already liked' : `Like ${profile.first_name}`}
-                  accessibilityHint={isLiked ? 'You have already liked this person' : 'Add like to this person'}
-                  accessibilityState={{ disabled: isLiked }}
-                >
-                  <Heart 
-                    size={20} 
-                    color="white" 
-                    fill={isLiked ? "white" : "none"}
-                  />
-                  <Text style={styles.likeButtonText}>
-                    {isLiked ? 'Liked!' : 'Like this person'}
-                  </Text>
-                </TouchableOpacity>
+              {/* Skip and Like Buttons */}
+              {(onSkip || onLike) && (
+                <View style={styles.buttonsContainer}>
+                  {onSkip && (
+                    <TouchableOpacity 
+                      style={styles.skipButton} 
+                      onPress={handleSkipPress}
+                      disabled={isSkipped}
+                      accessibilityRole="button"
+                      accessibilityLabel={isSkipped ? 'Already skipped' : `Skip ${profile.first_name}`}
+                      accessibilityHint={isSkipped ? 'You have already skipped this person' : 'Skip this profile'}
+                      accessibilityState={{ disabled: isSkipped }}
+                    >
+                      <X 
+                        size={20} 
+                        color="white" 
+                      />
+                      <Text style={styles.buttonText}>
+                        {isSkipped ? 'Skipped' : 'Skip'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                  
+                  {onLike && (
+                    <TouchableOpacity 
+                      style={styles.likeButton} 
+                      onPress={handleLikePress}
+                      disabled={isLiked}
+                      accessibilityRole="button"
+                      accessibilityLabel={isLiked ? 'Already liked' : `Like ${profile.first_name}`}
+                      accessibilityHint={isLiked ? 'You have already liked this person' : 'Add like to this person'}
+                      accessibilityState={{ disabled: isLiked }}
+                    >
+                      <Heart 
+                        size={20} 
+                        color="white" 
+                        fill={isLiked ? "white" : "none"}
+                      />
+                      <Text style={styles.buttonText}>
+                        {isLiked ? 'Liked!' : 'Like'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               )}
             </View>
 
@@ -275,8 +332,8 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, is
               </View>
             )}
           </ScrollView>
-        </View>
-      </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
     </Modal>
   );
 } 

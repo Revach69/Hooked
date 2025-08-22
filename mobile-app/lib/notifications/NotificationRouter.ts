@@ -11,6 +11,11 @@ type InitArgs = {
 
 const seen = new Map<string, number>();
 
+// Enhanced in-memory fallback cache for when AsyncStorage fails
+// This cache persists for the app session and provides redundancy
+const memoryFallbackCache = new Map<string, number>();
+const MEMORY_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour TTL for memory cache
+
 function dedupeKey(ev: AnyEvent) {
   if (ev.type === 'match') {
     // For matches, create a consistent key based on both users, regardless of who's creator
@@ -20,6 +25,19 @@ function dedupeKey(ev: AnyEvent) {
   }
   return `${ev.type}:${ev.id}`;
 }
+
+// Cleanup old entries from memory cache periodically
+function cleanupMemoryCache() {
+  const now = Date.now();
+  for (const [key, timestamp] of memoryFallbackCache.entries()) {
+    if (now - timestamp > MEMORY_CACHE_TTL_MS) {
+      memoryFallbackCache.delete(key);
+    }
+  }
+}
+
+// Run cleanup every 5 minutes
+setInterval(cleanupMemoryCache, 5 * 60 * 1000);
 
 // Helper to get current session (will be set by _layout.tsx)
 let currentSessionIdForDedup: string | null = null;
@@ -67,33 +85,47 @@ async function ensureSessionId(): Promise<string | null> {
 
 // Function to clear notification cache for re-matches
 export async function clearMatchNotificationCache(sessionId1: string, sessionId2: string) {
+  const sessions = [sessionId1, sessionId2].sort();
+  const persistentKey = `match_notification_${sessions[0]}_${sessions[1]}`;
+  const matchKey = `match:${sessions[0]}:${sessions[1]}`;
+  const singleMatchKey = `match_${matchKey}`;
+  
+  // Clear from all caches
+  let asyncStorageCleared = false;
+  
   try {
-    const sessions = [sessionId1, sessionId2].sort();
-    const persistentKey = `match_notification_${sessions[0]}_${sessions[1]}`;
+    // Try to clear from AsyncStorage
     await AsyncStorage.removeItem(persistentKey);
-    
-    // Also clear memory cache
-    const matchKey = `match:${sessions[0]}:${sessions[1]}`;
-    const singleMatchKey = `match_${matchKey}`;
-    seen.delete(singleMatchKey);
-    
-    console.log(`Cleared match notification cache for sessions ${sessions[0]} and ${sessions[1]}`);
-    
-    Sentry.addBreadcrumb({
-      message: 'Cleared match notification cache for re-match',
-      level: 'info',
-      category: 'notification',
-      data: { sessionId1: sessions[0], sessionId2: sessions[1] }
-    });
+    asyncStorageCleared = true;
+    console.log(`Cleared match notification from AsyncStorage for sessions ${sessions[0]} and ${sessions[1]}`);
   } catch (error) {
-    console.warn('Failed to clear match notification cache:', error);
+    console.warn('Failed to clear from AsyncStorage, will clear from memory caches:', error);
     Sentry.captureException(error, {
       tags: {
         operation: 'notification_cache_clear',
-        source: 'NotificationRouter'
+        source: 'NotificationRouter',
+        storage: 'AsyncStorage'
       }
     });
   }
+  
+  // Always clear from memory caches (even if AsyncStorage succeeded, for consistency)
+  seen.delete(singleMatchKey);
+  memoryFallbackCache.delete(persistentKey);
+  
+  console.log(`Cleared match notification cache for sessions ${sessions[0]} and ${sessions[1]} (AsyncStorage: ${asyncStorageCleared ? 'success' : 'failed'}, Memory: cleared)`);
+  
+  Sentry.addBreadcrumb({
+    message: 'Cleared match notification cache for re-match',
+    level: 'info',
+    category: 'notification',
+    data: { 
+      sessionId1: sessions[0], 
+      sessionId2: sessions[1],
+      asyncStorageCleared,
+      memoryCachesCleared: true
+    }
+  });
 }
 
 async function isCooling(ev: AnyEvent) {
@@ -232,10 +264,14 @@ export const NotificationRouter = {
       const matchKey = dedupeKey(ev);
       const now = Date.now();
       
-      // Use persistent storage to prevent duplicates across app reloads
+      // Enhanced deduplication with fallback mechanisms
+      const sessions = [ev.otherSessionId, getCurrentSessionId()].sort();
+      const persistentKey = `match_notification_${sessions[0]}_${sessions[1]}`;
+      let shouldSkipNotification = false;
+      let storageWorking = true;
+      
+      // First, try persistent storage
       try {
-        const sessions = [ev.otherSessionId, getCurrentSessionId()].sort();
-        const persistentKey = `match_notification_${sessions[0]}_${sessions[1]}`;
         const lastShown = await AsyncStorage.getItem(persistentKey);
         
         if (lastShown) {
@@ -243,16 +279,48 @@ export const NotificationRouter = {
           // Only allow one notification per match per 1 hour (reduced from 24h for re-matches)
           if (now - lastShownTime < 60 * 60 * 1000) {
             console.log(`Match notification already shown for this pair, skipping (last shown: ${new Date(lastShownTime).toISOString()})`);
-            return;
+            shouldSkipNotification = true;
           }
         }
         
-        // Mark this match as notified BEFORE showing the notification
-        await AsyncStorage.setItem(persistentKey, now.toString());
-        console.log(`Marked match notification as shown for sessions ${sessions[0]} and ${sessions[1]}`);
+        if (!shouldSkipNotification) {
+          // Mark this match as notified BEFORE showing the notification
+          await AsyncStorage.setItem(persistentKey, now.toString());
+          console.log(`Marked match notification as shown for sessions ${sessions[0]} and ${sessions[1]}`);
+          
+          // Also update memory fallback cache for redundancy
+          memoryFallbackCache.set(persistentKey, now);
+        }
       } catch (error) {
-        console.warn('Failed to check/save match notification state:', error);
-        // Don't return here - if storage fails, still allow the notification but use memory-only deduplication
+        console.warn('AsyncStorage failed, using memory fallback cache:', error);
+        storageWorking = false;
+        
+        // Log to Sentry for monitoring
+        Sentry.captureException(error, {
+          tags: {
+            operation: 'notification_deduplication',
+            fallback: 'memory_cache'
+          },
+          extra: {
+            persistentKey,
+            sessions
+          }
+        });
+        
+        // Fallback to memory cache when AsyncStorage fails
+        const memCachedTime = memoryFallbackCache.get(persistentKey);
+        if (memCachedTime && (now - memCachedTime < 60 * 60 * 1000)) {
+          console.log(`Memory cache: Match notification already shown, skipping`);
+          shouldSkipNotification = true;
+        } else if (!memCachedTime) {
+          // Mark in memory cache if not already present
+          memoryFallbackCache.set(persistentKey, now);
+          console.log(`Memory cache: Marked match notification as shown`);
+        }
+      }
+      
+      if (shouldSkipNotification) {
+        return;
       }
       
       // Also use memory-based deduplication as backup - use a single key for the entire match

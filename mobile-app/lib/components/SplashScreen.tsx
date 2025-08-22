@@ -16,7 +16,7 @@ export default function SplashScreen() {
       {/* App Icon */}
       <View style={styles.iconContainer}>
         <Image 
-          source={require('../../assets/icon.png')}
+          source={require('../../assets/icon-rounded.png')}
           style={styles.appIcon}
           resizeMode="contain"
         />
@@ -46,7 +46,6 @@ const styles = StyleSheet.create({
   appIcon: {
     width: 140,
     height: 140,
-    borderRadius: 35,
   },
   appName: {
     fontSize: 28,

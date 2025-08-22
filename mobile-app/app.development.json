@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Hooked",
-    "slug": "hooked",
+    "name": "Hooked Dev",
+    "slug": "hooked-dev",
     "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -16,7 +16,7 @@
     ],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.hookedapp.app",
+      "bundleIdentifier": "com.hookedapp.app.dev",
       "splash": {
         "image": "./assets/icon-rounded.png",
         "resizeMode": "contain",
@@ -28,19 +28,20 @@
         }
       },
       "associatedDomains": [
-        "applinks:hooked-app.com",
-        "applinks:www.hooked-app.com"
+        "applinks:dev.hooked-app.com",
+        "applinks:dev-www.hooked-app.com"
       ],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSCameraUsageDescription": "Hooked needs camera access to let you take profile photos and scan QR codes at events.",
-        "NSPhotoLibraryUsageDescription": "Hooked needs photo library access to let you select existing photos for your dating profile at events.",
-        "NSUserNotificationUsageDescription": "Hooked needs notification access to send you alerts about new matches and messages at events.",
+        "NSCameraUsageDescription": "Hooked Dev needs camera access to let you take profile photos and scan QR codes at events.",
+        "NSPhotoLibraryUsageDescription": "Hooked Dev needs photo library access to let you select existing photos for your dating profile at events.",
+        "NSUserNotificationUsageDescription": "Hooked Dev needs notification access to send you alerts about new matches and messages at events.",
         "UIBackgroundModes": ["remote-notification"]
       },
       "entitlements": {
-        "aps-environment": "production"
-      }
+        "aps-environment": "development"
+      },
+      "googleServicesFile": "./ios/Hooked/GoogleService-Info-dev.plist"
     },
     "android": {
       "adaptiveIcon": {
@@ -57,8 +58,8 @@
           "backgroundColor": "#1a1a1a"
         }
       },
-      "package": "com.hookedapp.app",
-      "googleServicesFile": "./android/app/google-services.json",
+      "package": "com.hooked.hookeddev",
+      "googleServicesFile": "./android/app/google-services-dev.json",
       "intentFilters": [
         {
           "action": "VIEW",
@@ -67,11 +68,11 @@
           "data": [
             {
               "scheme": "https",
-              "host": "hooked-app.com"
+              "host": "dev.hooked-app.com"
             },
             {
               "scheme": "https", 
-              "host": "www.hooked-app.com"
+              "host": "dev-www.hooked-app.com"
             }
           ]
         }
@@ -92,7 +93,7 @@
         "@sentry/react-native/expo",
         {
           "organization": "hooked",
-          "project": "hooked",
+          "project": "hooked-dev",
           "url": "https://sentry.io/"
         }
       ],
@@ -103,17 +104,16 @@
           "icon": "./assets/icon.png",
           "color": "#ffffff",
           "androidMode": "default",
-          "androidCollapsedTitle": "New Message",
-          "androidChannelId": "default",
-          "androidChannelName": "Hooked Notifications",
-          "androidChannelDescription": "Notifications for new messages and matches",
+          "androidCollapsedTitle": "New Message [DEV]",
+          "androidChannelId": "default-dev",
+          "androidChannelName": "Hooked Dev Notifications",
+          "androidChannelDescription": "Development notifications for new messages and matches",
           "androidChannelImportance": "high",
           "androidShowBadge": true,
           "androidVibrate": true,
           "androidSound": "default"
         }
       ],
- 
       [
         "expo-build-properties",
         {
@@ -125,16 +125,15 @@
         }
       ]
     ],
-    "scheme": "hooked", 
+    "scheme": "hooked-dev", 
     "extra": {
       "firebaseConfig": {
-        "apiKey": "AIzaSyDkVAo_xXbBHy8FYwFtMQA66aju08qK_yE",
-        "authDomain": "hooked-69.firebaseapp.com",
-        "projectId": "hooked-69",
-        "storageBucket": "hooked-69.firebasestorage.app",
-        "messagingSenderId": "741889428835",
-        "appId": "1:741889428835:web:d5f88b43a503c9e6351756",
-        "measurementId": "G-6YHKXLN806"
+        "apiKey": "AIzaSyBhGESZT7wVnFX7zLm6_ztJJHzKL5JLhf8",
+        "authDomain": "hooked-development.firebaseapp.com",
+        "projectId": "hooked-development",
+        "storageBucket": "hooked-development.firebasestorage.app",
+        "messagingSenderId": "474843121153",
+        "appId": "1:474843121153:web:7242ff23e23f158383a200",
       },
       "router": {},
       "eas": {
