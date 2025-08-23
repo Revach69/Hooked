@@ -127,7 +127,7 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      opacity: isSkipped ? 0.5 : 1,
+      opacity: (isSkipped || isLiked) ? 0.5 : 1, // Disable if skipped OR liked
     },
     likeButton: {
       flex: 1,
@@ -138,7 +138,7 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      opacity: isLiked ? 0.5 : 1,
+      opacity: (isLiked || isSkipped) ? 0.5 : 1, // Disable if liked OR skipped
     },
     buttonText: {
       color: 'white',
@@ -260,11 +260,11 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
                     <TouchableOpacity 
                       style={styles.skipButton} 
                       onPress={handleSkipPress}
-                      disabled={isSkipped}
+                      disabled={isSkipped || isLiked}
                       accessibilityRole="button"
-                      accessibilityLabel={isSkipped ? 'Already skipped' : `Skip ${profile.first_name}`}
-                      accessibilityHint={isSkipped ? 'You have already skipped this person' : 'Skip this profile'}
-                      accessibilityState={{ disabled: isSkipped }}
+                      accessibilityLabel={isSkipped ? 'Already skipped' : isLiked ? 'Cannot skip liked profile' : `Skip ${profile.first_name}`}
+                      accessibilityHint={isSkipped ? 'You have already skipped this person' : isLiked ? 'You cannot skip a profile you have liked' : 'Skip this profile'}
+                      accessibilityState={{ disabled: isSkipped || isLiked }}
                     >
                       <X 
                         size={20} 
@@ -280,11 +280,11 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
                     <TouchableOpacity 
                       style={styles.likeButton} 
                       onPress={handleLikePress}
-                      disabled={isLiked}
+                      disabled={isLiked || isSkipped}
                       accessibilityRole="button"
-                      accessibilityLabel={isLiked ? 'Already liked' : `Like ${profile.first_name}`}
-                      accessibilityHint={isLiked ? 'You have already liked this person' : 'Add like to this person'}
-                      accessibilityState={{ disabled: isLiked }}
+                      accessibilityLabel={isLiked ? 'Already liked' : isSkipped ? 'Cannot like skipped profile' : `Like ${profile.first_name}`}
+                      accessibilityHint={isLiked ? 'You have already liked this person' : isSkipped ? 'You cannot like a profile you have skipped' : 'Add like to this person'}
+                      accessibilityState={{ disabled: isLiked || isSkipped }}
                     >
                       <Heart 
                         size={20} 

@@ -728,6 +728,16 @@ export default function Discovery() {
 
   const handleLike = async (likedProfile: any) => {
     if (likedProfiles.has(likedProfile.session_id) || !currentUserProfile) return;
+    
+    // Cannot like a profile that has been skipped
+    if (skippedProfiles.has(likedProfile.session_id)) {
+      Alert.alert(
+        'Cannot Like',
+        'You cannot like a profile you have skipped. You can find skipped profiles in the discovery page with a gray overlay.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
 
     const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
     const likerSessionId = currentUserProfile.session_id;
@@ -830,6 +840,16 @@ export default function Discovery() {
 
   const handleSkip = async (skippedProfile: any) => {
     if (skippedProfiles.has(skippedProfile.session_id) || !currentUserProfile) return;
+    
+    // Cannot skip a profile that has been liked
+    if (likedProfiles.has(skippedProfile.session_id)) {
+      Alert.alert(
+        'Cannot Skip',
+        'You cannot skip a profile you have liked. You can see your likes with pink heart icons.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
 
     const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
     const skipperSessionId = currentUserProfile.session_id;
@@ -1298,7 +1318,7 @@ export default function Discovery() {
       right: 0,
       bottom: 0,
       backgroundColor: 'rgba(0, 0, 0, 0.4)',
-      borderRadius: 16,
+      borderRadius: 12,
       zIndex: 1,
     },
   });
