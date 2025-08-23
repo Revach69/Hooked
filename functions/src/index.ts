@@ -531,24 +531,65 @@ async function onceOnly(key: string) {
   return true;
 }
 
+// Notification Analytics Tracking
+interface NotificationAnalyticsEvent {
+  type: 'match' | 'message' | 'generic';
+  event: 'enqueued' | 'sent' | 'failed' | 'duplicate_prevented' | 'retry' | 'permanent_failure';
+  subject_session_id: string;
+  actor_session_id?: string;
+  aggregation_key?: string;
+  error?: string;
+  metadata?: Record<string, any>;
+}
+
+async function trackNotificationAnalytics(event: NotificationAnalyticsEvent): Promise<void> {
+  try {
+    // Store analytics data for monitoring and debugging duplicate notification issues
+    await admin.firestore().collection('notification_analytics').add({
+      ...event,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      date_partition: new Date().toISOString().split('T')[0], // For easier querying by date
+    });
+  } catch (error) {
+    // Don't let analytics tracking failures affect main notification flow
+    console.error('Failed to track notification analytics:', error);
+  }
+}
+
 // Queue management functions
 async function enqueueNotificationJob(job: Omit<NotificationJob, 'attempts' | 'status' | 'createdAt' | 'updatedAt'>): Promise<void> {
-  // Check for duplicate jobs with same aggregationKey in the last 30 seconds
-  const thirtySecondsAgo = new Date(Date.now() - 30000);
+  // Enhanced deduplication: Check for duplicate jobs with same aggregationKey in the last 5 minutes
+  // This prevents multiple notifications for the same event even if there are retries or race conditions
+  const DEDUPLICATION_WINDOW_MS = 5 * 60 * 1000; // 5 minutes (increased from 30 seconds)
+  const fiveMinutesAgo = new Date(Date.now() - DEDUPLICATION_WINDOW_MS);
   const duplicateCheck = await admin.firestore()
     .collection('notification_jobs')
     .where('aggregationKey', '==', job.aggregationKey)
     .where('subject_session_id', '==', job.subject_session_id)
-    .where('createdAt', '>', thirtySecondsAgo)
+    .where('createdAt', '>', fiveMinutesAgo)
     .limit(1)
     .get();
   
   if (!duplicateCheck.empty) {
-    console.log('Duplicate notification job detected, skipping:', { 
+    console.log('Duplicate notification job detected within 5-minute window, skipping:', { 
       type: job.type, 
       subject: job.subject_session_id, 
-      aggregationKey: job.aggregationKey 
+      aggregationKey: job.aggregationKey,
+      windowMinutes: 5
     });
+    
+    // Track duplicate attempt in analytics
+    await trackNotificationAnalytics({
+      type: job.type,
+      event: 'duplicate_prevented',
+      subject_session_id: job.subject_session_id,
+      aggregation_key: job.aggregationKey,
+      metadata: {
+        deduplication_window_ms: DEDUPLICATION_WINDOW_MS,
+        source: 'enqueue_deduplication'
+      }
+    });
+    
     return;
   }
   
@@ -562,6 +603,18 @@ async function enqueueNotificationJob(job: Omit<NotificationJob, 'attempts' | 's
   
   await admin.firestore().collection('notification_jobs').add(jobDoc);
   console.log('Enqueued notification job:', { type: job.type, subject: job.subject_session_id, aggregationKey: job.aggregationKey });
+  
+  // Track successful enqueue in analytics
+  await trackNotificationAnalytics({
+    type: job.type,
+    event: 'enqueued',
+    subject_session_id: job.subject_session_id,
+    actor_session_id: job.actor_session_id,
+    aggregation_key: job.aggregationKey,
+    metadata: {
+      event_id: job.event_id
+    }
+  });
 }
 
 async function processNotificationJobs(): Promise<void> {
@@ -646,6 +699,21 @@ async function processNotificationJobs(): Promise<void> {
             error: 'No push tokens found for recipient',
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           });
+          
+          // Track permanent failure in analytics
+          await trackNotificationAnalytics({
+            type: job.type,
+            event: 'permanent_failure',
+            subject_session_id: job.subject_session_id,
+            actor_session_id: job.actor_session_id,
+            aggregation_key: job.aggregationKey,
+            error: 'No push tokens found for recipient',
+            metadata: {
+              event_id: job.event_id,
+              reason: 'no_tokens'
+            }
+          });
+          
           continue;
         }
         
@@ -660,6 +728,19 @@ async function processNotificationJobs(): Promise<void> {
           await jobDoc.ref.update({
             status: 'sent',
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          
+          // Track successful send in analytics
+          await trackNotificationAnalytics({
+            type: job.type,
+            event: 'sent',
+            subject_session_id: job.subject_session_id,
+            actor_session_id: job.actor_session_id,
+            aggregation_key: job.aggregationKey,
+            metadata: {
+              event_id: job.event_id,
+              tokens_count: tokens.length
+            }
           });
         } else {
           throw new Error(`Push failed: ${JSON.stringify(result.results)}`);
@@ -679,6 +760,21 @@ async function processNotificationJobs(): Promise<void> {
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           });
           console.log('Job marked as permanent failure after max attempts');
+          
+          // Track permanent failure in analytics
+          await trackNotificationAnalytics({
+            type: job.type,
+            event: 'permanent_failure',
+            subject_session_id: job.subject_session_id,
+            actor_session_id: job.actor_session_id,
+            aggregation_key: job.aggregationKey,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            metadata: {
+              event_id: job.event_id,
+              attempts: newAttempts,
+              reason: 'max_attempts_exceeded'
+            }
+          });
         } else {
           // Increment attempts and keep queued (exponential backoff handled by scheduling)
           await jobDoc.ref.update({
@@ -687,6 +783,20 @@ async function processNotificationJobs(): Promise<void> {
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           });
           console.log(`Job attempt ${newAttempts} failed, will retry`);
+          
+          // Track retry in analytics
+          await trackNotificationAnalytics({
+            type: job.type,
+            event: 'retry',
+            subject_session_id: job.subject_session_id,
+            actor_session_id: job.actor_session_id,
+            aggregation_key: job.aggregationKey,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            metadata: {
+              event_id: job.event_id,
+              attempt_number: newAttempts
+            }
+          });
         }
       }
     }
@@ -821,6 +931,1147 @@ export const notify = onRequest({
       res.status(code).json({ error: err?.message || 'Unknown error' });
     }
   }); 
+
+// ===== MAPBOX VENUE DISCOVERY FUNCTIONS =====
+
+// Data Model: Venue Schema for Firestore
+interface Venue {
+  id: string;
+  name: string;
+  description?: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  geohash?: string; // For geospatial indexing
+  venue_type: 'restaurant' | 'bar' | 'cafe' | 'club' | 'retail' | 'hotel' | 'other';
+  subscription_status: 'active' | 'inactive' | 'trial';
+  client_type: 'map_client' | 'event_client'; // Differentiates continuous vs one-time
+  contact_info?: {
+    phone?: string;
+    email?: string;
+    website?: string;
+  };
+  business_hours?: {
+    [day: string]: { open: string; close: string; closed?: boolean };
+  };
+  amenities?: string[];
+  price_range?: 1 | 2 | 3 | 4; // $ to $$$$
+  rating?: number;
+  review_count?: number;
+  images?: string[];
+  created_at: admin.firestore.FieldValue | admin.firestore.Timestamp;
+  updated_at: admin.firestore.FieldValue | admin.firestore.Timestamp;
+  created_by?: string; // Admin user ID
+}
+
+// Cloud Function to get venues within map viewport (geospatial query)
+export const getVenuesInViewport = onCall({
+  region: FUNCTION_REGION,
+}, async (request) => {
+  const { bounds, venue_types, subscription_status } = request.data;
+  
+  // Validate bounds: { north, south, east, west }
+  if (!bounds || typeof bounds.north !== 'number' || typeof bounds.south !== 'number' ||
+      typeof bounds.east !== 'number' || typeof bounds.west !== 'number') {
+    throw new HttpsError('invalid-argument', 'bounds must contain north, south, east, west coordinates');
+  }
+  
+  // Validate coordinates are within valid ranges
+  if (Math.abs(bounds.north) > 90 || Math.abs(bounds.south) > 90 ||
+      Math.abs(bounds.east) > 180 || Math.abs(bounds.west) > 180) {
+    throw new HttpsError('invalid-argument', 'Invalid coordinate values');
+  }
+  
+  if (bounds.north <= bounds.south) {
+    throw new HttpsError('invalid-argument', 'North bound must be greater than south bound');
+  }
+  
+  try {
+    let query = db.collection('venues')
+      .where('latitude', '>=', bounds.south)
+      .where('latitude', '<=', bounds.north);
+    
+    // Apply longitude filtering (handling date line crossing)
+    if (bounds.west <= bounds.east) {
+      // Normal case: doesn't cross 180th meridian
+      query = query.where('longitude', '>=', bounds.west)
+                   .where('longitude', '<=', bounds.east);
+    } else {
+      // Crosses 180th meridian: need two queries
+      // This is a simplified approach - production might need more complex handling
+      query = query.where('longitude', '>=', bounds.west);
+    }
+    
+    // Filter by venue types if specified
+    if (venue_types && Array.isArray(venue_types) && venue_types.length > 0) {
+      query = query.where('venue_type', 'in', venue_types);
+    }
+    
+    // Filter by subscription status if specified
+    if (subscription_status && ['active', 'inactive', 'trial'].includes(subscription_status)) {
+      query = query.where('subscription_status', '==', subscription_status);
+    }
+    
+    // Limit results to prevent excessive data transfer
+    query = query.limit(500);
+    
+    const snapshot = await query.get();
+    
+    const venues = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    
+    // Additional longitude filtering for date line crossing case
+    if (bounds.west > bounds.east) {
+      venues.filter(venue => venue.longitude >= bounds.west || venue.longitude <= bounds.east);
+    }
+    
+    console.log(`getVenuesInViewport: Found ${venues.length} venues in bounds:`, bounds);
+    
+    return { success: true, venues, count: venues.length };
+    
+  } catch (error) {
+    console.error('Error fetching venues in viewport:', error);
+    throw new HttpsError('internal', 'Failed to fetch venues');
+  }
+});
+
+// Cloud Function to get detailed venue information
+export const getVenueDetails = onCall({
+  region: FUNCTION_REGION,
+}, async (request) => {
+  const { venue_id } = request.data;
+  
+  if (!venue_id || typeof venue_id !== 'string') {
+    throw new HttpsError('invalid-argument', 'venue_id is required and must be a string');
+  }
+  
+  try {
+    const venueDoc = await db.collection('venues').doc(venue_id).get();
+    
+    if (!venueDoc.exists) {
+      throw new HttpsError('not-found', 'Venue not found');
+    }
+    
+    const venueData = {
+      id: venueDoc.id,
+      ...venueDoc.data()
+    };
+    
+    console.log(`getVenueDetails: Retrieved details for venue ${venue_id}`);
+    
+    return { success: true, venue: venueData };
+    
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    console.error('Error fetching venue details:', error);
+    throw new HttpsError('internal', 'Failed to fetch venue details');
+  }
+});
+
+// Cloud Function to add/update venue (admin only)
+export const manageVenue = onCall({
+  region: FUNCTION_REGION,
+}, async (request) => {
+  // Verify admin authentication
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated');
+  }
+  
+  // For now, any authenticated user is considered admin
+  // In production, you'd check admin claims
+  
+  const { venue_data, venue_id, operation = 'create' } = request.data;
+  
+  if (!venue_data || typeof venue_data !== 'object') {
+    throw new HttpsError('invalid-argument', 'venue_data is required and must be an object');
+  }
+  
+  // Validate required fields
+  const required_fields = ['name', 'address', 'latitude', 'longitude', 'venue_type', 'subscription_status'];
+  for (const field of required_fields) {
+    if (!(field in venue_data)) {
+      throw new HttpsError('invalid-argument', `${field} is required`);
+    }
+  }
+  
+  // Validate coordinate ranges
+  if (Math.abs(venue_data.latitude) > 90 || Math.abs(venue_data.longitude) > 180) {
+    throw new HttpsError('invalid-argument', 'Invalid latitude or longitude');
+  }
+  
+  // Validate enums
+  const valid_types = ['restaurant', 'bar', 'cafe', 'club', 'retail', 'hotel', 'other'];
+  const valid_statuses = ['active', 'inactive', 'trial'];
+  const valid_client_types = ['map_client', 'event_client'];
+  
+  if (!valid_types.includes(venue_data.venue_type)) {
+    throw new HttpsError('invalid-argument', 'Invalid venue_type');
+  }
+  
+  if (!valid_statuses.includes(venue_data.subscription_status)) {
+    throw new HttpsError('invalid-argument', 'Invalid subscription_status');
+  }
+  
+  if (venue_data.client_type && !valid_client_types.includes(venue_data.client_type)) {
+    throw new HttpsError('invalid-argument', 'Invalid client_type');
+  }
+  
+  try {
+    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+    const venue_record: Partial<Venue> = {
+      ...venue_data,
+      client_type: venue_data.client_type || 'map_client',
+      updated_at: timestamp,
+      ...(operation === 'create' && { created_at: timestamp, created_by: request.auth.uid })
+    };
+    
+    // TODO: Add geohash calculation for better geospatial indexing
+    // This will be implemented in the geospatial indexing task
+    
+    let result;
+    if (operation === 'update' && venue_id) {
+      await db.collection('venues').doc(venue_id).update(venue_record);
+      result = { id: venue_id, operation: 'updated' };
+    } else {
+      const doc_ref = await db.collection('venues').add(venue_record as Venue);
+      result = { id: doc_ref.id, operation: 'created' };
+    }
+    
+    console.log(`manageVenue: ${result.operation} venue ${result.id}`);
+    
+    return { success: true, ...result };
+    
+  } catch (error) {
+    console.error('Error managing venue:', error);
+    throw new HttpsError('internal', 'Failed to manage venue');
+  }
+});
+
+// Cloud Function to generate test venues (admin only - for development/testing)
+export const generateTestVenues = onCall({
+  region: FUNCTION_REGION,
+}, async (request) => {
+  // Verify admin authentication
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated');
+  }
+  
+  const { count = 50, city = 'San Francisco', clear_existing = false } = request.data;
+  
+  if (typeof count !== 'number' || count < 1 || count > 1000) {
+    throw new HttpsError('invalid-argument', 'count must be a number between 1 and 1000');
+  }
+  
+  try {
+    // Clear existing test venues if requested
+    if (clear_existing) {
+      console.log('Clearing existing test venues...');
+      const existingVenues = await db.collection('venues').get();
+      const batch = db.batch();
+      existingVenues.docs.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+      console.log(`Deleted ${existingVenues.size} existing venues`);
+    }
+    
+    // City coordinates for realistic test data
+    const cityCoords = {
+      'San Francisco': { lat: 37.7749, lng: -122.4194, radius: 0.1 },
+      'New York': { lat: 40.7128, lng: -74.0060, radius: 0.1 },
+      'Los Angeles': { lat: 34.0522, lng: -118.2437, radius: 0.15 },
+      'Chicago': { lat: 41.8781, lng: -87.6298, radius: 0.1 },
+      'Austin': { lat: 30.2672, lng: -97.7431, radius: 0.08 }
+    };
+    
+    const coords = cityCoords[city as keyof typeof cityCoords] || cityCoords['San Francisco'];
+    
+    // Sample venue data
+    const venueNames = {
+      restaurant: ['The Golden Spoon', 'Bella Vista', 'Urban Kitchen', 'Harvest Table', 'Spice Route', 'Ocean Breeze', 'Fire & Stone', 'Green Garden'],
+      bar: ['The Copper Fox', 'Midnight Lounge', 'Rooftop Social', 'The Local Tap', 'Whiskey & Wine', 'Neon Nights', 'The Corner Pub', 'Skyline Bar'],
+      cafe: ['Morning Brew', 'The Coffee House', 'Artisan Roasters', 'Daily Grind', 'Steam & Cream', 'Corner Cafe', 'The Bean Scene', 'Sunrise Coffee'],
+      club: ['Electric Nights', 'The Underground', 'Pulse', 'Neon Dreams', 'Bass Drop', 'The Beat', 'Club Infinity', 'Sound & Fury'],
+      retail: ['Style Central', 'Urban Threads', 'The Boutique', 'Fashion Forward', 'Trendy Finds', 'The Marketplace', 'Local Goods', 'Artisan Market'],
+      hotel: ['Grand Plaza', 'City View Inn', 'The Boutique Hotel', 'Skyline Suites', 'Urban Lodge', 'The Metropolitan', 'Garden Inn', 'Historic Hotel']
+    };
+    
+    const amenities = ['WiFi', 'Parking', 'Outdoor Seating', 'Live Music', 'Happy Hour', 'Private Events', 'Wheelchair Accessible', 'Pet Friendly', 'Late Night', 'Takeout', 'Delivery', 'Group Bookings'];
+    
+    const venues: Partial<Venue>[] = [];
+    
+    for (let i = 0; i < count; i++) {
+      // Random venue type
+      const types = Object.keys(venueNames) as Array<keyof typeof venueNames>;
+      const venue_type = types[Math.floor(Math.random() * types.length)];
+      
+      // Random name from the type category
+      const nameOptions = venueNames[venue_type];
+      const name = nameOptions[Math.floor(Math.random() * nameOptions.length)] + ` ${i + 1}`;
+      
+      // Random coordinates within city bounds
+      const lat = coords.lat + (Math.random() - 0.5) * coords.radius;
+      const lng = coords.lng + (Math.random() - 0.5) * coords.radius;
+      
+      // Random subscription status (weighted towards active)
+      const statusWeights = { active: 0.7, trial: 0.2, inactive: 0.1 };
+      const rand = Math.random();
+      let subscription_status: 'active' | 'trial' | 'inactive' = 'active';
+      if (rand > 0.7) subscription_status = rand > 0.9 ? 'inactive' : 'trial';
+      
+      // Random client type (weighted towards map_client for the feature)
+      const client_type: 'map_client' | 'event_client' = Math.random() > 0.2 ? 'map_client' : 'event_client';
+      
+      // Random amenities (2-5 per venue)
+      const venueAmenities = amenities
+        .sort(() => Math.random() - 0.5)
+        .slice(0, Math.floor(Math.random() * 4) + 2);
+      
+      // Random business hours
+      const hours = ['09:00', '10:00', '11:00'];
+      const openHour = hours[Math.floor(Math.random() * hours.length)];
+      const closeHours = venue_type === 'club' ? ['02:00', '03:00', '04:00'] : 
+                        venue_type === 'bar' ? ['23:00', '00:00', '01:00'] :
+                        ['20:00', '21:00', '22:00'];
+      const closeHour = closeHours[Math.floor(Math.random() * closeHours.length)];
+      
+      const venue: Partial<Venue> = {
+        name,
+        description: `A great ${venue_type} in ${city}. Perfect for locals and visitors alike.`,
+        address: `${Math.floor(Math.random() * 9999) + 1} ${['Main St', 'Oak Ave', 'Pine Rd', 'Cedar Blvd', 'Elm Way'][Math.floor(Math.random() * 5)]}, ${city}`,
+        latitude: lat,
+        longitude: lng,
+        venue_type: venue_type as Venue['venue_type'],
+        subscription_status,
+        client_type,
+        contact_info: {
+          phone: `(${Math.floor(Math.random() * 900) + 100}) ${Math.floor(Math.random() * 900) + 100}-${Math.floor(Math.random() * 9000) + 1000}`,
+          email: `info@${name.toLowerCase().replace(/\s+/g, '')}.com`,
+          website: `https://www.${name.toLowerCase().replace(/\s+/g, '')}.com`
+        },
+        business_hours: {
+          monday: { open: openHour, close: closeHour },
+          tuesday: { open: openHour, close: closeHour },
+          wednesday: { open: openHour, close: closeHour },
+          thursday: { open: openHour, close: closeHour },
+          friday: { open: openHour, close: closeHour },
+          saturday: { open: openHour, close: closeHour },
+          sunday: Math.random() > 0.3 ? { open: openHour, close: closeHour } : { closed: true, open: '', close: '' }
+        },
+        amenities: venueAmenities,
+        price_range: (Math.floor(Math.random() * 4) + 1) as 1 | 2 | 3 | 4,
+        rating: Math.round((Math.random() * 2 + 3) * 10) / 10, // 3.0 to 5.0
+        review_count: Math.floor(Math.random() * 500) + 10,
+        images: [
+          `https://picsum.photos/400/300?random=${i * 3 + 1}`,
+          `https://picsum.photos/400/300?random=${i * 3 + 2}`,
+          `https://picsum.photos/400/300?random=${i * 3 + 3}`
+        ],
+        created_at: admin.firestore.FieldValue.serverTimestamp(),
+        updated_at: admin.firestore.FieldValue.serverTimestamp(),
+        created_by: request.auth.uid
+      };
+      
+      venues.push(venue);
+    }
+    
+    // Batch write venues (Firestore batch limit is 500)
+    const batches = [];
+    const batchSize = 500;
+    
+    for (let i = 0; i < venues.length; i += batchSize) {
+      const batch = db.batch();
+      const batchVenues = venues.slice(i, i + batchSize);
+      
+      batchVenues.forEach(venue => {
+        const docRef = db.collection('venues').doc();
+        batch.set(docRef, venue as Venue);
+      });
+      
+      batches.push(batch.commit());
+    }
+    
+    await Promise.all(batches);
+    
+    console.log(`generateTestVenues: Created ${venues.length} test venues in ${city}`);
+    
+    return { 
+      success: true, 
+      created: venues.length,
+      city,
+      message: `Generated ${venues.length} test venues in ${city}` 
+    };
+    
+  } catch (error) {
+    console.error('Error generating test venues:', error);
+    throw new HttpsError('internal', 'Failed to generate test venues');
+  }
+});
+
+// Cloud Function to register/update client type status
+export const updateClientType = onCall({
+  region: FUNCTION_REGION,
+}, async (request) => {
+  const { client_id, client_type, subscription_details } = request.data;
+  
+  // Validate required fields
+  if (!client_id || typeof client_id !== 'string') {
+    throw new HttpsError('invalid-argument', 'client_id is required and must be a string');
+  }
+  
+  if (!client_type || !['map_client', 'event_client'].includes(client_type)) {
+    throw new HttpsError('invalid-argument', 'client_type must be either map_client or event_client');
+  }
+  
+  try {
+    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+    
+    // Store client type information
+    const clientRecord = {
+      client_id,
+      client_type,
+      subscription_details: subscription_details || {},
+      last_updated: timestamp,
+      created_at: timestamp
+    };
+    
+    // Use merge to update existing or create new
+    await db.collection('client_types').doc(client_id).set(clientRecord, { merge: true });
+    
+    // Update all venues associated with this client
+    if (client_type === 'map_client') {
+      // Map clients have continuous access to venue discovery
+      const venuesSnapshot = await db.collection('venues')
+        .where('created_by', '==', client_id)
+        .get();
+        
+      if (!venuesSnapshot.empty) {
+        const batch = db.batch();
+        venuesSnapshot.docs.forEach(doc => {
+          batch.update(doc.ref, { 
+            client_type: 'map_client',
+            updated_at: timestamp
+          });
+        });
+        await batch.commit();
+      }
+    }
+    
+    console.log(`updateClientType: Updated client ${client_id} to ${client_type}`);
+    
+    return { 
+      success: true, 
+      client_id,
+      client_type,
+      message: `Client type updated to ${client_type}` 
+    };
+    
+  } catch (error) {
+    console.error('Error updating client type:', error);
+    throw new HttpsError('internal', 'Failed to update client type');
+  }
+});
+
+// Cloud Function to get client type and permissions
+export const getClientPermissions = onCall({
+  region: FUNCTION_REGION,
+}, async (request) => {
+  const { client_id } = request.data;
+  
+  if (!client_id || typeof client_id !== 'string') {
+    throw new HttpsError('invalid-argument', 'client_id is required and must be a string');
+  }
+  
+  try {
+    const clientDoc = await db.collection('client_types').doc(client_id).get();
+    
+    let permissions = {
+      can_access_map_discovery: false,
+      can_create_continuous_events: false,
+      subscription_status: 'inactive',
+      client_type: 'event_client'
+    };
+    
+    if (clientDoc.exists) {
+      const clientData = clientDoc.data();
+      const isMapClient = clientData?.client_type === 'map_client';
+      
+      permissions = {
+        can_access_map_discovery: isMapClient,
+        can_create_continuous_events: isMapClient,
+        subscription_status: clientData?.subscription_details?.status || 'inactive',
+        client_type: clientData?.client_type || 'event_client'
+      };
+    }
+    
+    console.log(`getClientPermissions: Retrieved permissions for client ${client_id}`);
+    
+    return { 
+      success: true, 
+      client_id,
+      permissions
+    };
+    
+  } catch (error) {
+    console.error('Error getting client permissions:', error);
+    throw new HttpsError('internal', 'Failed to get client permissions');
+  }
+});
+
+// Enhanced getVenuesInViewport with client type filtering
+export const getVenuesInViewportFiltered = onCall({
+  region: FUNCTION_REGION,
+}, async (request) => {
+  const { bounds, venue_types, subscription_status, requesting_client_id, client_type_filter } = request.data;
+  
+  // Validate bounds: { north, south, east, west }
+  if (!bounds || typeof bounds.north !== 'number' || typeof bounds.south !== 'number' ||
+      typeof bounds.east !== 'number' || typeof bounds.west !== 'number') {
+    throw new HttpsError('invalid-argument', 'bounds must contain north, south, east, west coordinates');
+  }
+  
+  // Validate coordinates are within valid ranges
+  if (Math.abs(bounds.north) > 90 || Math.abs(bounds.south) > 90 ||
+      Math.abs(bounds.east) > 180 || Math.abs(bounds.west) > 180) {
+    throw new HttpsError('invalid-argument', 'Invalid coordinate values');
+  }
+  
+  if (bounds.north <= bounds.south) {
+    throw new HttpsError('invalid-argument', 'North bound must be greater than south bound');
+  }
+  
+  // Check requesting client permissions if provided
+  let canAccessMapClients = false;
+  if (requesting_client_id) {
+    try {
+      const clientDoc = await db.collection('client_types').doc(requesting_client_id).get();
+      if (clientDoc.exists) {
+        const clientData = clientDoc.data();
+        canAccessMapClients = clientData?.client_type === 'map_client';
+      }
+    } catch (error) {
+      console.warn('Could not verify client permissions:', error);
+    }
+  }
+  
+  try {
+    let query = db.collection('venues')
+      .where('latitude', '>=', bounds.south)
+      .where('latitude', '<=', bounds.north);
+    
+    // Apply longitude filtering (handling date line crossing)
+    if (bounds.west <= bounds.east) {
+      // Normal case: doesn't cross 180th meridian
+      query = query.where('longitude', '>=', bounds.west)
+                   .where('longitude', '<=', bounds.east);
+    } else {
+      // Crosses 180th meridian: need two queries
+      query = query.where('longitude', '>=', bounds.west);
+    }
+    
+    // Filter by venue types if specified
+    if (venue_types && Array.isArray(venue_types) && venue_types.length > 0) {
+      query = query.where('venue_type', 'in', venue_types);
+    }
+    
+    // Filter by subscription status if specified
+    if (subscription_status && ['active', 'inactive', 'trial'].includes(subscription_status)) {
+      query = query.where('subscription_status', '==', subscription_status);
+    }
+    
+    // Filter by client type if specified and requesting client has permissions
+    if (client_type_filter && canAccessMapClients) {
+      query = query.where('client_type', '==', client_type_filter);
+    } else if (!canAccessMapClients) {
+      // Non-map clients can only see event_client venues
+      query = query.where('client_type', '==', 'event_client');
+    }
+    
+    // Limit results to prevent excessive data transfer
+    query = query.limit(500);
+    
+    const snapshot = await query.get();
+    
+    const venues = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    
+    // Additional longitude filtering for date line crossing case
+    if (bounds.west > bounds.east) {
+      venues.filter(venue => venue.longitude >= bounds.west || venue.longitude <= bounds.east);
+    }
+    
+    console.log(`getVenuesInViewportFiltered: Found ${venues.length} venues for client ${requesting_client_id} (map access: ${canAccessMapClients})`);
+    
+    return { 
+      success: true, 
+      venues, 
+      count: venues.length,
+      client_permissions: { canAccessMapClients }
+    };
+    
+  } catch (error) {
+    console.error('Error fetching filtered venues:', error);
+    throw new HttpsError('internal', 'Failed to fetch venues');
+  }
+});
+
+// ===== RATE LIMITING IMPLEMENTATION =====
+
+// Rate limiting helper function
+async function checkRateLimit(identifier: string, limit: number, windowMs: number): Promise<{ allowed: boolean; remaining: number; resetTime: number }> {
+  const now = Date.now();
+  const windowStart = now - windowMs;
+  const rateLimitKey = `rate_limit:${identifier}`;
+  
+  try {
+    // Get existing rate limit document
+    const rateLimitDoc = await db.collection('rate_limits').doc(rateLimitKey).get();
+    
+    let requests: number[] = [];
+    
+    if (rateLimitDoc.exists) {
+      const data = rateLimitDoc.data();
+      requests = data?.requests || [];
+    }
+    
+    // Filter out expired requests (outside the window)
+    requests = requests.filter(timestamp => timestamp > windowStart);
+    
+    // Check if limit exceeded
+    if (requests.length >= limit) {
+      const oldestRequest = Math.min(...requests);
+      const resetTime = oldestRequest + windowMs;
+      
+      return {
+        allowed: false,
+        remaining: 0,
+        resetTime
+      };
+    }
+    
+    // Add current request
+    requests.push(now);
+    
+    // Update rate limit document
+    await db.collection('rate_limits').doc(rateLimitKey).set({
+      requests,
+      updated_at: admin.firestore.FieldValue.serverTimestamp()
+    });
+    
+    return {
+      allowed: true,
+      remaining: limit - requests.length,
+      resetTime: now + windowMs
+    };
+    
+  } catch (error) {
+    console.error('Rate limit check error:', error);
+    // On error, allow the request (fail open)
+    return { allowed: true, remaining: limit - 1, resetTime: now + windowMs };
+  }
+}
+
+// Enhanced venue query with rate limiting
+export const getVenuesWithRateLimit = onCall({
+  region: FUNCTION_REGION,
+}, async (request) => {
+  const { bounds, venue_types, subscription_status, requesting_client_id, client_type_filter } = request.data;
+  
+  // Rate limiting: 100 requests per hour per client
+  const rateLimitId = requesting_client_id || (request.auth?.uid || 'anonymous');
+  const rateLimit = await checkRateLimit(rateLimitId, 100, 60 * 60 * 1000); // 100 requests per hour
+  
+  if (!rateLimit.allowed) {
+    throw new HttpsError('resource-exhausted', 'Rate limit exceeded', {
+      remaining: rateLimit.remaining,
+      resetTime: rateLimit.resetTime
+    });
+  }
+  
+  // Validate bounds: { north, south, east, west }
+  if (!bounds || typeof bounds.north !== 'number' || typeof bounds.south !== 'number' ||
+      typeof bounds.east !== 'number' || typeof bounds.west !== 'number') {
+    throw new HttpsError('invalid-argument', 'bounds must contain north, south, east, west coordinates');
+  }
+  
+  // Validate coordinates are within valid ranges
+  if (Math.abs(bounds.north) > 90 || Math.abs(bounds.south) > 90 ||
+      Math.abs(bounds.east) > 180 || Math.abs(bounds.west) > 180) {
+    throw new HttpsError('invalid-argument', 'Invalid coordinate values');
+  }
+  
+  if (bounds.north <= bounds.south) {
+    throw new HttpsError('invalid-argument', 'North bound must be greater than south bound');
+  }
+  
+  // Check requesting client permissions if provided
+  let canAccessMapClients = false;
+  if (requesting_client_id) {
+    try {
+      const clientDoc = await db.collection('client_types').doc(requesting_client_id).get();
+      if (clientDoc.exists) {
+        const clientData = clientDoc.data();
+        canAccessMapClients = clientData?.client_type === 'map_client';
+      }
+    } catch (error) {
+      console.warn('Could not verify client permissions:', error);
+    }
+  }
+  
+  try {
+    let query = db.collection('venues')
+      .where('latitude', '>=', bounds.south)
+      .where('latitude', '<=', bounds.north);
+    
+    // Apply longitude filtering (handling date line crossing)
+    if (bounds.west <= bounds.east) {
+      // Normal case: doesn't cross 180th meridian
+      query = query.where('longitude', '>=', bounds.west)
+                   .where('longitude', '<=', bounds.east);
+    } else {
+      // Crosses 180th meridian: need two queries
+      query = query.where('longitude', '>=', bounds.west);
+    }
+    
+    // Filter by venue types if specified
+    if (venue_types && Array.isArray(venue_types) && venue_types.length > 0) {
+      query = query.where('venue_type', 'in', venue_types);
+    }
+    
+    // Filter by subscription status if specified
+    if (subscription_status && ['active', 'inactive', 'trial'].includes(subscription_status)) {
+      query = query.where('subscription_status', '==', subscription_status);
+    }
+    
+    // Filter by client type if specified and requesting client has permissions
+    if (client_type_filter && canAccessMapClients) {
+      query = query.where('client_type', '==', client_type_filter);
+    } else if (!canAccessMapClients) {
+      // Non-map clients can only see event_client venues
+      query = query.where('client_type', '==', 'event_client');
+    }
+    
+    // Limit results to prevent excessive data transfer
+    query = query.limit(500);
+    
+    const snapshot = await query.get();
+    
+    const venues = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    
+    // Additional longitude filtering for date line crossing case
+    if (bounds.west > bounds.east) {
+      venues.filter(venue => venue.longitude >= bounds.west || venue.longitude <= bounds.east);
+    }
+    
+    console.log(`getVenuesWithRateLimit: Found ${venues.length} venues for ${rateLimitId} (${rateLimit.remaining} requests remaining)`);
+    
+    return { 
+      success: true, 
+      venues, 
+      count: venues.length,
+      rate_limit: {
+        remaining: rateLimit.remaining,
+        resetTime: rateLimit.resetTime
+      },
+      client_permissions: { canAccessMapClients }
+    };
+    
+  } catch (error) {
+    console.error('Error fetching venues with rate limit:', error);
+    throw new HttpsError('internal', 'Failed to fetch venues');
+  }
+});
+
+// Cloud Function to clean up old rate limit records (scheduled)
+export const cleanupRateLimits = onSchedule({
+  schedule: 'every 24 hours',
+  region: FUNCTION_REGION,
+}, async (event) => {
+  const now = Date.now();
+  const oneDayAgo = now - (24 * 60 * 60 * 1000);
+  
+  try {
+    console.log('Starting rate limit cleanup...');
+    
+    const rateLimitsSnapshot = await db.collection('rate_limits').get();
+    const batch = db.batch();
+    let deletedCount = 0;
+    
+    for (const doc of rateLimitsSnapshot.docs) {
+      const data = doc.data();
+      const requests = data?.requests || [];
+      
+      // Filter out old requests
+      const activeRequests = requests.filter((timestamp: number) => timestamp > oneDayAgo);
+      
+      if (activeRequests.length === 0) {
+        // No active requests, delete the document
+        batch.delete(doc.ref);
+        deletedCount++;
+      } else if (activeRequests.length < requests.length) {
+        // Some requests expired, update the document
+        batch.update(doc.ref, {
+          requests: activeRequests,
+          updated_at: admin.firestore.FieldValue.serverTimestamp()
+        });
+      }
+      
+      // Firestore batch limit is 500 operations
+      if (deletedCount >= 400) {
+        break;
+      }
+    }
+    
+    if (deletedCount > 0) {
+      await batch.commit();
+    }
+    
+    console.log(`Rate limit cleanup completed: processed ${rateLimitsSnapshot.size} records, deleted ${deletedCount} expired records`);
+    
+  } catch (error) {
+    console.error('Error during rate limit cleanup:', error);
+  }
+});
+
+// ===== GEOSPATIAL INDEXING IMPLEMENTATION =====
+
+// Simple geohash implementation for better geospatial queries
+function encodeGeohash(latitude: number, longitude: number, precision: number = 8): string {
+  const base32 = '0123456789bcdefghjkmnpqrstuvwxyz';
+  
+  let latMin = -90, latMax = 90;
+  let lngMin = -180, lngMax = 180;
+  
+  let geohash = '';
+  let bits = 0;
+  let bit = 0;
+  let even = true;
+  
+  while (geohash.length < precision) {
+    if (even) {
+      // longitude
+      const mid = (lngMin + lngMax) / 2;
+      if (longitude >= mid) {
+        bit = (bit << 1) + 1;
+        lngMin = mid;
+      } else {
+        bit = bit << 1;
+        lngMax = mid;
+      }
+    } else {
+      // latitude
+      const mid = (latMin + latMax) / 2;
+      if (latitude >= mid) {
+        bit = (bit << 1) + 1;
+        latMin = mid;
+      } else {
+        bit = bit << 1;
+        latMax = mid;
+      }
+    }
+    
+    even = !even;
+    bits++;
+    
+    if (bits === 5) {
+      geohash += base32[bit];
+      bits = 0;
+      bit = 0;
+    }
+  }
+  
+  return geohash;
+}
+
+// Get geohash neighbors for proximity queries
+function getGeohashNeighbors(geohash: string): string[] {
+  // This is a simplified version - production would need full neighbor calculation
+  const base = geohash.slice(0, -1);
+  const neighbors = [geohash];
+  
+  // Add adjacent geohashes by modifying the last character
+  const lastChar = geohash.slice(-1);
+  const base32 = '0123456789bcdefghjkmnpqrstuvwxyz';
+  const lastIndex = base32.indexOf(lastChar);
+  
+  // Add neighbors (simplified - real implementation would handle edge cases)
+  if (lastIndex > 0) neighbors.push(base + base32[lastIndex - 1]);
+  if (lastIndex < base32.length - 1) neighbors.push(base + base32[lastIndex + 1]);
+  
+  return neighbors;
+}
+
+// Cloud Function to update venue geohashes (run once to migrate existing data)
+export const updateVenueGeohashes = onCall({
+  region: FUNCTION_REGION,
+}, async (request) => {
+  // Verify admin authentication
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated');
+  }
+  
+  try {
+    console.log('Starting venue geohash update...');
+    
+    const venuesSnapshot = await db.collection('venues').get();
+    const batch = db.batch();
+    let updatedCount = 0;
+    
+    for (const venueDoc of venuesSnapshot.docs) {
+      const venueData = venueDoc.data();
+      const { latitude, longitude } = venueData;
+      
+      if (typeof latitude === 'number' && typeof longitude === 'number') {
+        const geohash = encodeGeohash(latitude, longitude, 8);
+        
+        batch.update(venueDoc.ref, {
+          geohash,
+          updated_at: admin.firestore.FieldValue.serverTimestamp()
+        });
+        
+        updatedCount++;
+        
+        // Firestore batch limit is 500
+        if (updatedCount >= 400) {
+          break;
+        }
+      }
+    }
+    
+    if (updatedCount > 0) {
+      await batch.commit();
+    }
+    
+    console.log(`updateVenueGeohashes: Updated ${updatedCount} venues with geohashes`);
+    
+    return { 
+      success: true, 
+      updated: updatedCount,
+      total: venuesSnapshot.size,
+      message: `Updated ${updatedCount} venues with geohashes` 
+    };
+    
+  } catch (error) {
+    console.error('Error updating venue geohashes:', error);
+    throw new HttpsError('internal', 'Failed to update venue geohashes');
+  }
+});
+
+// Enhanced venue query using geohashing for better performance
+export const getVenuesWithGeohash = onCall({
+  region: FUNCTION_REGION,
+}, async (request) => {
+  const { center, radius_km = 10, venue_types, subscription_status, requesting_client_id, limit = 100 } = request.data;
+  
+  // Validate center coordinates: { lat, lng }
+  if (!center || typeof center.lat !== 'number' || typeof center.lng !== 'number') {
+    throw new HttpsError('invalid-argument', 'center must contain lat and lng coordinates');
+  }
+  
+  // Validate coordinates are within valid ranges
+  if (Math.abs(center.lat) > 90 || Math.abs(center.lng) > 180) {
+    throw new HttpsError('invalid-argument', 'Invalid coordinate values');
+  }
+  
+  if (typeof radius_km !== 'number' || radius_km <= 0 || radius_km > 100) {
+    throw new HttpsError('invalid-argument', 'radius_km must be between 0 and 100');
+  }
+  
+  // Rate limiting
+  const rateLimitId = requesting_client_id || (request.auth?.uid || 'anonymous');
+  const rateLimit = await checkRateLimit(rateLimitId, 50, 60 * 60 * 1000); // 50 requests per hour for geohash queries
+  
+  if (!rateLimit.allowed) {
+    throw new HttpsError('resource-exhausted', 'Rate limit exceeded', {
+      remaining: rateLimit.remaining,
+      resetTime: rateLimit.resetTime
+    });
+  }
+  
+  try {
+    // Calculate geohash for center point
+    const centerGeohash = encodeGeohash(center.lat, center.lng, 6); // Lower precision for wider search
+    const geohashNeighbors = getGeohashNeighbors(centerGeohash);
+    
+    // Query venues by geohash prefix for better performance
+    let query = db.collection('venues');
+    
+    // Use geohash prefixes for initial filtering
+    const geohashPrefix = centerGeohash.slice(0, 4); // 4 characters covers roughly ~20km x 20km
+    query = query.where('geohash', '>=', geohashPrefix)
+                 .where('geohash', '<', geohashPrefix + 'z');
+    
+    // Filter by venue types if specified
+    if (venue_types && Array.isArray(venue_types) && venue_types.length > 0) {
+      query = query.where('venue_type', 'in', venue_types);
+    }
+    
+    // Filter by subscription status if specified
+    if (subscription_status && ['active', 'inactive', 'trial'].includes(subscription_status)) {
+      query = query.where('subscription_status', '==', subscription_status);
+    }
+    
+    // Check requesting client permissions
+    let canAccessMapClients = false;
+    if (requesting_client_id) {
+      try {
+        const clientDoc = await db.collection('client_types').doc(requesting_client_id).get();
+        if (clientDoc.exists) {
+          const clientData = clientDoc.data();
+          canAccessMapClients = clientData?.client_type === 'map_client';
+        }
+      } catch (error) {
+        console.warn('Could not verify client permissions:', error);
+      }
+    }
+    
+    // Filter by client type based on permissions
+    if (!canAccessMapClients) {
+      query = query.where('client_type', '==', 'event_client');
+    }
+    
+    query = query.limit(Math.min(limit, 200)); // Cap at 200
+    
+    const snapshot = await query.get();
+    
+    // Calculate actual distances and filter by radius
+    const venues = [];
+    for (const doc of snapshot.docs) {
+      const venueData = doc.data();
+      const distance = calculateDistance(center.lat, center.lng, venueData.latitude, venueData.longitude);
+      
+      if (distance <= radius_km) {
+        venues.push({
+          id: doc.id,
+          ...venueData,
+          distance_km: Math.round(distance * 10) / 10 // Round to 1 decimal
+        });
+      }
+    }
+    
+    // Sort by distance
+    venues.sort((a, b) => a.distance_km - b.distance_km);
+    
+    console.log(`getVenuesWithGeohash: Found ${venues.length} venues within ${radius_km}km of center for ${rateLimitId}`);
+    
+    return { 
+      success: true, 
+      venues: venues.slice(0, limit), // Apply final limit
+      count: venues.length,
+      center,
+      radius_km,
+      rate_limit: {
+        remaining: rateLimit.remaining,
+        resetTime: rateLimit.resetTime
+      }
+    };
+    
+  } catch (error) {
+    console.error('Error fetching venues with geohash:', error);
+    throw new HttpsError('internal', 'Failed to fetch venues');
+  }
+});
+
+// Haversine formula to calculate distance between two coordinates
+function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371; // Earth's radius in kilometers
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+// Update the manageVenue function to automatically generate geohash
+// (This would replace the existing manageVenue function)
+export const manageVenueWithGeohash = onCall({
+  region: FUNCTION_REGION,
+}, async (request) => {
+  // Verify admin authentication
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated');
+  }
+  
+  const { venue_data, venue_id, operation = 'create' } = request.data;
+  
+  if (!venue_data || typeof venue_data !== 'object') {
+    throw new HttpsError('invalid-argument', 'venue_data is required and must be an object');
+  }
+  
+  // Validate required fields
+  const required_fields = ['name', 'address', 'latitude', 'longitude', 'venue_type', 'subscription_status'];
+  for (const field of required_fields) {
+    if (!(field in venue_data)) {
+      throw new HttpsError('invalid-argument', `${field} is required`);
+    }
+  }
+  
+  // Validate coordinate ranges
+  if (Math.abs(venue_data.latitude) > 90 || Math.abs(venue_data.longitude) > 180) {
+    throw new HttpsError('invalid-argument', 'Invalid latitude or longitude');
+  }
+  
+  // Validate enums
+  const valid_types = ['restaurant', 'bar', 'cafe', 'club', 'retail', 'hotel', 'other'];
+  const valid_statuses = ['active', 'inactive', 'trial'];
+  const valid_client_types = ['map_client', 'event_client'];
+  
+  if (!valid_types.includes(venue_data.venue_type)) {
+    throw new HttpsError('invalid-argument', 'Invalid venue_type');
+  }
+  
+  if (!valid_statuses.includes(venue_data.subscription_status)) {
+    throw new HttpsError('invalid-argument', 'Invalid subscription_status');
+  }
+  
+  if (venue_data.client_type && !valid_client_types.includes(venue_data.client_type)) {
+    throw new HttpsError('invalid-argument', 'Invalid client_type');
+  }
+  
+  try {
+    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+    
+    // Generate geohash for the venue
+    const geohash = encodeGeohash(venue_data.latitude, venue_data.longitude, 8);
+    
+    const venue_record: Partial<Venue> = {
+      ...venue_data,
+      geohash, // Add geohash for efficient queries
+      client_type: venue_data.client_type || 'map_client',
+      updated_at: timestamp,
+      ...(operation === 'create' && { created_at: timestamp, created_by: request.auth.uid })
+    };
+    
+    let result;
+    if (operation === 'update' && venue_id) {
+      await db.collection('venues').doc(venue_id).update(venue_record);
+      result = { id: venue_id, operation: 'updated' };
+    } else {
+      const doc_ref = await db.collection('venues').add(venue_record as Venue);
+      result = { id: doc_ref.id, operation: 'created' };
+    }
+    
+    console.log(`manageVenueWithGeohash: ${result.operation} venue ${result.id} with geohash ${geohash}`);
+    
+    return { success: true, ...result, geohash };
+    
+  } catch (error) {
+    console.error('Error managing venue with geohash:', error);
+    throw new HttpsError('internal', 'Failed to manage venue');
+  }
+});
+
 // Trigger: Mutual Match (likes)
 export const onMutualLike = onDocumentWritten({
   document: 'likes/{likeId}',
