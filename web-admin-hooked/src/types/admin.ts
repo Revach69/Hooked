@@ -64,3 +64,40 @@ export type Event = {
   createdAt?: unknown;             // Firestore Timestamp
   updatedAt?: unknown;             // Firestore Timestamp
 };
+
+export type MapClient = {
+  id: string;                  // Firestore doc id
+  businessName: string;        // Business/venue name
+  businessType: 'restaurant' | 'bar' | 'club' | 'cafe' | 'venue' | 'other';
+  contactName: string;         // Name of business contact/manager
+  email?: string | null;
+  phone?: string | null;
+  address: string;             // Physical address
+  coordinates?: {              // Map coordinates
+    lat: number;
+    lng: number;
+  } | null;
+  subscriptionStatus: 'active' | 'inactive' | 'pending';
+  subscriptionStartDate?: string | null;   // ISO date (yyyy-mm-dd)
+  subscriptionEndDate?: string | null;     // ISO date (yyyy-mm-dd)
+  monthlyFee?: number | null;  // Monthly subscription fee
+  description?: string | null; // Business description
+  website?: string | null;     // Business website
+  socialMedia?: {              // Social media handles
+    instagram?: string;
+    facebook?: string;
+    twitter?: string;
+  } | null;
+  
+  // Integration settings
+  integrationSettings?: {
+    showOnMap: boolean;
+    mapIconStyle?: string;
+    promotionalMessage?: string;
+  } | null;
+  
+  // system fields
+  createdAt: unknown;              // Firestore Timestamp
+  updatedAt: unknown;              // Firestore Timestamp
+  createdByUid?: string | null;
+};

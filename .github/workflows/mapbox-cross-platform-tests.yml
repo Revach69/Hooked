@@ -1,0 +1,357 @@
+name: Mapbox Cross-Platform Testing
+
+on:
+  push:
+    branches: [ main, develop, 'feature/mapbox-integration' ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  NODE_VERSION: '18'
+  JAVA_VERSION: '11'
+  XCODE_VERSION: '15.0'
+
+jobs:
+  # iOS Testing Jobs
+  ios-simulator-tests:
+    name: iOS Simulator Tests
+    runs-on: macos-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        device: ['iPhone 15 Pro', 'iPhone SE (3rd generation)', 'iPad Air (5th generation)']
+        test-suite: ['location-permissions', 'map-interactions', 'performance']
+        exclude:
+          # Skip performance tests on iPad for now
+          - device: 'iPad Air (5th generation)'
+            test-suite: 'performance'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: mobile-app/package-lock.json
+
+    - name: Setup Xcode
+      uses: maxim-lobanov/setup-xcode@v1
+      with:
+        xcode-version: ${{ env.XCODE_VERSION }}
+
+    - name: Install dependencies
+      working-directory: mobile-app
+      run: |
+        npm ci
+        cd ios && pod install --repo-update
+
+    - name: Build iOS app for testing
+      working-directory: mobile-app
+      run: |
+        npx detox build --configuration ios.sim.release
+
+    - name: Run iOS simulator tests
+      working-directory: mobile-app
+      run: |
+        npx detox test --configuration ios.sim.release \
+          --device-name="${{ matrix.device }}" \
+          --test-name-pattern="${{ matrix.test-suite }}" \
+          --maxWorkers=1 \
+          --forceExit
+      env:
+        MAPBOX_ACCESS_TOKEN: ${{ secrets.MAPBOX_ACCESS_TOKEN }}
+        DETOX_LOG_LEVEL: info
+
+    - name: Upload iOS test artifacts
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: ios-test-artifacts-${{ matrix.device }}-${{ matrix.test-suite }}
+        path: |
+          mobile-app/__tests__/artifacts/
+          mobile-app/ios/build/Build/Logs/
+        retention-days: 7
+
+    - name: Upload iOS performance metrics
+      if: matrix.test-suite == 'performance'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ios-performance-metrics-${{ matrix.device }}
+        path: mobile-app/__tests__/artifacts/performance/
+        retention-days: 30
+
+  # Android Testing Jobs  
+  android-emulator-tests:
+    name: Android Emulator Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [29, 31, 33]
+        arch: ['x86_64']
+        test-suite: ['location-permissions', 'map-interactions', 'performance']
+        exclude:
+          # Skip performance tests on older Android versions
+          - api-level: 29
+            test-suite: 'performance'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: mobile-app/package-lock.json
+
+    - name: Setup JDK
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: ${{ env.JAVA_VERSION }}
+
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+
+    - name: Install dependencies
+      working-directory: mobile-app
+      run: npm ci
+
+    - name: Grant execute permission for gradlew
+      working-directory: mobile-app/android
+      run: chmod +x gradlew
+
+    - name: Build Android app for testing
+      working-directory: mobile-app
+      run: |
+        npx detox build --configuration android.emu.release
+
+    - name: Enable KVM group perms
+      run: |
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm
+
+    - name: Run Android emulator tests
+      uses: reactivecircus/android-emulator-runner@v2
+      with:
+        api-level: ${{ matrix.api-level }}
+        arch: ${{ matrix.arch }}
+        target: google_apis
+        profile: pixel_5
+        avd-name: test-avd-${{ matrix.api-level }}
+        force-avd-creation: false
+        emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+        disable-animations: true
+        working-directory: mobile-app
+        script: |
+          # Wait for emulator to be ready
+          adb wait-for-device shell 'while [[ -z $(getprop sys.boot_completed | tr -d '\r') ]]; do sleep 1; done; input keyevent 82'
+          
+          # Grant location permissions to avoid permission dialogs
+          adb shell pm grant com.hooked.app android.permission.ACCESS_FINE_LOCATION
+          adb shell pm grant com.hooked.app android.permission.ACCESS_COARSE_LOCATION
+          
+          # Run tests
+          npx detox test --configuration android.emu.release \
+            --test-name-pattern="${{ matrix.test-suite }}" \
+            --maxWorkers=1 \
+            --forceExit
+      env:
+        MAPBOX_ACCESS_TOKEN: ${{ secrets.MAPBOX_ACCESS_TOKEN }}
+        DETOX_LOG_LEVEL: info
+
+    - name: Upload Android test artifacts
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: android-test-artifacts-api${{ matrix.api-level }}-${{ matrix.test-suite }}
+        path: |
+          mobile-app/__tests__/artifacts/
+          mobile-app/android/app/build/reports/
+        retention-days: 7
+
+    - name: Upload Android performance metrics
+      if: matrix.test-suite == 'performance'
+      uses: actions/upload-artifact@v4
+      with:
+        name: android-performance-metrics-api${{ matrix.api-level }}
+        path: mobile-app/__tests__/artifacts/performance/
+        retention-days: 30
+
+  # Web Admin Dashboard Tests (for Map Clients management)
+  web-admin-tests:
+    name: Web Admin Dashboard Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: web-admin-hooked/package-lock.json
+
+    - name: Install dependencies
+      working-directory: web-admin-hooked
+      run: npm ci
+
+    - name: Install Playwright browsers
+      working-directory: web-admin-hooked
+      run: npx playwright install --with-deps
+
+    - name: Start Firebase emulator
+      working-directory: web-admin-hooked
+      run: |
+        npm install -g firebase-tools
+        firebase emulators:start --only firestore,functions &
+        sleep 10
+      env:
+        FIREBASE_PROJECT: hooked-test
+
+    - name: Build Next.js app
+      working-directory: web-admin-hooked
+      run: npm run build
+
+    - name: Start Next.js app
+      working-directory: web-admin-hooked
+      run: |
+        npm run start &
+        sleep 10
+      env:
+        NODE_ENV: test
+        FIREBASE_PROJECT: hooked-test
+
+    - name: Run Map Clients admin tests
+      working-directory: web-admin-hooked
+      run: npx playwright test tests/map-clients --reporter=html
+      env:
+        PLAYWRIGHT_BASE_URL: http://localhost:3000
+
+    - name: Upload Playwright report
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: playwright-report
+        path: web-admin-hooked/playwright-report/
+        retention-days: 7
+
+  # Integration Tests (Mobile + Web + Backend)
+  integration-tests:
+    name: End-to-End Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [ios-simulator-tests, android-emulator-tests, web-admin-tests]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: |
+        cd mobile-app && npm ci
+        cd ../web-admin-hooked && npm ci
+
+    - name: Start test environment
+      run: |
+        # Start Firebase emulators
+        npm install -g firebase-tools
+        firebase emulators:start --only firestore,functions &
+        
+        # Start web admin dashboard
+        cd web-admin-hooked && npm run build && npm run start &
+        
+        # Wait for services to be ready
+        sleep 15
+
+    - name: Run integration tests
+      working-directory: mobile-app
+      run: |
+        # Run Android emulator integration tests
+        npx detox build --configuration android.emu.release
+        
+        # Use emulator for integration tests
+        # (This would need an emulator setup similar to the Android job above)
+        echo "Integration tests would run here with full stack"
+      env:
+        MAPBOX_ACCESS_TOKEN: ${{ secrets.MAPBOX_ACCESS_TOKEN }}
+        FIREBASE_PROJECT: hooked-test
+        INTEGRATION_TEST_MODE: true
+
+  # Performance Analysis Job
+  performance-analysis:
+    name: Performance Analysis
+    runs-on: ubuntu-latest
+    needs: [ios-simulator-tests, android-emulator-tests]
+    if: always()
+
+    steps:
+    - name: Download iOS performance artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: ios-performance-metrics-*
+        path: ./performance-data/ios/
+
+    - name: Download Android performance artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: android-performance-metrics-*  
+        path: ./performance-data/android/
+
+    - name: Analyze performance metrics
+      run: |
+        echo "Analyzing performance data..."
+        # Here would be custom scripts to analyze performance metrics
+        # and generate reports or alert on performance regressions
+        
+        ls -la ./performance-data/ || echo "No performance data found"
+
+    - name: Upload performance analysis
+      uses: actions/upload-artifact@v4
+      with:
+        name: performance-analysis-report
+        path: ./performance-analysis/
+        retention-days: 30
+
+  # Test Result Summary
+  test-summary:
+    name: Test Results Summary
+    runs-on: ubuntu-latest
+    needs: [ios-simulator-tests, android-emulator-tests, web-admin-tests]
+    if: always()
+
+    steps:
+    - name: Test Summary
+      run: |
+        echo "# Mapbox Cross-Platform Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Platform | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| iOS Simulator | ${{ needs.ios-simulator-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Android Emulator | ${{ needs.android-emulator-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Web Admin Dashboard | ${{ needs.web-admin-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ needs.ios-simulator-tests.result }}" = "success" ] && [ "${{ needs.android-emulator-tests.result }}" = "success" ] && [ "${{ needs.web-admin-tests.result }}" = "success" ]; then
+          echo "✅ All tests passed! Mapbox integration is ready for deployment." >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ Some tests failed. Please review the test results before merging." >> $GITHUB_STEP_SUMMARY
+        fi

@@ -178,6 +178,25 @@ service cloud.firestore {
       allow update: if false;
     }
 
+    // ===== SKIPPED PROFILES COLLECTION =====
+    match /skipped_profiles/{skippedProfileId} {
+      // ✅ Anyone can read skipped profiles (for mobile app filtering)
+      allow read: if true;
+      
+      // ✅ Anyone can create skipped profile records (mobile app skipping)
+      allow create: if 
+        // Ensure required fields are present
+        request.resource.data.event_id is string &&
+        request.resource.data.skipper_session_id is string &&
+        request.resource.data.skipped_session_id is string;
+      
+      // ✅ Users can delete their own skipped profiles
+      allow delete: if true; // Simplified for mobile app since no Firebase Auth
+      
+      // ✅ No updates allowed (skipping is create/delete only)
+      allow update: if false;
+    }
+
     // ===== USERS COLLECTION =====
     match /users/{userId} {
       // ✅ Only authenticated users can access user data

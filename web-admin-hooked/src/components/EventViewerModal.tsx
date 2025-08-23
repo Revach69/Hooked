@@ -25,7 +25,7 @@ export function EventViewerModal({ event, isOpen, onClose }: EventViewerModalPro
   const handleDownloadQR = async () => {
     try {
       const QRCode = (await import('qrcode')).default;
-      const joinLink = `${window.location.origin}/join?code=${event.event_code}`;
+      const joinLink = `https://hooked-app.com/join-instant?code=${event.event_code}`;
       const qrDataUrl = await QRCode.toDataURL(joinLink, {
         width: 300,
         margin: 2,
@@ -131,12 +131,12 @@ export function EventViewerModal({ event, isOpen, onClose }: EventViewerModalPro
               <div className="flex gap-2">
                 <input
                   type="text"
-                  value={`${window.location.origin}/join?code=${event.event_code}`}
+                  value={`https://hooked-app.com/join-instant?code=${event.event_code}`}
                   readOnly
                   className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
                 />
                 <Button
-                  onClick={() => navigator.clipboard.writeText(`${window.location.origin}/join?code=${event.event_code}`)}
+                  onClick={() => navigator.clipboard.writeText(`https://hooked-app.com/join-instant?code=${event.event_code}`)}
                   variant="outline"
                   size="sm"
                   title="Copy to clipboard"

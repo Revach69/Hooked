@@ -105,6 +105,15 @@ This file contains specific rules and guidelines for Claude Code when working wi
 - If scope is unclear: Ask for clarification in comm file, await sync-up
 - If files conflict: Never modify, document issue for supervisor
 
+## Branch Management (CRITICAL)
+
+**ALL feature development must use dedicated feature branches:**
+- Create feature branch before starting work (e.g., `feature/mapbox-integration`)
+- NEVER work directly on main branch
+- Main branch must remain stable for production builds
+- Test features thoroughly on feature branches before requesting merge
+- Use proper git workflow to preserve working builds
+
 ## Remember
 
 Squad Engineering is about structured, scalable LLM development. Every action should reinforce:

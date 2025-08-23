@@ -23,10 +23,11 @@ function JoinInstantContent() {
     
     if (isMobile) {
       // Try to open the app with Universal/App Links first
+      const universalUrl = `https://hooked-app.com/join-instant?code=${code}`;
       const appUrl = `hooked://join?code=${code}`;
       
-      // Try to open the app
-      window.location.href = appUrl;
+      // Try to open the app via Universal Link first, fallback to custom scheme
+      window.location.href = universalUrl;
       
       // Show fallback after 3 seconds if app didn't open
       const fallbackTimer = setTimeout(() => {
@@ -44,14 +45,14 @@ function JoinInstantContent() {
   }, [code, userAgent]);
 
   const handleOpenApp = () => {
-    const appUrl = `hooked://join?code=${code}`;
-    window.location.href = appUrl;
+    const universalUrl = `https://hooked-app.com/join-instant?code=${code}`;
+    window.location.href = universalUrl;
   };
 
   const handleAppStore = () => {
     const isIOS = /iPhone|iPad|iPod/i.test(userAgent);
     const storeUrl = isIOS 
-      ? 'https://apps.apple.com/app/hooked/id6738434281'
+      ? 'https://apps.apple.com/app/hooked/id6748921014'
       : 'https://play.google.com/store/apps/details?id=com.hookedapp.app';
     window.location.href = storeUrl;
   };
@@ -80,7 +81,7 @@ function JoinInstantContent() {
                   onClick={handleOpenApp}
                   className="w-full bg-gradient-to-r from-pink-500 to-purple-600 text-white font-semibold py-4 px-6 rounded-xl hover:from-pink-600 hover:to-purple-700 transition-colors"
                 >
-                  🚀 Open in Hooked App
+                  🚀 Open in The Hooked App
                 </button>
                 
                 <p className="text-sm text-gray-500">
@@ -97,7 +98,7 @@ function JoinInstantContent() {
               
               <div className="bg-gray-50 rounded-lg p-4">
                 <p className="text-xs text-gray-600">
-                  Having trouble? Make sure you have the latest version of Hooked installed.
+                  Having trouble? Make sure you have the latest version of The Hooked App installed.
                 </p>
               </div>
             </>
@@ -119,7 +120,7 @@ function JoinInstantContent() {
                   <p className="font-semibold text-gray-900 mb-2">Option 2: Download the app</p>
                   <div className="flex gap-2 justify-center">
                     <a 
-                      href="https://apps.apple.com/app/hooked/id6738434281"
+                      href="https://apps.apple.com/app/hooked/id6748921014"
                       className="inline-flex items-center px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors text-sm"
                     >
                       📱 App Store
@@ -146,7 +147,7 @@ function JoinInstantContent() {
         <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
           <span className="text-2xl">💕</span>
         </div>
-        <h1 className="text-2xl font-bold mb-4 text-gray-900">Opening Hooked...</h1>
+        <h1 className="text-2xl font-bold mb-4 text-gray-900">Opening The Hooked App...</h1>
         <p className="text-gray-600 mb-4">
           {code ? `Joining event: #${code}` : 'Redirecting...'}
         </p>

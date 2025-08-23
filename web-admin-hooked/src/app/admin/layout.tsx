@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Calendar, Users, FileText, LogOut } from 'lucide-react';
+import { Calendar, Users, FileText, MapPin, LogOut } from 'lucide-react';
 import { AuthContext } from '@/contexts/AuthContext';
 import { useContext } from 'react';
 
@@ -26,9 +26,10 @@ export default function AdminLayout({
   }, []);
 
   const navigation = [
-    { name: 'Events', href: '/admin/events', icon: Calendar },
-    { name: 'Clients', href: '/admin/clients', icon: Users },
-    { name: 'Forms', href: '/admin/forms', icon: FileText },
+    { name: 'Events', href: '/admin/events', icon: Calendar, color: 'text-gray-600' },
+    { name: 'Event Clients', href: '/admin/clients', icon: Users, color: 'text-orange-600' },
+    { name: 'Map Clients', href: '/admin/map-clients', icon: MapPin, color: 'text-blue-600' },
+    { name: 'Forms', href: '/admin/forms', icon: FileText, color: 'text-gray-600' },
   ];
 
   return (
@@ -55,7 +56,7 @@ export default function AdminLayout({
                           : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700'
                       }`}
                     >
-                      <item.icon className="h-4 w-4" />
+                      <item.icon className={`h-4 w-4 ${!isActive && item.color ? item.color : ''}`} />
                       <span>{item.name}</span>
                     </Link>
                   );

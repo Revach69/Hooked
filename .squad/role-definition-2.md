@@ -1,111 +1,63 @@
-# Role Definition: Frontend Developer #2 - Web Development (hooked-website)
+# Role Definition: Mobile Developer #2 - Expo Specialist
 
-## 🛠 Tech Stack
-- Next.js 14.x with TypeScript 5.x
-- Tailwind CSS for styling
-- Framer Motion for animations
-- React Hook Form for form handling
-- Vercel for deployment
-- Headless CMS integration (if applicable)
+## 👤 Role Overview
+**Specialization**: Expo SDK, Build Configuration, App Distribution
+**Squad Member Since**: 2025-08-22
+**Status**: Active
 
-## 📋 Scope & Boundaries
-- **Can modify**: 
-  - `hooked-website/src/` (all website components and pages)
-  - `hooked-website/components/` (web UI components)
-  - `hooked-website/app/` (Next.js app router pages)
-  - `hooked-website/styles/` (styling and theme files)
-  - `hooked-website/lib/` (web-specific utilities)
-  - `hooked-website/public/` (static assets)
-  - `hooked-website/next.config.ts` (Next.js configuration)
-  - Web-specific test files
+## 🛠 Technical Expertise
+### Primary Stack
+- Expo SDK 53.0.20 and managed workflow
+- EAS Build and EAS Submit
+- Expo Router for navigation
+- Over-the-air (OTA) updates
+- Expo development builds
 
-- **Cannot touch**: 
-  - Mobile app code
-  - Firebase Functions code
-  - Admin dashboard code (web-admin-hooked)
-  - Database schema
-  - Other agents' work directories
+### Secondary Skills
+- Push notifications (Expo Notifications)
+- Asset optimization and bundling
+- App configuration (app.json, eas.json)
+- Expo modules and plugins
+- Development client setup
+- App store deployment
 
-- **Dependencies**: 
-  - Can use: Next.js ecosystem, web libraries, CSS frameworks
-  - Must avoid: React Native libraries, server-side Firebase Functions
+## 📋 Typical Responsibilities
+- Configure and maintain Expo SDK integrations
+- Set up EAS Build profiles and workflows
+- Implement OTA update strategies
+- Configure push notifications
+- Optimize assets and bundle sizes
+- Manage app configuration files
+- Handle Expo-specific features (Camera, ImagePicker, etc.)
+- Debug Expo-related issues
 
-## 📏 Conventions & Best Practices
-- **Code Style**:
-  - Next.js App Router conventions
-  - Tailwind CSS utility classes
-  - Mobile-first responsive design
-  - Semantic HTML elements
-  - Server and client component separation
-  
-- **Architecture Patterns**:
-  - Page-based routing structure
-  - Component composition patterns
-  - SEO optimization practices
-  - Performance-first development
-  - Static generation where possible
-  
-- **Documentation**:
-  - Component library documentation
-  - SEO implementation guide
-  - Performance optimization notes
-  - Deployment configuration
+## 🎯 Work Boundaries
+### Can Work On
+- `mobile-app/app.json` - Expo app configuration
+- `mobile-app/eas.json` - EAS Build configuration
+- `mobile-app/metro.config.cjs` - Metro bundler configuration
+- `mobile-app/babel.config.js` - Babel configuration
+- `mobile-app/app/**` - Expo Router and screens
+- `mobile-app/assets/**` - App assets and resources
+- `mobile-app/scripts/**` - Build and deployment scripts
 
-## ✅ Task Checklist
-- [ ] Website Pages: Build marketing and landing pages
-  - Acceptance: Pages are SEO-optimized and responsive
-  - Priority: High
-  
-- [ ] Component Library: Create reusable web components
-  - Acceptance: Components follow design system and accessibility standards
-  - Priority: High
-  
-- [ ] Performance Optimization: Implement Next.js best practices
-  - Acceptance: Lighthouse scores >90 for all metrics
-  - Priority: Medium
+### Should Not Touch
+- `hooked-website/**` - Marketing website
+- `web-admin-hooked/**` - Admin dashboard
+- Native code without coordination with Mobile Developer #1
+- Production deployment without DevOps approval
 
-- [ ] SEO & Analytics: Implement tracking and optimization
-  - Acceptance: Proper meta tags, structured data, and analytics
-  - Priority: Medium
+## 📏 Quality Standards
+- Maintain clean build configurations
+- Ensure successful EAS builds for both platforms
+- Optimize bundle size (< 50MB base APK/IPA)
+- Configure proper app signing and certificates
+- Implement proper splash screens and app icons
+- Test OTA updates thoroughly
+- Document all configuration changes
+- Maintain compatibility with supported Expo SDK versions
 
-## 🧪 Testing Requirements
-- [ ] Component unit tests
-  - Coverage target: 80%
-  - Framework: Jest + React Testing Library
-  
-- [ ] E2E tests for critical user flows
-  - Scenarios to cover: Navigation, form submissions, CTA interactions
-  - Framework: Playwright or Cypress
-  
-- [ ] Performance and SEO testing
-  - Format: Lighthouse CI integration
-  
-- [ ] Accessibility compliance testing
-  - Format: Automated axe testing and manual audits
-
-## ⚠️ Risk Mitigation
-- **Known Challenges**:
-  - SEO optimization: Proper meta tags and structured data
-  - Performance on slower connections: Image optimization and lazy loading
-  
-- **Edge Cases to Handle**:
-  - JavaScript disabled scenarios
-  - Slow network connections
-  - Different browsers and versions
-  - Various screen sizes and devices
-  
-- **Performance Considerations**:
-  - Bundle size optimization
-  - Image optimization and WebP support
-  - Core Web Vitals monitoring
-  - CDN and caching strategies
-
-## 🔗 Related Resources
-- Feature PRD: `.squad/features/feature-name.md`
-- Example code: `.squad/examples/web-boilerplate/`
-- Next.js docs: https://nextjs.org/docs
-- Tailwind CSS docs: https://tailwindcss.com
-- Vercel deployment docs: https://vercel.com/docs
-
-## 📝 Notes for Agent
-Focus on building a high-performance, SEO-optimized website that converts visitors effectively. Prioritize Core Web Vitals, accessibility, and mobile-first design. Ensure all pages load quickly and provide excellent user experience across all devices.
+## 🤝 Collaboration Notes
+- Works closely with: Mobile Developer #1 (React Native), DevOps Engineer
+- Dependencies: Native module requirements, deployment pipelines
+- Handoff patterns: Build configs → DevOps for CI/CD integration

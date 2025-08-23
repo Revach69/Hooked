@@ -4,76 +4,129 @@ This file maintains the persistent record of all squad members. Squad members ar
 
 ## 🚀 Active Squad Members
 
-### Frontend Development Team
+### Mobile Development Team
 
-#### Frontend Developer #1
-- **Role**: Frontend Developer
-- **Specialization**: React Native Mobile App Development
-- **Created**: August 16, 2025
+#### Mobile Developer #1 - React Native Specialist
+- **Role**: Mobile Developer
+- **Specialization**: React Native, TypeScript, Native Module Integration
+- **Created**: 2025-08-22
 - **Status**: Active
 - **Key Skills**:
-  - React Native development
-  - iOS and Android platform specifics
-  - Mobile UI/UX patterns
-  - Native module integration
-  - Mobile testing frameworks
+  - React Native component development
+  - Native iOS/Android bridge integration
+  - State management (Redux/Context)
+  - Performance optimization
+  - Platform-specific implementations
+  - React Navigation
+  - Gesture handling
 
-#### Frontend Developer #2
-- **Role**: Frontend Developer
-- **Specialization**: React/Next.js Web Development (hooked-website)
-- **Created**: August 16, 2025
+#### Mobile Developer #2 - Expo Specialist
+- **Role**: Mobile Developer
+- **Specialization**: Expo SDK, Build Configuration, App Distribution
+- **Created**: 2025-08-22
 - **Status**: Active
 - **Key Skills**:
-  - Next.js framework
-  - Server-side rendering
-  - Web performance optimization
-  - SEO implementation
-  - Modern CSS and styling
+  - Expo SDK and managed workflow
+  - EAS Build configuration
+  - Over-the-air updates
+  - Push notifications setup
+  - Asset optimization
+  - Expo Router
+  - Development builds
 
 ### Backend Development Team
 
 #### Backend Developer #1
 - **Role**: Backend Developer
-- **Specialization**: Firebase Functions and Cloud Services
-- **Created**: August 16, 2025
+- **Specialization**: Node.js, API Development, Database Design
+- **Created**: [Date when role was generated]
 - **Status**: Active
 - **Key Skills**:
-  - Firebase Functions development
-  - Cloud Firestore
-  - Firebase Authentication
-  - Push notifications
-  - Serverless architecture
+  - RESTful API design
+  - Database schema design
+  - Authentication/Authorization
+  - Business logic implementation
+  - Integration testing
 
 ### Quality Assurance Team
 
 #### QA Engineer #1
 - **Role**: QA Engineer
-- **Specialization**: Cross-platform Testing and Quality Assurance
-- **Created**: August 16, 2025
+- **Specialization**: Testing Strategy, E2E Testing, Documentation
+- **Created**: [Date when role was generated]
 - **Status**: Active
 - **Key Skills**:
-  - Mobile app testing (iOS/Android)
-  - Web application testing
-  - Firebase Functions testing
-  - Cross-platform compatibility
-  - Automated testing frameworks
+  - Test strategy development
+  - E2E test implementation
+  - API testing
+  - Documentation review
+  - Performance testing
+
+### Data Engineering Team
+
+#### Data Engineer #1
+- **Role**: Data Engineer
+- **Specialization**: Data Pipelines, Analytics, ETL Processing
+- **Created**: 2025-08-17
+- **Status**: Active
+- **Key Skills**:
+  - Data pipeline design
+  - ETL/ELT processes
+  - Database optimization
+  - Analytics implementation
+  - Data validation and quality
+
+### DevOps Team
+
+#### DevOps Engineer #6
+- **Role**: DevOps Engineer
+- **Specialization**: CI/CD, Infrastructure, Deployment Automation
+- **Created**: 2025-08-17
+- **Status**: Active
+- **Key Skills**:
+  - CI/CD pipeline setup
+  - Container orchestration
+  - Infrastructure as code
+  - Monitoring and alerting
+  - Security automation
+
+### Web Development Team
+
+#### Web Developer #7 - Next.js/Admin Dashboard Specialist
+- **Role**: Web Developer
+- **Specialization**: Next.js, React, Admin Dashboard Development
+- **Created**: 2025-08-22
+- **Status**: Active
+- **Key Skills**:
+  - Next.js 14+ with App Router
+  - React component development
+  - Admin interface design
+  - Client management systems
+  - Firebase integration
+  - TypeScript development
+  - Responsive web design
 
 ## 📊 Squad Statistics
 
-- **Total Squad Size**: 4 members
-- **Frontend Developers**: 2
+- **Total Squad Size**: 7 members
+- **Mobile Developers**: 2 (React Native + Expo specialists)
 - **Backend Developers**: 1
+- **Web Developers**: 1 (Next.js/Admin Dashboard specialist)
 - **QA Engineers**: 1
-- **DevOps Engineers**: 0
+- **Data Engineers**: 1
+- **DevOps Engineers**: 1
 
 ## 🔄 Squad History
 
 ### Squad Formation
-- Initial squad created on: August 16, 2025
-- Last squad modification: August 16, 2025
+- Initial squad created on: 2025-08-17
+- Last squad modification: 2025-08-22
 
 ### Role Changes
-<!-- Track any changes to squad composition -->
+- 2025-08-22: Added Mobile Developer #2 (Expo Specialist)
+- 2025-08-22: Updated Mobile Developer #1 to React Native Specialist
+- 2025-08-22: Reorganized Frontend Developer to Mobile Development Team
+- 2025-08-22: Added Web Developer #7 (Next.js/Admin Dashboard Specialist) for Mapbox feature requirements
 
 ## 📝 Notes
 

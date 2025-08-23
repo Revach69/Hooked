@@ -8,10 +8,11 @@ import { ClientsTable } from '@/components/clients/ClientsTable';
 import { ClientFormSheet } from '@/components/clients/ClientFormSheet';
 import { FormViewerModal } from '@/components/FormViewerModal';
 import { EventViewerModal } from '@/components/EventViewerModal';
+import { ClientTypeComparison } from '@/components/ClientTypeComparison';
 import { AdminClientAPI } from '@/lib/firestore/clients';
 import { EventFormAPI } from '@/lib/firestore/eventForms';
 import { EventAPI } from '@/lib/firebaseApi';
-import { Plus } from 'lucide-react';
+import { Plus, Users, Calendar } from 'lucide-react';
 import type { AdminClient, EventForm, Event } from '@/types/admin';
 
 export default function ClientsPage() {
@@ -132,14 +133,40 @@ export default function ClientsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Clients</h1>
-          <p className="text-gray-600 dark:text-gray-400">Manage your client relationships</p>
+          <div className="flex items-center gap-3 mb-2">
+            <div className="p-2 bg-orange-100 dark:bg-orange-900/20 rounded-lg">
+              <Users className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">Event Clients</h1>
+              <div className="flex items-center gap-2 mt-1">
+                <div className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400">
+                  <Calendar className="h-3 w-3 mr-1" />
+                  Event-Based
+                </div>
+                <div className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400">
+                  Project Management
+                </div>
+              </div>
+            </div>
+          </div>
+          <p className="text-gray-600 dark:text-gray-400">
+            Manage event-based client relationships and project opportunities
+          </p>
         </div>
-        <Button onClick={() => setShowClientForm(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Client
-        </Button>
+        <div className="flex flex-col gap-2">
+          <Button onClick={() => setShowClientForm(true)} className="bg-orange-600 hover:bg-orange-700">
+            <Plus className="h-4 w-4 mr-2" />
+            Add Event Client
+          </Button>
+          <div className="text-xs text-gray-500 text-center">
+            {clients.filter(c => c.status === 'Won').length} active projects
+          </div>
+        </div>
       </div>
+
+      {/* Client Type Comparison */}
+      <ClientTypeComparison currentType="event" />
 
       {/* Filters */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">

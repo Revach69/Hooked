@@ -70,7 +70,12 @@ jobs:
 
       - name: Copy development environment
         working-directory: mobile-app
-        run: cp .env.development .env
+        run: |
+          cp .env.development .env
+          # Override Mapbox token from secrets if available
+          if [ -n "${{ secrets.MAPBOX_ACCESS_TOKEN_DEV }}" ]; then
+            sed -i.bak "s/pk.development_mapbox_token_placeholder/${{ secrets.MAPBOX_ACCESS_TOKEN_DEV }}/g" .env
+          fi
 
       - name: Build development app
         working-directory: mobile-app

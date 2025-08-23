@@ -77,7 +77,12 @@ jobs:
 
       - name: Copy production environment
         working-directory: mobile-app
-        run: cp .env.production .env
+        run: |
+          cp .env.production .env
+          # Override Mapbox token from secrets if available
+          if [ -n "${{ secrets.MAPBOX_ACCESS_TOKEN_PROD }}" ]; then
+            sed -i.bak "s/pk.production_mapbox_token_placeholder/${{ secrets.MAPBOX_ACCESS_TOKEN_PROD }}/g" .env
+          fi
 
       - name: Build production app
         working-directory: mobile-app

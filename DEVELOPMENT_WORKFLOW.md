@@ -244,7 +244,7 @@ firebase deploy --only functions
 
 ### 2. Set Up Sentry Error Tracking
 
-**Purpose**: Create separate error tracking for each environment to avoid mixing development errors with production issues, and enable proper debugging workflows.
+**Purpose**: Create separate error tracking for each environment to avoid mixing development errors with production issues, and senable proper debugging workflows.
 
 **Steps**:
 ```bash
@@ -268,12 +268,12 @@ firebase deploy --only functions
 **Steps**:
 ```bash
 # Set EAS secrets for each environment
-eas secret:create --scope project --name GOOGLE_SERVICES_JSON_DEV --value "$(cat mobile-app/google-services-dev.json)"
+eas secret:create --scope project --name GOOGLE_SERVICES_JSON_DEV --value "$(cat mobile-app/android/app/google-services-dev.json)"
 eas secret:create --scope project --name GOOGLE_SERVICES_JSON_STAGING --value "$(cat mobile-app/google-services-staging.json)"
 eas secret:create --scope project --name GOOGLE_SERVICES_JSON_PROD --value "$(cat mobile-app/google-services-prod.json)"
 
 # iOS certificates for each environment
-eas secret:create --scope project --name GOOGLE_SERVICE_INFO_PLIST_DEV --value "$(cat mobile-app/ios/GoogleService-Info-dev.plist)"
+eas secret:create --scope project --name GOOGLE_SERVICE_INFO_PLIST_DEV --value "$(cat mobile-app/ios/Hooked/GoogleService-Info-dev.plist)"
 
 # Android signing keys
 eas secret:create --scope project --name KEYSTORE_PASSWORD --value "<your_keystore_password>"
@@ -281,7 +281,7 @@ eas secret:create --scope project --name KEY_ALIAS --value "hooked-key-alias"
 eas secret:create --scope project --name KEY_PASSWORD --value "<your_key_password>"
 ```
 
-**Why this matters**: Keeps sensitive build credentials secure, enables automated CI/CD builds, prevents accidental exposure of certificates/keys in version control.
+**Whcy this matters**: Keeps sensitive build credentials secure, enables automated CI/CD builds, prevents accidental exposure of certificates/keys in version control.
 
 ### 4. Set Up GitHub Repository Secrets
 

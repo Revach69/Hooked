@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Redirecting to Hooked App...</title>
+    <title>Redirecting to The Hooked App...</title>
     
     <!-- iOS App Store Redirect -->
-    <meta name="apple-itunes-app" content="app-id=YOUR_APP_STORE_ID, app-argument=hooked://join?code=EVENT_CODE">
+    <meta name="apple-itunes-app" content="app-id=6748921014, app-argument=hooked://join?code=EVENT_CODE">
     
     <!-- Android Play Store Redirect -->
     <meta name="google-play-app" content="app-id=com.hookedapp.app">
@@ -33,7 +33,7 @@
 </head>
 <body>
     <div class="message">
-        Redirecting to Hooked App Store...
+        Redirecting to The Hooked App Store...
     </div>
 
     <script>
@@ -41,12 +41,12 @@
         const urlParams = new URLSearchParams(window.location.search);
         const eventCode = urlParams.get('code');
         
-        // App store URLs (replace with your actual app IDs)
-        const APP_STORE_URL = 'https://apps.apple.com/app/hooked/YOUR_APP_STORE_ID';
+        // App store URLs
+        const APP_STORE_URL = 'https://apps.apple.com/app/hooked/id6748921014';
         const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.hookedapp.app';
         
         // Native app store redirect URLs
-        const IOS_STORE_REDIRECT = `https://apps.apple.com/app/hooked/YOUR_APP_STORE_ID?mt=8`;
+        const IOS_STORE_REDIRECT = `https://apps.apple.com/app/hooked/id6748921014?mt=8`;
         const ANDROID_STORE_REDIRECT = `intent://play.google.com/store/apps/details?id=com.hookedapp.app#Intent;scheme=https;package=com.android.vending;end`;
         
         // Detect platform
