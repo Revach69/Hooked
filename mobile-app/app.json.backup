@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "Hooked Dev",
+    "name": "Hooked",
     "slug": "hooked",
-    "version": "1.1.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -12,12 +12,11 @@
       "backgroundColor": "#ffffff"
     },
     "assetBundlePatterns": [
-      "**/*",
-      "assets/**/*"
+      "**/*"
     ],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.hookedapp.app.dev",
+      "bundleIdentifier": "com.hookedapp.app",
       "splash": {
         "image": "./assets/icon-rounded.png",
         "resizeMode": "contain",
@@ -29,22 +28,19 @@
         }
       },
       "associatedDomains": [
-        "applinks:dev.hooked-app.com",
-        "applinks:dev-www.hooked-app.com"
+        "applinks:hooked-app.com",
+        "applinks:www.hooked-app.com"
       ],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSCameraUsageDescription": "Hooked Dev needs camera access to let you take profile photos and scan QR codes at events.",
-        "NSPhotoLibraryUsageDescription": "Hooked Dev needs photo library access to let you select existing photos for your dating profile at events.",
-        "NSUserNotificationUsageDescription": "Hooked Dev needs notification access to send you alerts about new matches and messages at events.",
-        "NSLocationWhenInUseUsageDescription": "Hooked Dev needs location access to show you on the event map and help you discover nearby attendees.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Hooked Dev needs location access to show you on the event map and help you discover nearby attendees.",
-        "UIBackgroundModes": ["remote-notification", "location"]
+        "NSCameraUsageDescription": "Hooked needs camera access to let you take profile photos and scan QR codes at events.",
+        "NSPhotoLibraryUsageDescription": "Hooked needs photo library access to let you select existing photos for your dating profile at events.",
+        "NSUserNotificationUsageDescription": "Hooked needs notification access to send you alerts about new matches and messages at events.",
+        "UIBackgroundModes": ["remote-notification"]
       },
       "entitlements": {
-        "aps-environment": "development"
-      },
-      "googleServicesFile": "./ios/Hooked/GoogleService-Info-dev.plist"
+        "aps-environment": "production"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -61,8 +57,8 @@
           "backgroundColor": "#1a1a1a"
         }
       },
-      "package": "com.hooked.hookeddev",
-      "googleServicesFile": "./android/app/google-services-dev.json",
+      "package": "com.hookedapp.app",
+      "googleServicesFile": "./android/app/google-services.json",
       "intentFilters": [
         {
           "action": "VIEW",
@@ -71,11 +67,11 @@
           "data": [
             {
               "scheme": "https",
-              "host": "dev.hooked-app.com"
+              "host": "hooked-app.com"
             },
             {
               "scheme": "https", 
-              "host": "dev-www.hooked-app.com"
+              "host": "www.hooked-app.com"
             }
           ]
         }
@@ -85,10 +81,7 @@
         "android.permission.CAMERA",
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.POST_NOTIFICATIONS",
-        "android.permission.VIBRATE",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_BACKGROUND_LOCATION"
+        "android.permission.VIBRATE"
       ]
     },
     "web": {
@@ -99,7 +92,7 @@
         "@sentry/react-native/expo",
         {
           "organization": "hooked",
-          "project": "hooked-dev",
+          "project": "hooked",
           "url": "https://sentry.io/"
         }
       ],
@@ -110,23 +103,17 @@
           "icon": "./assets/icon.png",
           "color": "#ffffff",
           "androidMode": "default",
-          "androidCollapsedTitle": "New Message [DEV]",
-          "androidChannelId": "default-dev",
-          "androidChannelName": "Hooked Dev Notifications",
-          "androidChannelDescription": "Development notifications for new messages and matches",
+          "androidCollapsedTitle": "New Message",
+          "androidChannelId": "default",
+          "androidChannelName": "Hooked Notifications",
+          "androidChannelDescription": "Notifications for new messages and matches",
           "androidChannelImportance": "high",
           "androidShowBadge": true,
           "androidVibrate": true,
           "androidSound": "default"
         }
       ],
-      [
-        "@rnmapbox/maps",
-        {
-          "RNMapboxMapsImpl": "mapbox",
-          "RNMapboxMapsDownloadToken": "$MAPBOX_DOWNLOADS_TOKEN"
-        }
-      ],
+ 
       [
         "expo-build-properties",
         {
@@ -134,24 +121,21 @@
             "useFrameworks": "static",
             "useModularHeaders": true,
             "newArchEnabled": false
-          },
-          "android": {
-            "minSdkVersion": 21
           }
         }
       ]
     ],
-    "scheme": "hooked-dev", 
+    "scheme": "hooked", 
     "extra": {
       "firebaseConfig": {
-        "apiKey": "AIzaSyBhGESZT7wVnFX7zLm6_ztJJHzKL5JLhf8",
-        "authDomain": "hooked-development.firebaseapp.com",
-        "projectId": "hooked-development",
-        "storageBucket": "hooked-development.firebasestorage.app",
-        "messagingSenderId": "474843121153",
-        "appId": "1:474843121153:web:7242ff23e23f158383a200",
+        "apiKey": "AIzaSyDkVAo_xXbBHy8FYwFtMQA66aju08qK_yE",
+        "authDomain": "hooked-69.firebaseapp.com",
+        "projectId": "hooked-69",
+        "storageBucket": "hooked-69.firebasestorage.app",
+        "messagingSenderId": "741889428835",
+        "appId": "1:741889428835:web:d5f88b43a503c9e6351756",
+        "measurementId": "G-6YHKXLN806"
       },
-      "mapboxAccessToken": "$MAPBOX_ACCESS_TOKEN",
       "router": {},
       "eas": {
         "projectId": "7a1de260-e3cb-4cbb-863c-1557213d69f0"

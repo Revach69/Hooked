@@ -7,10 +7,12 @@
     "development": {
       "developmentClient": true,
       "env": {
-        "EXPO_PUBLIC_ENV": "development"
+        "EXPO_PUBLIC_ENV": "development",
+        "GOOGLE_SERVICES_JSON": "$GOOGLE_SERVICES_JSON_DEV",
+        "GOOGLE_SERVICE_INFO_PLIST": "$GOOGLE_SERVICE_INFO_PLIST_DEV",
+        "MAPBOX_DOWNLOADS_TOKEN": "$MAPBOX_DOWNLOADS_TOKEN"
       },
       "distribution": "internal",
-      "config": "app.development.json",
       "ios": {
         "resourceClass": "m-medium"
       },
@@ -21,7 +23,9 @@
     "staging": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_ENV": "staging"
+        "EXPO_PUBLIC_ENV": "staging",
+        "EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN": "$MAPBOX_ACCESS_TOKEN",
+        "MAPBOX_DOWNLOADS_TOKEN": "$MAPBOX_DOWNLOADS_TOKEN"
       },
       "ios": {
         "resourceClass": "m-medium"
@@ -34,7 +38,25 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_ENV": "preview"
+        "EXPO_PUBLIC_ENV": "preview",
+        "EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN": "$MAPBOX_ACCESS_TOKEN",
+        "MAPBOX_DOWNLOADS_TOKEN": "$MAPBOX_DOWNLOADS_TOKEN"
+      },
+      "ios": {
+        "resourceClass": "m-medium"
+      },
+      "android": {
+        "resourceClass": "medium"
+      }
+    },
+    "mapbox-dev": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_ENV": "development",
+        "EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN": "$MAPBOX_ACCESS_TOKEN_DEV",
+        "GOOGLE_SERVICES_JSON": "$GOOGLE_SERVICES_JSON_DEV",
+        "GOOGLE_SERVICE_INFO_PLIST": "$GOOGLE_SERVICE_INFO_PLIST_DEV",
+        "MAPBOX_DOWNLOADS_TOKEN": "$MAPBOX_DOWNLOADS_TOKEN"
       },
       "ios": {
         "resourceClass": "m-medium"
@@ -47,8 +69,10 @@
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_ENV": "production",
+        "EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN": "$MAPBOX_ACCESS_TOKEN",
         "GOOGLE_SERVICES_JSON": "$GOOGLE_SERVICES_JSON",
-        "GOOGLE_SERVICE_INFO_PLIST": "$GOOGLE_SERVICE_INFO_PLIST"
+        "GOOGLE_SERVICE_INFO_PLIST": "$GOOGLE_SERVICE_INFO_PLIST",
+        "MAPBOX_DOWNLOADS_TOKEN": "$MAPBOX_DOWNLOADS_TOKEN"
       },
       "ios": {
         "resourceClass": "m-medium",

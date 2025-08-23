@@ -32,6 +32,7 @@ if (process.env.EXPO_PUBLIC_SENTRY_DSN) {
 import React, { useEffect, useState } from 'react';
 import { Stack, useRouter } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useColorScheme } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { NotificationRouter } from '../lib/notifications/NotificationRouter';
 import { useIsForegroundGetter } from '../lib/notifications/helpers';
@@ -56,6 +57,8 @@ import { getSessionAndInstallationIds } from '../lib/session/sessionId';
 export default function RootLayout() {
   const router = useRouter();
   const [appIsReady, setAppIsReady] = useState(false);
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
 
   // 1) Provide getIsForeground to the router
   const getIsForeground = useIsForegroundGetter();
@@ -265,6 +268,10 @@ export default function RootLayout() {
             screenOptions={{ 
               headerShown: false,
               gestureEnabled: false,  // Disable swipe gestures
+              contentStyle: {
+                backgroundColor: isDark ? '#1a1a1a' : '#ffffff',
+              },
+              animation: 'fade', // Smoother transition
             }} 
           />
         <Toast 

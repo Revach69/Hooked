@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { router } from 'expo-router';
-import { Heart, Filter, Users, User, MessageCircle, X } from 'lucide-react-native';
+import { Heart, Filter, Users, User, MessageCircle, X, MapPin } from 'lucide-react-native';
 import { EventProfileAPI, LikeAPI, EventAPI, BlockedMatchAPI, SkippedProfileAPI } from '../lib/firebaseApi';
 import * as Sentry from '@sentry/react-native';
 
@@ -229,13 +229,25 @@ export default function Discovery() {
     setCurrentSessionId(sessionId);
     
     try {
-      // Add timeout to prevent hanging indefinitely
-      const eventTimeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Event loading timeout')), 15000); // 15 second timeout
-      });
+      // Reduce timeout and add retry logic
+      const fetchEventWithRetry = async (retries = 2) => {
+        for (let i = 0; i < retries; i++) {
+          try {
+            const timeoutPromise = new Promise<never>((_, reject) => {
+              setTimeout(() => reject(new Error('Event loading timeout')), 8000); // Reduced to 8 seconds
+            });
+            
+            const eventPromise = EventAPI.filter({ id: eventId });
+            return await Promise.race([eventPromise, timeoutPromise]);
+          } catch (error) {
+            if (i === retries - 1) throw error; // Last attempt failed
+            console.log(`Event fetch attempt ${i + 1} failed, retrying...`);
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+          }
+        }
+      };
       
-      const eventPromise = EventAPI.filter({ id: eventId });
-      const events = await Promise.race([eventPromise, eventTimeoutPromise]);
+      const events = await fetchEventWithRetry();
       
       if (events.length > 0) {
         setCurrentEvent(events[0]);
@@ -293,18 +305,33 @@ export default function Discovery() {
     } catch (error) {
       Sentry.captureException(error);
       
-      // Only clear data if we're certain something is wrong
-      // For network errors, just redirect without clearing
-      if (error instanceof Error && error.message === 'Event loading timeout') {
-        console.log('Event loading timed out - redirecting to home but keeping session data');
-      } else if (error instanceof Error && error.message === 'Profile loading timeout') {
-        console.log('Profile loading timed out - redirecting to home but keeping session data');
-      } else {
-        console.error('Error in initializeSession:', error);
+      // Handle errors with better UX
+      console.error('Error in initializeSession:', error);
+      
+      if (error instanceof Error && error.message.includes('timeout')) {
+        // Show retry option for timeout errors
+        setIsLoading(false);
+        Alert.alert(
+          'Connection Issue',
+          'Unable to load profiles. Please check your connection and try again.',
+          [
+            {
+              text: 'Go Back',
+              onPress: () => router.back(),
+              style: 'cancel'
+            },
+            {
+              text: 'Retry',
+              onPress: () => initializeSession()
+            }
+          ]
+        );
+        return;
       }
       
-      // Redirect to home but don't clear session data
-      router.replace('/home');
+      // For other errors, go back to previous page
+      setIsLoading(false);
+      router.back();
       return;
     }
     setIsLoading(false);
@@ -924,6 +951,7 @@ export default function Discovery() {
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
+      backgroundColor: isDark ? '#2d2d2d' : 'white',
     },
     loadingText: {
       marginTop: 16,
@@ -1414,15 +1442,26 @@ export default function Discovery() {
           </Text>
           <Text style={styles.subtitle}>{filteredProfiles.length} people discovered</Text>
         </View>
-        <TouchableOpacity
-          style={styles.filterButton}
-          onPress={handleOpenFilters}
-          accessibilityRole="button"
-          accessibilityLabel="Filter Profiles"
-          accessibilityHint="Open filters to customize your discovery preferences"
-        >
-          <Filter size={20} color="#6b7280" />
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity
+            style={styles.filterButton}
+            onPress={() => router.push('/map')}
+            accessibilityRole="button"
+            accessibilityLabel="Map View"
+            accessibilityHint="View attendees on interactive map"
+          >
+            <MapPin size={20} color="#6b7280" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.filterButton}
+            onPress={handleOpenFilters}
+            accessibilityRole="button"
+            accessibilityLabel="Filter Profiles"
+            accessibilityHint="Open filters to customize your discovery preferences"
+          >
+            <Filter size={20} color="#6b7280" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Profiles Grid */}

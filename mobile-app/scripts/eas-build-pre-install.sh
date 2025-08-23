@@ -69,4 +69,20 @@ else
   echo "⚠️  EXPO_PUBLIC_SENTRY_DSN not found - Sentry error reporting will be disabled"
 fi
 
-echo "🎉 Google Services files setup complete!"
+# Verify Mapbox configuration
+echo "🗺️  Checking Mapbox configuration..."
+if [ ! -z "${MAPBOX_DOWNLOADS_TOKEN:-}" ]; then
+  echo "✅ Mapbox Downloads Token is configured for native SDK installation"
+else
+  echo "❌ MAPBOX_DOWNLOADS_TOKEN not found - Mapbox native SDK installation will fail"
+  exit 1
+fi
+
+if [ ! -z "${EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN:-}" ]; then
+  echo "✅ Mapbox Access Token is configured: ${EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN:0:20}..."
+else
+  echo "❌ EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN not found - Maps will not load"
+  exit 1
+fi
+
+echo "🎉 Build pre-install setup complete!"

@@ -996,13 +996,25 @@ export default function Matches() {
 
       setCurrentSessionId(sessionId);
       
-      // Add timeout to prevent indefinite hanging
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Event lookup timeout')), 15000); // 15 seconds
-      });
+      // Reduce timeout and add retry logic
+      const fetchEventWithRetry = async (retries = 2) => {
+        for (let i = 0; i < retries; i++) {
+          try {
+            const timeoutPromise = new Promise<never>((_, reject) => {
+              setTimeout(() => reject(new Error('Event lookup timeout')), 8000); // Reduced to 8 seconds
+            });
+            
+            const eventPromise = EventAPI.filter({ id: eventId });
+            return await Promise.race([eventPromise, timeoutPromise]);
+          } catch (error) {
+            if (i === retries - 1) throw error; // Last attempt failed
+            console.log(`Event fetch attempt ${i + 1} failed, retrying...`);
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+          }
+        }
+      };
       
-      const eventPromise = EventAPI.filter({ id: eventId });
-      const events = await Promise.race([eventPromise, timeoutPromise]);
+      const events = await fetchEventWithRetry();
       
       if (events.length > 0) {
         setCurrentEvent(events[0]);
@@ -1054,23 +1066,38 @@ export default function Matches() {
       console.error('Error initializing matches session:', error);
       
       // Don't clear session data on network/timeout errors
-      // Let user try again or return to home naturally
+      // Show user-friendly error with retry option
       if (error instanceof Error) {
         if (error.message.includes('timeout')) {
-          // Show loading failed state but keep session data
-          console.log('Initialization timeout - keeping session data for retry');
-          // You could show a retry button here instead of redirecting
+          // Network timeout - show retry option
+          setIsLoading(false);
+          Alert.alert(
+            'Connection Issue',
+            'Unable to load matches. Please check your connection and try again.',
+            [
+              {
+                text: 'Go Back',
+                onPress: () => router.back(),
+                style: 'cancel'
+              },
+              {
+                text: 'Retry',
+                onPress: () => initializeSession()
+              }
+            ]
+          );
+          return; // Don't auto-redirect, let user choose
         } else {
-          // Log other errors but don't immediately clear session
-          console.log('Initialization error - redirecting to home but keeping session data');
+          // Other errors - still show option but default to going back
+          console.log('Initialization error:', error.message);
         }
       }
       
-      // Redirect to home but don't clear session data
-      // Homepage will handle session restoration
-      router.replace('/home');
-    } finally {
+      // For non-timeout errors, go back to previous page
       setIsLoading(false);
+      router.back(); // Use back() instead of replace() to return to previous page
+    } finally {
+      // Loading state already handled above for better control
     }
   }
 
@@ -1182,6 +1209,7 @@ export default function Matches() {
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
+      backgroundColor: isDark ? '#1a1a1a' : '#f8fafc',
     },
     loadingText: {
       marginTop: 16,
