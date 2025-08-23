@@ -11,15 +11,19 @@ import {
   Alert,
   AppState,
   Platform,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { Heart, MessageCircle, Users, User, UserX, VolumeX, Volume2 } from 'lucide-react-native';
-import { EventProfileAPI, LikeAPI, EventAPI, MessageAPI, MutedMatchAPI } from '../lib/firebaseApi';
+import { Heart, MessageCircle, Users, User, UserX, VolumeX, Volume2, Flag } from 'lucide-react-native';
+import { EventProfileAPI, LikeAPI, EventAPI, MessageAPI, MutedMatchAPI, ReportAPI } from '../lib/firebaseApi';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
+import { ImageCacheService } from '../lib/services/ImageCacheService';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebaseConfig';
 import UserProfileModal from '../lib/UserProfileModal';
+import DropdownMenu from '../components/DropdownMenu';
 
 import { updateUserActivity } from '../lib/messageNotificationHelper';
 import { setMuteStatus } from '../lib/utils/notificationUtils';
@@ -40,6 +44,11 @@ export default function Matches() {
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
   const [mutedMatches, setMutedMatches] = useState<Set<string>>(new Set());
   const [unmatchingUsers, setUnmatchingUsers] = useState<Set<string>>(new Set());
+  const [cachedImageUris, setCachedImageUris] = useState<Map<string, string>>(new Map());
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportingMatch, setReportingMatch] = useState<any>(null);
+  const [reportReason, setReportReason] = useState('');
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
   // Single ref to hold all unsubscribe functions
   const listenersRef = useRef<{
     userProfile?: () => void;
@@ -52,6 +61,8 @@ export default function Matches() {
 
   useEffect(() => {
     initializeSession();
+    // Initialize image cache service
+    ImageCacheService.initialize();
   }, []);
 
   // Reload muted matches and refresh unread messages whenever user returns to this page
@@ -445,6 +456,34 @@ export default function Matches() {
 
           setMatches(matchedProfiles);
           
+          // Cache match profile images
+          if (currentEvent?.id && matchedProfiles.length > 0) {
+            const cacheMatchImages = async () => {
+              const newCachedUris = new Map<string, string>();
+              
+              for (const match of matchedProfiles) {
+                if (match.profile_photo_url) {
+                  try {
+                    const cachedUri = await ImageCacheService.getCachedImageUri(
+                      match.profile_photo_url,
+                      currentEvent.id,
+                      match.session_id
+                    );
+                    newCachedUris.set(match.session_id, cachedUri);
+                  } catch (error) {
+                    console.warn('Failed to cache image for match:', match.session_id, error);
+                    // Fallback to original URI
+                    newCachedUris.set(match.session_id, match.profile_photo_url);
+                  }
+                }
+              }
+              
+              setCachedImageUris(newCachedUris);
+            };
+            
+            cacheMatchImages();
+          }
+          
           // If there are no matches, clear unread messages indicator
           if (matchedProfiles.length === 0) {
             console.log('No matches found - clearing unread messages indicator');
@@ -742,6 +781,16 @@ export default function Matches() {
               } catch (error) {
                 console.warn('Failed to clear notification cache:', error);
               }
+              
+              // Clear image cache for the unmatched user
+              try {
+                if (currentEvent?.id) {
+                  await ImageCacheService.clearProfileCache(matchSessionId, currentEvent.id);
+                  console.log('Cleared image cache for unmatched user');
+                }
+              } catch (cacheError) {
+                console.warn('Failed to clear image cache for unmatched user:', cacheError);
+              }
 
               // Immediately remove the unmatched user from the UI
               setMatches(prevMatches => prevMatches.filter(m => m.session_id !== matchSessionId));
@@ -760,17 +809,12 @@ export default function Matches() {
               );
             } catch (error) {
               console.error('Unmatch error:', error);
-              // Use Toast instead of notifications to match message toast design
-              const Toast = require('react-native-toast-message').default;
-              Toast.show({
-                type: 'error',
-                text1: 'Error',
-                text2: 'Failed to unmatch',
-                position: 'top',
-                visibilityTime: 3500,
-                autoHide: true,
-                topOffset: 0,
-              });
+              // Use Alert for critical errors
+              Alert.alert(
+                'Error',
+                'Failed to unmatch. Please try again.',
+                [{ text: 'OK' }]
+              );
             } finally {
               // Clear the unmatching state regardless of success/failure
               setUnmatchingUsers(prev => {
@@ -822,6 +866,18 @@ export default function Matches() {
       
       console.log(`Successfully ${isMuted ? 'unmuted' : 'muted'} match ${matchSessionId} on server`);
       
+      // Show alert to explain what happened
+      const matchProfile = matches.find(match => match.session_id === matchSessionId);
+      const matchName = matchProfile?.first_name || 'This match';
+      
+      Alert.alert(
+        isMuted ? "Match Unmuted!" : "Match Muted!",
+        isMuted 
+          ? `You will now receive notifications from ${matchName}. You can still see their messages and chat normally.`
+          : `You will not receive notifications from ${matchName}. You can still see their messages and chat, but won't get push notifications.`,
+        [{ text: "OK" }]
+      );
+      
       // Verify after a longer delay to ensure Firebase has updated
       setTimeout(async () => {
         console.log('Verifying mute status was saved (after 3 seconds)...');
@@ -869,20 +925,60 @@ export default function Matches() {
         return newSet;
       });
       
-      // Use Toast instead of notifications to match message toast design
-      const Toast = require('react-native-toast-message').default;
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: `Failed to ${isMuted ? 'unmute' : 'mute'} match`,
-        position: 'top',
-        visibilityTime: 3500,
-        autoHide: true,
-        topOffset: 0,
-      });
+      // Use Alert for critical errors
+      Alert.alert(
+        'Error',
+        `Failed to ${isMuted ? 'unmute' : 'mute'} match. Please try again.`,
+        [{ text: 'OK' }]
+      );
       if (error) {
         try { require('@sentry/react-native').captureException(error); } catch { /* ignore */ }
       }
+    }
+  };
+
+  const handleReportMatch = (match: any) => {
+    setReportingMatch(match);
+    setShowReportModal(true);
+  };
+
+  const submitReport = async () => {
+    if (!reportReason.trim()) {
+      Alert.alert('Error', 'Please provide a reason for the report');
+      return;
+    }
+    
+    if (!currentEvent?.id || !currentSessionId || !reportingMatch) {
+      Alert.alert('Error', 'Missing information for report');
+      return;
+    }
+
+    setIsSubmittingReport(true);
+    try {
+      const reportData = {
+        event_id: currentEvent.id,
+        reporter_session_id: currentSessionId,
+        reported_session_id: reportingMatch.session_id,
+        reason: reportReason.trim(),
+        details: '',
+        status: 'pending' as const,
+      };
+
+      await ReportAPI.create(reportData);
+
+      Alert.alert(
+        'Report Submitted',
+        'Thank you for your report. We will review it shortly.'
+      );
+
+      setShowReportModal(false);
+      setReportReason('');
+      setReportingMatch(null);
+    } catch (error) {
+      console.error('Error submitting report:', error);
+      Alert.alert('Error', 'Failed to submit report');
+    } finally {
+      setIsSubmittingReport(false);
     }
   };
 
@@ -1343,6 +1439,70 @@ export default function Matches() {
       alignItems: 'center',
       justifyContent: 'center',
     },
+    reportModalOverlay: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    reportModalContent: {
+      width: '100%',
+      maxWidth: 400,
+      borderRadius: 16,
+      padding: 24,
+    },
+    reportModalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    reportModalTitle: {
+      fontSize: 20,
+      fontWeight: '600',
+    },
+    reportModalCloseButton: {
+      padding: 4,
+    },
+    reportModalDescription: {
+      fontSize: 16,
+      lineHeight: 22,
+      marginBottom: 16,
+    },
+    reportReasonInput: {
+      borderWidth: 1,
+      borderRadius: 8,
+      padding: 12,
+      fontSize: 16,
+      textAlignVertical: 'top',
+      height: 100,
+      marginBottom: 20,
+    },
+    reportModalButtons: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    reportModalButton: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    reportCancelButton: {
+      // Styled inline in component
+    },
+    reportSubmitButton: {
+      backgroundColor: '#dc2626',
+    },
+    reportButtonText: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: 'white',
+    },
+    disabledButton: {
+      opacity: 0.5,
+    },
   });
 
   if (isLoading) {
@@ -1471,8 +1631,8 @@ export default function Matches() {
                   accessibilityHint="Opens profile details modal"
                 >
                     {match.profile_photo_url ? (
-                      <Image source={{ uri: match.profile_photo_url }}
-        onError={() => {}} style={[styles.matchImage, mutedMatches.has(match.session_id) && { opacity: 0.5 }]} />
+                      <Image source={{ uri: cachedImageUris.get(match.session_id) || match.profile_photo_url }}
+                        onError={() => {}} style={[styles.matchImage, mutedMatches.has(match.session_id) && { opacity: 0.5 }]} />
                     ) : (
                       <View style={[styles.matchImageFallback, { backgroundColor: match.profile_color || '#cccccc' }, mutedMatches.has(match.session_id) && { opacity: 0.5 }]}>
                         <Text style={styles.matchImageFallbackText}>{match.first_name[0]}</Text>
@@ -1536,29 +1696,29 @@ export default function Matches() {
                       <Text style={styles.actionText}>Message</Text>
                     </TouchableOpacity>
                     
-                    <TouchableOpacity 
-                      style={styles.iconButton}
-                      onPress={() => handleMuteMatch(match.session_id)}
-                      accessibilityRole="button"
-                      accessibilityLabel={mutedMatches.has(match.session_id) ? 'Unmute match' : 'Mute match'}
-                      accessibilityHint={mutedMatches.has(match.session_id) ? 'Unmute notifications from this match' : 'Mute notifications from this match'}
-                    >
-                      {mutedMatches.has(match.session_id) ? (
-                        <Volume2 size={20} color="#6b7280" />
-                      ) : (
-                        <VolumeX size={20} color="#6b7280" />
-                      )}
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                      style={styles.iconButton}
-                      onPress={() => handleUnmatch(match.session_id, match.first_name)}
-                      accessibilityRole="button"
-                      accessibilityLabel="Unmatch"
-                      accessibilityHint="Remove this match and return them to discovery"
-                    >
-                      <UserX size={20} color="#dc2626" />
-                    </TouchableOpacity>
+                    <DropdownMenu
+                      items={[
+                        {
+                          id: 'mute',
+                          label: mutedMatches.has(match.session_id) ? 'Unmute' : 'Mute',
+                          icon: mutedMatches.has(match.session_id) ? Volume2 : VolumeX,
+                          onPress: () => handleMuteMatch(match.session_id),
+                        },
+                        {
+                          id: 'unmatch',
+                          label: 'Unmatch',
+                          icon: UserX,
+                          onPress: () => handleUnmatch(match.session_id, match.first_name),
+                        },
+                        {
+                          id: 'report',
+                          label: 'Report',
+                          icon: Flag,
+                          onPress: () => handleReportMatch(match),
+                          destructive: true,
+                        },
+                      ]}
+                    />
                   </View>
                 </View>
               </TouchableOpacity>
@@ -1652,6 +1812,72 @@ export default function Matches() {
         onLike={handleLike}
         isLiked={selectedProfileForDetail ? likedProfiles.has(selectedProfileForDetail.session_id) : false}
       />
+
+      {/* Report Modal */}
+      <Modal
+        visible={showReportModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowReportModal(false)}
+      >
+        <View style={[styles.reportModalOverlay, { backgroundColor: 'rgba(0, 0, 0, 0.5)' }]}>
+          <View style={[styles.reportModalContent, { backgroundColor: isDark ? '#1f2937' : '#ffffff' }]}>
+            <View style={styles.reportModalHeader}>
+              <Text style={[styles.reportModalTitle, { color: isDark ? '#ffffff' : '#1f2937' }]}>
+                Report User
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowReportModal(false)}
+                style={styles.reportModalCloseButton}
+              >
+                <UserX size={24} color={isDark ? '#9ca3af' : '#6b7280'} />
+              </TouchableOpacity>
+            </View>
+            <Text style={[styles.reportModalDescription, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+              Please provide a reason for reporting {reportingMatch?.first_name || 'this user'}:
+            </Text>
+            <TextInput
+              style={[
+                styles.reportReasonInput,
+                {
+                  backgroundColor: isDark ? '#374151' : '#f9fafb',
+                  color: isDark ? '#ffffff' : '#1f2937',
+                  borderColor: isDark ? '#4b5563' : '#d1d5db',
+                }
+              ]}
+              value={reportReason}
+              onChangeText={setReportReason}
+              placeholder="Enter the reason for your report..."
+              placeholderTextColor={isDark ? '#6b7280' : '#9ca3af'}
+              multiline
+              numberOfLines={4}
+            />
+            <View style={styles.reportModalButtons}>
+              <TouchableOpacity
+                style={[styles.reportModalButton, styles.reportCancelButton, { backgroundColor: isDark ? '#374151' : '#f3f4f6' }]}
+                onPress={() => setShowReportModal(false)}
+              >
+                <Text style={[styles.reportButtonText, { color: isDark ? '#9ca3af' : '#6b7280' }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.reportModalButton,
+                  styles.reportSubmitButton,
+                  !reportReason.trim() && styles.disabledButton
+                ]}
+                onPress={submitReport}
+                disabled={!reportReason.trim() || isSubmittingReport}
+              >
+                {isSubmittingReport ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Text style={styles.reportButtonText}>Submit Report</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 } 

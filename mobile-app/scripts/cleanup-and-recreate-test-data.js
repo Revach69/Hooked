@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
 /**
- * Mock Profile Generator for Hooked App
- * Creates 18 test profiles (3 of each gender/orientation combination)
- * 2 basic profiles + 1 full profile for each type
+ * Cleanup and Recreation Script for Test Data
+ * 1. Deletes old test event and profiles
+ * 2. Creates new test event with specified fields
+ * 3. Recreates profiles for the new event
  */
 
 // Load environment variables from .env file
@@ -11,7 +12,7 @@ require('dotenv').config();
 
 const { v4: uuidv4 } = require('uuid');
 const { initializeApp } = require('firebase/app');
-const { getFirestore, collection, addDoc, serverTimestamp } = require('firebase/firestore');
+const { getFirestore, collection, addDoc, deleteDoc, doc, getDocs, query, where, serverTimestamp, Timestamp } = require('firebase/firestore');
 
 // Firebase configuration - use environment variables from .env
 const firebaseConfig = {
@@ -27,30 +28,16 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// Test event configuration
-const TEST_EVENT_CODE = 'dev-test';
-let TEST_EVENT_ID = null; // Will be set after creating the event
+// Old and new test event configuration
+const OLD_TEST_EVENT_ID = 'zYC7gDXJvnOMW09T7ALO'; // From previous run
+const NEW_TEST_EVENT_CODE = 'TEST';
+let NEW_TEST_EVENT_ID = null;
 
 // Profile colors palette
 const PROFILE_COLORS = [
-  '#FF6B6B', // Coral Red
-  '#4ECDC4', // Turquoise
-  '#45B7D1', // Sky Blue
-  '#96CEB4', // Sage Green
-  '#FFEAA7', // Pastel Yellow
-  '#DDA0DD', // Plum
-  '#FFB6C1', // Light Pink
-  '#98D8C8', // Mint
-  '#F7DC6F', // Sunshine
-  '#BB8FCE', // Lavender
-  '#85C1E2', // Light Blue
-  '#F8B739', // Golden
-  '#52B788', // Emerald
-  '#F72585', // Hot Pink
-  '#7209B7', // Purple
-  '#3A0CA3', // Deep Blue
-  '#F77F00', // Orange
-  '#06FFA5'  // Neon Green
+  '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD',
+  '#FFB6C1', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2', '#F8B739',
+  '#52B788', '#F72585', '#7209B7', '#3A0CA3', '#F77F00', '#06FFA5'
 ];
 
 // Name pools
@@ -89,28 +76,101 @@ const ABOUT_ME_TEMPLATES = [
   "Sports fan, trivia champion, and aspiring sommelier. Looking for someone competitive enough to challenge me."
 ];
 
-// Helper function to get random element from array
+// Helper functions
 function getRandom(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-// Helper function to get random elements from array
 function getRandomMultiple(arr, count) {
   const shuffled = [...arr].sort(() => 0.5 - Math.random());
   return shuffled.slice(0, count);
 }
 
-// Helper function to generate age between 25-35
 function getRandomAge() {
   return Math.floor(Math.random() * 11) + 25;
 }
 
-// Helper function to generate height in cm (150-195)
 function getRandomHeight(gender) {
   if (gender === 'man') {
     return Math.floor(Math.random() * 26) + 170; // 170-195 cm
   } else {
     return Math.floor(Math.random() * 26) + 155; // 155-180 cm
+  }
+}
+
+// Delete old test event and profiles
+async function cleanupOldTestData() {
+  console.log('🗑️ Cleaning up old test data...\n');
+  
+  try {
+    // Delete old profiles
+    const profilesQuery = query(collection(db, 'event_profiles'), where('event_id', '==', OLD_TEST_EVENT_ID));
+    const profilesSnapshot = await getDocs(profilesQuery);
+    
+    let deletedProfiles = 0;
+    for (const profileDoc of profilesSnapshot.docs) {
+      await deleteDoc(doc(db, 'event_profiles', profileDoc.id));
+      deletedProfiles++;
+    }
+    
+    console.log(`✅ Deleted ${deletedProfiles} old profiles`);
+    
+    // Delete old event
+    if (OLD_TEST_EVENT_ID) {
+      await deleteDoc(doc(db, 'events', OLD_TEST_EVENT_ID));
+      console.log(`✅ Deleted old test event (ID: ${OLD_TEST_EVENT_ID})`);
+    }
+    
+    console.log('');
+  } catch (error) {
+    console.error(`❌ Error during cleanup: ${error.message}`);
+    throw error;
+  }
+}
+
+// Create new test event with specified fields
+async function createNewTestEvent() {
+  console.log('🎫 Creating new test event...\n');
+  
+  // Create timestamps as specified
+  const createdAt = Timestamp.fromDate(new Date('2025-08-17T09:07:49.000Z')); // 12:07:49 UTC+3 = 09:07:49 UTC
+  const updatedAt = Timestamp.fromDate(new Date('2025-08-17T14:28:06.000Z')); // 17:28:06 UTC+3 = 14:28:06 UTC
+  const startsAt = Timestamp.fromDate(new Date('2024-12-31T22:00:00.000Z')); // 00:00:00 UTC+2 = 22:00:00 UTC (previous day)
+  const startDate = Timestamp.fromDate(new Date('2024-12-31T22:00:00.000Z')); // Same as startsAt
+  const expiresAt = Timestamp.fromDate(new Date('2025-12-31T22:00:00.000Z')); // 00:00:00 UTC+2 = 22:00:00 UTC (previous day)
+  
+  const newTestEvent = {
+    country: "Israel",
+    created_at: createdAt,
+    description: "",
+    event_code: "TEST",
+    event_link: "",
+    event_type: "conferences",
+    expires_at: expiresAt,
+    is_active: true,
+    is_private: true,
+    location: "test",
+    name: "test",
+    organizer_email: "",
+    region: "",
+    start_date: startDate,
+    starts_at: startsAt,
+    timezone: "Asia/Jerusalem",
+    updated_at: updatedAt
+  };
+
+  try {
+    const docRef = await addDoc(collection(db, 'events'), newTestEvent);
+    NEW_TEST_EVENT_ID = docRef.id;
+    console.log(`✅ Created new test event: ${newTestEvent.name} (ID: ${NEW_TEST_EVENT_ID})`);
+    console.log(`🎫 Event code: ${NEW_TEST_EVENT_CODE}`);
+    console.log(`🌍 Country: ${newTestEvent.country}`);
+    console.log(`📅 Timezone: ${newTestEvent.timezone}`);
+    console.log(`🏢 Event type: ${newTestEvent.event_type}\n`);
+    return NEW_TEST_EVENT_ID;
+  } catch (error) {
+    console.error(`❌ Failed to create new test event: ${error.message}`);
+    throw error;
   }
 }
 
@@ -121,7 +181,7 @@ function generateProfile(gender, interestedIn, isFullProfile, index) {
   const sessionId = uuidv4();
   
   const baseProfile = {
-    event_id: TEST_EVENT_ID,
+    event_id: NEW_TEST_EVENT_ID,
     session_id: sessionId,
     first_name: name,
     age: getRandomAge(),
@@ -146,39 +206,9 @@ function generateProfile(gender, interestedIn, isFullProfile, index) {
   return baseProfile;
 }
 
-// Create test event first
-async function createTestEvent() {
-  console.log('🎫 Creating test event...\n');
-  
-  const testEvent = {
-    event_name: 'Development Test Event',
-    event_code: TEST_EVENT_CODE,
-    location: 'Dev Testing Location',
-    event_date: new Date('2024-12-31'),
-    created_at: serverTimestamp(),
-    updated_at: serverTimestamp(),
-    is_active: true,
-    max_participants: 100
-  };
-
-  try {
-    const docRef = await addDoc(collection(db, 'events'), testEvent);
-    TEST_EVENT_ID = docRef.id;
-    console.log(`✅ Created test event: ${testEvent.event_name} (ID: ${TEST_EVENT_ID})`);
-    console.log(`🎫 Event code: ${TEST_EVENT_CODE}\n`);
-    return TEST_EVENT_ID;
-  } catch (error) {
-    console.error(`❌ Failed to create test event: ${error.message}`);
-    throw error;
-  }
-}
-
-// Generate all profiles
-async function generateMockProfiles() {
-  console.log('🚀 Starting mock profile generation...\n');
-  
-  // First create the test event
-  await createTestEvent();
+// Generate all profiles for the new event
+async function generateNewProfiles() {
+  console.log('👥 Creating new profiles for the test event...\n');
   
   const profileTypes = [
     { gender: 'man', interestedIn: 'women', label: 'Men interested in women' },
@@ -194,7 +224,7 @@ async function generateMockProfiles() {
   let errorCount = 0;
 
   for (const type of profileTypes) {
-    console.log(`\n📝 Creating ${type.label}:`);
+    console.log(`📝 Creating ${type.label}:`);
     
     for (let i = 0; i < 3; i++) {
       // Make the third profile (index 2) the full profile
@@ -219,37 +249,52 @@ async function generateMockProfiles() {
         errorCount++;
       }
     }
+    console.log('');
   }
 
-  console.log('\n' + '='.repeat(50));
-  console.log('📊 SUMMARY:');
-  console.log('='.repeat(50));
-  console.log(`✅ Successfully created: ${successCount} profiles`);
-  console.log(`❌ Failed: ${errorCount} profiles`);
-  console.log(`📍 Event ID: ${TEST_EVENT_ID}`);
-  console.log(`🎫 Event Code: ${TEST_EVENT_CODE}`);
-  
-  console.log('\n📸 IMAGE UPLOAD INSTRUCTIONS:');
-  console.log('='.repeat(50));
-  console.log('To add profile photos manually:');
-  console.log('1. Upload images to Firebase Storage at: /profile-photos/{profile_id}.jpg');
-  console.log('2. Get the download URL for each image');
-  console.log('3. Update the profile_photo_url field in Firestore');
-  console.log('\nProfile IDs for photo upload:');
-  allProfiles.forEach((profile, index) => {
-    if (index % 3 === 2) { // Full profiles only
-      console.log(`  - ${profile.id} (${profile.first_name}, ${profile.gender_identity}, Full Profile)`);
-    }
-  });
-
-  console.log('\n✨ Mock profile generation complete!');
-  process.exit(0);
+  return { allProfiles, successCount, errorCount };
 }
 
-// Error handler
+// Main execution function
 async function main() {
   try {
-    await generateMockProfiles();
+    console.log('🚀 Starting test data cleanup and recreation...\n');
+    
+    // Step 1: Cleanup old data
+    await cleanupOldTestData();
+    
+    // Step 2: Create new test event
+    await createNewTestEvent();
+    
+    // Step 3: Create new profiles
+    const { allProfiles, successCount, errorCount } = await generateNewProfiles();
+    
+    // Summary
+    console.log('='.repeat(50));
+    console.log('📊 FINAL SUMMARY:');
+    console.log('='.repeat(50));
+    console.log(`✅ Successfully created: ${successCount} profiles`);
+    console.log(`❌ Failed: ${errorCount} profiles`);
+    console.log(`📍 New Event ID: ${NEW_TEST_EVENT_ID}`);
+    console.log(`🎫 Event Code: ${NEW_TEST_EVENT_CODE}`);
+    console.log(`🌍 Country: Israel`);
+    console.log(`📅 Timezone: Asia/Jerusalem`);
+    
+    console.log('\n📸 IMAGE UPLOAD INSTRUCTIONS:');
+    console.log('='.repeat(50));
+    console.log('To add profile photos manually:');
+    console.log('1. Upload images to Firebase Storage at: /profile-photos/{profile_id}.jpg');
+    console.log('2. Get the download URL for each image');
+    console.log('3. Update the profile_photo_url field in Firestore');
+    console.log('\nProfile IDs for photo upload:');
+    allProfiles.forEach((profile, index) => {
+      if (index % 3 === 2) { // Full profiles only
+        console.log(`  - ${profile.id} (${profile.first_name}, ${profile.gender_identity}, Full Profile)`);
+      }
+    });
+
+    console.log('\n✨ Test data recreation complete!');
+    process.exit(0);
   } catch (error) {
     console.error('❌ Fatal error:', error);
     process.exit(1);
@@ -261,4 +306,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { generateMockProfiles };
+module.exports = { main };

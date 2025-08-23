@@ -273,7 +273,7 @@ export default function Consent() {
         mediaTypes: 'images',
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.4, // Further reduced quality for simulator
+        quality: 0.4, // Optimized for fast upload
         allowsMultipleSelection: false,
         base64: false,
         exif: false,
@@ -322,7 +322,7 @@ export default function Consent() {
         mediaTypes: 'images',
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.4, // Further reduced quality for simulator
+        quality: 0.4, // Optimized for fast upload
         allowsMultipleSelection: false,
         base64: false,
         exif: false,
@@ -352,12 +352,11 @@ export default function Consent() {
   };
 
   const processImageAsset = async (asset: any) => {
-    // Validate file size (stricter limit for simulator)
-    const maxFileSize = Platform.OS === 'ios' && __DEV__ ? 5 * 1024 * 1024 : 10 * 1024 * 1024; // 5MB for simulator, 10MB for device
+    // Consistent 5MB file size limit across all platforms
+    const maxFileSize = 5 * 1024 * 1024; // 5MB limit
     if (asset.fileSize && asset.fileSize > maxFileSize) {
       Sentry.captureException(new Error(`File too large: ${asset.fileSize}`));
-      const sizeLimit = Platform.OS === 'ios' && __DEV__ ? '5MB' : '10MB';
-      Alert.alert("File Too Large", `Image must be smaller than ${sizeLimit}.`);
+      Alert.alert("File Too Large", "Image must be smaller than 5MB. Please choose a smaller image or take a new photo.");
       return;
     }
 
@@ -367,27 +366,23 @@ export default function Consent() {
     setIsUploadingPhoto(true);
     
     try {
-      // Add timeout to prevent hanging in simulator
+      // Add timeout to prevent hanging - reduced from 60s to 25s
       const uploadPromise = async () => {
-        // Check network connectivity before upload
-        const { checkNetworkConnectivityWithTimeout } = await import('../lib/utils');
-        const isConnected = await checkNetworkConnectivityWithTimeout(5000);
-        
-        if (!isConnected) {
-          throw new Error('No internet connection. Please check your network and try again.');
-        }
+        // Optimize image for faster upload
+        const { ImageOptimizationService } = await import('../lib/services/ImageOptimizationService');
+        const optimizedUri = await ImageOptimizationService.optimizeProfilePhoto(asset.uri);
 
-        // Create file object for upload
+        // Create file object for upload with optimized image
         const fileObject = {
-          uri: asset.uri,
+          uri: optimizedUri,
           name: `profile-photo-${Date.now()}.jpg`,
           type: 'image/jpeg',
-          fileSize: asset.fileSize
+          fileSize: asset.fileSize // Note: This is original size, optimized will be smaller
         };
 
-        // Upload to Firebase Storage with retry logic
+        // Upload to Firebase Storage with simplified retry logic
         let uploadAttempts = 0;
-        const maxAttempts = 3;
+        const maxAttempts = 2; // Reduced from 3 to 2 attempts
         
         while (uploadAttempts < maxAttempts) {
           try {
@@ -418,16 +413,16 @@ export default function Consent() {
               throw uploadError;
             }
             
-            // Wait before retrying (exponential backoff)
-            const waitTime = 1000 * uploadAttempts;
+            // Wait before retrying (shorter delay)
+            const waitTime = 2000; // Fixed 2 second delay instead of exponential backoff
             await new Promise(resolve => setTimeout(resolve, waitTime));
           }
         }
       };
 
-      // Add timeout to prevent hanging - longer timeout for simulator
+      // Add timeout to prevent hanging - reduced from 60s to 25s
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Upload timeout - please try again')), 60000)
+        setTimeout(() => reject(new Error('Upload timeout - please try again in a few moments')), 25000)
       );
       
       try {

@@ -12,13 +12,13 @@ import {
   useColorScheme,
   Image,
   Linking,
+  StatusBar,
 } from 'react-native';
 import { router } from 'expo-router';
 import { QrCode, X } from 'lucide-react-native';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 
 import QRCodeScanner from '../lib/components/QRCodeScanner';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import MobileOfflineStatusBar from '../lib/components/MobileOfflineStatusBar';
@@ -218,12 +218,12 @@ export default function Home() {
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: 20,
-      paddingTop: 20,
-      paddingBottom: 40,
+      paddingTop: 0,
+      paddingBottom: 0,
     },
     headerSection: {
       alignItems: 'center',
-      marginTop: 60,
+      marginTop: 100,
     },
     logoContainer: {
       alignItems: 'center',
@@ -432,6 +432,7 @@ export default function Home() {
     legalDisclaimer: {
       alignItems: 'center',
       marginTop: 20,
+      marginBottom: 40,
     },
     legalText: {
       fontSize: 12,
@@ -445,7 +446,8 @@ export default function Home() {
   });
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
+    <View style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent={true} />
       <MobileOfflineStatusBar />
       <LinearGradient
         colors={['#FBA7D5', '#C187FD']}
@@ -629,8 +631,8 @@ export default function Home() {
           }}>
             <View style={{ alignItems: 'center' }}>
               <Image
-                source={require('../assets/icon.png')}
-                style={{ width: 120, height: 120, borderRadius: 30, marginBottom: 24 }}
+                source={require('../assets/icon-rounded.png')}
+                style={{ width: 120, height: 120, marginBottom: 24 }}
                 resizeMode="contain"
               />
               <Text style={{
@@ -647,6 +649,6 @@ export default function Home() {
           </View>
         )}
       </LinearGradient>
-    </SafeAreaView>
+    </View>
   );
 } 

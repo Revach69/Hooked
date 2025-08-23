@@ -243,6 +243,14 @@ export interface MutedMatch {
   created_at: string;
 }
 
+export interface SkippedProfile {
+  id: string;
+  event_id: string;
+  skipper_session_id: string;
+  skipped_session_id: string;
+  created_at: string;
+}
+
 export interface AdminClient {
   id: string;                  // Firestore doc id
   name: string;                // Name
@@ -769,6 +777,53 @@ export const MutedMatchAPI = {
       const docRef = doc(db, 'muted_matches', id);
       await deleteDoc(docRef);
     }, { operation: 'Unmute match' });
+  }
+};
+
+// Skipped Profile API
+export const SkippedProfileAPI = {
+  async create(data: Omit<SkippedProfile, 'id' | 'created_at'>): Promise<SkippedProfile> {
+    return firebaseRetry(async () => {
+      const docRef = await addDoc(collection(db, 'skipped_profiles'), {
+        ...data,
+        created_at: serverTimestamp()
+      });
+      
+      return {
+        id: docRef.id,
+        ...data,
+        created_at: new Date().toISOString()
+      };
+    }, { operation: 'Skip profile' });
+  },
+
+  async filter(filters: Partial<SkippedProfile> = {}): Promise<SkippedProfile[]> {
+    return firebaseRetry(async () => {
+      let q: any = collection(db, 'skipped_profiles');
+      
+      if (filters.event_id) {
+        q = query(q, where('event_id', '==', filters.event_id));
+      }
+      if (filters.skipper_session_id) {
+        q = query(q, where('skipper_session_id', '==', filters.skipper_session_id));
+      }
+      if (filters.skipped_session_id) {
+        q = query(q, where('skipped_session_id', '==', filters.skipped_session_id));
+      }
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map((doc: any) => ({
+        id: doc.id,
+        ...doc.data()
+      })) as SkippedProfile[];
+    }, { operation: 'Filter skipped profiles' });
+  },
+
+  async delete(id: string): Promise<void> {
+    return firebaseRetry(async () => {
+      const docRef = doc(db, 'skipped_profiles', id);
+      await deleteDoc(docRef);
+    }, { operation: 'Unskip profile' });
   }
 };
 

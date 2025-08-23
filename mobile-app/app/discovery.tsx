@@ -10,23 +10,148 @@ import {
   Dimensions,
   AppState,
   Modal,
+  Alert,
   useColorScheme,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { router } from 'expo-router';
 import { Heart, Filter, Users, User, MessageCircle, X } from 'lucide-react-native';
-import { EventProfileAPI, LikeAPI, EventAPI, BlockedMatchAPI } from '../lib/firebaseApi';
+import { EventProfileAPI, LikeAPI, EventAPI, BlockedMatchAPI, SkippedProfileAPI } from '../lib/firebaseApi';
 import * as Sentry from '@sentry/react-native';
 
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
+import { ImageCacheService } from '../lib/services/ImageCacheService';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Slider from '@react-native-community/slider';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 import { db } from '../lib/firebaseConfig';
 import UserProfileModal from '../lib/UserProfileModal';
 
 import { updateUserActivity } from '../lib/messageNotificationHelper';
 import { usePerformanceMonitoring } from '../lib/hooks/usePerformanceMonitoring';
+
+// Dual Handle Range Slider Component
+interface DualHandleRangeSliderProps {
+  min: number;
+  max: number;
+  minValue: number;
+  maxValue: number;
+  onValueChange: (min: number, max: number) => void;
+}
+
+const DualHandleRangeSlider: React.FC<DualHandleRangeSliderProps> = ({
+  min,
+  max,
+  minValue,
+  maxValue,
+  onValueChange,
+}) => {
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  
+  const [sliderWidth, setSliderWidth] = React.useState(300);
+  const [dragging, setDragging] = React.useState<'min' | 'max' | null>(null);
+  
+  const getThumbPosition = (value: number) => {
+    return ((value - min) / (max - min)) * sliderWidth;
+  };
+  
+  const getValueFromPosition = (position: number) => {
+    const value = (position / sliderWidth) * (max - min) + min;
+    return Math.max(min, Math.min(max, value));
+  };
+  
+  const handlePanGestureEvent = (event: any, thumb: 'min' | 'max') => {
+    const { locationX } = event.nativeEvent;
+    const newValue = getValueFromPosition(locationX);
+    
+    if (thumb === 'min') {
+      const newMinValue = Math.max(min, Math.min(newValue, maxValue - 1));
+      onValueChange(newMinValue, maxValue);
+    } else {
+      const newMaxValue = Math.min(max, Math.max(newValue, minValue + 1));
+      onValueChange(minValue, newMaxValue);
+    }
+  };
+  
+  const minThumbPosition = getThumbPosition(minValue);
+  const maxThumbPosition = getThumbPosition(maxValue);
+  
+  return (
+    <View style={{
+      height: 40,
+      justifyContent: 'center',
+      marginHorizontal: 16,
+      marginTop: 8,
+    }}>
+      <View
+        style={{
+          height: 6,
+          backgroundColor: isDark ? '#404040' : '#e5e7eb',
+          borderRadius: 3,
+        }}
+        onLayout={(event) => setSliderWidth(event.nativeEvent.layout.width)}
+      >
+        {/* Active track between thumbs */}
+        <View
+          style={{
+            position: 'absolute',
+            left: minThumbPosition,
+            width: maxThumbPosition - minThumbPosition,
+            height: 6,
+            backgroundColor: '#8b5cf6',
+            borderRadius: 3,
+          }}
+        />
+        
+        {/* Min thumb */}
+        <View
+          style={{
+            position: 'absolute',
+            left: minThumbPosition - 12,
+            top: -6,
+            width: dragging === 'min' ? 28 : 24,
+            height: dragging === 'min' ? 28 : 24,
+            borderRadius: dragging === 'min' ? 14 : 12,
+            backgroundColor: '#8b5cf6',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: dragging === 'min' ? 0.3 : 0.2,
+            shadowRadius: 4,
+            elevation: 3,
+          }}
+          onStartShouldSetResponder={() => true}
+          onMoveShouldSetResponder={() => true}
+          onResponderGrant={() => setDragging('min')}
+          onResponderMove={(event) => handlePanGestureEvent(event, 'min')}
+          onResponderRelease={() => setDragging(null)}
+        />
+        
+        {/* Max thumb */}
+        <View
+          style={{
+            position: 'absolute',
+            left: maxThumbPosition - 12,
+            top: -6,
+            width: dragging === 'max' ? 28 : 24,
+            height: dragging === 'max' ? 28 : 24,
+            borderRadius: dragging === 'max' ? 14 : 12,
+            backgroundColor: '#8b5cf6',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: dragging === 'max' ? 0.3 : 0.2,
+            shadowRadius: 4,
+            elevation: 3,
+          }}
+          onStartShouldSetResponder={() => true}
+          onMoveShouldSetResponder={() => true}
+          onResponderGrant={() => setDragging('max')}
+          onResponderMove={(event) => handlePanGestureEvent(event, 'max')}
+          onResponderRelease={() => setDragging(null)}
+        />
+      </View>
+    </View>
+  );
+};
 
 const { width } = Dimensions.get('window');
 const gap = 8;
@@ -66,14 +191,21 @@ export default function Discovery() {
     age_max: 99,
     interests: [] as string[]
   });
+  const [tempFilters, setTempFilters] = useState({
+    age_min: 18,
+    age_max: 99,
+    interests: [] as string[]
+  });
   const [showFilters, setShowFilters] = useState(false);
   const [showExtendedInterests, setShowExtendedInterests] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [likedProfiles, setLikedProfiles] = useState(new Set<string>());
   const [blockedProfiles, setBlockedProfiles] = useState(new Set<string>());
+  const [skippedProfiles, setSkippedProfiles] = useState(new Set<string>());
   const [selectedProfileForDetail, setSelectedProfileForDetail] = useState<any>(null);
   const [isAppActive, setIsAppActive] = useState(true);
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
+  const [cachedImageUris, setCachedImageUris] = useState<Map<string, string>>(new Map());
   
   // Single ref to hold all unsubscribe functions
   const listenersRef = useRef<{
@@ -107,8 +239,9 @@ export default function Discovery() {
       
       if (events.length > 0) {
         setCurrentEvent(events[0]);
-        // Load blocked profiles
+        // Load blocked and skipped profiles
         await loadBlockedProfiles(eventId, sessionId);
+        await loadSkippedProfiles(eventId, sessionId);
       } else {
         // Event doesn't exist - clear only after confirmation
         console.log('Event not found in discovery, clearing session data');
@@ -180,6 +313,8 @@ export default function Discovery() {
   // Use initializeSession in useEffect
   useEffect(() => {
     initializeSession();
+    // Initialize image cache service
+    ImageCacheService.initialize();
   }, [initializeSession]);
 
   // Cleanup all listeners on unmount
@@ -475,14 +610,75 @@ export default function Discovery() {
     }
   };
 
-  // Apply filters whenever profiles or currentUserProfile changes
+  const loadSkippedProfiles = async (eventId: string, sessionId: string) => {
+    try {
+      const skipped = await SkippedProfileAPI.filter({
+        event_id: eventId,
+        skipper_session_id: sessionId
+      });
+      setSkippedProfiles(new Set(skipped.map(s => s.skipped_session_id)));
+    } catch (error) {
+      Sentry.captureException(error);
+    }
+  };
+
+  // Apply filters whenever profiles, user profile, filters, or profile states change
   useEffect(() => {
     applyFilters();
-  }, [profiles, currentUserProfile, filters]);
+  }, [profiles, currentUserProfile, filters, likedProfiles, skippedProfiles]);
+
+  // Cache profile images when profiles change
+  useEffect(() => {
+    if (!currentEvent?.id || !currentSessionId) return;
+    
+    const cacheProfileImages = async () => {
+      const newCachedUris = new Map<string, string>();
+      
+      for (const profile of filteredProfiles) {
+        if (profile.profile_photo_url) {
+          try {
+            const cachedUri = await ImageCacheService.getCachedImageUri(
+              profile.profile_photo_url,
+              currentEvent.id,
+              profile.session_id
+            );
+            newCachedUris.set(profile.session_id, cachedUri);
+          } catch (error) {
+            console.warn('Failed to cache image for profile:', profile.session_id, error);
+            // Fallback to original URI
+            newCachedUris.set(profile.session_id, profile.profile_photo_url);
+          }
+        }
+      }
+      
+      setCachedImageUris(newCachedUris);
+    };
+    
+    cacheProfileImages();
+  }, [filteredProfiles, currentEvent?.id, currentSessionId]);
 
   // Duplicate initializeSession function removed - already defined above
 
+  function sortProfilesByPriority(profilesList: any[]) {
+    return [...profilesList].sort((a, b) => {
+      const aIsLiked = likedProfiles.has(a.session_id);
+      const bIsLiked = likedProfiles.has(b.session_id);
+      const aIsSkipped = skippedProfiles.has(a.session_id);
+      const bIsSkipped = skippedProfiles.has(b.session_id);
 
+      // Priority 1: Liked profiles at the top
+      if (aIsLiked && !bIsLiked) return -1;
+      if (!aIsLiked && bIsLiked) return 1;
+
+      // Priority 2: Skipped profiles at the bottom
+      if (aIsSkipped && !bIsSkipped) return 1;
+      if (!aIsSkipped && bIsSkipped) return -1;
+
+      // Priority 3: For profiles in the same category, maintain created_at desc order (already sorted by Firestore)
+      // Since Firestore already orders by created_at desc, we don't need to sort again
+      return 0;
+    });
+  }
 
   function applyFilters() {
     if (!currentUserProfile) {
@@ -492,13 +688,16 @@ export default function Discovery() {
 
     let tempFiltered = profiles.filter(otherUser => {
       // Mutual Gender Interest Check - based on user's profile preferences
+      // Add defensive checks for missing fields
       const iAmInterestedInOther =
-        (currentUserProfile.interested_in === 'everyone') ||
+        !currentUserProfile.interested_in || 
+        currentUserProfile.interested_in === 'everyone' ||
         (currentUserProfile.interested_in === 'men' && otherUser.gender_identity === 'man') ||
         (currentUserProfile.interested_in === 'women' && otherUser.gender_identity === 'woman');
 
       const otherIsInterestedInMe =
-        (otherUser.interested_in === 'everyone') ||
+        !otherUser.interested_in ||
+        otherUser.interested_in === 'everyone' ||
         (otherUser.interested_in === 'men' && currentUserProfile.gender_identity === 'man') ||
         (otherUser.interested_in === 'women' && currentUserProfile.gender_identity === 'woman');
       
@@ -506,8 +705,8 @@ export default function Discovery() {
         return false;
       }
 
-      // Age Range Filter
-      if (!(otherUser.age >= filters.age_min && otherUser.age <= filters.age_max)) {
+      // Age Range Filter - add defensive check for missing age
+      if (otherUser.age && !(otherUser.age >= filters.age_min && otherUser.age <= filters.age_max)) {
         return false;
       }
 
@@ -521,11 +720,24 @@ export default function Discovery() {
       return true;
     });
 
-    setFilteredProfiles(tempFiltered);
+    // Apply priority-based sorting
+    const sortedProfiles = sortProfilesByPriority(tempFiltered);
+
+    setFilteredProfiles(sortedProfiles);
   }
 
   const handleLike = async (likedProfile: any) => {
     if (likedProfiles.has(likedProfile.session_id) || !currentUserProfile) return;
+    
+    // Cannot like a profile that has been skipped
+    if (skippedProfiles.has(likedProfile.session_id)) {
+      Alert.alert(
+        'Cannot Like',
+        'You cannot like a profile you have skipped. You can find skipped profiles in the discovery page with a gray overlay.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
 
     const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
     const likerSessionId = currentUserProfile.session_id;
@@ -618,15 +830,65 @@ export default function Discovery() {
       });
       
       // Show user-friendly error message
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Unable to like this person. Please try again.',
-        position: 'top',
-        visibilityTime: 3500,
-        autoHide: true,
-        topOffset: 0,
+      Alert.alert(
+        'Error',
+        'Unable to like this person. Please try again.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
+
+  const handleSkip = async (skippedProfile: any) => {
+    if (skippedProfiles.has(skippedProfile.session_id) || !currentUserProfile) return;
+    
+    // Cannot skip a profile that has been liked
+    if (likedProfiles.has(skippedProfile.session_id)) {
+      Alert.alert(
+        'Cannot Skip',
+        'You cannot skip a profile you have liked. You can see your likes with pink heart icons.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
+    const skipperSessionId = currentUserProfile.session_id;
+
+    if (!eventId) return;
+
+    // Track user interaction
+    await trackUserInteraction('skip_profile');
+
+    try {
+      // Optimistically update UI
+      setSkippedProfiles(prev => new Set([...prev, skippedProfile.session_id]));
+
+      await trackAsyncOperation('create_skip', async () => {
+        return await SkippedProfileAPI.create({
+          event_id: eventId,
+          skipper_session_id: skipperSessionId,
+          skipped_session_id: skippedProfile.session_id,
+        });
       });
+
+      // Close profile modal if it's open
+      setSelectedProfileForDetail(null);
+
+    } catch (error) {
+      Sentry.captureException(error);
+      // Revert optimistic update on error
+      setSkippedProfiles(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(skippedProfile.session_id);
+        return newSet;
+      });
+      
+      // Show user-friendly error message
+      Alert.alert(
+        'Error',
+        'Unable to skip this person. Please try again.',
+        [{ text: 'OK' }]
+      );
     }
   };
   
@@ -637,26 +899,39 @@ export default function Discovery() {
 
 
   const handleToggleInterest = (interest: string) => {
-    let newInterests = [...filters.interests];
+    let newInterests = [...tempFilters.interests];
     if (newInterests.includes(interest)) {
       newInterests = newInterests.filter(i => i !== interest);
     } else if (newInterests.length < 3) {
       newInterests.push(interest);
     }
-    setFilters(prev => ({ ...prev, interests: newInterests }));
+    setTempFilters(prev => ({ ...prev, interests: newInterests }));
   };
 
   const handleApplyFilters = () => {
+    setFilters(tempFilters);
     setShowFilters(false);
     setShowExtendedInterests(false);
   };
 
   const handleResetFilters = () => {
-    setFilters({
+    const resetFilters = {
       age_min: 18,
       age_max: 99,
       interests: []
-    });
+    };
+    setTempFilters(resetFilters);
+    setShowExtendedInterests(false);
+  };
+
+  const handleOpenFilters = () => {
+    setTempFilters(filters); // Initialize temp filters with current filters
+    setShowFilters(true);
+  };
+
+  const handleCancelFilters = () => {
+    setTempFilters(filters); // Reset temp filters to current filters
+    setShowFilters(false);
     setShowExtendedInterests(false);
   };
 
@@ -896,13 +1171,6 @@ export default function Discovery() {
       textAlign: 'center',
       marginBottom: 12,
     },
-    sliderContainer: {
-      gap: 16,
-    },
-    slider: {
-      width: '100%',
-      height: 40,
-    },
 
     interestsContainer: {
       maxHeight: 200,
@@ -1043,6 +1311,16 @@ export default function Discovery() {
       justifyContent: 'center',
       backgroundColor: isDark ? '#2d2d2d' : 'white',
     },
+    skippedOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.4)',
+      borderRadius: 12,
+      zIndex: 1,
+    },
   });
 
   if (isLoading) {
@@ -1158,7 +1436,7 @@ export default function Discovery() {
         </View>
         <TouchableOpacity
           style={styles.filterButton}
-          onPress={() => setShowFilters(true)}
+          onPress={handleOpenFilters}
           accessibilityRole="button"
           accessibilityLabel="Filter Profiles"
           accessibilityHint="Open filters to customize your discovery preferences"
@@ -1188,8 +1466,8 @@ export default function Discovery() {
                       <View style={styles.profileImageContainer}>
                         {profile.profile_photo_url ? (
                           <Image
-                            source={{ uri: profile.profile_photo_url }}
-        onError={() => {}}
+                            source={{ uri: cachedImageUris.get(profile.session_id) || profile.profile_photo_url }}
+                            onError={() => {}}
                             style={styles.profileImage}
                             resizeMode="cover"
                           />
@@ -1226,6 +1504,11 @@ export default function Discovery() {
                         <View style={styles.nameOverlay}>
                           <Text style={styles.profileName}>{profile.first_name}</Text>
                         </View>
+
+                        {/* Skipped Overlay */}
+                        {skippedProfiles.has(profile.session_id) && (
+                          <View style={styles.skippedOverlay} />
+                        )}
                       </View>
                     </TouchableOpacity>
                   ))}
@@ -1245,7 +1528,7 @@ export default function Discovery() {
             </Text>
             <TouchableOpacity
               style={styles.adjustFiltersButton}
-              onPress={() => setShowFilters(true)}
+              onPress={handleOpenFilters}
               accessibilityRole="button"
               accessibilityLabel="Adjust Filters"
               accessibilityHint="Open filters to adjust your discovery preferences"
@@ -1316,12 +1599,20 @@ export default function Discovery() {
       </View>
 
       {/* Filter Modal */}
-      <Modal visible={showFilters} transparent animationType="slide" onRequestClose={() => setShowFilters(false)} accessibilityViewIsModal={true}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
+      <Modal visible={showFilters} transparent animationType="slide" onRequestClose={handleCancelFilters} accessibilityViewIsModal={true}>
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={handleCancelFilters}
+        >
+          <TouchableOpacity 
+            style={styles.modalCard}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Filters</Text>
-              <TouchableOpacity onPress={() => setShowFilters(false)} accessibilityRole="button" accessibilityLabel="Close filters" accessibilityHint="Close the filters modal">
+              <TouchableOpacity onPress={handleCancelFilters} accessibilityRole="button" accessibilityLabel="Close filters" accessibilityHint="Close the filters modal">
                 <X size={24} color="#6b7280" />
               </TouchableOpacity>
             </View>
@@ -1331,30 +1622,21 @@ export default function Discovery() {
               <Text style={styles.filterSectionTitle}>Age Range</Text>
               <View style={styles.ageRangeContainer}>
                 <Text style={styles.ageRangeText}>
-                  {filters.age_min} - {filters.age_max} years
+                  {tempFilters.age_min} - {tempFilters.age_max} years
                 </Text>
-                <View style={styles.sliderContainer}>
-                  <Slider
-                    style={styles.slider}
-                    minimumValue={18}
-                    maximumValue={99}
-                    value={filters.age_min}
-                    onValueChange={(value) => setFilters(prev => ({ ...prev, age_min: Math.round(value) }))}
-                    minimumTrackTintColor="#8b5cf6"
-                    maximumTrackTintColor="#d1d5db"
-                    thumbTintColor="#8b5cf6"
-                  />
-                  <Slider
-                    style={styles.slider}
-                    minimumValue={18}
-                    maximumValue={99}
-                    value={filters.age_max}
-                    onValueChange={(value) => setFilters(prev => ({ ...prev, age_max: Math.round(value) }))}
-                    minimumTrackTintColor="#8b5cf6"
-                    maximumTrackTintColor="#d1d5db"
-                    thumbTintColor="#8b5cf6"
-                  />
-                </View>
+                <DualHandleRangeSlider
+                  min={18}
+                  max={99}
+                  minValue={tempFilters.age_min}
+                  maxValue={tempFilters.age_max}
+                  onValueChange={(min, max) => {
+                    setTempFilters(prev => ({ 
+                      ...prev, 
+                      age_min: Math.round(min), 
+                      age_max: Math.round(max) 
+                    }));
+                  }}
+                />
               </View>
             </View>
 
@@ -1377,21 +1659,21 @@ export default function Discovery() {
                         key={interest}
                         style={[
                           styles.interestOption,
-                          filters.interests.includes(interest) && styles.interestOptionSelected
+                          tempFilters.interests.includes(interest) && styles.interestOptionSelected
                         ]}
                         onPress={() => handleToggleInterest(interest)}
-                        disabled={!filters.interests.includes(interest) && filters.interests.length >= 3}
+                        disabled={!tempFilters.interests.includes(interest) && tempFilters.interests.length >= 3}
                         accessibilityRole="button"
                         accessibilityLabel={`${interest.charAt(0).toUpperCase() + interest.slice(1)}`}
-                        accessibilityHint={filters.interests.includes(interest) ? "Remove this interest filter" : "Add this interest filter"}
+                        accessibilityHint={tempFilters.interests.includes(interest) ? "Remove this interest filter" : "Add this interest filter"}
                         accessibilityState={{ 
-                          selected: filters.interests.includes(interest),
-                          disabled: !filters.interests.includes(interest) && filters.interests.length >= 3
+                          selected: tempFilters.interests.includes(interest),
+                          disabled: !tempFilters.interests.includes(interest) && tempFilters.interests.length >= 3
                         }}
                       >
                         <Text style={[
                           styles.interestOptionText,
-                          filters.interests.includes(interest) && styles.interestOptionTextSelected
+                          tempFilters.interests.includes(interest) && styles.interestOptionTextSelected
                         ]}>
                           {interest.charAt(0).toUpperCase() + interest.slice(1)}
                         </Text>
@@ -1419,21 +1701,21 @@ export default function Discovery() {
                           key={interest}
                           style={[
                             styles.interestOption,
-                            filters.interests.includes(interest) && styles.interestOptionSelected
+                            tempFilters.interests.includes(interest) && styles.interestOptionSelected
                           ]}
                           onPress={() => handleToggleInterest(interest)}
-                          disabled={!filters.interests.includes(interest) && filters.interests.length >= 3}
+                          disabled={!tempFilters.interests.includes(interest) && tempFilters.interests.length >= 3}
                           accessibilityRole="button"
                           accessibilityLabel={`${interest.charAt(0).toUpperCase() + interest.slice(1)}`}
-                          accessibilityHint={filters.interests.includes(interest) ? "Remove this interest filter" : "Add this interest filter"}
+                          accessibilityHint={tempFilters.interests.includes(interest) ? "Remove this interest filter" : "Add this interest filter"}
                           accessibilityState={{ 
-                            selected: filters.interests.includes(interest),
-                            disabled: !filters.interests.includes(interest) && filters.interests.length >= 3
+                            selected: tempFilters.interests.includes(interest),
+                            disabled: !tempFilters.interests.includes(interest) && tempFilters.interests.length >= 3
                           }}
                         >
                           <Text style={[
                             styles.interestOptionText,
-                            filters.interests.includes(interest) && styles.interestOptionTextSelected
+                            tempFilters.interests.includes(interest) && styles.interestOptionTextSelected
                           ]}>
                             {interest.charAt(0).toUpperCase() + interest.slice(1)}
                           </Text>
@@ -1454,8 +1736,8 @@ export default function Discovery() {
                 <Text style={styles.applyButtonText}>Apply Filters</Text>
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       {/* Profile Detail Modal */}
@@ -1464,7 +1746,9 @@ export default function Discovery() {
         profile={selectedProfileForDetail}
         onClose={() => setSelectedProfileForDetail(null)}
         onLike={handleLike}
+        onSkip={handleSkip}
         isLiked={selectedProfileForDetail ? likedProfiles.has(selectedProfileForDetail.session_id) : false}
+        isSkipped={selectedProfileForDetail ? skippedProfiles.has(selectedProfileForDetail.session_id) : false}
       />
 
     </SafeAreaView>
