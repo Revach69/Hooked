@@ -12,9 +12,10 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MapPin, User, Users, MessageCircle, ArrowLeft } from 'lucide-react-native';
+import { MapPin, User, Users, MessageCircle, ArrowLeft, Navigation } from 'lucide-react-native';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
-import Mapbox, { MapView, Camera } from '@rnmapbox/maps';
+import Mapbox, { MapView, Camera, UserLocation } from '@rnmapbox/maps';
+import * as Location from 'expo-location';
 
 // Set Mapbox access token from environment variable
 if (process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN) {
@@ -32,16 +33,72 @@ export default function MapScreen() {
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
   const [isMapReady, setIsMapReady] = useState(false);
   const [mapboxTokenAvailable, setMapboxTokenAvailable] = useState(false);
+  const [locationPermissionGranted, setLocationPermissionGranted] = useState(false);
+  const [userLocation, setUserLocation] = useState<{longitude: number, latitude: number} | null>(null);
+  const [showUserLocation, setShowUserLocation] = useState(false);
+  const [followUserLocation, setFollowUserLocation] = useState(false);
   
   useEffect(() => {
     initializeMapScreen();
   }, []);
   
+  const requestLocationPermission = useCallback(async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      
+      if (status === 'granted') {
+        setLocationPermissionGranted(true);
+        setShowUserLocation(true);
+        
+        try {
+          const location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.High,
+            timeout: 10000,
+          });
+          
+          setUserLocation({
+            longitude: location.coords.longitude,
+            latitude: location.coords.latitude,
+          });
+        } catch (locationError) {
+          console.warn('Could not get current location:', locationError);
+          // Still allow showing user location dot without centering
+        }
+        
+        return true;
+      } else {
+        setLocationPermissionGranted(false);
+        setShowUserLocation(false);
+        
+        Alert.alert(
+          'Location Access',
+          'Location access is needed to show your position on the map and help you find nearby venues. You can enable it later in Settings.',
+          [
+            { text: 'Settings', onPress: () => Location.requestForegroundPermissionsAsync() },
+            { text: 'Continue', style: 'cancel' }
+          ]
+        );
+        
+        return false;
+      }
+    } catch (error) {
+      console.error('Location permission error:', error);
+      setLocationPermissionGranted(false);
+      setShowUserLocation(false);
+      return false;
+    }
+  }, []);
+
   const initializeMapScreen = useCallback(async () => {
     try {
       // Check if Mapbox token is available
       const tokenAvailable = !!process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN;
       setMapboxTokenAvailable(tokenAvailable);
+      
+      // Request location permission if Mapbox is available
+      if (tokenAvailable) {
+        await requestLocationPermission();
+      }
       
       // For venue discovery, we don't need event/session validation
       // Users can browse venues without being in an event
@@ -51,7 +108,7 @@ export default function MapScreen() {
       console.error('Error initializing map screen:', error);
       setIsLoading(false);
     }
-  }, []);
+  }, [requestLocationPermission]);
   
   const handleGoBack = () => {
     router.back();
@@ -61,6 +118,33 @@ export default function MapScreen() {
     setIsMapReady(true);
     console.log('Mapbox map is ready');
   };
+
+  const handleCenterToUser = useCallback(async () => {
+    if (!locationPermissionGranted) {
+      const granted = await requestLocationPermission();
+      if (!granted) return;
+    }
+    
+    setFollowUserLocation(true);
+    
+    try {
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+        timeout: 10000,
+      });
+      
+      setUserLocation({
+        longitude: location.coords.longitude,
+        latitude: location.coords.latitude,
+      });
+    } catch (error) {
+      console.warn('Could not get current location for centering:', error);
+      Alert.alert(
+        'Location Unavailable',
+        'Could not get your current location. Please check that location services are enabled.'
+      );
+    }
+  }, [locationPermissionGranted, requestLocationPermission]);
   
   const styles = StyleSheet.create({
     container: {
@@ -136,6 +220,23 @@ export default function MapScreen() {
       justifyContent: 'center',
       alignItems: 'center',
       zIndex: 10,
+    },
+    locationButton: {
+      position: 'absolute',
+      top: 150,
+      right: 20,
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: isDark ? '#2d2d2d' : '#ffffff',
+      justifyContent: 'center',
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+      elevation: 5,
+      zIndex: 100,
     },
     placeholderText: {
       fontSize: 18,
@@ -233,11 +334,39 @@ export default function MapScreen() {
               attributionPosition={{ bottom: 8, right: 8 }}
             >
               <Camera
-                zoomLevel={12}
-                centerCoordinate={[-122.4194, 37.7749]} // San Francisco as default
+                zoomLevel={userLocation && followUserLocation ? 15 : 12}
+                centerCoordinate={
+                  userLocation && followUserLocation 
+                    ? [userLocation.longitude, userLocation.latitude]
+                    : [-122.4194, 37.7749] // San Francisco as default
+                }
                 animationDuration={1000}
+                followUserLocation={followUserLocation}
+                onUserLocationUpdate={() => setFollowUserLocation(false)}
               />
+              
+              {showUserLocation && (
+                <UserLocation
+                  visible={true}
+                  showsUserHeadingIndicator={true}
+                  minDisplacement={10}
+                />
+              )}
             </MapView>
+            
+            {/* Location Button */}
+            <TouchableOpacity
+              style={styles.locationButton}
+              onPress={handleCenterToUser}
+              accessibilityRole="button"
+              accessibilityLabel="Center to my location"
+              accessibilityHint="Centers the map on your current location"
+            >
+              <Navigation 
+                size={20} 
+                color={followUserLocation ? '#8b5cf6' : (isDark ? '#9ca3af' : '#6b7280')} 
+              />
+            </TouchableOpacity>
           </>
         ) : (
           <View style={styles.placeholderContainer}>

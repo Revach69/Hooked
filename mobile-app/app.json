@@ -152,12 +152,21 @@
         "appId": "1:474843121153:web:7242ff23e23f158383a200",
       },
       "mapboxAccessToken": "$MAPBOX_ACCESS_TOKEN",
+      "mapboxCacheConfig": {
+        "maxCacheSize": 100,
+        "cleanupThreshold": 80,
+        "maxAge": 7,
+        "preferredCachePolicy": "cacheFirst"
+      },
       "router": {},
       "eas": {
         "projectId": "7a1de260-e3cb-4cbb-863c-1557213d69f0"
       },
       "updates": {
-        "url": "https://u.expo.dev/7a1de260-e3cb-4cbb-863c-1557213d69f0"
+        "url": "https://u.expo.dev/7a1de260-e3cb-4cbb-863c-1557213d69f0",
+        "enabled": true,
+        "checkAutomatically": "ON_LOAD",
+        "fallbackToCacheTimeout": 30000
       }
     }
   }
