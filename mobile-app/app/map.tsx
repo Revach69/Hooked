@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,9 +12,18 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MapPin, User, Users, MessageCircle, ArrowLeft, Navigation, Layers, Plus, Minus } from 'lucide-react-native';
+import { MapPin, User, Users, MessageCircle, ArrowLeft, Navigation, Layers, Plus, Minus, Grid3X3 } from 'lucide-react-native';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
-import Mapbox, { MapView, Camera, UserLocation, PointAnnotation, Callout } from '@rnmapbox/maps';
+import Mapbox, { 
+  MapView, 
+  Camera, 
+  UserLocation, 
+  PointAnnotation, 
+  Callout,
+  ShapeSource,
+  SymbolLayer,
+  CircleLayer
+} from '@rnmapbox/maps';
 import * as Location from 'expo-location';
 
 // Set Mapbox access token from environment variable
@@ -24,49 +33,45 @@ if (process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN) {
   console.warn('Mapbox access token not found in environment variables');
 }
 
-// Mock venue data for development
-const MOCK_VENUES = [
-  {
-    id: 'venue-1',
-    name: 'The Rooftop Lounge',
-    type: 'Bar & Lounge',
-    coordinates: [-122.4194, 37.7849],
-    address: '123 Market St, San Francisco, CA',
-    activeUsers: 12,
-    description: 'Trendy rooftop bar with city views',
-    image: null,
-  },
-  {
-    id: 'venue-2', 
-    name: 'Downtown Social',
-    type: 'Restaurant & Bar',
-    coordinates: [-122.4094, 37.7749],
-    address: '456 Union Square, San Francisco, CA',
-    activeUsers: 8,
-    description: 'Modern social dining experience',
-    image: null,
-  },
-  {
-    id: 'venue-3',
-    name: 'Sunset Café',
-    type: 'Coffee & Light Bites',
-    coordinates: [-122.4294, 37.7649],
-    address: '789 Sunset Blvd, San Francisco, CA',
-    activeUsers: 5,
-    description: 'Cozy coffee shop perfect for meetings',
-    image: null,
-  },
-  {
-    id: 'venue-4',
-    name: 'Marina Club',
-    type: 'Nightclub',
-    coordinates: [-122.4394, 37.7949],
-    address: '321 Marina District, San Francisco, CA',
-    activeUsers: 25,
-    description: 'Premier nightlife destination',
-    image: null,
-  },
-];
+// Generate more mock venue data for clustering testing
+const generateMockVenues = () => {
+  const baseVenues = [
+    { name: 'The Rooftop Lounge', type: 'Bar & Lounge', desc: 'Trendy rooftop bar with city views' },
+    { name: 'Downtown Social', type: 'Restaurant & Bar', desc: 'Modern social dining experience' },
+    { name: 'Sunset Café', type: 'Coffee & Light Bites', desc: 'Cozy coffee shop perfect for meetings' },
+    { name: 'Marina Club', type: 'Nightclub', desc: 'Premier nightlife destination' },
+    { name: 'Golden Gate Bistro', type: 'Restaurant', desc: 'Fine dining with bay views' },
+    { name: 'Tech Hub Lounge', type: 'Co-working & Bar', desc: 'Where startups meet and network' },
+    { name: 'Artisan Coffee Co.', type: 'Coffee Shop', desc: 'Locally roasted specialty coffee' },
+    { name: 'Nob Hill Tavern', type: 'Pub', desc: 'Classic neighborhood pub atmosphere' },
+    { name: 'Waterfront Grill', type: 'Seafood Restaurant', desc: 'Fresh seafood by the bay' },
+    { name: 'Mission Taphouse', type: 'Craft Beer Bar', desc: 'Local brews and live music' },
+  ];
+
+  const venues = [];
+  
+  // Generate 60 venues spread across San Francisco
+  for (let i = 0; i < 60; i++) {
+    const baseVenue = baseVenues[i % baseVenues.length];
+    const lat = 37.7749 + (Math.random() - 0.5) * 0.1; // SF lat ± 0.05
+    const lon = -122.4194 + (Math.random() - 0.5) * 0.1; // SF lon ± 0.05
+    
+    venues.push({
+      id: `venue-${i + 1}`,
+      name: `${baseVenue.name} ${i > 9 ? Math.floor(i / 10) : ''}`.trim(),
+      type: baseVenue.type,
+      coordinates: [lon, lat],
+      address: `${100 + i} Street Name, San Francisco, CA`,
+      activeUsers: Math.floor(Math.random() * 30) + 1,
+      description: baseVenue.desc,
+      image: null,
+    });
+  }
+  
+  return venues;
+};
+
+const MOCK_VENUES = generateMockVenues();
 
 export default function MapScreen() {
   const colorScheme = useColorScheme();
@@ -85,7 +90,25 @@ export default function MapScreen() {
   const [selectedVenue, setSelectedVenue] = useState<any>(null);
   const [mapStyle, setMapStyle] = useState<'street' | 'satellite'>('street');
   const [currentZoom, setCurrentZoom] = useState(12);
+  const [enableClustering, setEnableClustering] = useState(true);
   
+  // Convert venues to GeoJSON for clustering
+  const venuesGeoJSON = useMemo(() => ({
+    type: 'FeatureCollection',
+    features: venues.map(venue => ({
+      type: 'Feature',
+      id: venue.id,
+      properties: {
+        ...venue,
+        cluster: false,
+      },
+      geometry: {
+        type: 'Point',
+        coordinates: venue.coordinates,
+      },
+    })),
+  }), [venues]);
+
   useEffect(() => {
     initializeMapScreen();
   }, []);
@@ -225,6 +248,21 @@ export default function MapScreen() {
 
   const handleZoomOut = useCallback(() => {
     setCurrentZoom(prev => Math.max(prev - 1, 1));
+  }, []);
+
+  const handleClusterPress = useCallback((feature: any) => {
+    const clusterId = feature.properties.cluster_id;
+    const pointCount = feature.properties.point_count;
+    
+    Alert.alert(
+      'Venue Cluster',
+      `${pointCount} venues in this area. Zoom in to see individual venues.`,
+      [{ text: 'OK' }]
+    );
+  }, []);
+
+  const toggleClustering = useCallback(() => {
+    setEnableClustering(prev => !prev);
   }, []);
   
   const styles = StyleSheet.create({
@@ -420,6 +458,26 @@ export default function MapScreen() {
       color: isDark ? '#9ca3af' : '#6b7280',
       fontWeight: '500',
     },
+    clusterMarker: {
+      width: 50,
+      height: 50,
+      borderRadius: 25,
+      backgroundColor: '#8b5cf6',
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderWidth: 4,
+      borderColor: '#ffffff',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.4,
+      shadowRadius: 6,
+      elevation: 8,
+    },
+    clusterText: {
+      color: '#ffffff',
+      fontSize: 16,
+      fontWeight: 'bold',
+    },
     placeholderText: {
       fontSize: 18,
       fontWeight: '600',
@@ -539,54 +597,82 @@ export default function MapScreen() {
                 />
               )}
 
-              {/* Venue Markers */}
-              {venues.map((venue) => (
-                <PointAnnotation
-                  key={venue.id}
-                  id={venue.id}
-                  coordinate={venue.coordinates}
-                  onSelected={() => handleVenuePress(venue)}
+              {/* Clustered Venue Markers */}
+              {enableClustering && (
+                <ShapeSource
+                  id="venues"
+                  shape={venuesGeoJSON}
+                  cluster={true}
+                  clusterRadius={50}
+                  clusterMaxZoomLevel={14}
+                  onPress={(feature) => {
+                    if (feature.properties?.cluster) {
+                      handleClusterPress(feature);
+                    } else {
+                      const venue = venues.find(v => v.id === feature.properties?.id);
+                      if (venue) handleVenuePress(venue);
+                    }
+                  }}
                 >
-                  <View style={[
-                    styles.venueMarker,
-                    selectedVenue?.id === venue.id && styles.venueMarkerActive
-                  ]}>
-                    <MapPin size={20} color="#ffffff" />
-                    {venue.activeUsers > 0 && (
-                      <View style={{
-                        position: 'absolute',
-                        top: -4,
-                        right: -4,
-                        backgroundColor: '#ef4444',
-                        borderRadius: 10,
-                        minWidth: 20,
-                        height: 20,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        borderWidth: 2,
-                        borderColor: '#ffffff',
-                      }}>
-                        <Text style={{
-                          color: '#ffffff',
-                          fontSize: 10,
-                          fontWeight: 'bold',
-                        }}>
-                          {venue.activeUsers > 99 ? '99+' : venue.activeUsers}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-
-                  <Callout style={styles.venueCallout} onPress={() => handleVenueCalloutPress(venue)}>
-                    <Text style={styles.calloutTitle}>{venue.name}</Text>
-                    <Text style={styles.calloutType}>{venue.type}</Text>
-                    <Text style={styles.calloutDescription}>{venue.description}</Text>
-                    <Text style={styles.calloutUsers}>
-                      👥 {venue.activeUsers} active user{venue.activeUsers !== 1 ? 's' : ''}
-                    </Text>
-                  </Callout>
-                </PointAnnotation>
-              ))}
+                  {/* Cluster circles */}
+                  <CircleLayer
+                    id="clusters"
+                    filter={['has', 'point_count']}
+                    style={{
+                      circleColor: '#8b5cf6',
+                      circleRadius: [
+                        'step',
+                        ['get', 'point_count'],
+                        20, // radius for point count < 10
+                        10, 25, // radius for point count 10-99
+                        100, 30, // radius for point count >= 100
+                      ],
+                      circleOpacity: 0.8,
+                      circleStrokeWidth: 3,
+                      circleStrokeColor: '#ffffff',
+                    }}
+                  />
+                  
+                  {/* Cluster count text */}
+                  <SymbolLayer
+                    id="cluster-count"
+                    filter={['has', 'point_count']}
+                    style={{
+                      textField: ['get', 'point_count_abbreviated'],
+                      textFont: ['Arial Unicode MS Bold'],
+                      textSize: 14,
+                      textColor: '#ffffff',
+                      textIgnorePlacement: true,
+                      textAllowOverlap: true,
+                    }}
+                  />
+                  
+                  {/* Individual venue points */}
+                  <CircleLayer
+                    id="unclustered-point"
+                    filter={['!', ['has', 'point_count']]}
+                    style={{
+                      circleColor: '#8b5cf6',
+                      circleRadius: 15,
+                      circleStrokeWidth: 3,
+                      circleStrokeColor: '#ffffff',
+                    }}
+                  />
+                  
+                  {/* Individual venue icons */}
+                  <SymbolLayer
+                    id="unclustered-point-icon"
+                    filter={['!', ['has', 'point_count']]}
+                    style={{
+                      iconImage: 'marker-15', // Built-in Mapbox icon
+                      iconSize: 1.5,
+                      iconColor: '#ffffff',
+                      iconAllowOverlap: true,
+                      iconIgnorePlacement: true,
+                    }}
+                  />
+                </ShapeSource>
+              )}
             </MapView>
             
             {/* Location Button */}
@@ -603,7 +689,7 @@ export default function MapScreen() {
               />
             </TouchableOpacity>
 
-            {/* Map Style Toggle */}
+            {/* Map Controls */}
             <View style={styles.controlsContainer}>
               <TouchableOpacity
                 style={styles.mapControlButton}
@@ -615,6 +701,19 @@ export default function MapScreen() {
                 <Layers 
                   size={20} 
                   color={isDark ? '#9ca3af' : '#6b7280'} 
+                />
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.mapControlButton}
+                onPress={toggleClustering}
+                accessibilityRole="button"
+                accessibilityLabel={`${enableClustering ? 'Disable' : 'Enable'} marker clustering`}
+                accessibilityHint="Toggles clustering of nearby venue markers"
+              >
+                <Grid3X3 
+                  size={20} 
+                  color={enableClustering ? '#8b5cf6' : (isDark ? '#9ca3af' : '#6b7280')} 
                 />
               </TouchableOpacity>
             </View>
