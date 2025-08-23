@@ -63,3 +63,4 @@ yarn-error.*
 # EAS
 eas-build-*.tar.gz
 .vercel
+!.eas/build/app.development.json

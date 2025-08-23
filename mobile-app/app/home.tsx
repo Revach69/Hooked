@@ -15,7 +15,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { router } from 'expo-router';
-import { QrCode, X } from 'lucide-react-native';
+import { QrCode, X, MapPin } from 'lucide-react-native';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 
 import QRCodeScanner from '../lib/components/QRCodeScanner';
@@ -207,6 +207,11 @@ export default function Home() {
         topOffset: 0,
       });
     }
+  };
+
+  const handleMapNavigation = () => {
+    // Navigate to map view for venue discovery
+    router.push('/map');
   };
 
   const styles = StyleSheet.create({
@@ -512,6 +517,15 @@ export default function Home() {
               <Text style={styles.buttonText}>Enter Code Manually</Text>
             </TouchableOpacity>
 
+            <TouchableOpacity
+              style={styles.button}
+              onPress={handleMapNavigation}
+              accessibilityLabel="Find Venues"
+              accessibilityHint="Opens map to discover Hooked-integrated venues"
+            >
+              <MapPin size={24} color="black" />
+              <Text style={styles.buttonText}>Find Venues</Text>
+            </TouchableOpacity>
 
           </View>
         </View>
