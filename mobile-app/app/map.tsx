@@ -14,7 +14,7 @@ import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MapPin, User, Users, MessageCircle, ArrowLeft, Navigation } from 'lucide-react-native';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
-import Mapbox, { MapView, Camera, UserLocation } from '@rnmapbox/maps';
+import Mapbox, { MapView, Camera, UserLocation, PointAnnotation, Callout } from '@rnmapbox/maps';
 import * as Location from 'expo-location';
 
 // Set Mapbox access token from environment variable
@@ -23,6 +23,50 @@ if (process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN) {
 } else {
   console.warn('Mapbox access token not found in environment variables');
 }
+
+// Mock venue data for development
+const MOCK_VENUES = [
+  {
+    id: 'venue-1',
+    name: 'The Rooftop Lounge',
+    type: 'Bar & Lounge',
+    coordinates: [-122.4194, 37.7849],
+    address: '123 Market St, San Francisco, CA',
+    activeUsers: 12,
+    description: 'Trendy rooftop bar with city views',
+    image: null,
+  },
+  {
+    id: 'venue-2', 
+    name: 'Downtown Social',
+    type: 'Restaurant & Bar',
+    coordinates: [-122.4094, 37.7749],
+    address: '456 Union Square, San Francisco, CA',
+    activeUsers: 8,
+    description: 'Modern social dining experience',
+    image: null,
+  },
+  {
+    id: 'venue-3',
+    name: 'Sunset Café',
+    type: 'Coffee & Light Bites',
+    coordinates: [-122.4294, 37.7649],
+    address: '789 Sunset Blvd, San Francisco, CA',
+    activeUsers: 5,
+    description: 'Cozy coffee shop perfect for meetings',
+    image: null,
+  },
+  {
+    id: 'venue-4',
+    name: 'Marina Club',
+    type: 'Nightclub',
+    coordinates: [-122.4394, 37.7949],
+    address: '321 Marina District, San Francisco, CA',
+    activeUsers: 25,
+    description: 'Premier nightlife destination',
+    image: null,
+  },
+];
 
 export default function MapScreen() {
   const colorScheme = useColorScheme();
@@ -37,6 +81,8 @@ export default function MapScreen() {
   const [userLocation, setUserLocation] = useState<{longitude: number, latitude: number} | null>(null);
   const [showUserLocation, setShowUserLocation] = useState(false);
   const [followUserLocation, setFollowUserLocation] = useState(false);
+  const [venues, setVenues] = useState(MOCK_VENUES);
+  const [selectedVenue, setSelectedVenue] = useState<any>(null);
   
   useEffect(() => {
     initializeMapScreen();
@@ -145,6 +191,27 @@ export default function MapScreen() {
       );
     }
   }, [locationPermissionGranted, requestLocationPermission]);
+
+  const handleVenuePress = useCallback((venue: any) => {
+    setSelectedVenue(venue);
+  }, []);
+
+  const handleVenueCalloutPress = useCallback((venue: any) => {
+    Alert.alert(
+      venue.name,
+      `${venue.description}\n\n📍 ${venue.address}\n👥 ${venue.activeUsers} active users\n\nWould you like to check in to this venue?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Check In', 
+          onPress: () => {
+            // Future: Integration with backend API
+            Alert.alert('Coming Soon', 'Check-in functionality will be available once backend integration is complete.');
+          }
+        }
+      ]
+    );
+  }, []);
   
   const styles = StyleSheet.create({
     container: {
@@ -237,6 +304,60 @@ export default function MapScreen() {
       shadowRadius: 4,
       elevation: 5,
       zIndex: 100,
+    },
+    venueMarker: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: '#8b5cf6',
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderWidth: 3,
+      borderColor: '#ffffff',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.3,
+      shadowRadius: 4,
+      elevation: 5,
+    },
+    venueMarkerActive: {
+      backgroundColor: '#7c3aed',
+      borderColor: '#fbbf24',
+      transform: [{ scale: 1.2 }],
+    },
+    venueCallout: {
+      backgroundColor: isDark ? '#2d2d2d' : '#ffffff',
+      borderRadius: 8,
+      padding: 12,
+      minWidth: 200,
+      maxWidth: 250,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 8,
+      elevation: 5,
+    },
+    calloutTitle: {
+      fontSize: 16,
+      fontWeight: 'bold',
+      color: isDark ? '#ffffff' : '#1f2937',
+      marginBottom: 4,
+    },
+    calloutType: {
+      fontSize: 12,
+      color: '#8b5cf6',
+      fontWeight: '600',
+      marginBottom: 6,
+    },
+    calloutDescription: {
+      fontSize: 14,
+      color: isDark ? '#d1d5db' : '#6b7280',
+      marginBottom: 8,
+    },
+    calloutUsers: {
+      fontSize: 12,
+      color: isDark ? '#9ca3af' : '#6b7280',
+      fontWeight: '500',
     },
     placeholderText: {
       fontSize: 18,
@@ -352,6 +473,55 @@ export default function MapScreen() {
                   minDisplacement={10}
                 />
               )}
+
+              {/* Venue Markers */}
+              {venues.map((venue) => (
+                <PointAnnotation
+                  key={venue.id}
+                  id={venue.id}
+                  coordinate={venue.coordinates}
+                  onSelected={() => handleVenuePress(venue)}
+                >
+                  <View style={[
+                    styles.venueMarker,
+                    selectedVenue?.id === venue.id && styles.venueMarkerActive
+                  ]}>
+                    <MapPin size={20} color="#ffffff" />
+                    {venue.activeUsers > 0 && (
+                      <View style={{
+                        position: 'absolute',
+                        top: -4,
+                        right: -4,
+                        backgroundColor: '#ef4444',
+                        borderRadius: 10,
+                        minWidth: 20,
+                        height: 20,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        borderWidth: 2,
+                        borderColor: '#ffffff',
+                      }}>
+                        <Text style={{
+                          color: '#ffffff',
+                          fontSize: 10,
+                          fontWeight: 'bold',
+                        }}>
+                          {venue.activeUsers > 99 ? '99+' : venue.activeUsers}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <Callout style={styles.venueCallout} onPress={() => handleVenueCalloutPress(venue)}>
+                    <Text style={styles.calloutTitle}>{venue.name}</Text>
+                    <Text style={styles.calloutType}>{venue.type}</Text>
+                    <Text style={styles.calloutDescription}>{venue.description}</Text>
+                    <Text style={styles.calloutUsers}>
+                      👥 {venue.activeUsers} active user{venue.activeUsers !== 1 ? 's' : ''}
+                    </Text>
+                  </Callout>
+                </PointAnnotation>
+              ))}
             </MapView>
             
             {/* Location Button */}
