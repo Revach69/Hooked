@@ -96,7 +96,7 @@ export default function Home() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 items-center">
             {/* Left Side - Text Content */}
             <div className="text-center lg:col-span-2">
-              <p className="text-4xl md:text-5xl font-extrabold mb-4 font-heading ">One scan shows you who&apos;s single.</p>
+              <p className="text-4xl md:text-5xl font-extrabold mb-4 font-heading ">Scan. Match. Meet IRL.</p>
               <p className="text-base md:text-lg mb-8 text-white/90 font-bold font-body">
                 A live social app for any kind of event - parties, conferences,weddings...
               </p>

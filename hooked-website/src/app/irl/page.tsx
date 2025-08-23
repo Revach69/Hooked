@@ -22,14 +22,14 @@ export default function IRL() {
       <Header />
       
       {/* Hero Section */}
-      <section className="bg-gradient-to-r from-purple-500/90 to-pink-400/90 text-white py-16 relative">
+      <section className="bg-gradient-to-r from-purple-500/90 to-pink-400/90 text-white py-8 relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <h1 className="text-4xl font-bold mb-4">
+            <h1 className="text-3xl font-bold mb-2">
               IRL
             </h1>
-            <p className="text-xl mx-auto">
-              Explore upcoming events using Hooked.<br />Browse by location, event type, and grab your tickets.
+            <p className="text-lg mx-auto">
+              Explore upcoming events using Hooked.
             </p>
           </div>
         </div>
