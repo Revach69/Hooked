@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MapPin, User, Users, MessageCircle, ArrowLeft, Navigation } from 'lucide-react-native';
+import { MapPin, User, Users, MessageCircle, ArrowLeft, Navigation, Layers, Plus, Minus } from 'lucide-react-native';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import Mapbox, { MapView, Camera, UserLocation, PointAnnotation, Callout } from '@rnmapbox/maps';
 import * as Location from 'expo-location';
@@ -83,6 +83,8 @@ export default function MapScreen() {
   const [followUserLocation, setFollowUserLocation] = useState(false);
   const [venues, setVenues] = useState(MOCK_VENUES);
   const [selectedVenue, setSelectedVenue] = useState<any>(null);
+  const [mapStyle, setMapStyle] = useState<'street' | 'satellite'>('street');
+  const [currentZoom, setCurrentZoom] = useState(12);
   
   useEffect(() => {
     initializeMapScreen();
@@ -212,6 +214,18 @@ export default function MapScreen() {
       ]
     );
   }, []);
+
+  const toggleMapStyle = useCallback(() => {
+    setMapStyle(prev => prev === 'street' ? 'satellite' : 'street');
+  }, []);
+
+  const handleZoomIn = useCallback(() => {
+    setCurrentZoom(prev => Math.min(prev + 1, 20));
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setCurrentZoom(prev => Math.max(prev - 1, 1));
+  }, []);
   
   const styles = StyleSheet.create({
     container: {
@@ -304,6 +318,53 @@ export default function MapScreen() {
       shadowRadius: 4,
       elevation: 5,
       zIndex: 100,
+    },
+    controlsContainer: {
+      position: 'absolute',
+      top: 200,
+      right: 20,
+      zIndex: 100,
+    },
+    mapControlButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: isDark ? '#2d2d2d' : '#ffffff',
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: 8,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+      elevation: 5,
+    },
+    zoomControls: {
+      position: 'absolute',
+      bottom: 120,
+      right: 20,
+      zIndex: 100,
+    },
+    zoomButton: {
+      width: 44,
+      height: 44,
+      backgroundColor: isDark ? '#2d2d2d' : '#ffffff',
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: 4,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+      elevation: 5,
+    },
+    zoomButtonTop: {
+      borderTopLeftRadius: 22,
+      borderTopRightRadius: 22,
+    },
+    zoomButtonBottom: {
+      borderBottomLeftRadius: 22,
+      borderBottomRightRadius: 22,
     },
     venueMarker: {
       width: 40,
@@ -446,7 +507,11 @@ export default function MapScreen() {
             <MapView
               style={styles.mapView}
               onDidFinishLoadingMap={handleMapReady}
-              styleURL={isDark ? Mapbox.StyleURL.Dark : Mapbox.StyleURL.Street}
+              styleURL={
+                mapStyle === 'satellite' 
+                  ? Mapbox.StyleURL.Satellite
+                  : (isDark ? Mapbox.StyleURL.Dark : Mapbox.StyleURL.Street)
+              }
               compassEnabled={true}
               compassPosition={{ top: 100, right: 20 }}
               scaleBarEnabled={false}
@@ -455,7 +520,7 @@ export default function MapScreen() {
               attributionPosition={{ bottom: 8, right: 8 }}
             >
               <Camera
-                zoomLevel={userLocation && followUserLocation ? 15 : 12}
+                zoomLevel={userLocation && followUserLocation ? 15 : currentZoom}
                 centerCoordinate={
                   userLocation && followUserLocation 
                     ? [userLocation.longitude, userLocation.latitude]
@@ -537,6 +602,45 @@ export default function MapScreen() {
                 color={followUserLocation ? '#8b5cf6' : (isDark ? '#9ca3af' : '#6b7280')} 
               />
             </TouchableOpacity>
+
+            {/* Map Style Toggle */}
+            <View style={styles.controlsContainer}>
+              <TouchableOpacity
+                style={styles.mapControlButton}
+                onPress={toggleMapStyle}
+                accessibilityRole="button"
+                accessibilityLabel={`Switch to ${mapStyle === 'street' ? 'satellite' : 'street'} view`}
+                accessibilityHint="Changes the map style between street and satellite view"
+              >
+                <Layers 
+                  size={20} 
+                  color={isDark ? '#9ca3af' : '#6b7280'} 
+                />
+              </TouchableOpacity>
+            </View>
+
+            {/* Zoom Controls */}
+            <View style={styles.zoomControls}>
+              <TouchableOpacity
+                style={[styles.zoomButton, styles.zoomButtonTop]}
+                onPress={handleZoomIn}
+                accessibilityRole="button"
+                accessibilityLabel="Zoom in"
+                accessibilityHint="Zooms into the map"
+              >
+                <Plus size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.zoomButton, styles.zoomButtonBottom]}
+                onPress={handleZoomOut}
+                accessibilityRole="button"
+                accessibilityLabel="Zoom out"
+                accessibilityHint="Zooms out of the map"
+              >
+                <Minus size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+              </TouchableOpacity>
+            </View>
           </>
         ) : (
           <View style={styles.placeholderContainer}>
