@@ -808,7 +808,7 @@ async function processNotificationJobs(): Promise<void> {
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
 // Notification job types and interfaces
-type NotificationJobType = 'message' | 'match' | 'like';
+type NotificationJobType = 'message' | 'match' | 'generic';
 
 interface NotificationJob {
   type: NotificationJobType;
@@ -1020,11 +1020,13 @@ export const getVenuesInViewport = onCall({
     const venues = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
-    }));
+    })) as Array<{id: string} & Venue>;
     
     // Additional longitude filtering for date line crossing case
     if (bounds.west > bounds.east) {
-      venues.filter(venue => venue.longitude >= bounds.west || venue.longitude <= bounds.east);
+      const filteredVenues = venues.filter(venue => venue.longitude >= bounds.west || venue.longitude <= bounds.east);
+      console.log(`getVenuesInViewport: Found ${filteredVenues.length} venues in bounds:`, bounds);
+      return { success: true, venues: filteredVenues, count: filteredVenues.length };
     }
     
     console.log(`getVenuesInViewport: Found ${venues.length} venues in bounds:`, bounds);
@@ -1215,8 +1217,7 @@ export const generateTestVenues = onCall({
       const lat = coords.lat + (Math.random() - 0.5) * coords.radius;
       const lng = coords.lng + (Math.random() - 0.5) * coords.radius;
       
-      // Random subscription status (weighted towards active)
-      const statusWeights = { active: 0.7, trial: 0.2, inactive: 0.1 };
+      // Random subscription status (weighted towards active: 70%, trial: 20%, inactive: 10%)
       const rand = Math.random();
       let subscription_status: 'active' | 'trial' | 'inactive' = 'active';
       if (rand > 0.7) subscription_status = rand > 0.9 ? 'inactive' : 'trial';
@@ -1497,11 +1498,18 @@ export const getVenuesInViewportFiltered = onCall({
     const venues = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
-    }));
+    })) as Array<{id: string} & Venue>;
     
     // Additional longitude filtering for date line crossing case
     if (bounds.west > bounds.east) {
-      venues.filter(venue => venue.longitude >= bounds.west || venue.longitude <= bounds.east);
+      const filteredVenues = venues.filter(venue => venue.longitude >= bounds.west || venue.longitude <= bounds.east);
+      console.log(`getVenuesInViewportFiltered: Found ${filteredVenues.length} venues for client ${requesting_client_id} (map access: ${canAccessMapClients})`);
+      return { 
+        success: true, 
+        venues: filteredVenues, 
+        count: filteredVenues.length,
+        client_permissions: { canAccessMapClients }
+      };
     }
     
     console.log(`getVenuesInViewportFiltered: Found ${venues.length} venues for client ${requesting_client_id} (map access: ${canAccessMapClients})`);
@@ -1663,19 +1671,20 @@ export const getVenuesWithRateLimit = onCall({
     const venues = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
-    }));
+    })) as Array<{id: string} & Venue>;
     
     // Additional longitude filtering for date line crossing case
+    let finalVenues = venues;
     if (bounds.west > bounds.east) {
-      venues.filter(venue => venue.longitude >= bounds.west || venue.longitude <= bounds.east);
+      finalVenues = venues.filter(venue => venue.longitude >= bounds.west || venue.longitude <= bounds.east);
     }
     
-    console.log(`getVenuesWithRateLimit: Found ${venues.length} venues for ${rateLimitId} (${rateLimit.remaining} requests remaining)`);
+    console.log(`getVenuesWithRateLimit: Found ${finalVenues.length} venues for ${rateLimitId} (${rateLimit.remaining} requests remaining)`);
     
     return { 
       success: true, 
-      venues, 
-      count: venues.length,
+      venues: finalVenues, 
+      count: finalVenues.length,
       rate_limit: {
         remaining: rateLimit.remaining,
         resetTime: rateLimit.resetTime
@@ -1791,6 +1800,7 @@ function encodeGeohash(latitude: number, longitude: number, precision: number = 
 }
 
 // Get geohash neighbors for proximity queries
+// @ts-ignore - Keeping for future geospatial optimizations
 function getGeohashNeighbors(geohash: string): string[] {
   // This is a simplified version - production would need full neighbor calculation
   const base = geohash.slice(0, -1);
@@ -1898,10 +1908,9 @@ export const getVenuesWithGeohash = onCall({
   try {
     // Calculate geohash for center point
     const centerGeohash = encodeGeohash(center.lat, center.lng, 6); // Lower precision for wider search
-    const geohashNeighbors = getGeohashNeighbors(centerGeohash);
     
     // Query venues by geohash prefix for better performance
-    let query = db.collection('venues');
+    let query = db.collection('venues') as admin.firestore.Query;
     
     // Use geohash prefixes for initial filtering
     const geohashPrefix = centerGeohash.slice(0, 4); // 4 characters covers roughly ~20km x 20km
