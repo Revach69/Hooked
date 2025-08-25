@@ -273,21 +273,18 @@ export function localEventTimeStringToUTCTimestamp(localDateTime: string, eventT
   if (!localDateTime) throw new Error('Missing localDateTime');
   
   try {
-    // SIMPLE DIRECT APPROACH:
-    // Example: Input "14:00" in Israel timezone should become "11:00" UTC (Israel is UTC+3)
+    // SIMPLEST CORRECT APPROACH using native Date timezone support:
+    // Create a date assuming it's in the event timezone, then convert to UTC
     
     const [datePart, timePart] = localDateTime.split('T');
     const [year, month, day] = datePart.split('-').map(Number);
     const [hour, minute] = timePart.split(':').map(Number);
     
-    // Create the date string in ISO format but WITHOUT the 'Z' (so it's treated as local time)
-    const isoString = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}T${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}:00`;
+    // Create date assuming it's already in UTC (baseline)
+    const baselineUTC = new Date(Date.UTC(year, month - 1, day, hour, minute));
     
-    // Get what time this represents in the event timezone and in UTC  
-    const tempDate = new Date(); // Use current date for timezone offset calculation
-    
-    // Format current time in the event timezone
-    const eventTZFormatter = new Intl.DateTimeFormat('sv-SE', {
+    // Use Intl.DateTimeFormat to see what this UTC time looks like in the event timezone
+    const formatter = new Intl.DateTimeFormat('sv-SE', {
       timeZone: eventTimezone,
       year: 'numeric',
       month: '2-digit',
@@ -297,40 +294,27 @@ export function localEventTimeStringToUTCTimestamp(localDateTime: string, eventT
       second: '2-digit'
     });
     
-    // Format current time in UTC
-    const utcFormatter = new Intl.DateTimeFormat('sv-SE', {
-      timeZone: 'UTC',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    });
+    const formattedInTZ = formatter.format(baselineUTC);
+    const parsedTZTime = new Date(formattedInTZ);
     
-    const timeInEventTZ = eventTZFormatter.format(tempDate);
-    const timeInUTC = utcFormatter.format(tempDate);
+    // The difference between what we want and what we got
+    const desiredTime = new Date(year, month - 1, day, hour, minute, 0);
+    const offsetMs = desiredTime.getTime() - parsedTZTime.getTime();
     
-    // Calculate the timezone offset in milliseconds
-    const eventTZTime = new Date(timeInEventTZ).getTime();
-    const utcTime = new Date(timeInUTC).getTime();
-    const offsetMs = eventTZTime - utcTime;
+    // Apply the offset to get correct UTC
+    const correctUTC = new Date(baselineUTC.getTime() + offsetMs);
     
-    // Now apply this offset to our target date
-    // If user enters 14:00 Israel time, we need to subtract 3 hours to get 11:00 UTC
-    const targetDate = new Date(isoString);
-    const utcDate = new Date(targetDate.getTime() - offsetMs);
-    
-    console.log('🔧 TIMEZONE CONVERSION DIRECT:', {
+    console.log('🔧 TIMEZONE CONVERSION FIXED:', {
       input: `${hour}:${minute} in ${eventTimezone}`,
-      isoString,
+      baselineUTC: baselineUTC.toISOString(),
+      formattedInTZ,
+      parsedTZTime: parsedTZTime.toISOString(),
+      desiredTime: desiredTime.toISOString(),
       offsetHours: offsetMs / (1000 * 60 * 60),
-      targetLocal: targetDate.toISOString(),
-      finalUTC: utcDate.toISOString(),
-      expectedResult: `Input ${hour}:${minute} ${eventTimezone} should become UTC time by subtracting ${offsetMs / (1000 * 60 * 60)}h`
+      finalUTC: correctUTC.toISOString()
     });
     
-    return Timestamp.fromDate(utcDate);
+    return Timestamp.fromDate(correctUTC);
     
   } catch (error) {
     console.error('Conversion error:', error);
