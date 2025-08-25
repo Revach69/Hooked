@@ -113,10 +113,11 @@ export const formatDateInTimezone = (
 ): string => {
   const dateObj = typeof date === 'string' ? new Date(date) : date;
   
-  console.log('FORMAT DATE DEBUG:', {
+  console.log('🎨 FORMAT DATE DEBUG:', {
     input: typeof date === 'string' ? date : date.toISOString(),
     timezone,
-    dateObjISO: dateObj.toISOString()
+    dateObjISO: dateObj.toISOString(),
+    expectedResult: `UTC time ${dateObj.toISOString()} should display as local time in ${timezone}`
   });
   
   // NOW WITH PROPER TIMEZONE CONVERSION:
@@ -320,12 +321,13 @@ export function localEventTimeStringToUTCTimestamp(localDateTime: string, eventT
     const targetDate = new Date(isoString);
     const utcDate = new Date(targetDate.getTime() - offsetMs);
     
-    console.log('TIMEZONE CONVERSION DIRECT:', {
+    console.log('🔧 TIMEZONE CONVERSION DIRECT:', {
       input: `${hour}:${minute} in ${eventTimezone}`,
       isoString,
       offsetHours: offsetMs / (1000 * 60 * 60),
       targetLocal: targetDate.toISOString(),
-      finalUTC: utcDate.toISOString()
+      finalUTC: utcDate.toISOString(),
+      expectedResult: `Input ${hour}:${minute} ${eventTimezone} should become UTC time by subtracting ${offsetMs / (1000 * 60 * 60)}h`
     });
     
     return Timestamp.fromDate(utcDate);
