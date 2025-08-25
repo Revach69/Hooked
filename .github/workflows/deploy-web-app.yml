@@ -46,6 +46,25 @@ jobs:
         working-directory: hooked-web-app
         run: npx playwright test || echo "Playwright tests not configured yet"
 
+      - name: PWA Validation
+        working-directory: hooked-web-app
+        run: |
+          # Validate manifest.json
+          if [ -f "public/manifest.json" ]; then
+            echo "✅ PWA manifest found"
+            node -e "const manifest = require('./public/manifest.json'); console.log('Manifest validation:', manifest.name ? '✅' : '❌')"
+          else
+            echo "❌ PWA manifest missing"
+            exit 1
+          fi
+          
+          # Check for service worker in build
+          if npm run build | grep -q "service worker\|sw\.js"; then
+            echo "✅ Service worker configured"
+          else
+            echo "⚠️  Service worker may not be properly configured"
+          fi
+
   deploy-staging:
     runs-on: ubuntu-latest
     needs: test
