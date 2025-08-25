@@ -1,0 +1,29 @@
+# Hooked Web App - Mobile-Only Access
+User-agent: *
+Allow: /
+Allow: /mobile-only-access
+
+# Block desktop access page from search indexing
+Disallow: /desktop-not-supported
+
+# Allow PWA files
+Allow: /manifest.json
+Allow: /sw.js
+Allow: /workbox-*.js
+
+# Block admin routes (if any)
+Disallow: /admin
+Disallow: /api/
+
+# Allow essential mobile pages
+Allow: /profile
+Allow: /event
+Allow: /discovery
+Allow: /matches
+
+# Sitemap location
+Sitemap: https://hooked-app.com/sitemap.xml
+
+# Mobile-first indexing optimization
+# This robots.txt is optimized for mobile crawlers
+Crawl-delay: 1
