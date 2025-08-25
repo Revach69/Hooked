@@ -448,25 +448,32 @@ export const verifyAdminStatus = onCall({
 
 // Removed REGION constant - using FUNCTION_REGION directly
 
-// Shared helpers for push notifications
-async function fetchSessionTokens(sessionId: string) {
+// Shared helpers for push notifications - enhanced for cross-platform support
+async function fetchSessionTokens(sessionId: string): Promise<Array<{token: string, platform: string}>> {
   const snap = await admin.firestore()
     .collection('push_tokens')
     .where('sessionId', '==', sessionId)
+    .where('isActive', '==', true) // Only get active tokens
     .orderBy('updatedAt', 'desc')  // Get most recent tokens first
-    .limit(2)  // Limit to 2 tokens per session (iOS + Android)
+    .limit(3)  // Limit to 3 tokens per session (iOS + Android + Web)
     .get();
   
-  // Deduplicate tokens and only return unique ones
-  const uniqueTokens = new Set<string>();
+  // Return tokens with platform information, deduplicated
+  const tokenPlatformMap = new Map<string, string>();
   snap.forEach(d => {
     const data = d.data() as any;
-    if (typeof data?.token === 'string' && data.token) {
-      uniqueTokens.add(data.token);
+    if (typeof data?.token === 'string' && data.token && typeof data?.platform === 'string') {
+      tokenPlatformMap.set(data.token, data.platform);
     }
   });
   
-  return Array.from(uniqueTokens);
+  return Array.from(tokenPlatformMap.entries()).map(([token, platform]) => ({ token, platform }));
+}
+
+// Legacy function for backward compatibility - returns just token strings
+async function fetchSessionTokensLegacy(sessionId: string): Promise<string[]> {
+  const tokensWithPlatform = await fetchSessionTokens(sessionId);
+  return tokensWithPlatform.map(t => t.token);
 }
 
 
@@ -649,8 +656,8 @@ async function processNotificationJobs(): Promise<void> {
           continue;
         }
         
-        // Send push notification
-        const result = await sendExpoPush(tokens, job.payload);
+        // Send push notification using cross-platform system
+        const result = await sendCrossPlatformPush(tokens, job.payload);
         
         // Check if successful
         const success = result.results.every(r => r.status === 200);
@@ -696,6 +703,88 @@ async function processNotificationJobs(): Promise<void> {
 }
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
+
+// Enhanced push notification sender that handles both Expo (mobile) and FCM (web) tokens
+async function sendCrossPlatformPush(sessionTokens: Array<{token: string, platform: string}>, payload: { title: string; body?: string; data?: any }) {
+  if (!sessionTokens.length) {
+    return { sent: 0, results: [] };
+  }
+
+  // Separate tokens by platform
+  const expoTokens = sessionTokens.filter(t => ['ios', 'android'].includes(t.platform)).map(t => t.token);
+  const webTokens = sessionTokens.filter(t => t.platform === 'web').map(t => t.token);
+
+  const results: any[] = [];
+  let totalSent = 0;
+
+  // Send to mobile clients using Expo
+  if (expoTokens.length > 0) {
+    const expoResult = await sendExpoPush(expoTokens, payload);
+    results.push({ platform: 'expo', result: expoResult });
+    totalSent += expoResult.sent;
+  }
+
+  // Send to web clients using FCM
+  if (webTokens.length > 0) {
+    const webResult = await sendWebPush(webTokens, payload);
+    results.push({ platform: 'web', result: webResult });
+    totalSent += webResult.sent;
+  }
+
+  return { sent: totalSent, results };
+}
+
+// Web push notification sender using FCM
+async function sendWebPush(webTokens: string[], payload: { title: string; body?: string; data?: any }) {
+  if (!webTokens.length) {
+    return { sent: 0, results: [] };
+  }
+
+  try {
+    // Use Firebase Admin SDK messaging for web push
+    const messaging = admin.messaging();
+    
+    // Prepare FCM messages for web clients
+    const messages = webTokens.map(token => ({
+      token,
+      notification: {
+        title: payload.title,
+        body: payload.body || ''
+      },
+      data: payload.data ? Object.fromEntries(
+        Object.entries(payload.data).map(([key, value]) => [key, String(value)])
+      ) : {},
+      webpush: {
+        notification: {
+          title: payload.title,
+          body: payload.body || '',
+          requireInteraction: false,
+          badge: '/favicon.ico',
+          icon: '/favicon.ico'
+        }
+      }
+    }));
+
+    // Send messages in batches (FCM allows up to 500 per batch)
+    const batchSize = 500;
+    const results: any[] = [];
+
+    for (let i = 0; i < messages.length; i += batchSize) {
+      const batch = messages.slice(i, i + batchSize);
+      try {
+        const response = await messaging.sendEach(batch);
+        results.push(response);
+      } catch (error) {
+        results.push({ error: error instanceof Error ? error.message : 'Unknown error' });
+      }
+    }
+
+    return { sent: webTokens.length, results };
+  } catch (error) {
+    console.error('Error sending web push notifications:', error);
+    return { sent: 0, results: [{ error: error instanceof Error ? error.message : 'Unknown error' }] };
+  }
+}
 
 // Notification job types and interfaces
 type NotificationJobType = 'message' | 'match' | 'like';
@@ -749,72 +838,23 @@ export const notify = onRequest({
         throw new HttpsError('invalid-argument', 'recipientSessionId and title required');
       }
 
-      const db = admin.firestore();
-      const snap = await db.collection('push_tokens')
-        .where('sessionId', '==', recipientSessionId)
-        .get();
+      // Get tokens with platform information
+      const tokensWithPlatform = await fetchSessionTokens(recipientSessionId);
 
-      const tokens: string[] = [];
-      snap.forEach(doc => {
-        const d = doc.data() as any;
-        if (typeof d?.token === 'string' && d.token) tokens.push(d.token);
-      });
-
-      if (!tokens.length) {
+      if (!tokensWithPlatform.length) {
         res.status(200).json({ sent: 0, message: 'No tokens for recipient' });
         return;
       }
 
-      // chunk to 100 per request
-      const chunks: string[][] = [];
-      for (let i = 0; i < tokens.length; i += 100) chunks.push(tokens.slice(i, i + 100));
-
-      const results: any[] = [];
-      // Generate aggregation key for deduplication
-      const agg = data?.aggregationKey || data?.type || 'default';
+      // Use the new cross-platform push system
+      const payload = {
+        title,
+        body,
+        data
+      };
       
-      for (const chunk of chunks) {
-        // Determine Android channel based on notification type
-        const notificationType = data?.type;
-        let androidChannelId = 'default';
-        
-        if (notificationType === 'message') {
-          androidChannelId = 'messages';
-        } else if (notificationType === 'match') {
-          androidChannelId = 'matches';
-        }
-        
-        const messages = chunk.map(to => ({
-          to,
-          title,
-          body,
-          data,
-          sound: 'default',
-          priority: 'high',
-          collapseId: agg,       // Expo dedupe key
-          threadId: agg,         // iOS grouping in Notification Center
-          channelId: androidChannelId,  // Android notification channel
-          android: {
-            channelId: androidChannelId,
-            priority: 'high',
-            sound: 'default',
-            vibrate: true
-          },
-          ios: {
-            sound: 'default',
-            badge: 1
-          }
-        }));
-        const resp = await fetch(EXPO_PUSH_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(messages),
-        });
-        const json = await resp.json().catch(() => null);
-        results.push({ status: resp.status, json });
-      }
-
-      res.status(200).json({ sent: tokens.length, results });
+      const result = await sendCrossPlatformPush(tokensWithPlatform, payload);
+      res.status(200).json({ sent: result.sent, results: result.results });
     } catch (err: any) {
       console.error('notify error', err);
       const code = err?.code === 'permission-denied' ? 403 : 500;
@@ -1081,8 +1121,8 @@ export const onMessageCreate = onDocumentCreated({
   });
 
 // === Callable: savePushToken ===
-// Saves/updates a user's Expo token under push_tokens/{sessionId}_{platform}
-// Expects: { token: string, platform: 'ios' | 'android', sessionId: string }
+// Saves/updates a user's push token under push_tokens/{sessionId}_{platform}
+// Expects: { token: string, platform: 'ios' | 'android' | 'web', sessionId: string }
 // === Scheduled: Process Notification Jobs ===
 // Runs every minute to process queued notification jobs
 export const processNotificationJobsScheduled = onSchedule({
@@ -1128,8 +1168,8 @@ export const savePushToken = onCall(async (request) => {
     if (typeof token !== 'string' || !token.trim()) {
       throw new HttpsError('invalid-argument', 'token is required and must be a string');
     }
-    if (platform !== 'ios' && platform !== 'android') {
-      throw new HttpsError('invalid-argument', "platform must be 'ios' or 'android'");
+    if (platform !== 'ios' && platform !== 'android' && platform !== 'web') {
+      throw new HttpsError('invalid-argument', "platform must be 'ios', 'android', or 'web'");
     }
     if (typeof sessionId !== 'string' || !sessionId.trim()) {
       throw new HttpsError('invalid-argument', 'sessionId is required and must be a string');
@@ -1345,9 +1385,9 @@ export const sendCrossDeviceNotification = onCall(async (request) => {
       }
 
       // Get push tokens for target session
-      const tokens = await fetchSessionTokens(targetSessionId);
+      const tokensWithPlatform = await fetchSessionTokens(targetSessionId);
 
-      if (tokens.length === 0) {
+      if (tokensWithPlatform.length === 0) {
         return { success: false, error: 'No push tokens found for target session' };
       }
 
@@ -1361,20 +1401,20 @@ export const sendCrossDeviceNotification = onCall(async (request) => {
         }
       };
 
-      // Send push notification
-      const result = await sendExpoPush(tokens, payload);
+      // Send push notification using cross-platform system
+      const result = await sendCrossPlatformPush(tokensWithPlatform, payload);
 
       console.log(`Sent cross-device notification to ${targetSessionId}:`, { 
         type, 
         title, 
-        tokensCount: tokens.length, 
+        tokensCount: tokensWithPlatform.length, 
         result
       });
 
       return { 
         success: true, 
         messageId: `cross-device-${Date.now()}`,
-        sentToTokens: tokens.length
+        sentToTokens: result.sent
       };
 
     } catch (error) {

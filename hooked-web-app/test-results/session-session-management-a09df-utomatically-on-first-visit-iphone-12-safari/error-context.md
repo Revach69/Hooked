@@ -1,0 +1,63 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - main [ref=e4]:
+      - generic [ref=e6]:
+        - generic [ref=e8]:
+          - button "Go back" [ref=e9]:
+            - img [ref=e10]
+          - heading "Join Event" [level=1] [ref=e12]
+        - generic [ref=e14]:
+          - generic [ref=e15]:
+            - button "QR Code" [ref=e16]:
+              - img [ref=e17]
+              - generic [ref=e20]: QR Code
+            - button "Manual Entry" [ref=e21]:
+              - img [ref=e22]
+              - generic [ref=e24]: Manual Entry
+          - generic [ref=e25]:
+            - generic [ref=e27]:
+              - generic [ref=e28]: Event Code
+              - textbox "Enter event code" [ref=e29]
+              - paragraph [ref=e30]: Enter the event code provided by the organizer
+            - button "Join Event" [disabled] [ref=e31]:
+              - img [ref=e32]
+              - generic [ref=e34]: Join Event
+            - button "Use QR code scanner instead" [ref=e36]
+    - navigation [ref=e37]:
+      - generic [ref=e38]:
+        - link "Home" [ref=e40]:
+          - /url: /
+          - img [ref=e42]
+          - generic [ref=e44]: Home
+        - link "Event" [ref=e46]:
+          - /url: /event
+          - img [ref=e48]
+          - generic [ref=e51]: Event
+        - link "Discovery" [ref=e53]:
+          - /url: /profile
+          - img [ref=e55]
+          - generic [ref=e58]: Discovery
+        - link "Matches" [ref=e60]:
+          - /url: /profile
+          - img [ref=e62]
+          - generic [ref=e65]: Matches
+        - link "Profile" [ref=e67]:
+          - /url: /profile
+          - img [ref=e69]
+          - generic [ref=e71]: Profile
+  - generic [ref=e76] [cursor=pointer]:
+    - button "Open Next.js Dev Tools" [ref=e77] [cursor=pointer]:
+      - img [ref=e78] [cursor=pointer]
+    - generic [ref=e83] [cursor=pointer]:
+      - button "Open issues overlay" [ref=e84] [cursor=pointer]:
+        - generic [ref=e85] [cursor=pointer]:
+          - generic [ref=e86] [cursor=pointer]: "0"
+          - generic [ref=e87] [cursor=pointer]: "1"
+        - generic [ref=e88] [cursor=pointer]: Issue
+      - button "Collapse issues badge" [ref=e89] [cursor=pointer]:
+        - img [ref=e90] [cursor=pointer]
+  - alert [ref=e92]
+```

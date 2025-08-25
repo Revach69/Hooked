@@ -1,0 +1,75 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - main [ref=e4]:
+        - generic [ref=e8]:
+          - generic [ref=e10]:
+            - heading "Hooked" [level=1] [ref=e11]
+            - paragraph [ref=e12]: Connect at Events
+          - generic [ref=e13]:
+            - generic [ref=e16]:
+              - paragraph [ref=e17]: Welcome to Hooked!
+              - paragraph [ref=e18]: Create your profile and start connecting with people at events
+            - generic [ref=e19]:
+              - button "Create Profile" [ref=e20]
+              - button "Join with Code" [ref=e21]:
+                - img [ref=e22]
+                - generic [ref=e24]: Join with Code
+          - paragraph [ref=e27]: "Session ID: 0hoeriwc"
+      - navigation [ref=e28]:
+        - generic [ref=e29]:
+          - link "Home" [ref=e31]:
+            - /url: /
+            - img [ref=e33]
+            - generic [ref=e37]: Home
+          - link "Event" [ref=e39]:
+            - /url: /event
+            - img [ref=e41]
+            - generic [ref=e44]: Event
+          - link "Discovery" [ref=e46]:
+            - /url: /profile
+            - img [ref=e48]
+            - generic [ref=e51]: Discovery
+          - link "Matches" [ref=e53]:
+            - /url: /profile
+            - img [ref=e55]
+            - generic [ref=e58]: Matches
+          - link "Profile" [ref=e60]:
+            - /url: /profile
+            - img [ref=e62]
+            - generic [ref=e64]: Profile
+    - generic [ref=e66]:
+      - generic [ref=e67]:
+        - generic [ref=e68]:
+          - img [ref=e70]
+          - generic [ref=e72]:
+            - heading "Install Hooked" [level=3] [ref=e73]
+            - paragraph [ref=e74]: Add to home screen
+        - button [ref=e75]:
+          - img [ref=e76]
+      - paragraph [ref=e79]: Install Hooked for the best experience. Tap the share button and select 'Add to Home Screen'.
+      - generic [ref=e80]:
+        - generic [ref=e81]:
+          - img [ref=e83]
+          - generic [ref=e85]: "How to install:"
+        - list [ref=e86]:
+          - listitem [ref=e87]: 1. Tap the share button (□↗) in Safari
+          - listitem [ref=e88]: 2. Scroll down and tap "Add to Home Screen"
+          - listitem [ref=e89]: 3. Tap "Add" to install Hooked
+      - button "Got it" [ref=e91]
+  - generic [ref=e96] [cursor=pointer]:
+    - button "Open Next.js Dev Tools" [ref=e97] [cursor=pointer]:
+      - img [ref=e98] [cursor=pointer]
+    - generic [ref=e103] [cursor=pointer]:
+      - button "Open issues overlay" [ref=e104] [cursor=pointer]:
+        - generic [ref=e105] [cursor=pointer]:
+          - generic [ref=e106] [cursor=pointer]: "0"
+          - generic [ref=e107] [cursor=pointer]: "1"
+        - generic [ref=e108] [cursor=pointer]: Issue
+      - button "Collapse issues badge" [ref=e109] [cursor=pointer]:
+        - img [ref=e110] [cursor=pointer]
+  - alert [ref=e112]
+```

@@ -1,111 +1,87 @@
-# Role Definition: Frontend Developer #1 - React Native Mobile App
+# Role Definition: Web Developer #1
 
-## 🛠 Tech Stack
-- React Native 0.73.x with TypeScript 5.x
-- Expo SDK for development tooling
-- React Native Paper for UI components
-- React Query for state management
-- Jest + React Native Testing Library for testing
-- ESLint + Prettier for code quality
-- Firebase SDK for React Native
+## 👤 Role Overview
+**Specialization**: Next.js Mobile-First PWA Development
+**Squad Member Since**: 2025-08-25
+**Status**: Active
 
-## 📋 Scope & Boundaries
-- **Can modify**: 
-  - `mobile-app/app/` (all screen components and navigation)
-  - `mobile-app/components/` (mobile UI components)
-  - `mobile-app/hooks/` (custom React hooks)
-  - `mobile-app/lib/` (mobile-specific utilities and services)
-  - `mobile-app/types/` (TypeScript type definitions)
-  - `mobile-app/assets/` (images, fonts, sounds)
-  - `mobile-app/__tests__/` (component and screen tests)
-  - `mobile-app/ios/` and `mobile-app/android/` (native configuration)
+## 🛠 Technical Expertise
+### Primary Stack
+- Next.js 14+ with App Router
+- React 18+ with TypeScript
+- Progressive Web App (PWA) technologies
+- Firebase Web SDK (v9+)
+- Tailwind CSS + shadcn/ui components
+- Mobile-first responsive design
 
-- **Cannot touch**: 
-  - Firebase Functions code
-  - Web applications (hooked-website, web-admin-hooked)
-  - Database schema
-  - Other agents' work directories
-  - Root package.json configurations
+### Secondary Skills
+- React Context API / Zustand state management
+- Web push notifications
+- Service Workers and caching strategies
+- Mobile browser optimization
+- Device detection and user agent analysis
+- Vercel/Netlify deployment
+- Web accessibility (WCAG compliance)
 
-- **Dependencies**: 
-  - Can use: React Native ecosystem, native modules, mobile libraries
-  - Must avoid: Web-specific libraries, server frameworks, Firebase Functions dependencies
+## 📋 Typical Responsibilities
+- Mobile-only web application development
+- Progressive Web App implementation
+- Firebase Web SDK integration and optimization  
+- Real-time data synchronization with mobile apps
+- Mobile browser performance optimization
+- Device detection and mobile-first UX patterns
+- Cross-platform compatibility (iOS/Android browsers)
 
-## 📏 Conventions & Best Practices
-- **Code Style**:
-  - Functional components with hooks only
-  - TypeScript strict mode compliance
-  - Named exports for components
-  - Consistent file naming (PascalCase for components)
-  - Platform-specific code handling (iOS/Android)
-  
-- **Architecture Patterns**:
-  - Screen-based navigation structure
-  - Custom hooks for device-specific logic
-  - Props interface definitions for all components
-  - Context providers for global state
-  - Native module integration patterns
-  
-- **Documentation**:
-  - JSDoc comments for complex component props
-  - Platform-specific implementation notes
-  - Navigation structure documentation
-  - Native module usage guides
+## 🎯 Work Boundaries
+### Can Work On
+- `hooked-web-app/**` (new web app directory)
+- Next.js configuration and setup
+- React components and pages
+- Firebase Web SDK integration
+- Mobile-responsive CSS and styling
+- PWA manifest and service worker setup
+- Web authentication flows
+- Real-time messaging interfaces
 
-## ✅ Task Checklist
-- [ ] Screen Development: Create mobile app screens and navigation
-  - Acceptance: Screens render correctly on iOS and Android
-  - Priority: High
-  
-- [ ] Component Library: Build reusable mobile UI components
-  - Acceptance: Components work across platforms with proper styling
-  - Priority: High
-  
-- [ ] Native Integration: Implement platform-specific features
-  - Acceptance: Native modules work correctly on both platforms
-  - Priority: Medium
+### Should Not Touch
+- `mobile-app/**` (React Native codebase)
+- `functions/**` (Firebase Functions - backend only)
+- `hooked-website/**` (marketing website)
+- `web-admin-hooked/**` (admin dashboard)
+- Native mobile features (camera, location, push notifications via native APIs)
+- Desktop optimization (explicitly out of scope)
 
-- [ ] State Management: Implement mobile-optimized state with React Query
-  - Acceptance: Offline support and proper error handling
-  - Priority: Medium
+## 📏 Quality Standards
+- **Mobile-First**: STRICT mobile-only design - no desktop optimization
+- **Performance**: Core Web Vitals compliance (LCP < 2.5s, FID < 100ms, CLS < 0.1)
+- **Bundle Size**: Initial JavaScript bundle under 500KB gzipped
+- **Testing**: 90%+ test coverage for components and utilities
+- **Accessibility**: WCAG 2.1 AA compliance for mobile interfaces
+- **TypeScript**: Full TypeScript usage with strict mode enabled
+- **PWA Standards**: Lighthouse PWA score of 90+
 
-## 🧪 Testing Requirements
-- [ ] Unit tests for all components and screens
-  - Coverage target: 85%
-  - Framework: Jest + React Native Testing Library
-  
-- [ ] Integration tests for navigation flows
-  - Scenarios to cover: navigation, push notifications, offline behavior
-  
-- [ ] Platform-specific testing
-  - Format: iOS Simulator and Android Emulator testing
-  
-- [ ] E2E testing with Detox (if available)
-  - Scenarios to cover: Complete user journeys on both platforms
+## 🤝 Collaboration Notes
+- **Works well with**: Backend Developers (Firebase integration), QA Engineers (cross-browser testing)
+- **Dependencies**: Firebase project configuration, domain setup, existing Firebase Functions
+- **Handoff patterns**: 
+  - Provides mobile-optimized interfaces for backend integration
+  - Delivers cross-browser compatible solutions for QA testing
+  - Creates reusable components for other web developers
 
-## ⚠️ Risk Mitigation
-- **Known Challenges**:
-  - Platform differences: Handle iOS/Android UI variations
-  - Performance on older devices: Optimize animations and list rendering
-  
-- **Edge Cases to Handle**:
-  - Network connectivity changes
-  - App state transitions (background/foreground)
-  - Permission handling (camera, notifications, location)
-  - Different screen sizes and orientations
-  
-- **Performance Considerations**:
-  - Bundle size optimization for mobile
-  - Memory usage monitoring
-  - Battery life impact
-  - Native module performance
+## 🚨 Critical Constraints
+- **MOBILE-ONLY**: Must implement device detection to block/redirect desktop users
+- **Branch Strategy**: ALL development on `feature/web-app` branch
+- **Domain**: Deploy to `hooked-app.com` (separate from hooked-website)
+- **Firebase Compatibility**: Must maintain compatibility with existing mobile app data structures
+- **No Map Features**: Do not implement location/map features (not in current mobile app)
+- **Session-Based Access**: Implement session management without authentication (like mobile app)
+- **No Admin Features**: Do not implement admin/event management functions (separate admin dashboard exists)
 
-## 🔗 Related Resources
-- Feature PRD: `.squad/features/feature-name.md`
-- Example code: `.squad/examples/mobile-boilerplate/`
-- React Native docs: https://reactnative.dev
-- Expo docs: https://docs.expo.dev
-- Firebase React Native docs: https://rnfirebase.io
-
-## 📝 Notes for Agent
-Focus on creating a native-feeling mobile experience that works seamlessly on both iOS and Android. Prioritize performance, offline capabilities, and platform-specific UI patterns. Always test on both platforms before considering features complete.
+## 📱 Specialized Focus Areas
+- Progressive Web App best practices
+- Mobile browser performance optimization  
+- Firebase Web SDK real-time features
+- Session-based access without authentication
+- Touch-optimized user interfaces
+- Mobile-first responsive design patterns
+- Browser session persistence (localStorage/sessionStorage)

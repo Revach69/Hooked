@@ -1,0 +1,373 @@
+/* Cross-browser compatibility fixes for mobile browsers */
+/* Chrome Mobile, Safari Mobile, Firefox Mobile, Edge Mobile */
+
+/* CSS Custom Properties fallbacks */
+:root {
+  /* Viewport height fixes */
+  --vh: 1vh;
+  
+  /* Safe area insets (iOS) */
+  --safe-area-inset-top: env(safe-area-inset-top, 0px);
+  --safe-area-inset-right: env(safe-area-inset-right, 0px);
+  --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-inset-left: env(safe-area-inset-left, 0px);
+  
+  /* Browser-specific color schemes */
+  --webkit-tap-highlight-color: rgba(147, 51, 234, 0.2);
+  
+  /* Form element consistency */
+  --input-font-size: 16px; /* Prevents zoom on iOS */
+}
+
+/* Global browser resets and fixes */
+* {
+  /* Prevent text size adjustment on orientation change (iOS Safari) */
+  -webkit-text-size-adjust: 100%;
+  -moz-text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  
+  /* Smoother font rendering */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  
+  /* Better box model */
+  box-sizing: border-box;
+}
+
+html {
+  /* Prevent horizontal scrolling */
+  overflow-x: hidden;
+  
+  /* Use custom viewport height */
+  height: calc(var(--vh, 1vh) * 100);
+  
+  /* Prevent bounce scrolling on iOS */
+  overscroll-behavior: none;
+}
+
+body {
+  /* Use custom viewport height */
+  min-height: calc(var(--vh, 1vh) * 100);
+  
+  /* Prevent bounce scrolling on iOS */
+  overscroll-behavior: none;
+  
+  /* Better font rendering on Windows */
+  font-feature-settings: 'kern' 1;
+  text-rendering: optimizeLegibility;
+  
+  /* Remove default margins */
+  margin: 0;
+  padding: 0;
+}
+
+/* Touch targets and interactions */
+button,
+[role="button"],
+input[type="button"],
+input[type="submit"],
+input[type="reset"] {
+  /* Ensure minimum touch target size (44px) */
+  min-height: 44px;
+  min-width: 44px;
+  
+  /* Remove default button styles for consistency */
+  background: none;
+  border: none;
+  outline: none;
+  
+  /* Better touch response */
+  touch-action: manipulation;
+  
+  /* Custom tap highlight */
+  -webkit-tap-highlight-color: var(--webkit-tap-highlight-color);
+  
+  /* Prevent zoom on focus (iOS) */
+  font-size: var(--input-font-size);
+}
+
+/* Form elements consistency */
+input,
+textarea,
+select {
+  /* Prevent zoom on focus (iOS Safari) */
+  font-size: var(--input-font-size);
+  
+  /* Remove default styling */
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  
+  /* Better touch response */
+  touch-action: manipulation;
+  
+  /* Remove default border radius (iOS) */
+  border-radius: 0;
+  
+  /* Consistent box model */
+  box-sizing: border-box;
+}
+
+/* iOS Safari specific fixes */
+.platform-ios input[type="text"],
+.platform-ios input[type="email"],
+.platform-ios input[type="password"],
+.platform-ios input[type="tel"],
+.platform-ios input[type="url"],
+.platform-ios textarea {
+  /* Prevent inner shadow */
+  -webkit-appearance: none;
+  
+  /* Prevent rounded corners */
+  border-radius: 0;
+  
+  /* Fix for iOS Safari form zoom */
+  font-size: 16px !important;
+}
+
+/* Safari-specific fixes */
+.browser-safari {
+  /* Better scroll performance */
+  -webkit-overflow-scrolling: touch;
+}
+
+.browser-safari * {
+  /* Fix for Safari transform flicker */
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+/* Firefox mobile fixes */
+.browser-firefox {
+  /* Better touch scrolling */
+  scroll-behavior: smooth;
+}
+
+.browser-firefox input,
+.browser-firefox textarea {
+  /* Remove Firefox dotted outline */
+  outline: none;
+}
+
+/* Chrome mobile fixes */
+.browser-chrome {
+  /* Better hardware acceleration */
+  transform: translateZ(0);
+}
+
+/* Edge mobile fixes */
+.browser-edge input[type="text"],
+.browser-edge input[type="email"],
+.browser-edge input[type="password"] {
+  /* Remove Edge's clear button */
+  -ms-clear: none;
+}
+
+/* Safe area support */
+.safe-area-top {
+  padding-top: var(--safe-area-inset-top);
+}
+
+.safe-area-right {
+  padding-right: var(--safe-area-inset-right);
+}
+
+.safe-area-bottom {
+  padding-bottom: var(--safe-area-inset-bottom);
+}
+
+.safe-area-left {
+  padding-left: var(--safe-area-inset-left);
+}
+
+.safe-area-inset {
+  padding-top: var(--safe-area-inset-top);
+  padding-right: var(--safe-area-inset-right);
+  padding-bottom: var(--safe-area-inset-bottom);
+  padding-left: var(--safe-area-inset-left);
+}
+
+/* Viewport height classes */
+.h-screen-mobile {
+  height: calc(var(--vh, 1vh) * 100);
+}
+
+.min-h-screen-mobile {
+  min-height: calc(var(--vh, 1vh) * 100);
+}
+
+.max-h-screen-mobile {
+  max-height: calc(var(--vh, 1vh) * 100);
+}
+
+/* Touch-friendly scrollbars */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+/* Focus indicators for accessibility */
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid #9333ea;
+  outline-offset: 2px;
+}
+
+/* Animation performance optimizations */
+* {
+  /* Use hardware acceleration for animations */
+  will-change: auto;
+}
+
+.animate-in {
+  animation-fill-mode: both;
+  animation-duration: 0.3s;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-out {
+  animation-fill-mode: both;
+  animation-duration: 0.2s;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* High contrast support */
+@media (prefers-contrast: high) {
+  :root {
+    --webkit-tap-highlight-color: rgba(0, 0, 0, 0.3);
+  }
+  
+  button,
+  input,
+  textarea,
+  select {
+    border: 2px solid currentColor;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+}
+
+/* Print styles */
+@media print {
+  * {
+    background: transparent !important;
+    color: black !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+  
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* Landscape orientation fixes */
+@media screen and (orientation: landscape) {
+  .platform-ios .h-screen-mobile {
+    /* Account for iOS Safari UI in landscape */
+    height: calc(var(--vh, 1vh) * 100 - var(--safe-area-inset-top) - var(--safe-area-inset-bottom));
+  }
+}
+
+/* Small screen optimizations */
+@media screen and (max-width: 360px) {
+  /* Smaller touch targets for very small screens */
+  button,
+  [role="button"] {
+    min-height: 40px;
+    min-width: 40px;
+  }
+  
+  /* Smaller font size base */
+  html {
+    font-size: 14px;
+  }
+}
+
+/* Large screen mobile (tablets in portrait) */
+@media screen and (min-width: 768px) and (max-width: 1024px) and (orientation: portrait) {
+  /* Larger touch targets */
+  button,
+  [role="button"] {
+    min-height: 48px;
+    min-width: 48px;
+  }
+  
+  /* Larger font size base */
+  html {
+    font-size: 18px;
+  }
+}
+
+/* Network-aware loading (if supported) */
+@media (prefers-reduced-data: reduce) {
+  /* Disable autoplay and reduce animations */
+  video {
+    preload: none;
+  }
+  
+  .animate-in,
+  .animate-out {
+    animation: none !important;
+  }
+}
+
+/* Utility classes for browser-specific styling */
+.webkit-only {
+  display: none;
+}
+
+.browser-safari .webkit-only,
+.browser-chrome .webkit-only {
+  display: block;
+}
+
+.gecko-only {
+  display: none;
+}
+
+.browser-firefox .gecko-only {
+  display: block;
+}

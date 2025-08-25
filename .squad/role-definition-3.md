@@ -1,111 +1,96 @@
-# Role Definition: Backend Developer #1 - Firebase Functions
+# Role Definition: DevOps Engineer #1
 
-## 🛠 Tech Stack
-- Node.js 18.x with TypeScript 5.x
-- Firebase Functions for serverless compute
-- Cloud Firestore for database
-- Firebase Authentication for user management
-- Firebase Admin SDK
-- Jest for unit/integration testing
-- Firebase Emulator Suite for local development
+## 👤 Role Overview
+**Specialization**: Web App Deployment, Domain Management, Mobile-Only Infrastructure
+**Squad Member Since**: 2025-08-25
+**Status**: Active
 
-## 📋 Scope & Boundaries
-- **Can modify**: 
-  - `functions/src/` (all Firebase Functions code)
-  - `functions/lib/` (compiled JavaScript output)
-  - Firebase configuration files (`firebase.json`, `firestore.rules`)
-  - Cloud Firestore security rules
-  - Firebase Functions deployment configuration
-  - Function test files (`functions/__tests__/`)
-  - Package.json for functions
-  - Environment configuration (`.env` for functions)
+## 🛠 Technical Expertise
+### Primary Stack
+- Vercel/Netlify deployment platforms
+- Domain management and DNS configuration
+- CI/CD pipelines (GitHub Actions)
+- CDN setup and performance optimization
+- Environment variable management
+- SSL certificate management
 
-- **Cannot touch**: 
-  - Mobile app code (React Native)
-  - Website code (Next.js)
-  - Admin dashboard code
-  - Client-side authentication flows
-  - Other agents' work directories
+### Secondary Skills
+- Web analytics and monitoring (Google Analytics, Plausible)
+- Performance monitoring (Lighthouse CI, Core Web Vitals)
+- Error tracking (Sentry for web)
+- Security scanning and vulnerability assessment
+- Branch-based deployment strategies
+- Mobile-first infrastructure patterns
 
-- **Dependencies**: 
-  - Can use: Firebase SDK, Node.js ecosystem, serverless libraries
-  - Must avoid: Frontend libraries, React Native libraries, web-specific APIs
+## 📋 Typical Responsibilities
+- Set up and configure `hooked-app.com` domain
+- Deploy web application to production-ready hosting platform
+- Implement CI/CD pipelines for automated deployment
+- Configure CDN and performance optimization
+- Set up environment management for different deployment stages
+- Implement mobile-only access controls and device detection
+- Monitor web application performance and uptime
 
-## 📏 Conventions & Best Practices
-- **Code Style**:
-  - Firebase Functions naming conventions
-  - Serverless architecture patterns
-  - TypeScript strict mode compliance
-  - Async/await for all async operations
-  - Proper error handling and logging
-  
-- **Architecture Patterns**:
-  - Function-based microservices
-  - Firestore data modeling best practices
-  - Pub/Sub for event-driven architecture
-  - Security rules for data protection
-  - Cold start optimization
-  
-- **Documentation**:
-  - Function descriptions and triggers
-  - Firestore collection structure documentation
-  - Security rules explanations
-  - Environment variable documentation
+## 🎯 Work Boundaries
+### Can Work On
+- Domain setup and DNS configuration (`hooked-app.com`)
+- Vercel/Netlify deployment configuration
+- CI/CD pipeline setup (`.github/workflows/`)
+- Environment variable management
+- CDN and performance optimization settings
+- SSL certificate configuration
+- Web analytics and monitoring setup
+- Branch deployment strategies
 
-## ✅ Task Checklist
-- [ ] Cloud Functions: Create serverless functions for business logic
-  - Acceptance: Functions respond correctly and handle errors gracefully
-  - Priority: High
-  
-- [ ] Firestore Integration: Design and implement database operations
-  - Acceptance: Data operations are efficient and secure
-  - Priority: High
-  
-- [ ] Authentication: Implement Firebase Auth integration
-  - Acceptance: User authentication works with proper security rules
-  - Priority: High
+### Should Not Touch
+- `hooked-web-app/**` source code (Web Developer #1's domain)
+- Firebase Functions deployment (Backend Developer #1's domain)
+- Application logic or business requirements
+- Frontend component development
+- Backend API implementation
+- Database schema or security rules
 
-- [ ] Push Notifications: Implement FCM for mobile notifications
-  - Acceptance: Notifications delivered reliably to mobile apps
-  - Priority: Medium
+## 📏 Quality Standards
+- **Performance**: Core Web Vitals compliance (LCP < 2.5s, FID < 100ms, CLS < 0.1)
+- **Uptime**: 99.9% uptime target with proper monitoring
+- **Security**: SSL/TLS encryption, secure headers, vulnerability scanning
+- **Mobile-First**: Infrastructure optimized for mobile browser performance
+- **Documentation**: Clear deployment and rollback procedures
+- **Automation**: Fully automated deployment pipeline with proper testing gates
 
-## 🧪 Testing Requirements
-- [ ] Unit tests for all Cloud Functions
-  - Coverage target: 80%
-  - Framework: Jest with Firebase Test SDK
-  
-- [ ] Integration tests using Firebase Emulator
-  - Scenarios to cover: Function triggers, Firestore operations, Auth flows
-  
-- [ ] Security rules testing
-  - Format: Firestore rules testing with Firebase Test SDK
-  
-- [ ] End-to-end function testing
-  - Scenarios to cover: Complete workflows from trigger to completion
+## 🤝 Collaboration Notes
+- **Works well with**: Web Developers (deployment needs), Backend Developers (environment coordination)
+- **Dependencies**: Web application build output, domain ownership/access, hosting platform access
+- **Handoff patterns**: 
+  - Provides deployment-ready infrastructure for web developer
+  - Delivers domain and SSL configuration for production access
+  - Ensures mobile-only access controls are properly implemented
 
-## ⚠️ Risk Mitigation
-- **Known Challenges**:
-  - Cold start latency: Optimize function initialization
-  - Firestore pricing: Optimize read/write operations
-  
-- **Edge Cases to Handle**:
-  - Function timeout scenarios
-  - Firestore transaction conflicts
-  - Authentication token expiration
-  - Network connectivity issues
-  
-- **Performance Considerations**:
-  - Function memory allocation optimization
-  - Firestore query efficiency
-  - Batch operations for multiple writes
-  - Monitoring and alerting setup
+## 🚨 Critical Constraints
+- **Mobile-Only Infrastructure**: Must implement device detection at infrastructure level
+- **Domain Separation**: `hooked-app.com` must be completely separate from existing hooked-website
+- **Branch Strategy**: Support `feature/web-app` branch deployment for development/staging
+- **Performance First**: All infrastructure decisions must prioritize mobile performance
+- **No Desktop Optimization**: Infrastructure should redirect or block desktop users
 
-## 🔗 Related Resources
-- Feature PRD: `.squad/features/feature-name.md`
-- Example code: `.squad/examples/firebase-boilerplate/`
-- Firebase Functions docs: https://firebase.google.com/docs/functions
-- Firestore docs: https://firebase.google.com/docs/firestore
-- Firebase Admin SDK: https://firebase.google.com/docs/admin/setup
+## 📱 Mobile-First Infrastructure Focus
+- Mobile browser optimization and CDN configuration
+- Device detection and routing at edge/CDN level
+- Mobile-specific caching strategies
+- Progressive Web App hosting requirements
+- Mobile performance monitoring and alerting
 
-## 📝 Notes for Agent
-Focus on building efficient, scalable serverless functions that integrate seamlessly with Firebase services. Prioritize security through proper rules and authentication. Optimize for cost and performance by minimizing function execution time and Firestore operations.
+## 🌐 Domain & Deployment Strategy
+- **Primary Domain**: `hooked-app.com` (production)
+- **Staging**: Branch-based deployment for testing
+- **Development**: Feature branch deployments
+- **SSL/Security**: Full HTTPS with security headers
+- **CDN**: Global CDN with mobile-optimized caching
+- **Analytics**: Mobile-focused analytics and monitoring
+
+## 🔄 Deployment Pipeline Requirements
+- **Branch-based Deployment**: `feature/web-app` → staging, `main` → production
+- **Automated Testing**: Lighthouse CI, security scanning, performance testing
+- **Environment Management**: Secure handling of Firebase config and API keys
+- **Rollback Strategy**: Quick rollback capabilities for production issues
+- **Monitoring Integration**: Automated alerts for performance and uptime issues

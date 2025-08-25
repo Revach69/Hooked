@@ -1,0 +1,51 @@
+{
+  "name": "hooked-web-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build --turbopack",
+    "build:analyze": "ANALYZE=true npm run build",
+    "start": "next start",
+    "lint": "eslint",
+    "test": "playwright test",
+    "test:mobile": "playwright test --project=iphone-12-safari --project=pixel-7-chrome",
+    "test:cross-browser": "playwright test --project=mobile-firefox --project=mobile-edge",
+    "test:performance": "playwright test --grep=performance",
+    "test:pwa": "playwright test --project=pwa-testing",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "test:report": "playwright show-report"
+  },
+  "dependencies": {
+    "@headlessui/react": "^2.2.7",
+    "@heroicons/react": "^2.2.0",
+    "@next/bundle-analyzer": "^15.5.0",
+    "@types/ua-parser-js": "^0.7.39",
+    "clsx": "^2.1.1",
+    "firebase": "^12.1.0",
+    "framer-motion": "^12.23.12",
+    "next": "15.5.0",
+    "next-pwa": "^5.6.0",
+    "qr-scanner": "^1.4.2",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-qr-code": "^2.0.18",
+    "ua-parser-js": "^2.0.4",
+    "web-vitals": "^5.1.0",
+    "workbox-webpack-plugin": "^7.3.0",
+    "zustand": "^5.0.8"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@playwright/test": "^1.55.0",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "15.5.0",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

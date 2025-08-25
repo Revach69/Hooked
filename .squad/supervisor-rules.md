@@ -13,25 +13,31 @@ This document defines the behavior patterns, allocation logic, and decision crit
 
 ### When Generating Squad Roles
 
-1. **Frontend Developers**
-   - Allocate when UI/UX work is needed
-   - Typical ratio: 2 frontend : 1 backend for user-facing features
-   - Skills: React, TypeScript, CSS, Testing
+1. **Web Developers** (NEW)
+   - Allocate for web application development (distinct from mobile frontend)
+   - Specialized in Next.js, PWA, and web-specific technologies
+   - Skills: Next.js, React, PWA, Firebase Web SDK, Mobile-first design
+   - Consider for cross-platform web solutions
 
-2. **Backend Developers**
+2. **Frontend Developers** 
+   - Allocate when mobile/native UI/UX work is needed
+   - Typical ratio: 2 frontend : 1 backend for user-facing features
+   - Skills: React Native, iOS/Android, Mobile testing
+
+3. **Backend Developers**
    - Allocate for API, database, or service work
    - Consider complexity of business logic
-   - Skills: Node.js, Databases, API design
+   - Skills: Firebase Functions, Node.js, Databases, API design
 
-3. **QA Engineers**
+4. **QA Engineers**
    - Allocate 1 per 3-4 developers
    - Essential for features with complex interactions
-   - Skills: Testing frameworks, E2E testing
+   - Skills: Cross-platform testing, E2E testing, Mobile/Web testing
 
-4. **DevOps Engineers**
+5. **DevOps Engineers**
    - Allocate for infrastructure or deployment needs
    - Usually 1 per feature unless complex
-   - Skills: CI/CD, Docker, Cloud platforms
+   - Skills: CI/CD, Domain setup, Cloud platforms, Web deployment
 
 ### Squad Sizing Guidelines
 - **Small Feature**: 1-2 agents
@@ -98,6 +104,28 @@ During `/sync-up`, the supervisor should:
 | New requirements added | Update PRD, regenerate affected roles |
 | Quality issues found | Add QA engineer or review tasks |
 | Performance concerns | Add performance engineer role |
+| Web app feature | Allocate Web Developer with mobile-first expertise |
+| Cross-platform parity | Consider Web Developer + corresponding mobile specialist |
+
+## 🌐 Web Developer Specific Guidelines
+
+### When to Allocate Web Developers
+- Progressive Web App (PWA) requirements
+- Cross-platform web solutions needed
+- Mobile-first web application development
+- Firebase Web SDK integration required
+- Alternative platform access (Android web vs native)
+
+### Web Developer Constraints
+- **Mobile-Only Focus**: Must enforce mobile-only design patterns
+- **Branch Strategy**: Typically work on feature branches for web components
+- **Platform Boundaries**: Cannot work on native mobile or backend systems
+- **Performance Standards**: Must meet Core Web Vitals and PWA metrics
+
+### Collaboration Patterns
+- **With Backend**: Firebase Web SDK integration and real-time features
+- **With QA**: Cross-browser mobile testing and PWA validation
+- **With DevOps**: Domain setup, web deployment, and CDN configuration
 
 ## 🎛️ Communication Standards
 
