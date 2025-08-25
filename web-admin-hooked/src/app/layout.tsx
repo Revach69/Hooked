@@ -16,7 +16,9 @@ export const metadata: Metadata = {
   title: "Hooked Admin Dashboard",
   description: "Admin dashboard for Hooked event management and analytics",
   icons: {
-    icon: '/favicon.ico',
+    icon: '/favicon.png',
+    shortcut: '/favicon.png',
+    apple: '/favicon.png',
   },
 };
 
