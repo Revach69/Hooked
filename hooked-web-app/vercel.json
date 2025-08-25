@@ -1,0 +1,103 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "framework": "nextjs",
+  "installCommand": "npm install",
+  "devCommand": "npm run dev",
+  "regions": ["iad1", "fra1", "hkg1"],
+  "functions": {
+    "app/**/*.ts": {
+      "maxDuration": 30
+    }
+  },
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=(), payment=(), accelerometer=(), gyroscope=(), magnetometer=()"
+        },
+        {
+          "key": "X-DNS-Prefetch-Control",
+          "value": "on"
+        },
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=31536000; includeSubDomains; preload"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://firebasestorage.googleapis.com https://*.firebasestorage.app; frame-src 'self' https://www.google.com; object-src 'none'; base-uri 'self'; form-action 'self';"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/_next/static/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control", 
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/favicon.ico",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400"
+        }
+      ]
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/desktop-block",
+      "destination": "/mobile-only-access",
+      "permanent": false
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/((?!api|_next|_static|favicon.ico|robots.txt|sitemap.xml).*)",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?=.*Mobile)|(?=.*Android)|(?=.*iPhone)|(?=.*iPad)|(?=.*Tablet)"
+        }
+      ],
+      "destination": "$1"
+    },
+    {
+      "source": "/((?!api|_next|_static|favicon.ico|robots.txt|sitemap.xml|mobile-only-access).*)",
+      "missing": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?=.*Mobile)|(?=.*Android)|(?=.*iPhone)|(?=.*iPad)|(?=.*Tablet)"
+        }
+      ],
+      "destination": "/mobile-only-access"
+    }
+  ],
+  "trailingSlash": false,
+  "cleanUrls": true
+}
