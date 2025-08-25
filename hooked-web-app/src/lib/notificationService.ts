@@ -2,6 +2,8 @@
 
 import { getMessaging, getToken, onMessage, type Messaging } from 'firebase/messaging';
 import { getFirebaseApp } from './firebase';
+import { serviceWorkerCompat, webPushCompat } from './swCompat';
+import { browserInfo } from './browserCompat';
 
 // Notification service for Firebase Cloud Messaging
 export class NotificationService {
@@ -30,12 +32,14 @@ export class NotificationService {
     return this.messaging;
   }
 
-  // Check if notifications are supported
+  // Check if notifications are supported with browser compatibility
   static isSupported(): boolean {
-    return typeof window !== 'undefined' && 
-           'Notification' in window && 
-           'serviceWorker' in navigator &&
-           'PushManager' in window;
+    if (typeof window === 'undefined') return false;
+    
+    // Use browser compatibility detection
+    return browserInfo.supportsNotifications && 
+           browserInfo.supportsServiceWorker && 
+           browserInfo.supportsPushManager;
   }
 
   // Check notification permission status
