@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Edit, Trash2, Link, Calendar, MapPin, Users, Mail, Phone } from 'lucide-react';
+import { Edit, Trash2, Link, Calendar, MapPin, Users, Mail, Phone, UserPlus } from 'lucide-react';
 import type { EventForm } from '@/types/admin';
 
 interface EventFormCardProps {
@@ -12,6 +12,7 @@ interface EventFormCardProps {
   onEdit: (form: EventForm) => void;
   onDelete: (formId: string) => void;
   onLink: (form: EventForm) => void;
+  onCreateClient: (form: EventForm) => Promise<void>;
   linkedClientName?: string;
 }
 
@@ -32,8 +33,9 @@ const getStatusColor = (status: string) => {
   }
 };
 
-export function EventFormCard({ form, onEdit, onDelete, onLink, linkedClientName }: EventFormCardProps) {
+export function EventFormCard({ form, onEdit, onDelete, onLink, onCreateClient, linkedClientName }: EventFormCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isCreatingClient, setIsCreatingClient] = useState(false);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -57,6 +59,17 @@ export function EventFormCard({ form, onEdit, onDelete, onLink, linkedClientName
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  const handleCreateClient = async () => {
+    setIsCreatingClient(true);
+    try {
+      await onCreateClient(form);
+    } catch (error) {
+      console.error('Failed to create client:', error);
+    } finally {
+      setIsCreatingClient(false);
+    }
   };
 
   return (
@@ -85,13 +98,25 @@ export function EventFormCard({ form, onEdit, onDelete, onLink, linkedClientName
               <Edit className="h-4 w-4" />
             </Button>
             {!form.linkedClientId && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onLink(form)}
-              >
-                <Link className="h-4 w-4" />
-              </Button>
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onLink(form)}
+                  title="Link to existing client"
+                >
+                  <Link className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCreateClient}
+                  disabled={isCreatingClient}
+                  title="Create new client from form"
+                >
+                  <UserPlus className="h-4 w-4" />
+                </Button>
+              </>
             )}
             <Button
               variant="ghost"

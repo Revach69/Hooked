@@ -113,29 +113,34 @@ export const formatDateInTimezone = (
 ): string => {
   const dateObj = typeof date === 'string' ? new Date(date) : date;
   
-  try {
-    const defaultOptions: Intl.DateTimeFormatOptions = {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-      timeZone: timezone
-    };
-    
-    return dateObj.toLocaleDateString('en-US', { ...defaultOptions, ...options });
-  } catch (error) {
-    console.warn('Timezone formatting failed, using fallback:', error);
-    return dateObj.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    });
-  }
+  console.log('🎨 FORMAT DATE DEBUG:', {
+    input: typeof date === 'string' ? date : date.toISOString(),
+    timezone,
+    dateObjISO: dateObj.toISOString(),
+    expectedResult: `UTC time ${dateObj.toISOString()} should display as local time in ${timezone}`
+  });
+  
+  // NOW WITH PROPER TIMEZONE CONVERSION:
+  // Convert UTC stored time back to event's local time for display
+  const defaultOptions: Intl.DateTimeFormatOptions = {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: timezone  // Use the event's timezone for display
+  };
+  
+  const result = dateObj.toLocaleDateString('en-US', { ...defaultOptions, ...options });
+  
+  console.log('FORMAT DATE RESULT:', { 
+    result,
+    timezone,
+    utcInput: dateObj.toISOString()
+  });
+  
+  return result;
 };
 
 // Format a date for display with timezone info
@@ -144,7 +149,11 @@ export const formatDateWithTimezone = (
   timezone: string,
   showTimezone: boolean = true
 ): string => {
+  console.log('FORMAT DATE WITH TIMEZONE:', { date, timezone, showTimezone });
+  
   const formatted = formatDateInTimezone(date, timezone);
+  
+  console.log('FORMAT DATE WITH TIMEZONE RESULT:', { formatted });
   
   if (showTimezone) {
     const timezoneAbbr = getTimezoneAbbreviation(timezone);
@@ -254,26 +263,68 @@ export const toDate = (dateInput: string | Date | { toDate?: () => Date; seconds
 import { Timestamp } from 'firebase/firestore';
 
 /**
- * Converts a local event datetime string (from input, in event timezone) to a Firestore UTC Timestamp.
- * @param localDateTime - string in 'YYYY-MM-DDTHH:mm' format (from <input type="datetime-local">)
- * @param eventTimezone - IANA timezone string (e.g., 'Asia/Jerusalem')
+ * Converts a datetime string to UTC Timestamp, treating input as being in the event's timezone.
+ * 
+ * @param localDateTime - string in 'YYYY-MM-DDTHH:mm' format
+ * @param eventTimezone - IANA timezone string (e.g., 'Australia/Sydney', 'Asia/Jerusalem')
  * @returns Firestore Timestamp (UTC)
  */
 export function localEventTimeStringToUTCTimestamp(localDateTime: string, eventTimezone: string): Timestamp {
   if (!localDateTime) throw new Error('Missing localDateTime');
-  // Parse as if in eventTimezone
-  const [datePart, timePart] = localDateTime.split('T');
-  const [year, month, day] = datePart.split('-').map(Number);
-  const [hour, minute] = timePart.split(':').map(Number);
-  // Create a Date in eventTimezone
-  const eventDate = new Date(Date.UTC(year, month - 1, day, hour, minute));
-  // Convert to UTC by getting the offset for the eventTimezone
-  const formatter = new Intl.DateTimeFormat('en-US', { timeZone: eventTimezone, hour: '2-digit', hour12: false });
-  const parts = formatter.formatToParts(eventDate);
-  // This is a hack: we want the UTC time for the event's local time
-  // So we create a date as if it's in eventTimezone, then get the UTC equivalent
-  const utcDate = new Date(eventDate.toLocaleString('en-US', { timeZone: 'UTC' }));
-  return Timestamp.fromDate(utcDate);
+  
+  try {
+    // SIMPLEST CORRECT APPROACH using native Date timezone support:
+    // Create a date assuming it's in the event timezone, then convert to UTC
+    
+    const [datePart, timePart] = localDateTime.split('T');
+    const [year, month, day] = datePart.split('-').map(Number);
+    const [hour, minute] = timePart.split(':').map(Number);
+    
+    // Create date assuming it's already in UTC (baseline)
+    const baselineUTC = new Date(Date.UTC(year, month - 1, day, hour, minute));
+    
+    // Use Intl.DateTimeFormat to see what this UTC time looks like in the event timezone
+    const formatter = new Intl.DateTimeFormat('sv-SE', {
+      timeZone: eventTimezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+    
+    const formattedInTZ = formatter.format(baselineUTC);
+    const parsedTZTime = new Date(formattedInTZ);
+    
+    // The difference between what we want and what we got
+    const desiredTime = new Date(year, month - 1, day, hour, minute, 0);
+    const offsetMs = desiredTime.getTime() - parsedTZTime.getTime();
+    
+    // Apply the offset to get correct UTC
+    const correctUTC = new Date(baselineUTC.getTime() + offsetMs);
+    
+    console.log('🔧 TIMEZONE CONVERSION FIXED:', {
+      input: `${hour}:${minute} in ${eventTimezone}`,
+      baselineUTC: baselineUTC.toISOString(),
+      formattedInTZ,
+      parsedTZTime: parsedTZTime.toISOString(),
+      desiredTime: desiredTime.toISOString(),
+      offsetHours: offsetMs / (1000 * 60 * 60),
+      finalUTC: correctUTC.toISOString()
+    });
+    
+    return Timestamp.fromDate(correctUTC);
+    
+  } catch (error) {
+    console.error('Conversion error:', error);
+    
+    // Fallback: basic UTC conversion
+    const [datePart, timePart] = localDateTime.split('T');
+    const [year, month, day] = datePart.split('-').map(Number);  
+    const [hour, minute] = timePart.split(':').map(Number);
+    return Timestamp.fromDate(new Date(Date.UTC(year, month - 1, day, hour, minute)));
+  }
 }
 
 /**
@@ -284,7 +335,18 @@ export function localEventTimeStringToUTCTimestamp(localDateTime: string, eventT
  */
 export function utcTimestampToLocalEventTimeString(timestamp: Timestamp, eventTimezone: string): string {
   if (!timestamp) return '';
+  
   const utcDate = timestamp.toDate();
+  
+  console.log('DISPLAY INPUT:', { 
+    utcISO: utcDate.toISOString(), 
+    eventTimezone 
+  });
+  
+  // PROPER TIMEZONE CONVERSION:
+  // Convert UTC timestamp to local time in the event's timezone
+  
+  // Use Intl.DateTimeFormat to convert UTC to event timezone
   const formatter = new Intl.DateTimeFormat('en-CA', {
     timeZone: eventTimezone,
     year: 'numeric',
@@ -292,10 +354,24 @@ export function utcTimestampToLocalEventTimeString(timestamp: Timestamp, eventTi
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
-    hour12: false,
+    second: '2-digit',
+    hour12: false
   });
+  
   const parts = formatter.formatToParts(utcDate);
   const values: Record<string, string> = {};
-  parts.forEach(part => { if (part.type !== 'literal') values[part.type] = part.value; });
-  return `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
+  parts.forEach(part => { 
+    if (part.type !== 'literal') values[part.type] = part.value; 
+  });
+  
+  const result = `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
+  
+  console.log('DISPLAY OUTPUT:', { 
+    result,
+    extractedTime: `${values.hour}:${values.minute}`,
+    eventTimezone,
+    convertedFromUTC: utcDate.toISOString()
+  });
+  
+  return result;
 }
