@@ -272,22 +272,21 @@ export function localEventTimeStringToUTCTimestamp(localDateTime: string, eventT
   if (!localDateTime) throw new Error('Missing localDateTime');
   
   try {
-    // DEFINITIVE CORRECT APPROACH:
-    // Input: "2025-08-26T00:00" in Australia/Sydney should become "2025-08-25T14:00:00.000Z" (UTC)
+    // SIMPLE DIRECT APPROACH:
+    // Example: Input "14:00" in Israel timezone should become "11:00" UTC (Israel is UTC+3)
     
     const [datePart, timePart] = localDateTime.split('T');
     const [year, month, day] = datePart.split('-').map(Number);
     const [hour, minute] = timePart.split(':').map(Number);
     
-    // The key insight: we need to ask "what UTC time corresponds to this local time?"
-    // We do this by creating a reference point and calculating the offset
+    // Create the date string in ISO format but WITHOUT the 'Z' (so it's treated as local time)
+    const isoString = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}T${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}:00`;
     
-    // Step 1: Create a dummy date to determine current timezone offset
-    const dummyLocalTime = new Date(year, month - 1, day, hour, minute);
-    const dummyUTCTime = new Date(Date.UTC(year, month - 1, day, hour, minute));
+    // Get what time this represents in the event timezone and in UTC  
+    const tempDate = new Date(); // Use current date for timezone offset calculation
     
-    // Step 2: Format both dates in the event timezone to see the offset
-    const formatter = new Intl.DateTimeFormat('sv-SE', {
+    // Format current time in the event timezone
+    const eventTZFormatter = new Intl.DateTimeFormat('sv-SE', {
       timeZone: eventTimezone,
       year: 'numeric',
       month: '2-digit',
@@ -297,28 +296,39 @@ export function localEventTimeStringToUTCTimestamp(localDateTime: string, eventT
       second: '2-digit'
     });
     
-    // What does the UTC version look like when formatted in event timezone?
-    const utcFormattedInEventTZ = formatter.format(dummyUTCTime);
-    
-    // Convert that back to a Date to calculate offset
-    const parsedEventTZTime = new Date(utcFormattedInEventTZ);
-    
-    // The offset tells us how far off our UTC time is from the desired local time
-    const offsetMs = dummyUTCTime.getTime() - parsedEventTZTime.getTime();
-    
-    // Apply the offset to get the correct UTC time
-    const correctUTCTime = new Date(dummyUTCTime.getTime() + offsetMs);
-    
-    console.log('TIMEZONE CONVERSION FINAL:', {
-      input: `${hour}:${minute} in ${eventTimezone}`,
-      dummyUTC: dummyUTCTime.toISOString(),
-      utcFormattedInEventTZ,
-      parsedEventTZTime: parsedEventTZTime.toISOString(),
-      offsetHours: offsetMs / (1000 * 60 * 60),
-      finalUTC: correctUTCTime.toISOString()
+    // Format current time in UTC
+    const utcFormatter = new Intl.DateTimeFormat('sv-SE', {
+      timeZone: 'UTC',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
     });
     
-    return Timestamp.fromDate(correctUTCTime);
+    const timeInEventTZ = eventTZFormatter.format(tempDate);
+    const timeInUTC = utcFormatter.format(tempDate);
+    
+    // Calculate the timezone offset in milliseconds
+    const eventTZTime = new Date(timeInEventTZ).getTime();
+    const utcTime = new Date(timeInUTC).getTime();
+    const offsetMs = eventTZTime - utcTime;
+    
+    // Now apply this offset to our target date
+    // If user enters 14:00 Israel time, we need to subtract 3 hours to get 11:00 UTC
+    const targetDate = new Date(isoString);
+    const utcDate = new Date(targetDate.getTime() - offsetMs);
+    
+    console.log('TIMEZONE CONVERSION DIRECT:', {
+      input: `${hour}:${minute} in ${eventTimezone}`,
+      isoString,
+      offsetHours: offsetMs / (1000 * 60 * 60),
+      targetLocal: targetDate.toISOString(),
+      finalUTC: utcDate.toISOString()
+    });
+    
+    return Timestamp.fromDate(utcDate);
     
   } catch (error) {
     console.error('Conversion error:', error);
