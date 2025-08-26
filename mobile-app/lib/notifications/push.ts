@@ -6,6 +6,7 @@ const API_KEY = process.env.EXPO_PUBLIC_FUNCTION_API_KEY;
 type WireData = {
   type: 'match' | 'message';
   otherSessionId?: string;
+  otherName?: string;
   conversationId?: string;
 };
 
@@ -25,6 +26,7 @@ export async function sendPush(event: AnyEvent, recipientSessionId?: string) {
   const data: WireData = {
     type: event.type,
     otherSessionId: event.type === 'match' ? event.otherSessionId : undefined,
+    otherName: event.type === 'match' ? event.otherName : undefined,
     conversationId: event.type === 'message' ? event.conversationId : undefined,
   };
 

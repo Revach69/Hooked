@@ -7,14 +7,14 @@ const DISABLE_PERFORMANCE_MONITORING = true; // Disabled for now to avoid errors
 
 // Types for Firebase Performance Web SDK
 interface Trace {
-  putAttribute: (_name: string, _value: string) => void;
-  putMetric: (_name: string, _value: number) => void;
+  putAttribute: (name: string, value: string) => void;
+  putMetric: (name: string, value: number) => void;
   stop: () => void;
 }
 
 interface HttpMetric {
-  setHttpResponseCode: (_code: number) => void;
-  setResponsePayloadSize: (_size: number) => void;
+  setHttpResponseCode: (code: number) => void;
+  setResponsePayloadSize: (size: number) => void;
   stop: () => void;
 }
 
@@ -84,10 +84,10 @@ class FirebasePerformance {
 
       // Use a simple approach without the trace function for now
       const trace: Trace = {
-        putAttribute: (_name: string, _value: string) => {
+        putAttribute: (name: string, value: string) => {
           // Trace attribute set
         },
-        putMetric: (_name: string, _value: number) => {
+        putMetric: (name: string, value: number) => {
                       // Trace metric set
         },
         stop: () => {
@@ -138,10 +138,10 @@ class FirebasePerformance {
       }
 
       const trace: Trace = {
-        putAttribute: (_name: string, _value: string) => {
+        putAttribute: (name: string, value: string) => {
           // Network trace attribute set
         },
-        putMetric: (_name: string, _value: number) => {
+        putMetric: (name: string, value: number) => {
                       // Network trace metric set
         },
         stop: () => {

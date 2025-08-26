@@ -187,14 +187,6 @@ export interface Message {
   updated_at?: string;
 }
 
-export interface ContactShare {
-  id: string;
-  event_id: string;
-  from_profile_id: string;
-  to_profile_id: string;
-  contact_info: string;
-  created_at: string;
-}
 
 export interface EventFeedback {
   id: string;
@@ -567,23 +559,6 @@ export const MessageAPI = {
   }
 };
 
-// Contact Share API
-export const ContactShareAPI = {
-  async create(data: Omit<ContactShare, 'id' | 'created_at'>): Promise<ContactShare> {
-    return firebaseRetry(async () => {
-      const docRef = await addDoc(collection(db, 'contact_shares'), {
-        ...data,
-        created_at: serverTimestamp()
-      });
-      
-      return {
-        id: docRef.id,
-        ...data,
-        created_at: new Date().toISOString()
-      };
-    }, { operation: 'Create contact share' });
-  }
-};
 
 // Event Feedback API
 export const EventFeedbackAPI = {

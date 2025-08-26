@@ -72,22 +72,6 @@ service cloud.firestore {
       allow delete: if true;
     }
     
-    // ===== CONTACT SHARES COLLECTION =====
-    match /contact_shares/{shareId} {
-      // ✅ Everyone can read contact shares
-      allow read: if true;
-      
-      // ✅ Anyone can create contact shares
-      allow create: if true;
-      
-      // ✅ Users can update their own contact shares
-      allow update: if 
-        resource.data.from_profile_id == request.resource.data.from_profile_id;
-      
-      // ✅ Users can delete their own contact shares
-      // Simplified: allow all contact share deletions since mobile app doesn't use Firebase Auth
-      allow delete: if true;
-    }
     
     // ===== EVENT FEEDBACK COLLECTION =====
     match /event_feedback/{feedbackId} {

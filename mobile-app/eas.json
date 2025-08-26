@@ -10,9 +10,12 @@
         "EXPO_PUBLIC_ENV": "development"
       },
       "distribution": "internal",
-      "config": "app.development.json",
+      "node": "22.11.0",
       "ios": {
-        "resourceClass": "m-medium"
+        "resourceClass": "m-medium",
+        "env": {
+          "RCT_NEW_ARCH_ENABLED": "0"
+        }
       },
       "android": {
         "resourceClass": "medium"

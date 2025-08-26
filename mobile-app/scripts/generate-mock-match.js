@@ -267,28 +267,6 @@ async function createSampleMessages(simulatorUser, matchProfile) {
 }
 
 // Create contact share (optional - simulate that they exchanged contact info)
-async function createContactShare(simulatorUser, matchProfile) {
-  console.log('\n📱 Creating contact share...');
-  
-  try {
-    const contactShare = await addDoc(collection(db, 'contact_shares'), {
-      event_id: simulatorUser.event_id,
-      from_profile_id: matchProfile.id,
-      to_profile_id: simulatorUser.id,
-      from_session_id: matchProfile.session_id,
-      to_session_id: simulatorUser.session_id,
-      contact_type: 'phone', // Could be 'phone', 'instagram', 'snapchat', etc.
-      created_at: serverTimestamp()
-    });
-    
-    console.log(`✅ ${matchProfile.first_name} shared contact with ${simulatorUser.first_name}`);
-    
-    return contactShare.id;
-  } catch (error) {
-    console.error('❌ Failed to create contact share:', error.message);
-    throw error;
-  }
-}
 
 // Main function to generate complete mock match
 async function generateMockMatch() {
@@ -308,8 +286,6 @@ async function generateMockMatch() {
     // 4. Create sample conversation
     const messageIds = await createSampleMessages(simulatorUser, matchProfile);
     
-    // 5. Create contact share
-    const contactShareId = await createContactShare(simulatorUser, matchProfile);
     
     // Summary
     console.log('\n' + '='.repeat(60));
@@ -322,13 +298,11 @@ async function generateMockMatch() {
     console.log(`  🏷️  Match Profile: 1`);
     console.log(`  💕 Mutual Likes: 2`);
     console.log(`  💬 Messages: ${messageIds.length}`);
-    console.log(`  📱 Contact Share: 1`);
     
     console.log(`\n🔍 To find in Firebase Console:`);
     console.log(`  Collection: event_profiles -> Document: ${matchProfile.id}`);
     console.log(`  Collection: likes -> Filter by event_id: ${simulatorUser.event_id}`);
     console.log(`  Collection: messages -> Filter by event_id: ${simulatorUser.event_id}`);
-    console.log(`  Collection: contact_shares -> Filter by event_id: ${simulatorUser.event_id}`);
     
     console.log('\n✨ Your simulator should now show this as a match with conversation history!');
     

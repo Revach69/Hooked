@@ -190,8 +190,25 @@ export const NotificationRouter = {
       senderName: ev.type === 'message' ? ev.senderName : undefined,
       isReady: this.isReady(),
       hasSessionId: !!sessionId,
-      currentSessionId: sessionId
+      currentSessionId: sessionId,
+      timestamp: new Date().toISOString()
     });
+    
+    // Additional safety check: Ensure this event is relevant to current session
+    if (ev.type === 'match' && sessionId) {
+      const isRelevantMatch = ev.otherSessionId && (
+        ev.otherSessionId === sessionId || 
+        getCurrentSessionId() === sessionId
+      );
+      if (!isRelevantMatch) {
+        console.log('NotificationRouter: Match event not relevant to current session, skipping:', {
+          eventOtherSessionId: ev.otherSessionId,
+          currentSessionId: sessionId,
+          eventId: ev.id
+        });
+        return;
+      }
+    }
 
     Sentry.addBreadcrumb({
       message: 'NotificationRouter.handleIncoming called',
@@ -323,16 +340,33 @@ export const NotificationRouter = {
         return;
       }
       
-      // Also use memory-based deduplication as backup - use a single key for the entire match
+      // Enhanced memory-based deduplication with better race condition handling
       const singleMatchKey = `match_${matchKey}`;
       const lastShown = seen.get(singleMatchKey);
       
-      if (lastShown && now - lastShown < 30000) { // 30 seconds memory cooldown
+      // Use shorter cooldown for memory deduplication to handle rapid-fire events
+      if (lastShown && now - lastShown < 10000) { // 10 seconds memory cooldown
         console.log(`Already processed this match recently in memory, skipping`);
+        Sentry.addBreadcrumb({
+          message: 'NotificationRouter: Duplicate match notification blocked by memory cache',
+          level: 'info',
+          category: 'notification_deduplication',
+          data: { 
+            matchKey: singleMatchKey, 
+            timeSinceLastShown: now - lastShown,
+            sessions: sessions
+          }
+        });
         return;
       }
       
+      // Set memory marker immediately to prevent race conditions
       seen.set(singleMatchKey, now);
+      
+      // Additional protection: Add a small random delay to prevent simultaneous processing
+      // This helps when multiple listeners trigger at exactly the same time
+      const randomDelay = Math.random() * 100; // 0-100ms
+      await new Promise(resolve => setTimeout(resolve, randomDelay));
 
       if (ev.isCreator) {
         // Creator is always in-app (must be to create match), show Alert
@@ -345,10 +379,27 @@ export const NotificationRouter = {
         });
         Alert.alert(
           "You got Hooked!",
-          'See matches or continue browsing',
+          `Start chatting with ${ev.otherName || 'your match'}!`,
           [
             { text: 'Dismiss', style: 'cancel' },
-            { text: 'See Match', onPress: () => gotoMatches?.() },
+            { 
+              text: 'Start Chat', 
+              onPress: () => {
+                try {
+                  const { router } = require('expo-router');
+                  router.push({
+                    pathname: '/chat',
+                    params: {
+                      matchId: ev.otherSessionId,
+                      matchName: ev.otherName || 'Someone'
+                    }
+                  });
+                } catch (navError) {
+                  console.warn('Failed to navigate to chat from alert, falling back to matches:', navError);
+                  gotoMatches?.();
+                }
+              }
+            },
           ],
           { cancelable: true }
         );
@@ -463,6 +514,32 @@ export const NotificationRouter = {
         }
       } else {
         console.log('NotificationRouter: no senderSessionId available, cannot check mute status');
+      }
+
+      // Content-based message deduplication - only block if exact same message content
+      if (ev.senderSessionId && ev.preview) {
+        const messageKey = `message_${ev.senderSessionId}_${getCurrentSessionId()}_${ev.preview}`;
+        const lastMessageTime = seen.get(messageKey);
+        const now = Date.now();
+        
+        // Only prevent notifications if exact same message content within 30 seconds
+        // This handles server-side duplicate processing, not legitimate consecutive messages
+        if (lastMessageTime && now - lastMessageTime < 30000) {
+          console.log('NotificationRouter: Exact same message content detected, skipping duplicate');
+          Sentry.addBreadcrumb({
+            message: 'NotificationRouter: Duplicate message content blocked',
+            level: 'info',
+            category: 'notification_deduplication',
+            data: { 
+              senderSessionId: ev.senderSessionId,
+              messagePreview: ev.preview?.substring(0, 20),
+              timeSinceLastMessage: now - lastMessageTime
+            }
+          });
+          return;
+        }
+        
+        seen.set(messageKey, now);
       }
 
       const isForeground = getFg?.() ?? false;

@@ -81,21 +81,19 @@ def enableProguardInReleaseBuilds = (findProperty('android.enableProguardInRelea
  */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
-apply from: new File(["node", "--print", "require('path').dirname(require.resolve('@sentry/react-native/package.json'))"].execute().text.trim(), "sentry.gradle")
-
 android {
     ndkVersion rootProject.ext.ndkVersion
 
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.hookedapp.app'
+    namespace "com.hooked"
     defaultConfig {
-        applicationId 'com.hookedapp.app'
+        applicationId "com.hooked"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
-        versionName "1.1.0"
+        versionName "1.0"
     }
     signingConfigs {
         debug {
@@ -177,5 +175,3 @@ dependencies {
         implementation jscFlavor
     }
 }
-
-apply plugin: 'com.google.gms.google-services'

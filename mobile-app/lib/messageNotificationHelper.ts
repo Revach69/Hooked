@@ -14,11 +14,8 @@ const NOTIFICATION_COOLDOWN = 3000; // 3 seconds cooldown
  */
 async function checkIfInCurrentChat(senderSessionId: string): Promise<boolean> {
   try {
-    // Check if there's a way to get the current route from expo-router
-    const { router } = await import('expo-router');
-    
     // Router pathname and params are not directly accessible in expo-router
-    // Use the AsyncStorage fallback approach instead
+    // Use the AsyncStorage fallback approach
     
     // Fallback: Check if we have stored the current chat session
     const currentChatSessionId = await AsyncStorageUtils.getItem<string>('currentChatSessionId');

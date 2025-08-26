@@ -80,7 +80,19 @@ export default function RootLayout() {
       try {
         const data = (response?.notification?.request?.content?.data || {}) as any;
         if (data?.type === 'match') {
-          router.push('/matches');
+          // Route to specific chat with the matched user if we have their session ID
+          if (data?.otherSessionId) {
+            router.push({
+              pathname: '/chat',
+              params: {
+                matchId: data.otherSessionId,
+                matchName: data.otherName || 'Your match'
+              }
+            });
+          } else {
+            // Fallback to matches page if no partner info
+            router.push('/matches');
+          }
         } else if (data?.type === 'message') {
           // Route to specific chat with partner session ID
           if (data?.partnerSessionId) {
@@ -97,24 +109,25 @@ export default function RootLayout() {
     return () => sub.remove();
   }, [router]);
 
-  const handleDeepLink = (url: string) => {
-    try {
-      const { path, queryParams } = Linking.parse(url);
-      
-      // Handle hooked://join?code=XXXXX
-      if (path === 'join' && queryParams?.code) {
-        const code = queryParams.code as string;
-        router.push(`/join?code=${code.toUpperCase()}`);
-      }
-    } catch (error) {
-      console.error('Error handling deep link:', error);
-      Sentry.captureException(error);
-    }
-  };
-
   // 2.6) Deep linking handler for QR codes from native camera
   useEffect(() => {
     if (!appIsReady) return;
+
+    // Move handleDeepLink inside useEffect to avoid dependency issues
+    const handleDeepLink = (url: string) => {
+      try {
+        const { path, queryParams } = Linking.parse(url);
+        
+        // Handle hooked://join?code=XXXXX
+        if (path === 'join' && queryParams?.code) {
+          const code = queryParams.code as string;
+          router.push(`/join?code=${code.toUpperCase()}`);
+        }
+      } catch (error) {
+        console.error('Error handling deep link:', error);
+        Sentry.captureException(error);
+      }
+    };
 
     // Handle initial URL (app was closed)
     Linking.getInitialURL().then((url) => {
@@ -131,7 +144,7 @@ export default function RootLayout() {
     return () => {
       subscription.remove();
     };
-  }, [appIsReady, router, handleDeepLink]);
+  }, [appIsReady, router]);
 
 
 
@@ -265,6 +278,7 @@ export default function RootLayout() {
             screenOptions={{ 
               headerShown: false,
               gestureEnabled: false,  // Disable swipe gestures
+              animation: 'none',      // Disable slide transitions - instant page changes
             }} 
           />
         <Toast 

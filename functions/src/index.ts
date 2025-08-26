@@ -31,15 +31,38 @@ export const cleanupExpiredEvents = onSchedule({
       console.log('Starting expired events cleanup with 30-minute grace period...');
       
       // Get events that expired more than 30 minutes ago and haven't been processed yet
-      const expiredEventsSnapshot = await db
+      // Note: We need to handle both events with expired:false and events without the expired field
+      const expiredEventsSnapshot1 = await db
         .collection('events')
         .where('expires_at', '<', thirtyMinutesAgo)
-        .where('expired', '!=', true) // Only get events that haven't been processed
+        .where('expired', '==', false)
         .get();
       
-      console.log(`Found ${expiredEventsSnapshot.size} expired events to process`);
+      const expiredEventsSnapshot2 = await db
+        .collection('events')
+        .where('expires_at', '<', thirtyMinutesAgo)
+        .get();
       
-      for (const eventDoc of expiredEventsSnapshot.docs) {
+      // Combine and deduplicate events
+      const processedEventIds = new Set();
+      const allExpiredEvents: any[] = [];
+      
+      expiredEventsSnapshot1.docs.forEach(doc => {
+        processedEventIds.add(doc.id);
+        allExpiredEvents.push(doc);
+      });
+      
+      expiredEventsSnapshot2.docs.forEach(doc => {
+        const data = doc.data();
+        // Only include if not already processed and doesn't have expired:true
+        if (!processedEventIds.has(doc.id) && data.expired !== true) {
+          allExpiredEvents.push(doc);
+        }
+      });
+      
+      console.log(`Found ${allExpiredEvents.length} expired events to process`);
+      
+      for (const eventDoc of allExpiredEvents) {
         const eventData = eventDoc.data();
         const eventId = eventDoc.id;
         
@@ -66,7 +89,7 @@ export const cleanupExpiredEvents = onSchedule({
       }
       
       console.log('Expired events cleanup completed successfully');
-      console.log('Processed events:', expiredEventsSnapshot.size);
+      console.log('Processed events:', allExpiredEvents.length);
       
     } catch (error) {
       console.error('Error during expired events cleanup:', error);
@@ -469,6 +492,53 @@ async function fetchSessionTokens(sessionId: string) {
   return Array.from(uniqueTokens);
 }
 
+// Circuit breaker for preventing duplicate notification content
+const notificationCircuitBreaker = new Map<string, { timestamp: number, content?: string }>();
+const NOTIFICATION_DEDUP_MS = 10000; // 10 second window to check for exact duplicates
+
+function shouldSkipNotification(sessionId: string, type: string, sourceId?: string, content?: string): boolean {
+  // Create key based on recipient, type, and source
+  const key = type === 'message' && sourceId 
+    ? `${sessionId}_${type}_${sourceId}` 
+    : `${sessionId}_${type}`;
+    
+  const lastEntry = notificationCircuitBreaker.get(key);
+  const now = Date.now();
+  
+  if (lastEntry && now - lastEntry.timestamp < NOTIFICATION_DEDUP_MS) {
+    // For messages, only skip if the content is exactly the same
+    if (type === 'message' && content && lastEntry.content) {
+      if (content === lastEntry.content) {
+        console.log(`Circuit breaker: Skipping duplicate ${type} notification for ${sessionId} from ${sourceId || 'unknown'} (same content)`);
+        return true;
+      }
+      // Different content from same sender - allow it
+      console.log(`Circuit breaker: Allowing ${type} notification for ${sessionId} from ${sourceId || 'unknown'} (different content)`);
+    } else if (type === 'match') {
+      // For matches, still use time-based deduplication (prevent match spam)
+      console.log(`Circuit breaker: Skipping ${type} notification for ${sessionId} from ${sourceId || 'unknown'} (recent match)`);
+      return true;
+    }
+  }
+  
+  // Store the new notification info
+  notificationCircuitBreaker.set(key, { 
+    timestamp: now, 
+    content: type === 'message' ? content : undefined 
+  });
+  
+  // Clean up old entries to prevent memory leaks
+  if (notificationCircuitBreaker.size > 1000) {
+    const cutoff = now - NOTIFICATION_DEDUP_MS * 2;
+    for (const [k, entry] of notificationCircuitBreaker.entries()) {
+      if (entry.timestamp < cutoff) {
+        notificationCircuitBreaker.delete(k);
+      }
+    }
+  }
+  
+  return false;
+}
 
 async function sendExpoPush(toTokens: string[], payload: { title: string; body?: string; data?: any }) {
   if (!toTokens.length) {
@@ -478,8 +548,30 @@ async function sendExpoPush(toTokens: string[], payload: { title: string; body?:
   for (let i = 0; i < toTokens.length; i += 100) chunks.push(toTokens.slice(i, i + 100));
   const results: any[] = [];
   
-  // Generate aggregation key for deduplication
-  const agg = payload?.data?.aggregationKey || payload?.data?.type || 'default';
+  // Generate specific aggregation key for better deduplication
+  let agg = payload?.data?.aggregationKey;
+  
+  if (!agg) {
+    const notificationData = payload?.data;
+    if (notificationData?.type === 'match') {
+      // Create unique key for match between two users (order independent)
+      const sessions = [notificationData.otherSessionId, notificationData.targetSessionId].filter(Boolean).sort();
+      agg = sessions.length === 2 ? `match_${sessions[0]}_${sessions[1]}` : `match_${notificationData.type}_${Date.now()}`;
+    } else if (notificationData?.type === 'message') {
+      // Use conversation ID or create one from sender/receiver pair
+      if (notificationData.conversationId) {
+        agg = `message_${notificationData.conversationId}`;
+      } else if (notificationData.senderSessionId && notificationData.targetSessionId) {
+        const sessions = [notificationData.senderSessionId, notificationData.targetSessionId].sort();
+        agg = `message_${sessions[0]}_${sessions[1]}`;
+      } else {
+        // Fallback with timestamp to prevent excessive grouping
+        agg = `message_${notificationData.type}_${Date.now().toString().slice(-6)}`;
+      }
+    } else {
+      agg = notificationData?.type || 'default';
+    }
+  }
   
   // Determine Android channel based on notification type
   const notificationType = payload?.data?.type;
@@ -882,40 +974,53 @@ export const onMutualLike = onDocumentWritten({
 
     console.log('onMutualLike: Proceeding with notification logic');
 
-    // SKIP notification for second liker (creator) - they created the match in-app
-    // The second liker who creates the match should NOT get a push notification
-    // They will see an alert/toast in the app instead
-    console.log('Skipping push notification for creator (second liker):', likerSession);
-    console.log('Creator created the match in-app and will see an alert/toast instead');
+    // Check app state for both users to handle edge cases where both might be in background
+    let likerIsForeground = false;
+    let likedIsForeground = false;
 
-    // Send to first liker (recipient) - only if not in foreground
-    {
-      console.log('Checking app state for recipient (first liker):', likedSession);
-      let isForeground = false;
-      let appState = null;
+    // Check second liker (creator) app state
+    try {
+      const likerAppStateDoc = await admin.firestore().collection('app_states').doc(likerSession).get();
+      const likerAppState = likerAppStateDoc.exists ? likerAppStateDoc.data() as any : null;
       
-      try {
-        const appStateDoc = await admin.firestore().collection('app_states').doc(likedSession).get();
-        appState = appStateDoc.exists ? appStateDoc.data() as any : null;
-        
-        if (appState?.isForeground === true && appState?.updatedAt) {
-          // Check if app state is recent (within 30 seconds for better reliability)
-          const APP_STATE_TTL_SECONDS = 30;
-          const appStateAge = Date.now() - appState.updatedAt.toDate().getTime();
-          const isRecent = appStateAge < (APP_STATE_TTL_SECONDS * 1000);
-          
-          isForeground = isRecent;
-        } else {
-          isForeground = false;
-        }
-      } catch (error) {
-        console.log('Error reading app state for recipient, assuming not in foreground:', error);
-        isForeground = false;
+      if (likerAppState?.isForeground === true && likerAppState?.updatedAt) {
+        const APP_STATE_TTL_SECONDS = 30;
+        const appStateAge = Date.now() - likerAppState.updatedAt.toDate().getTime();
+        likerIsForeground = appStateAge < (APP_STATE_TTL_SECONDS * 1000);
       }
+    } catch (error) {
+      console.log('Error reading app state for liker (creator), assuming foreground:', error);
+      likerIsForeground = true; // Default assumption: creator is in foreground
+    }
+
+    console.log('Liker (creator) app state:', { likerSession, isForeground: likerIsForeground });
+
+    // Check first liker (recipient) app state
+    try {
+      const appStateDoc = await admin.firestore().collection('app_states').doc(likedSession).get();
+      const appState = appStateDoc.exists ? appStateDoc.data() as any : null;
       
-      console.log('Recipient app state:', { isForeground, appState });
-      
-      if (!isForeground) {
+      if (appState?.isForeground === true && appState?.updatedAt) {
+        const APP_STATE_TTL_SECONDS = 30;
+        const appStateAge = Date.now() - appState.updatedAt.toDate().getTime();
+        likedIsForeground = appStateAge < (APP_STATE_TTL_SECONDS * 1000);
+      }
+    } catch (error) {
+      console.log('Error reading app state for recipient, assuming not in foreground:', error);
+      likedIsForeground = false;
+    }
+    
+    console.log('Recipient app state:', { likedSession, isForeground: likedIsForeground });
+
+    // Send notifications based on app state
+    // First liker (recipient) - send if not in foreground
+    if (!likedIsForeground) {
+        // Apply circuit breaker to prevent notification spam
+        if (shouldSkipNotification(likedSession, 'match', likerSession)) {
+          console.log('Circuit breaker: Skipping match notification for recipient due to cooldown');
+          return;
+        }
+        
         console.log('Enqueuing match notification for recipient (not in foreground)');
         await enqueueNotificationJob({
           type: 'match',
@@ -936,6 +1041,36 @@ export const onMutualLike = onDocumentWritten({
       } else {
         console.log('Recipient is in foreground - client will handle notification');
       }
+
+    // Second liker (creator) - send if not in foreground (edge case handling)
+    // This handles scenarios where the creator might also be in background
+    if (!likerIsForeground) {
+      console.log('Creator is also in background - sending notification to creator too');
+      
+      // Apply circuit breaker to prevent notification spam
+      if (shouldSkipNotification(likerSession, 'match', likedSession)) {
+        console.log('Circuit breaker: Skipping match notification for creator due to cooldown');
+      } else {
+        console.log('Enqueuing match notification for creator (also in background)');
+        await enqueueNotificationJob({
+          type: 'match',
+          event_id: eventId,
+          subject_session_id: likerSession,
+          actor_session_id: likedSession, // Other user becomes the "actor" from creator's perspective
+          payload: {
+            title: 'You got Hooked!',
+            body: 'You got a match! Tap to start chatting.',
+            data: { 
+              type: 'match', 
+              otherSessionId: likedSession,
+              aggregationKey: `match:${eventId}:${likerSession}`
+            }
+          },
+          aggregationKey: `match:${eventId}:${likerSession}`
+        });
+      }
+    } else {
+      console.log('Creator is in foreground - client will handle notification with alert/toast');
     }
   });
 
@@ -1349,6 +1484,57 @@ export const sendCrossDeviceNotification = onCall(async (request) => {
 
       if (tokens.length === 0) {
         return { success: false, error: 'No push tokens found for target session' };
+      }
+
+      // Check if user is in foreground to avoid duplicate notifications
+      try {
+        const appStateDoc = await admin.firestore().collection('app_states').doc(targetSessionId).get();
+        const appState = appStateDoc.data();
+        
+        if (appState) {
+          const isInForeground = appState.isForeground === true;
+          const stateAge = Date.now() - (appState.updatedAt?.toMillis?.() || 0);
+          const isRecentState = stateAge < 15000; // State updated within last 15 seconds
+          
+          console.log('sendCrossDeviceNotification: App state check:', {
+            targetSessionId,
+            isInForeground,
+            stateAge,
+            isRecentState,
+            type
+          });
+          
+          // Skip push notification if user is actively using the app
+          // Exception: Always send urgent notifications
+          if (isInForeground && isRecentState && type !== 'urgent') {
+            console.log('sendCrossDeviceNotification: User is in foreground, skipping push notification');
+            return { 
+              success: true, 
+              skipped: true, 
+              reason: 'user_in_foreground',
+              message: 'User is actively using the app, client-side notification will handle this'
+            };
+          }
+        }
+      } catch (appStateError) {
+        console.warn('Error checking app state, proceeding with notification:', appStateError);
+        // Continue with notification if app state check fails
+      }
+
+      // Apply circuit breaker to prevent duplicate notification content
+      // For messages, include sender ID and message content for exact duplicate detection
+      const sourceId = type === 'message' ? senderSessionId : undefined;
+      const messageContent = type === 'message' ? body : undefined;
+      
+      if (shouldSkipNotification(targetSessionId, type, sourceId, messageContent)) {
+        return { 
+          success: true, 
+          skipped: true, 
+          reason: type === 'message' ? 'duplicate_content' : 'recent_match',
+          message: type === 'message' 
+            ? 'Notification skipped - duplicate message content' 
+            : 'Notification skipped - recent match notification'
+        };
       }
 
       // Prepare notification payload

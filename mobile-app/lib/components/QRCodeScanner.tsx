@@ -4,7 +4,7 @@ import { Camera, CameraView } from 'expo-camera';
 import { X } from 'lucide-react-native';
 
 interface QRCodeScannerProps {
-  onScan: (data: string) => void;
+  onScan: (eventCode: string) => void;
   onClose: () => void;
 }
 
@@ -21,7 +21,7 @@ export default function QRCodeScanner({ onScan, onClose }: QRCodeScannerProps) {
     getCameraPermissions();
   }, []);
 
-  const handleBarCodeScanned = ({ type, data }: { type: string; data: string }) => {
+  const handleBarCodeScanned = ({ type: _type, data }: { type: string; data: string }) => {
     setScanned(true);
     
     // Extract code from QR data
@@ -43,7 +43,7 @@ export default function QRCodeScanner({ onScan, onClose }: QRCodeScannerProps) {
         // If no code found, just pass the raw data
         onScan(data);
       }
-    } catch (error) {
+    } catch {
       // If URL parsing fails, treat as plain text
       onScan(data);
     }
@@ -111,7 +111,7 @@ export default function QRCodeScanner({ onScan, onClose }: QRCodeScannerProps) {
   );
 }
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 const scanAreaSize = width * 0.7;
 
 const styles = StyleSheet.create({

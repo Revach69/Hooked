@@ -5,7 +5,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
-  ActivityIndicator,
   StyleSheet,
   Dimensions,
   AppState,
@@ -22,12 +21,14 @@ import * as Sentry from '@sentry/react-native';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { ImageCacheService } from '../lib/services/ImageCacheService';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebaseConfig';
 import UserProfileModal from '../lib/UserProfileModal';
+import CountdownTimer from '../lib/components/CountdownTimer';
 
 import { updateUserActivity } from '../lib/messageNotificationHelper';
 import { usePerformanceMonitoring } from '../lib/hooks/usePerformanceMonitoring';
+import { GlobalDataCache, CacheKeys } from '../lib/cache/GlobalDataCache';
 
 // Dual Handle Range Slider Component
 interface DualHandleRangeSliderProps {
@@ -35,7 +36,7 @@ interface DualHandleRangeSliderProps {
   max: number;
   minValue: number;
   maxValue: number;
-  onValueChange: (min: number, max: number) => void;
+  onValueChange: (minValue: number, maxValue: number) => void;
 }
 
 const DualHandleRangeSlider: React.FC<DualHandleRangeSliderProps> = ({
@@ -50,6 +51,8 @@ const DualHandleRangeSlider: React.FC<DualHandleRangeSliderProps> = ({
   
   const [sliderWidth, setSliderWidth] = React.useState(300);
   const [dragging, setDragging] = React.useState<'min' | 'max' | null>(null);
+  const sliderRef = React.useRef<View>(null);
+  const [sliderX, setSliderX] = React.useState(0);
   
   const getThumbPosition = (value: number) => {
     return ((value - min) / (max - min)) * sliderWidth;
@@ -61,14 +64,16 @@ const DualHandleRangeSlider: React.FC<DualHandleRangeSliderProps> = ({
   };
   
   const handlePanGestureEvent = (event: any, thumb: 'min' | 'max') => {
-    const { locationX } = event.nativeEvent;
-    const newValue = getValueFromPosition(locationX);
+    const { pageX } = event.nativeEvent;
+    const relativeX = pageX - sliderX;
+    const clampedX = Math.max(0, Math.min(sliderWidth, relativeX));
+    const newValue = getValueFromPosition(clampedX);
     
     if (thumb === 'min') {
-      const newMinValue = Math.max(min, Math.min(newValue, maxValue - 1));
+      const newMinValue = Math.round(Math.max(min, Math.min(newValue, maxValue - 1)));
       onValueChange(newMinValue, maxValue);
     } else {
-      const newMaxValue = Math.min(max, Math.max(newValue, minValue + 1));
+      const newMaxValue = Math.round(Math.min(max, Math.max(newValue, minValue + 1)));
       onValueChange(minValue, newMaxValue);
     }
   };
@@ -84,12 +89,18 @@ const DualHandleRangeSlider: React.FC<DualHandleRangeSliderProps> = ({
       marginTop: 8,
     }}>
       <View
+        ref={sliderRef}
         style={{
           height: 6,
           backgroundColor: isDark ? '#404040' : '#e5e7eb',
           borderRadius: 3,
         }}
-        onLayout={(event) => setSliderWidth(event.nativeEvent.layout.width)}
+        onLayout={(event) => {
+          setSliderWidth(event.nativeEvent.layout.width);
+          sliderRef.current?.measure((x, y, width, height, pageX) => {
+            setSliderX(pageX);
+          });
+        }}
       >
         {/* Active track between thumbs */}
         <View
@@ -157,13 +168,6 @@ const { width } = Dimensions.get('window');
 const gap = 8;
 const cardSize = (width - 64 - gap * 2) / 3; // 3 columns with 16px padding on each side and 8px gap between cards
 
-const BASIC_INTERESTS = [
-  'music', 'tech', 'food', 'books', 'travel', 'art', 'fitness', 'nature', 'movies', 'business', 'photography', 'dancing'
-];
-
-const EXTENDED_INTERESTS = [
-  'yoga', 'gaming', 'comedy', 'startups', 'fashion', 'spirituality', 'volunteering', 'crypto', 'cocktails', 'politics', 'hiking', 'design', 'podcasts', 'pets', 'wellness'
-];
 
 
 
@@ -188,21 +192,18 @@ export default function Discovery() {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [filters, setFilters] = useState({
     age_min: 18,
-    age_max: 99,
-    interests: [] as string[]
+    age_max: 99
   });
   const [tempFilters, setTempFilters] = useState({
     age_min: 18,
-    age_max: 99,
-    interests: [] as string[]
+    age_max: 99
   });
   const [showFilters, setShowFilters] = useState(false);
-  const [showExtendedInterests, setShowExtendedInterests] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const [likedProfiles, setLikedProfiles] = useState(new Set<string>());
   const [blockedProfiles, setBlockedProfiles] = useState(new Set<string>());
   const [skippedProfiles, setSkippedProfiles] = useState(new Set<string>());
   const [selectedProfileForDetail, setSelectedProfileForDetail] = useState<any>(null);
+  const [viewedProfiles, setViewedProfiles] = useState(new Set<string>());
   const [isAppActive, setIsAppActive] = useState(true);
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
   const [cachedImageUris, setCachedImageUris] = useState<Map<string, string>>(new Map());
@@ -229,19 +230,36 @@ export default function Discovery() {
     setCurrentSessionId(sessionId);
     
     try {
-      // Add timeout to prevent hanging indefinitely
-      const eventTimeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Event loading timeout')), 15000); // 15 second timeout
-      });
+      let eventData = null;
       
-      const eventPromise = EventAPI.filter({ id: eventId });
-      const events = await Promise.race([eventPromise, eventTimeoutPromise]);
+      // Check cache first for event data
+      const cachedEvent = GlobalDataCache.get<any>(CacheKeys.DISCOVERY_EVENT);
+      if (cachedEvent && cachedEvent.id === eventId) {
+        setCurrentEvent(cachedEvent);
+        eventData = cachedEvent;
+        console.log('Discovery: Using cached event data');
+      } else {
+        // Add timeout to prevent hanging indefinitely
+        const eventTimeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('Event loading timeout')), 30000); // 30 second timeout - give more time
+        });
+        
+        const eventPromise = EventAPI.filter({ id: eventId });
+        const events = await Promise.race([eventPromise, eventTimeoutPromise]);
+        
+        if (events.length > 0) {
+          eventData = events[0];
+          setCurrentEvent(eventData);
+          GlobalDataCache.set(CacheKeys.DISCOVERY_EVENT, eventData, 10 * 60 * 1000); // Cache for 10 minutes
+          console.log('Discovery: Loaded and cached event data');
+        }
+      }
       
-      if (events.length > 0) {
-        setCurrentEvent(events[0]);
-        // Load blocked and skipped profiles
+      if (eventData) {
+        // Load blocked, skipped, and viewed profiles (with their own caching)
         await loadBlockedProfiles(eventId, sessionId);
         await loadSkippedProfiles(eventId, sessionId);
+        await loadViewedProfiles(eventId);
       } else {
         // Event doesn't exist - clear only after confirmation
         console.log('Event not found in discovery, clearing session data');
@@ -257,28 +275,40 @@ export default function Discovery() {
       }
 
       // Verify that the user's profile actually exists in the database
-      const profileTimeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Profile loading timeout')), 15000); // 15 second timeout
-      });
+      const cacheKey = `${CacheKeys.DISCOVERY_CURRENT_USER}_${sessionId}`;
+      const cachedUserProfile = GlobalDataCache.get<any>(cacheKey);
       
-      const profilePromise = EventProfileAPI.filter({
-        event_id: eventId,
-        session_id: sessionId
-      });
-      const userProfiles = await Promise.race([profilePromise, profileTimeoutPromise]);
+      if (cachedUserProfile) {
+        setCurrentUserProfile(cachedUserProfile);
+        console.log('Discovery: Using cached user profile');
+      } else {
+        const profileTimeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('Profile loading timeout')), 30000); // 30 second timeout - give more time
+        });
+        
+        const profilePromise = EventProfileAPI.filter({
+          event_id: eventId,
+          session_id: sessionId
+        });
+        const userProfiles = await Promise.race([profilePromise, profileTimeoutPromise]);
 
-      if (userProfiles.length === 0) {
-        // Profile doesn't exist in database (user left event and deleted profile)
-        console.log('User profile not found in discovery, clearing session data');
-        await AsyncStorageUtils.multiRemove([
-          'currentEventId',
-          'currentSessionId',
-          'currentEventCode',
-          'currentProfileColor',
-          'currentProfilePhotoUrl'
-        ]);
-        router.replace('/home');
-        return;
+        if (userProfiles.length === 0) {
+          // Profile doesn't exist in database (user left event and deleted profile)
+          console.log('User profile not found in discovery, clearing session data');
+          await AsyncStorageUtils.multiRemove([
+            'currentEventId',
+            'currentSessionId',
+            'currentEventCode',
+            'currentProfileColor',
+            'currentProfilePhotoUrl'
+          ]);
+          router.replace('/home');
+          return;
+        } else {
+          setCurrentUserProfile(userProfiles[0]);
+          GlobalDataCache.set(cacheKey, userProfiles[0], 5 * 60 * 1000); // Cache for 5 minutes
+          console.log('Discovery: Loaded and cached user profile');
+        }
       }
       
       // For photos set up display, we need to check if profilePhotoUrl is in storage
@@ -293,21 +323,23 @@ export default function Discovery() {
     } catch (error) {
       Sentry.captureException(error);
       
-      // Only clear data if we're certain something is wrong
-      // For network errors, just redirect without clearing
+      // Handle errors gracefully without losing user session
       if (error instanceof Error && error.message === 'Event loading timeout') {
-        console.log('Event loading timed out - redirecting to home but keeping session data');
+        console.log('Event loading timed out - continuing with cached data if available');
+        // Don't redirect - let the user continue using the app
+        // The cached data should still work
+        return;
       } else if (error instanceof Error && error.message === 'Profile loading timeout') {
-        console.log('Profile loading timed out - redirecting to home but keeping session data');
+        console.log('Profile loading timed out - continuing with cached data if available');
+        // Don't redirect - let the user continue using the app
+        return;
       } else {
         console.error('Error in initializeSession:', error);
+        // For other errors, still don't redirect immediately
+        // Let the user stay on the page - they can manually navigate if needed
+        return;
       }
-      
-      // Redirect to home but don't clear session data
-      router.replace('/home');
-      return;
     }
-    setIsLoading(false);
   }, []);
 
   // Use initializeSession in useEffect
@@ -400,6 +432,105 @@ export default function Discovery() {
     }
   }, [currentEvent?.id, currentSessionId, currentUserProfile?.id]);
 
+  // Define setupOtherListeners before it's used
+  const setupOtherListeners = useCallback(() => {
+    if (!currentEvent?.id || !currentSessionId) return;
+
+    // Prevent multiple listener creation
+    if (listenersRef.current.otherProfiles || listenersRef.current.likes) {
+      return;
+    }
+
+    try {
+      // 2. Other visible profiles listener
+      const otherProfilesQuery = query(
+        collection(db, 'event_profiles'),
+        where('event_id', '==', currentEvent.id),
+        where('is_visible', '==', true)
+      );
+
+      // Check for cached profiles first to show immediately - both profiles and filtered profiles
+      const cachedProfiles = GlobalDataCache.get<any[]>(CacheKeys.DISCOVERY_PROFILES);
+      const cachedFilteredProfiles = GlobalDataCache.get<any[]>(`${CacheKeys.DISCOVERY_PROFILES}_filtered`);
+      
+      if (cachedProfiles && Array.isArray(cachedProfiles)) {
+        setProfiles(cachedProfiles);
+        console.log('Discovery: Using cached profiles for instant display');
+        
+        // Also set filtered profiles immediately to prevent visual reordering
+        if (cachedFilteredProfiles && Array.isArray(cachedFilteredProfiles)) {
+          setFilteredProfiles(cachedFilteredProfiles);
+          console.log('Discovery: Using cached filtered profiles to prevent reordering');
+        }
+      }
+
+      const otherProfilesUnsubscribe = onSnapshot(otherProfilesQuery, (otherSnapshot) => {
+        try {
+          const allVisibleProfiles = otherSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as any[];
+          const otherUsersProfiles = allVisibleProfiles.filter(p => 
+            p.session_id !== currentSessionId
+          );
+          setProfiles(otherUsersProfiles);
+          
+          // Cache the fresh data for next time
+          GlobalDataCache.set(CacheKeys.DISCOVERY_PROFILES, otherUsersProfiles, 2 * 60 * 1000); // Cache for 2 minutes
+        } catch (error) {
+          Sentry.captureException(error);
+        }
+              }, (error) => {
+          Sentry.captureException(error);
+        });
+
+      listenersRef.current.otherProfiles = otherProfilesUnsubscribe;
+
+      // 3. Likes listener
+      const likesQuery = query(
+        collection(db, 'likes'),
+        where('event_id', '==', currentEvent.id),
+        where('liker_session_id', '==', currentSessionId)
+      );
+
+      const likesUnsubscribe = onSnapshot(likesQuery, (snapshot) => {
+        try {
+          const likes = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as any[];
+          
+          setLikedProfiles(new Set(likes.map(like => like.liked_session_id)));
+        } catch (error) {
+          Sentry.captureException(error);
+        }
+              }, (error) => {
+          Sentry.captureException(error);
+        });
+
+      listenersRef.current.likes = likesUnsubscribe;
+
+      // 4. Mutual matches listener - for real-time match notifications (handled globally in _layout.tsx)
+      const mutualMatchesQuery = query(
+        collection(db, 'likes'),
+        where('event_id', '==', currentEvent.id),
+        where('is_mutual', '==', true)
+      );
+
+      const mutualMatchesUnsubscribe = onSnapshot(mutualMatchesQuery, async () => {
+        // Match notifications are now handled globally in _layout.tsx
+        // This listener is kept for any future local match-related functionality
+      }, (error) => {
+        Sentry.captureException(error);
+      });
+
+      listenersRef.current.mutualMatches = mutualMatchesUnsubscribe;
+
+    } catch (error) {
+      Sentry.captureException(error);
+    }
+  }, [currentEvent?.id, currentSessionId]);
+
   // Consolidated listener setup with proper cleanup
   useEffect(() => {
     if (!currentEvent?.id || !currentSessionId) {
@@ -470,87 +601,8 @@ export default function Discovery() {
     return () => {
       cleanupAllListeners();
     };
-  }, [currentEvent?.id, currentSessionId]);
+  }, [currentEvent?.id, currentSessionId, setupOtherListeners]);
 
-  function setupOtherListeners() {
-    if (!currentEvent?.id || !currentSessionId) return;
-
-    // Prevent multiple listener creation
-    if (listenersRef.current.otherProfiles || listenersRef.current.likes) {
-      return;
-    }
-
-    try {
-      // 2. Other visible profiles listener
-      const otherProfilesQuery = query(
-        collection(db, 'event_profiles'),
-        where('event_id', '==', currentEvent.id),
-        where('is_visible', '==', true)
-      );
-
-      const otherProfilesUnsubscribe = onSnapshot(otherProfilesQuery, (otherSnapshot) => {
-        try {
-          const allVisibleProfiles = otherSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          })) as any[];
-          const otherUsersProfiles = allVisibleProfiles.filter(p => 
-            p.session_id !== currentSessionId && !blockedProfiles.has(p.session_id)
-          );
-          setProfiles(otherUsersProfiles);
-        } catch (error) {
-          Sentry.captureException(error);
-        }
-              }, (error) => {
-          Sentry.captureException(error);
-        });
-
-      listenersRef.current.otherProfiles = otherProfilesUnsubscribe;
-
-      // 3. Likes listener
-      const likesQuery = query(
-        collection(db, 'likes'),
-        where('event_id', '==', currentEvent.id),
-        where('liker_session_id', '==', currentSessionId)
-      );
-
-      const likesUnsubscribe = onSnapshot(likesQuery, (snapshot) => {
-        try {
-          const likes = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          })) as any[];
-          
-          setLikedProfiles(new Set(likes.map(like => like.liked_session_id)));
-        } catch (error) {
-          Sentry.captureException(error);
-        }
-              }, (error) => {
-          Sentry.captureException(error);
-        });
-
-      listenersRef.current.likes = likesUnsubscribe;
-
-      // 4. Mutual matches listener - for real-time match notifications (handled globally in _layout.tsx)
-      const mutualMatchesQuery = query(
-        collection(db, 'likes'),
-        where('event_id', '==', currentEvent.id),
-        where('is_mutual', '==', true)
-      );
-
-      const mutualMatchesUnsubscribe = onSnapshot(mutualMatchesQuery, async () => {
-        // Match notifications are now handled globally in _layout.tsx
-        // This listener is kept for any future local match-related functionality
-      }, (error) => {
-        Sentry.captureException(error);
-      });
-
-      listenersRef.current.mutualMatches = mutualMatchesUnsubscribe;
-
-    } catch (error) {
-      Sentry.captureException(error);
-    }
-  }
 
   const cleanupAllListeners = () => {
     try {
@@ -622,10 +674,133 @@ export default function Discovery() {
     }
   };
 
+  const loadViewedProfiles = async (eventId: string) => {
+    try {
+      const viewedKey = `viewedProfiles_${eventId}`;
+      const viewedData = await AsyncStorageUtils.getItem<string[]>(viewedKey);
+      if (viewedData && Array.isArray(viewedData)) {
+        setViewedProfiles(new Set(viewedData));
+      }
+    } catch (error) {
+      console.error('Error loading viewed profiles:', error);
+    }
+  };
+
+  const saveViewedProfiles = async (eventId: string, viewedSet: Set<string>) => {
+    try {
+      const viewedKey = `viewedProfiles_${eventId}`;
+      await AsyncStorageUtils.setItem(viewedKey, Array.from(viewedSet));
+    } catch (error) {
+      console.error('Error saving viewed profiles:', error);
+    }
+  };
+
   // Apply filters whenever profiles, user profile, filters, or profile states change
   useEffect(() => {
+    // Only skip re-filtering in specific cases to prevent visual reordering
+    // Skip if we just set filtered profiles from cache and nothing significant has changed
+    const cachedFilteredProfiles = GlobalDataCache.get<any[]>(`${CacheKeys.DISCOVERY_PROFILES}_filtered`);
+    
+    // Skip re-filtering only in very specific initial load case
+    // Don't skip if likedProfiles or viewedProfiles have changed (need fresh sorting)
+    const hasInteractionChanges = likedProfiles.size > 0 || viewedProfiles.size > 0;
+    
+    if (cachedFilteredProfiles && 
+        filteredProfiles.length === cachedFilteredProfiles.length && 
+        filteredProfiles.length > 0 &&
+        currentUserProfile &&
+        profiles.length > 0 &&
+        !hasInteractionChanges) {
+      console.log('Discovery: Skipping re-filter to prevent visual reordering (no interactions yet)');
+      return;
+    }
+    
+    // Sort profiles by priority (move inside to avoid dependency issues)
+    function sortProfilesByPriority(profilesList: any[]) {
+      return [...profilesList].sort((a, b) => {
+        const aIsLiked = likedProfiles.has(a.session_id);
+        const bIsLiked = likedProfiles.has(b.session_id);
+        const aIsViewed = viewedProfiles.has(a.session_id);
+        const bIsViewed = viewedProfiles.has(b.session_id);
+
+        // Priority 1: Liked profiles at the top
+        if (aIsLiked && !bIsLiked) return -1;
+        if (!aIsLiked && bIsLiked) return 1;
+
+        // If both are liked or both are not liked, continue to next criteria
+        if (aIsLiked === bIsLiked) {
+          // Priority 2: Unseen profiles before seen profiles
+          if (!aIsViewed && bIsViewed) return -1;
+          if (aIsViewed && !bIsViewed) return 1;
+
+          // Priority 3: Within same group (both unseen or both seen), sort by join date
+          // Earlier joined users appear first (ascending order by created_at)
+          if (a.created_at && b.created_at) {
+            const aJoinTime = a.created_at.toDate ? a.created_at.toDate().getTime() : new Date(a.created_at).getTime();
+            const bJoinTime = b.created_at.toDate ? b.created_at.toDate().getTime() : new Date(b.created_at).getTime();
+            return aJoinTime - bJoinTime; // Earlier join time first
+          }
+
+          // Fallback: if no join date available, maintain current order
+          return 0;
+        }
+
+        return 0;
+      });
+    }
+
+    // Apply filters (move inside to avoid dependency issues)
+    function applyFilters() {
+      if (!currentUserProfile) {
+        setFilteredProfiles([]);
+        return;
+      }
+
+      let tempFiltered = profiles.filter(otherUser => {
+        // Filter out skipped profiles completely
+        if (skippedProfiles.has(otherUser.session_id)) {
+          return false;
+        }
+
+        // Mutual Gender Interest Check - based on user's profile preferences
+        // Add defensive checks for missing fields
+        const iAmInterestedInOther =
+          !currentUserProfile.interested_in || 
+          currentUserProfile.interested_in === 'everyone' ||
+          (currentUserProfile.interested_in === 'men' && otherUser.gender_identity === 'man') ||
+          (currentUserProfile.interested_in === 'women' && otherUser.gender_identity === 'woman');
+
+        const otherIsInterestedInMe =
+          !otherUser.interested_in ||
+          otherUser.interested_in === 'everyone' ||
+          (otherUser.interested_in === 'men' && currentUserProfile.gender_identity === 'man') ||
+          (otherUser.interested_in === 'women' && currentUserProfile.gender_identity === 'woman');
+        
+        if (!iAmInterestedInOther || !otherIsInterestedInMe) {
+          return false;
+        }
+
+        // Age Range Filter - add defensive check for missing age
+        if (otherUser.age && !(otherUser.age >= filters.age_min && otherUser.age <= filters.age_max)) {
+          return false;
+        }
+
+        
+        return true;
+      });
+
+      // Apply priority-based sorting
+      const sortedProfiles = sortProfilesByPriority(tempFiltered);
+
+      setFilteredProfiles(sortedProfiles);
+      console.log('Discovery: Applied fresh filtering and sorting');
+      
+      // Cache the sorted filtered profiles to prevent visual reordering on next load
+      GlobalDataCache.set(`${CacheKeys.DISCOVERY_PROFILES}_filtered`, sortedProfiles, 2 * 60 * 1000);
+    }
+
     applyFilters();
-  }, [profiles, currentUserProfile, filters, likedProfiles, skippedProfiles]);
+  }, [profiles, currentUserProfile, filters, likedProfiles, skippedProfiles, viewedProfiles]);
 
   // Cache profile images when profiles change
   useEffect(() => {
@@ -659,72 +834,6 @@ export default function Discovery() {
 
   // Duplicate initializeSession function removed - already defined above
 
-  function sortProfilesByPriority(profilesList: any[]) {
-    return [...profilesList].sort((a, b) => {
-      const aIsLiked = likedProfiles.has(a.session_id);
-      const bIsLiked = likedProfiles.has(b.session_id);
-      const aIsSkipped = skippedProfiles.has(a.session_id);
-      const bIsSkipped = skippedProfiles.has(b.session_id);
-
-      // Priority 1: Liked profiles at the top
-      if (aIsLiked && !bIsLiked) return -1;
-      if (!aIsLiked && bIsLiked) return 1;
-
-      // Priority 2: Skipped profiles at the bottom
-      if (aIsSkipped && !bIsSkipped) return 1;
-      if (!aIsSkipped && bIsSkipped) return -1;
-
-      // Priority 3: For profiles in the same category, maintain created_at desc order (already sorted by Firestore)
-      // Since Firestore already orders by created_at desc, we don't need to sort again
-      return 0;
-    });
-  }
-
-  function applyFilters() {
-    if (!currentUserProfile) {
-      setFilteredProfiles([]);
-      return;
-    }
-
-    let tempFiltered = profiles.filter(otherUser => {
-      // Mutual Gender Interest Check - based on user's profile preferences
-      // Add defensive checks for missing fields
-      const iAmInterestedInOther =
-        !currentUserProfile.interested_in || 
-        currentUserProfile.interested_in === 'everyone' ||
-        (currentUserProfile.interested_in === 'men' && otherUser.gender_identity === 'man') ||
-        (currentUserProfile.interested_in === 'women' && otherUser.gender_identity === 'woman');
-
-      const otherIsInterestedInMe =
-        !otherUser.interested_in ||
-        otherUser.interested_in === 'everyone' ||
-        (otherUser.interested_in === 'men' && currentUserProfile.gender_identity === 'man') ||
-        (otherUser.interested_in === 'women' && currentUserProfile.gender_identity === 'woman');
-      
-      if (!iAmInterestedInOther || !otherIsInterestedInMe) {
-        return false;
-      }
-
-      // Age Range Filter - add defensive check for missing age
-      if (otherUser.age && !(otherUser.age >= filters.age_min && otherUser.age <= filters.age_max)) {
-        return false;
-      }
-
-      // Shared Interests Filter
-      if (filters.interests.length > 0) {
-        if (!otherUser.interests?.some((interest: any) => filters.interests.includes(interest))) {
-          return false;
-        }
-      }
-      
-      return true;
-    });
-
-    // Apply priority-based sorting
-    const sortedProfiles = sortProfilesByPriority(tempFiltered);
-
-    setFilteredProfiles(sortedProfiles);
-  }
 
   const handleLike = async (likedProfile: any) => {
     if (likedProfiles.has(likedProfile.session_id) || !currentUserProfile) return;
@@ -733,7 +842,7 @@ export default function Discovery() {
     if (skippedProfiles.has(likedProfile.session_id)) {
       Alert.alert(
         'Cannot Like',
-        'You cannot like a profile you have skipped. You can find skipped profiles in the discovery page with a gray overlay.',
+        'You cannot like a profile you have skipped.',
         [{ text: 'OK' }]
       );
       return;
@@ -764,6 +873,9 @@ export default function Discovery() {
     try {
       // Optimistically update UI
       setLikedProfiles(prev => new Set([...prev, likedProfile.session_id]));
+      
+      // Clear cached filtered profiles to trigger fresh sorting
+      GlobalDataCache.clear(`${CacheKeys.DISCOVERY_PROFILES}_filtered`);
 
       const newLike = await trackAsyncOperation('create_like', async () => {
         return await LikeAPI.create({
@@ -829,6 +941,9 @@ export default function Discovery() {
         return newSet;
       });
       
+      // Clear cached filtered profiles to trigger fresh sorting
+      GlobalDataCache.clear(`${CacheKeys.DISCOVERY_PROFILES}_filtered`);
+      
       // Show user-friendly error message
       Alert.alert(
         'Error',
@@ -893,35 +1008,24 @@ export default function Discovery() {
   };
   
   const handleProfileTap = (profile: any) => {
+    console.log('Discovery: Profile tapped, setting selectedProfileForDetail to:', profile.first_name);
     setSelectedProfileForDetail(profile);
   };
 
 
 
-  const handleToggleInterest = (interest: string) => {
-    let newInterests = [...tempFilters.interests];
-    if (newInterests.includes(interest)) {
-      newInterests = newInterests.filter(i => i !== interest);
-    } else if (newInterests.length < 3) {
-      newInterests.push(interest);
-    }
-    setTempFilters(prev => ({ ...prev, interests: newInterests }));
-  };
 
   const handleApplyFilters = () => {
     setFilters(tempFilters);
     setShowFilters(false);
-    setShowExtendedInterests(false);
   };
 
   const handleResetFilters = () => {
     const resetFilters = {
       age_min: 18,
-      age_max: 99,
-      interests: []
+      age_max: 99
     };
     setTempFilters(resetFilters);
-    setShowExtendedInterests(false);
   };
 
   const handleOpenFilters = () => {
@@ -932,7 +1036,6 @@ export default function Discovery() {
   const handleCancelFilters = () => {
     setTempFilters(filters); // Reset temp filters to current filters
     setShowFilters(false);
-    setShowExtendedInterests(false);
   };
 
   const styles = StyleSheet.create({
@@ -1008,15 +1111,24 @@ export default function Discovery() {
       shadowRadius: 4,
       elevation: 2,
     },
+    profileCardUnviewed: {
+      shadowColor: '#8b5cf6',
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: isDark ? 0.5 : 0.4,
+      shadowRadius: 12,
+      elevation: 8,
+      backgroundColor: isDark ? '#2d1b3d' : '#faf5ff',
+    },
     profileImageContainer: {
       width: cardSize - 12,
       height: cardSize - 12,
       borderRadius: 12,
       overflow: 'hidden',
-      marginBottom: 8,
+      marginBottom: 6, // Reduced to lower the name
       backgroundColor: isDark ? '#404040' : '#e5e7eb',
       alignItems: 'center',
       justifyContent: 'center',
+      position: 'relative',
     },
     profileImage: {
       width: '100%',
@@ -1031,41 +1143,33 @@ export default function Discovery() {
       justifyContent: 'center',
       backgroundColor: isDark ? '#404040' : '#cccccc',
     },
+    purpleInnerStroke: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      borderRadius: 12,
+      borderWidth: 2,
+      borderColor: isDark ? 'rgba(139, 92, 246, 0.6)' : 'rgba(139, 92, 246, 0.5)',
+      pointerEvents: 'none', // Don't interfere with touch events
+    },
     fallbackText: {
       fontSize: 24,
       fontWeight: 'bold',
       color: 'white',
     },
-    likeButton: {
-      position: 'absolute',
-      top: 8,
-      right: 8,
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      backgroundColor: 'rgba(255, 255, 255, 0.9)',
-      alignItems: 'center',
-      justifyContent: 'center',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 2,
-    },
-    likeButtonActive: {
-      backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    },
     nameOverlay: {
       position: 'absolute',
-      bottom: 0,
+      bottom: -4, // Move down below the bottom edge to lower position
       left: 0,
       right: 0,
-      backgroundColor: isDark ? 'rgba(0, 0, 0, 0.7)' : 'rgba(0, 0, 0, 0.8)',
-      padding: 8,
+      backgroundColor: isDark ? 'rgba(0, 0, 0, 0.4)' : 'rgba(0, 0, 0, 0.5)',
+      padding: 6,
     },
     profileName: {
-      fontSize: 14,
-      fontWeight: '600',
+      fontSize: 12,
+      fontWeight: '500',
       color: '#ffffff',
     },
     emptyState: {
@@ -1323,15 +1427,6 @@ export default function Discovery() {
     },
   });
 
-  if (isLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#8b5cf6" />
-        <Text style={styles.loadingText}>Loading singles at this event...</Text>
-      </View>
-    );
-  }
-
   // Show hidden state if user is not visible
   if (currentUserProfile && !currentUserProfile.is_visible) {
     return (
@@ -1379,14 +1474,14 @@ export default function Discovery() {
         {/* Bottom Navigation */}
         <View style={styles.bottomNavigation}>
           <TouchableOpacity
-            style={[styles.navButton, styles.navButtonActive]}
-            onPress={() => router.push('/profile')}
+            style={styles.navButton}
+            onPress={() => router.push('/matches')}
             accessibilityRole="button"
-            accessibilityLabel="Profile Tab"
-            accessibilityHint="Navigate to your profile settings"
+            accessibilityLabel="Matches Tab"
+            accessibilityHint="Navigate to your matches"
           >
-            <User size={24} color="#8b5cf6" />
-            <Text style={[styles.navButtonText, styles.navButtonTextActive]}>Profile</Text>
+            <MessageCircle size={24} color="#9ca3af" />
+            <Text style={styles.navButtonText}>Matches</Text>
           </TouchableOpacity>
           
           <TouchableOpacity
@@ -1401,14 +1496,14 @@ export default function Discovery() {
           </TouchableOpacity>
           
           <TouchableOpacity
-            style={styles.navButton}
-            onPress={() => router.push('/matches')}
+            style={[styles.navButton, styles.navButtonActive]}
+            onPress={() => router.push('/profile')}
             accessibilityRole="button"
-            accessibilityLabel="Matches Tab"
-            accessibilityHint="Navigate to your matches"
+            accessibilityLabel="Profile Tab"
+            accessibilityHint="Navigate to your profile settings"
           >
-            <MessageCircle size={24} color="#9ca3af" />
-            <Text style={styles.navButtonText}>Matches</Text>
+            <User size={24} color="#8b5cf6" />
+            <Text style={[styles.navButtonText, styles.navButtonTextActive]}>Profile</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -1432,7 +1527,15 @@ export default function Discovery() {
           <Text style={styles.title}>
             Singles at {currentEvent?.name}
           </Text>
-          <Text style={styles.subtitle}>{filteredProfiles.length} people discovered</Text>
+          {currentEvent?.expires_at ? (
+            <CountdownTimer
+              expiresAt={currentEvent.expires_at}
+              prefix="Everything expires in "
+              style={styles.subtitle}
+            />
+          ) : (
+            <Text style={styles.subtitle}>{filteredProfiles.length} people discovered</Text>
+          )}
         </View>
         <TouchableOpacity
           style={styles.filterButton}
@@ -1457,7 +1560,10 @@ export default function Discovery() {
                   {rowProfiles.map((profile) => (
                     <TouchableOpacity
                       key={profile.id}
-                      style={styles.profileCard}
+                      style={[
+                        styles.profileCard,
+                        !viewedProfiles.has(profile.session_id) && styles.profileCardUnviewed
+                      ]}
                       onPress={() => handleProfileTap(profile)}
                       accessibilityRole="button"
                       accessibilityLabel={`View ${profile.first_name}'s Profile`}
@@ -1477,38 +1583,15 @@ export default function Discovery() {
                           </View>
                         )}
                         
-                        {/* Like Button Overlay */}
-                        <TouchableOpacity
-                          style={[
-                            styles.likeButton,
-                            likedProfiles.has(profile.session_id) && styles.likeButtonActive
-                          ]}
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            handleLike(profile);
-                          }}
-                          disabled={likedProfiles.has(profile.session_id)}
-                          accessibilityRole="button"
-                          accessibilityLabel={likedProfiles.has(profile.session_id) ? `Already liked ${profile.first_name}` : `Like ${profile.first_name}`}
-                          accessibilityHint={likedProfiles.has(profile.session_id) ? "You have already liked this profile" : "Add like to this profile"}
-                          accessibilityState={{ disabled: likedProfiles.has(profile.session_id) }}
-                        >
-                          <Heart 
-                            size={16} 
-                            color={likedProfiles.has(profile.session_id) ? '#ec4899' : '#9ca3af'} 
-                            fill={likedProfiles.has(profile.session_id) ? '#ec4899' : 'none'}
-                          />
-                        </TouchableOpacity>
+                        {/* Purple inner stroke for unviewed profiles */}
+                        {!viewedProfiles.has(profile.session_id) && (
+                          <View style={styles.purpleInnerStroke} />
+                        )}
 
                         {/* Name Overlay */}
                         <View style={styles.nameOverlay}>
-                          <Text style={styles.profileName}>{profile.first_name}</Text>
+                          <Text style={styles.profileName}>{profile.first_name?.split(' ')[0] || profile.first_name}</Text>
                         </View>
-
-                        {/* Skipped Overlay */}
-                        {skippedProfiles.has(profile.session_id) && (
-                          <View style={styles.skippedOverlay} />
-                        )}
                       </View>
                     </TouchableOpacity>
                   ))}
@@ -1519,7 +1602,7 @@ export default function Discovery() {
           })()}
         </View>
 
-        {filteredProfiles.length === 0 && !isLoading && (
+        {filteredProfiles.length === 0 && (
           <View style={styles.emptyState}>
             <Users size={48} color="#9ca3af" />
             <Text style={styles.emptyTitle}>No singles found</Text>
@@ -1541,29 +1624,6 @@ export default function Discovery() {
 
       {/* Bottom Navigation */}
       <View style={styles.bottomNavigation}>
-        <TouchableOpacity
-          style={styles.navButton}
-          onPress={() => router.push('/profile')}
-          accessibilityRole="button"
-          accessibilityLabel="Profile"
-          accessibilityHint="Navigate to your profile page"
-        >
-          <User size={24} color="#9ca3af" />
-          <Text style={styles.navButtonText}>Profile</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.navButton, styles.navButtonActive]}
-          onPress={() => {}} // Already on discovery page
-          accessibilityRole="button"
-          accessibilityLabel="Discover"
-          accessibilityHint="Currently on discovery page"
-          accessibilityState={{ selected: true }}
-        >
-          <Users size={24} color="#8b5cf6" />
-          <Text style={[styles.navButtonText, styles.navButtonTextActive]}>Discover</Text>
-        </TouchableOpacity>
-        
         <TouchableOpacity
           style={styles.navButton}
           onPress={() => router.push('/matches')}
@@ -1595,6 +1655,29 @@ export default function Discovery() {
             )}
           </View>
           <Text style={styles.navButtonText}>Matches</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[styles.navButton, styles.navButtonActive]}
+          onPress={() => {}} // Already on discovery page
+          accessibilityRole="button"
+          accessibilityLabel="Discover"
+          accessibilityHint="Currently on discovery page"
+          accessibilityState={{ selected: true }}
+        >
+          <Users size={24} color="#8b5cf6" />
+          <Text style={[styles.navButtonText, styles.navButtonTextActive]}>Discover</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={styles.navButton}
+          onPress={() => router.push('/profile')}
+          accessibilityRole="button"
+          accessibilityLabel="Profile"
+          accessibilityHint="Navigate to your profile page"
+        >
+          <User size={24} color="#9ca3af" />
+          <Text style={styles.navButtonText}>Profile</Text>
         </TouchableOpacity>
       </View>
 
@@ -1642,90 +1725,6 @@ export default function Discovery() {
 
 
 
-            {/* Interests Filter */}
-            <View style={styles.filterSection}>
-              <Text style={styles.filterSectionTitle}>Interests (up to 3)</Text>
-              <ScrollView 
-                style={styles.interestsContainer} 
-                showsVerticalScrollIndicator={false}
-                horizontal={false}
-                showsHorizontalScrollIndicator={false}
-              >
-                {/* Basic Interests - Always Visible */}
-                <View style={styles.interestsSection}>
-                  <View style={styles.interestsGrid}>
-                    {BASIC_INTERESTS.map((interest) => (
-                      <TouchableOpacity
-                        key={interest}
-                        style={[
-                          styles.interestOption,
-                          tempFilters.interests.includes(interest) && styles.interestOptionSelected
-                        ]}
-                        onPress={() => handleToggleInterest(interest)}
-                        disabled={!tempFilters.interests.includes(interest) && tempFilters.interests.length >= 3}
-                        accessibilityRole="button"
-                        accessibilityLabel={`${interest.charAt(0).toUpperCase() + interest.slice(1)}`}
-                        accessibilityHint={tempFilters.interests.includes(interest) ? "Remove this interest filter" : "Add this interest filter"}
-                        accessibilityState={{ 
-                          selected: tempFilters.interests.includes(interest),
-                          disabled: !tempFilters.interests.includes(interest) && tempFilters.interests.length >= 3
-                        }}
-                      >
-                        <Text style={[
-                          styles.interestOptionText,
-                          tempFilters.interests.includes(interest) && styles.interestOptionTextSelected
-                        ]}>
-                          {interest.charAt(0).toUpperCase() + interest.slice(1)}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-
-                {/* Extended Interests - Collapsible */}
-                <View style={styles.interestsSection}>
-                  <TouchableOpacity 
-                    style={styles.interestsSectionHeader}
-                    onPress={() => setShowExtendedInterests(!showExtendedInterests)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${showExtendedInterests ? 'Hide' : 'Show'} extended interests`}
-                    accessibilityHint="Toggle visibility of additional interest options"
-                  >
-                    <Text style={styles.toggleIcon}>{showExtendedInterests ? '↑' : '↓'}</Text>
-                  </TouchableOpacity>
-                  
-                  {showExtendedInterests && (
-                    <View style={styles.interestsGrid}>
-                      {EXTENDED_INTERESTS.map((interest) => (
-                        <TouchableOpacity
-                          key={interest}
-                          style={[
-                            styles.interestOption,
-                            tempFilters.interests.includes(interest) && styles.interestOptionSelected
-                          ]}
-                          onPress={() => handleToggleInterest(interest)}
-                          disabled={!tempFilters.interests.includes(interest) && tempFilters.interests.length >= 3}
-                          accessibilityRole="button"
-                          accessibilityLabel={`${interest.charAt(0).toUpperCase() + interest.slice(1)}`}
-                          accessibilityHint={tempFilters.interests.includes(interest) ? "Remove this interest filter" : "Add this interest filter"}
-                          accessibilityState={{ 
-                            selected: tempFilters.interests.includes(interest),
-                            disabled: !tempFilters.interests.includes(interest) && tempFilters.interests.length >= 3
-                          }}
-                        >
-                          <Text style={[
-                            styles.interestOptionText,
-                            tempFilters.interests.includes(interest) && styles.interestOptionTextSelected
-                          ]}>
-                            {interest.charAt(0).toUpperCase() + interest.slice(1)}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  )}
-                </View>
-              </ScrollView>
-            </View>
 
             {/* Action Buttons */}
             <View style={styles.modalActions}>
@@ -1744,7 +1743,18 @@ export default function Discovery() {
       <UserProfileModal
         visible={selectedProfileForDetail !== null}
         profile={selectedProfileForDetail}
-        onClose={() => setSelectedProfileForDetail(null)}
+        onClose={() => {
+          console.log('Discovery: Profile modal closing, clearing selectedProfileForDetail');
+          if (selectedProfileForDetail && currentEvent?.id) {
+            const newViewedSet = new Set([...viewedProfiles, selectedProfileForDetail.session_id]);
+            setViewedProfiles(newViewedSet);
+            saveViewedProfiles(currentEvent.id, newViewedSet);
+            
+            // Clear cached filtered profiles to trigger fresh sorting
+            GlobalDataCache.clear(`${CacheKeys.DISCOVERY_PROFILES}_filtered`);
+          }
+          setSelectedProfileForDetail(null);
+        }}
         onLike={handleLike}
         onSkip={handleSkip}
         isLiked={selectedProfileForDetail ? likedProfiles.has(selectedProfileForDetail.session_id) : false}

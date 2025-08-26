@@ -119,7 +119,7 @@
         {
           "ios": {
             "useFrameworks": "static",
-            "useModularHeaders": true,
+            "useModularHeaders": false,
             "newArchEnabled": false
           }
         }

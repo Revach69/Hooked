@@ -28,6 +28,7 @@ import { SurveyService } from '../lib/surveyService';
 import { ensureFirebaseReady } from '../lib/firebaseReady';
 import * as Sentry from '@sentry/react-native';
 import InAppAlert from '../lib/components/InAppAlert';
+import { ImageOptimizationService } from '../lib/services/ImageOptimizationService';
 
 
 // Simple UUID v4 generator function
@@ -47,7 +48,7 @@ export default function Consent() {
   const [step, setStep] = useState('manual');
   const [formData, setFormData] = useState({
     first_name: '',
-    age: '25',
+    age: '',
     gender_identity: '',
     interested_in: '',
     profile_photo_url: ''
@@ -268,8 +269,8 @@ export default function Consent() {
         }
       }
 
-      // Add timeout to prevent hanging in simulator
-      const pickerPromise = ImagePicker.launchCameraAsync({
+      // Launch camera without timeout - let users take their time
+      const result = await ImagePicker.launchCameraAsync({
         mediaTypes: 'images',
         allowsEditing: true,
         aspect: [1, 1],
@@ -278,27 +279,13 @@ export default function Consent() {
         base64: false,
         exif: false,
       });
-      
-      const timeoutPromise = new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error('Image picker timeout')), 15000)
-      );
-      
-      const result = await Promise.race([pickerPromise, timeoutPromise]) as any;
 
       if (!result.canceled && result.assets && result.assets[0]) {
         await processImageAsset(result.assets[0]);
       }
     } catch (error) {
       Sentry.captureException(error);
-      let errorMessage = "Failed to capture photo. Please try again.";
-      
-      if (error instanceof Error) {
-        if (error.message.includes('Image picker timeout')) {
-          errorMessage = "Camera took too long to respond. Please try again.";
-        }
-      }
-      
-      Alert.alert("Error", errorMessage);
+      Alert.alert("Error", "Failed to capture photo. Please try again.");
     }
   };
 
@@ -317,8 +304,8 @@ export default function Consent() {
         }
       }
 
-      // Add timeout to prevent hanging in simulator
-      const pickerPromise = ImagePicker.launchImageLibraryAsync({
+      // Launch gallery without timeout - let users browse as long as they need
+      const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: 'images',
         allowsEditing: true,
         aspect: [1, 1],
@@ -327,27 +314,13 @@ export default function Consent() {
         base64: false,
         exif: false,
       });
-      
-      const timeoutPromise = new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error('Image picker timeout')), 15000)
-      );
-      
-      const result = await Promise.race([pickerPromise, timeoutPromise]) as any;
 
       if (!result.canceled && result.assets && result.assets[0]) {
         await processImageAsset(result.assets[0]);
       }
     } catch (error) {
       Sentry.captureException(error);
-      let errorMessage = "Failed to pick image. Please try again.";
-      
-      if (error instanceof Error) {
-        if (error.message.includes('Image picker timeout')) {
-          errorMessage = "Gallery took too long to respond. Please try again.";
-        }
-      }
-      
-      Alert.alert("Error", errorMessage);
+      Alert.alert("Error", "Failed to pick image. Please try again.");
     }
   };
 
@@ -369,7 +342,6 @@ export default function Consent() {
       // Add timeout to prevent hanging - reduced from 60s to 25s
       const uploadPromise = async () => {
         // Optimize image for faster upload
-        const { ImageOptimizationService } = await import('../lib/services/ImageOptimizationService');
         const optimizedUri = await ImageOptimizationService.optimizeProfilePhoto(asset.uri);
 
         // Create file object for upload with optimized image
@@ -727,7 +699,7 @@ export default function Consent() {
     photoContainer: {
       width: 120,
       height: 120,
-      borderRadius: 60,
+      borderRadius: 20,
       borderWidth: 2,
       borderColor: isDark ? '#404040' : '#d1d5db',
       borderStyle: 'dashed',
@@ -766,7 +738,7 @@ export default function Consent() {
       backgroundColor: 'rgba(0, 0, 0, 0.3)',
       justifyContent: 'center',
       alignItems: 'center',
-      borderRadius: 50,
+      borderRadius: 20,
     },
     photoRequirements: {
       fontSize: 12,
@@ -1173,10 +1145,10 @@ export default function Consent() {
 
             {/* Form Fields */}
             <View style={styles.formSection}>
+              <Text style={styles.sectionTitle}>Name *</Text>
               <TextInput
                 style={styles.input}
-                placeholder="First Name *"
-                placeholderTextColor="#9ca3af"
+                placeholder="Enter your first name"
                 value={formData.first_name}
                 onChangeText={(text) => setFormData(prev => ({ ...prev, first_name: text }))}
                 returnKeyType="next"
@@ -1184,6 +1156,7 @@ export default function Consent() {
                 accessibilityHint="Enter your first name"
               />
               
+              <Text style={styles.sectionTitle}>Age *</Text>
               {/* Age Selection */}
               <TouchableOpacity
                 style={styles.input}
@@ -1192,7 +1165,7 @@ export default function Consent() {
                 accessibilityHint="Tap to select your age"
               >
                 <Text style={formData.age ? styles.inputText : styles.placeholderText}>
-                  {formData.age ? `Age: ${formData.age}` : 'Age *'}
+                  {formData.age ? formData.age : 'Select your age'}
                 </Text>
               </TouchableOpacity>
             </View>

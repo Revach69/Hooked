@@ -72,10 +72,19 @@ export class SurveyService {
 
   /**
    * Check if user has already filled survey for a specific event
+   * This checks both completed surveys (database) AND exited surveys (local storage)
    */
   static async hasUserFilledSurveyForEvent(eventId: string, sessionId: string): Promise<boolean> {
     try {
-      // Check if there's already feedback for this event and session
+      // First check local storage for surveys that were shown (completed OR exited)
+      const filledSurveys = await this.getFilledSurveys();
+      const surveyKey = `${eventId}_${sessionId}`;
+      
+      if (filledSurveys.includes(surveyKey)) {
+        return true; // User has already seen this survey (completed or exited)
+      }
+      
+      // Fallback: check database for completed surveys (for backward compatibility)
       const feedback = await EventFeedbackAPI.filter({ event_id: eventId, profile_id: sessionId });
       return feedback.length > 0;
     } catch {

@@ -16,7 +16,7 @@ import Toast from 'react-native-toast-message';
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
-  onError?: (_error: Error, _errorInfo: any) => void;
+  onError?: (error: Error, errorInfo: any) => void;
 }
 
 interface State {

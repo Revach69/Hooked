@@ -1,9 +1,9 @@
 import * as Sentry from '@sentry/react-native';
+import * as ImageManipulator from 'expo-image-manipulator';
 
-// Import with fallback handling for native module issues
-let ImageManipulator: any = null;
+// Fallback handling for native module issues
 try {
-  ImageManipulator = require('expo-image-manipulator');
+  require('expo-image-manipulator');
 } catch (error) {
   console.warn('ImageOptimizationService: expo-image-manipulator not available:', error);
   Sentry.captureException(error, {
