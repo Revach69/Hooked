@@ -19,14 +19,13 @@ function JoinInstantContent() {
       return;
     }
 
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(userAgent);
+    const isIOS = /iPhone|iPad|iPod/i.test(userAgent);
     
-    if (isMobile) {
-      // Try to open the app with Universal/App Links first
+    if (isIOS) {
+      // iOS - Try to open the app with Universal/App Links first
       const universalUrl = `https://hooked-app.com/join-instant?code=${code}`;
-      const appUrl = `hooked://join?code=${code}`;
       
-      // Try to open the app via Universal Link first, fallback to custom scheme
+      // Try to open the app via Universal Link first
       window.location.href = universalUrl;
       
       // Show fallback after 3 seconds if app didn't open
@@ -39,7 +38,7 @@ function JoinInstantContent() {
       // Clean up timer if component unmounts
       return () => clearTimeout(fallbackTimer);
     } else {
-      // Desktop - show fallback immediately
+      // Android or Desktop - show fallback immediately
       setShowFallback(true);
     }
   }, [code, userAgent]);
@@ -58,8 +57,8 @@ function JoinInstantContent() {
   };
 
   if (showFallback) {
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(userAgent);
     const isIOS = /iPhone|iPad|iPod/i.test(userAgent);
+    const isAndroid = /Android/i.test(userAgent);
     
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-pink-100 to-purple-100 p-4">
@@ -74,7 +73,7 @@ function JoinInstantContent() {
             Event Code: <span className="font-mono font-bold text-purple-600">#{code}</span>
           </p>
           
-          {isMobile ? (
+          {isIOS ? (
             <>
               <div className="space-y-3 mb-6">
                 <button
@@ -92,7 +91,7 @@ function JoinInstantContent() {
                   onClick={handleAppStore}
                   className="w-full bg-gray-900 text-white font-semibold py-3 px-6 rounded-xl hover:bg-gray-800 transition-colors"
                 >
-                  {isIOS ? '📱 Download from App Store' : '📱 Download from Play Store'}
+                  📱 Download from App Store
                 </button>
               </div>
               
@@ -100,6 +99,57 @@ function JoinInstantContent() {
                 <p className="text-xs text-gray-600">
                   Having trouble? Make sure you have the latest version of The Hooked App installed.
                 </p>
+              </div>
+            </>
+          ) : isAndroid ? (
+            <>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+                <h2 className="font-semibold text-amber-900 mb-2">🚧 Android App in Beta</h2>
+                <p className="text-sm text-amber-800">
+                  The Android app is currently in beta testing. To use it, you need to opt-in to our beta program.
+                </p>
+              </div>
+              
+              <div className="space-y-6">
+                <div className="bg-gray-50 rounded-lg p-4 text-left">
+                  <div className="flex items-center mb-2">
+                    <span className="bg-purple-100 text-purple-600 font-bold rounded-full w-7 h-7 flex items-center justify-center text-sm mr-2">1</span>
+                    <h3 className="font-semibold text-gray-900">Join Beta Group</h3>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-3 ml-9">
+                    First, join our Google Group to get access to the beta version.
+                  </p>
+                  <a
+                    href="https://groups.google.com/g/hooked-beta/about"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full inline-block bg-blue-600 text-white font-semibold py-3 px-6 rounded-xl hover:bg-blue-700 transition-colors text-center"
+                  >
+                    🔗 Join Beta Group
+                  </a>
+                </div>
+                
+                <div className="bg-gray-50 rounded-lg p-4 text-left">
+                  <div className="flex items-center mb-2">
+                    <span className="bg-purple-100 text-purple-600 font-bold rounded-full w-7 h-7 flex items-center justify-center text-sm mr-2">2</span>
+                    <h3 className="font-semibold text-gray-900">Download App</h3>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-3 ml-9">
+                    After joining the group, you can download the beta app from Play Store.
+                  </p>
+                  <a
+                    href="https://play.google.com/apps/testing/com.hookedapp.app"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full inline-block bg-green-600 text-white font-semibold py-3 px-6 rounded-xl hover:bg-green-700 transition-colors text-center"
+                  >
+                    📱 Download from Play Store
+                  </a>
+                </div>
+              </div>
+              
+              <div className="mt-6 text-xs text-gray-500">
+                Note: It may take a few minutes after joining the group before you can access the beta.
               </div>
             </>
           ) : (
