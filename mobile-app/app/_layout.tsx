@@ -60,19 +60,57 @@ export default function RootLayout() {
   // 1) Provide getIsForeground to the router
   const getIsForeground = useIsForegroundGetter();
 
-  // 2) Initialize NotificationRouter when app is ready and dependencies are available
+  // 2) Initialize NotificationRouter and Android channels when app is ready
   useEffect(() => {
     if (!appIsReady) return;
     
-    console.log('_layout.tsx: Initializing NotificationRouter with dependencies');
+    console.log('_layout.tsx: Initializing notification system');
+    
+    // Initialize Android notification channels first
+    import('../lib/notifications/AndroidChannels').then(({ AndroidChannels }) => {
+      AndroidChannels.initialize();
+    }).catch(error => {
+      console.warn('Failed to initialize Android channels:', error);
+    });
+    
+    // Initialize local notification fallback service
+    import('../lib/notifications/LocalNotificationFallback').then(({ LocalNotificationFallback }) => {
+      LocalNotificationFallback.initialize();
+    }).catch(error => {
+      console.warn('Failed to initialize Local Notification Fallback:', error);
+    });
+    
+    // Initialize NotificationRouter
     NotificationRouter.init({
       getIsForeground,
       navigateToMatches: () => router.push('/matches'),
     });
     
-    console.log('_layout.tsx: NotificationRouter initialization complete');
+    console.log('_layout.tsx: Notification system initialization complete');
   }, [appIsReady, getIsForeground, router]);
 
+  // 2.4) Push notification received handler - cancel local fallbacks when push arrives
+  useEffect(() => {
+    const sub = Notifications.addNotificationReceivedListener(async (notification) => {
+      try {
+        const data = notification.request.content.data as any;
+        
+        // If this is a push notification (not local fallback), cancel any local fallbacks for the same event
+        if (data?.source !== 'local_fallback' && data?.id) {
+          const { LocalNotificationFallback } = await import('../lib/notifications/LocalNotificationFallback');
+          await LocalNotificationFallback.cancelLocalFallback(data.id, data.type);
+          
+          console.log('_layout.tsx: Push notification received, cancelled local fallback for event:', data.id);
+        }
+      } catch (error) {
+        console.warn('_layout.tsx: Error handling received notification:', error);
+      }
+    });
+
+    return () => {
+      sub.remove();
+    };
+  }, []);
 
   // 2.5) Push notification tap handler
   useEffect(() => {
@@ -96,7 +134,13 @@ export default function RootLayout() {
         } else if (data?.type === 'message') {
           // Route to specific chat with partner session ID
           if (data?.partnerSessionId) {
-            router.push(`/chat?partner=${data.partnerSessionId}`);
+            router.push({
+              pathname: '/chat',
+              params: {
+                matchId: data.partnerSessionId,
+                matchName: data.partnerName || 'Your match'
+              }
+            });
           } else {
             // Fallback to matches page if no partner info
             router.push('/matches');
@@ -150,25 +194,46 @@ export default function RootLayout() {
 
 
 
-  // 2.7) Foreground notification policy - prevent duplicate notifications on iOS
+  // 2.7) Enhanced foreground notification policy - intelligent handling
   useEffect(() => {
     if (!(Notifications as any).__hookedHandlerSet) {
       (Notifications as any).__hookedHandlerSet = true;
       Notifications.setNotificationHandler({
-        handleNotification: async () => {
-          // For iOS, don't show banner/sound when app is in foreground to prevent duplicates
-          // The custom toast system will handle foreground notifications
+        handleNotification: async (notification) => {
+          // Enhanced logic: Check notification source and type
+          const data = notification.request.content.data as any;
+          const isLocalFallback = data?.source === 'local_fallback';
+          const isForeground = getIsForeground();
           
+          console.log('_layout.tsx: Handling foreground notification:', {
+            type: data?.type,
+            source: data?.source,
+            isForeground,
+            isLocalFallback
+          });
+          
+          // Special case: Local fallback notifications can show banner
+          // This handles the case where push failed but user is still in foreground
+          if (isLocalFallback) {
+            return {
+              shouldPlaySound: true,       // Allow sound for fallback
+              shouldSetBadge: true,        // Update badge
+              shouldShowBanner: true,      // Show banner since push failed
+              shouldShowList: true,        // Add to notification list
+            };
+          }
+          
+          // Standard foreground policy: Let toast system handle it
           return {
             shouldPlaySound: false,      // Disable sound - toast will handle
-            shouldSetBadge: true,         // Keep badge on both platforms
-            shouldShowBanner: false,      // Disable banner - toast will handle foreground
-            shouldShowList: true,         // Show in notification list on both platforms
+            shouldSetBadge: true,        // Keep badge on both platforms  
+            shouldShowBanner: false,     // Disable banner - toast will handle
+            shouldShowList: true,        // Show in notification list
           };
         },
       });
     }
-  }, []);
+  }, [getIsForeground]);
 
   // 3) App initialization using the robust AppInitializationService
   useEffect(() => {

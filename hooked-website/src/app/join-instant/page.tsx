@@ -22,38 +22,35 @@ function JoinInstantContent() {
     const isIOS = /iPhone|iPad|iPod/i.test(userAgent);
     
     if (isIOS) {
-      // iOS - Try to open the app with Universal/App Links first
-      const universalUrl = `https://hooked-app.com/join-instant?code=${code}`;
+      // iOS - automatically open App Store modal on page load
+      window.open('https://apps.apple.com/app/hooked/id6748921014', '_blank');
       
-      // Try to open the app via Universal Link first
-      window.location.href = universalUrl;
-      
-      // Show fallback after 3 seconds if app didn't open
-      const fallbackTimer = setTimeout(() => {
-        if (!document.hidden) {
-          setShowFallback(true);
-        }
-      }, 3000);
-
-      // Clean up timer if component unmounts
-      return () => clearTimeout(fallbackTimer);
+      // Show fallback UI after short delay in case modal didn't work
+      setTimeout(() => {
+        setShowFallback(true);
+      }, 1500);
     } else {
-      // Android or Desktop - show fallback immediately
+      // Android/Desktop - show fallback UI immediately
       setShowFallback(true);
     }
   }, [code, userAgent]);
 
   const handleOpenApp = () => {
-    const universalUrl = `https://hooked-app.com/join-instant?code=${code}`;
-    window.location.href = universalUrl;
+    const appSchemeUrl = `hooked://join?code=${code}`;
+    window.location.href = appSchemeUrl;
   };
 
   const handleAppStore = () => {
     const isIOS = /iPhone|iPad|iPod/i.test(userAgent);
-    const storeUrl = isIOS 
-      ? 'https://apps.apple.com/app/hooked/id6748921014'
-      : 'https://play.google.com/store/apps/details?id=com.hookedapp.app';
-    window.location.href = storeUrl;
+    
+    if (isIOS) {
+      // For iOS, open App Store URL directly - iOS Safari will show native modal
+      window.open('https://apps.apple.com/app/hooked/id6748921014', '_blank');
+    } else {
+      // Android - direct to Play Store
+      const storeUrl = 'https://play.google.com/store/apps/details?id=com.hookedapp.app';
+      window.location.href = storeUrl;
+    }
   };
 
   if (showFallback) {
@@ -180,18 +177,18 @@ function JoinInstantContent() {
                 <div className="bg-gray-50 rounded-lg p-4">
                   <p className="font-semibold text-gray-900 mb-2">Option 2: Download the app</p>
                   <div className="flex gap-2 justify-center">
-                    <a 
-                      href="https://apps.apple.com/app/hooked/id6748921014"
+                    <button
+                      onClick={handleAppStore}
                       className="inline-flex items-center px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors text-sm"
                     >
                       📱 App Store
-                    </a>
-                    <a 
-                      href="https://play.google.com/store/apps/details?id=com.hookedapp.app"
+                    </button>
+                    <button
+                      onClick={() => window.open('https://play.google.com/store/apps/details?id=com.hookedapp.app', '_blank')}
                       className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
                     >
                       📱 Play Store
-                    </a>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -202,20 +199,18 @@ function JoinInstantContent() {
     );
   }
 
+  // Loading screen for when fallback hasn't loaded yet
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-pink-100 to-purple-100">
       <div className="text-center p-8">
         <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
           <span className="text-2xl">💕</span>
         </div>
-        <h1 className="text-2xl font-bold mb-4 text-gray-900">Opening The Hooked App...</h1>
+        <h1 className="text-2xl font-bold mb-4 text-gray-900">Loading...</h1>
         <p className="text-gray-600 mb-4">
-          {code ? `Joining event: #${code}` : 'Redirecting...'}
+          {code ? `Event code: #${code}` : 'Setting up...'}
         </p>
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto"></div>
-        <p className="text-sm text-gray-500 mt-4">
-          If the app doesn&apos;t open automatically, we&apos;ll show you download options
-        </p>
       </div>
     </div>
   );

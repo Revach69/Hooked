@@ -718,33 +718,22 @@ export default function Discovery() {
     // Sort profiles by priority (move inside to avoid dependency issues)
     function sortProfilesByPriority(profilesList: any[]) {
       return [...profilesList].sort((a, b) => {
-        const aIsLiked = likedProfiles.has(a.session_id);
-        const bIsLiked = likedProfiles.has(b.session_id);
         const aIsViewed = viewedProfiles.has(a.session_id);
         const bIsViewed = viewedProfiles.has(b.session_id);
 
-        // Priority 1: Liked profiles at the top
-        if (aIsLiked && !bIsLiked) return -1;
-        if (!aIsLiked && bIsLiked) return 1;
+        // Priority 1: Unseen profiles before seen profiles
+        if (!aIsViewed && bIsViewed) return -1;
+        if (aIsViewed && !bIsViewed) return 1;
 
-        // If both are liked or both are not liked, continue to next criteria
-        if (aIsLiked === bIsLiked) {
-          // Priority 2: Unseen profiles before seen profiles
-          if (!aIsViewed && bIsViewed) return -1;
-          if (aIsViewed && !bIsViewed) return 1;
-
-          // Priority 3: Within same group (both unseen or both seen), sort by join date
-          // Earlier joined users appear first (ascending order by created_at)
-          if (a.created_at && b.created_at) {
-            const aJoinTime = a.created_at.toDate ? a.created_at.toDate().getTime() : new Date(a.created_at).getTime();
-            const bJoinTime = b.created_at.toDate ? b.created_at.toDate().getTime() : new Date(b.created_at).getTime();
-            return aJoinTime - bJoinTime; // Earlier join time first
-          }
-
-          // Fallback: if no join date available, maintain current order
-          return 0;
+        // Priority 2: Within same group (both unseen or both seen), sort by join date
+        // Earlier joined users appear first (ascending order by created_at)
+        if (a.created_at && b.created_at) {
+          const aJoinTime = a.created_at.toDate ? a.created_at.toDate().getTime() : new Date(a.created_at).getTime();
+          const bJoinTime = b.created_at.toDate ? b.created_at.toDate().getTime() : new Date(b.created_at).getTime();
+          return aJoinTime - bJoinTime; // Earlier join time first
         }
 
+        // Fallback: if no join date available, maintain current order
         return 0;
       });
     }
@@ -759,6 +748,11 @@ export default function Discovery() {
       let tempFiltered = profiles.filter(otherUser => {
         // Filter out skipped profiles completely
         if (skippedProfiles.has(otherUser.session_id)) {
+          return false;
+        }
+
+        // Filter out liked profiles completely
+        if (likedProfiles.has(otherUser.session_id)) {
           return false;
         }
 
@@ -1112,12 +1106,15 @@ export default function Discovery() {
       elevation: 2,
     },
     profileCardUnviewed: {
+      // Subtle purple glow that works in both light and dark mode
       shadowColor: '#8b5cf6',
       shadowOffset: { width: 0, height: 0 },
-      shadowOpacity: isDark ? 0.5 : 0.4,
-      shadowRadius: 12,
-      elevation: 8,
-      backgroundColor: isDark ? '#2d1b3d' : '#faf5ff',
+      shadowOpacity: 0.6,
+      shadowRadius: 8,
+      elevation: 6,
+      // Purple border around the entire thumbnail
+      borderWidth: 3,
+      borderColor: '#8b5cf6',
     },
     profileImageContainer: {
       width: cardSize - 12,
@@ -1142,17 +1139,6 @@ export default function Discovery() {
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: isDark ? '#404040' : '#cccccc',
-    },
-    purpleInnerStroke: {
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      borderRadius: 12,
-      borderWidth: 2,
-      borderColor: isDark ? 'rgba(139, 92, 246, 0.6)' : 'rgba(139, 92, 246, 0.5)',
-      pointerEvents: 'none', // Don't interfere with touch events
     },
     fallbackText: {
       fontSize: 24,
@@ -1475,17 +1461,6 @@ export default function Discovery() {
         <View style={styles.bottomNavigation}>
           <TouchableOpacity
             style={styles.navButton}
-            onPress={() => router.push('/matches')}
-            accessibilityRole="button"
-            accessibilityLabel="Matches Tab"
-            accessibilityHint="Navigate to your matches"
-          >
-            <MessageCircle size={24} color="#9ca3af" />
-            <Text style={styles.navButtonText}>Matches</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={styles.navButton}
             onPress={() => {}} // Already on discovery page but hidden
             accessibilityRole="button"
             accessibilityLabel="Discover"
@@ -1493,6 +1468,17 @@ export default function Discovery() {
           >
             <Users size={24} color="#9ca3af" />
             <Text style={styles.navButtonText}>Discover</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.navButton}
+            onPress={() => router.push('/matches')}
+            accessibilityRole="button"
+            accessibilityLabel="Matches Tab"
+            accessibilityHint="Navigate to your matches"
+          >
+            <MessageCircle size={24} color="#9ca3af" />
+            <Text style={styles.navButtonText}>Matches</Text>
           </TouchableOpacity>
           
           <TouchableOpacity
@@ -1582,11 +1568,6 @@ export default function Discovery() {
                             <Text style={styles.fallbackText}>{profile.first_name[0]}</Text>
                           </View>
                         )}
-                        
-                        {/* Purple inner stroke for unviewed profiles */}
-                        {!viewedProfiles.has(profile.session_id) && (
-                          <View style={styles.purpleInnerStroke} />
-                        )}
 
                         {/* Name Overlay */}
                         <View style={styles.nameOverlay}>
@@ -1625,6 +1606,18 @@ export default function Discovery() {
       {/* Bottom Navigation */}
       <View style={styles.bottomNavigation}>
         <TouchableOpacity
+          style={[styles.navButton, styles.navButtonActive]}
+          onPress={() => {}} // Already on discovery page
+          accessibilityRole="button"
+          accessibilityLabel="Discover"
+          accessibilityHint="Currently on discovery page"
+          accessibilityState={{ selected: true }}
+        >
+          <Users size={24} color="#8b5cf6" />
+          <Text style={[styles.navButtonText, styles.navButtonTextActive]}>Discover</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
           style={styles.navButton}
           onPress={() => router.push('/matches')}
           accessibilityRole="button"
@@ -1655,18 +1648,6 @@ export default function Discovery() {
             )}
           </View>
           <Text style={styles.navButtonText}>Matches</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.navButton, styles.navButtonActive]}
-          onPress={() => {}} // Already on discovery page
-          accessibilityRole="button"
-          accessibilityLabel="Discover"
-          accessibilityHint="Currently on discovery page"
-          accessibilityState={{ selected: true }}
-        >
-          <Users size={24} color="#8b5cf6" />
-          <Text style={[styles.navButtonText, styles.navButtonTextActive]}>Discover</Text>
         </TouchableOpacity>
         
         <TouchableOpacity

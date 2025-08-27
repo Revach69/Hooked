@@ -19,9 +19,14 @@ const MEMORY_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour TTL for memory cache
 function dedupeKey(ev: AnyEvent) {
   if (ev.type === 'match') {
     // For matches, create a consistent key based on both users, regardless of who's creator
-    // This ensures only one notification per match pair
     const sessions = [ev.otherSessionId, getCurrentSessionId()].sort();
     return `${ev.type}:${sessions[0]}:${sessions[1]}`;
+  }
+  if (ev.type === 'message') {
+    // Content-based key for messages: sender + recipient + content hash
+    const contentHash = ev.preview ? btoa(ev.preview).slice(0, 8) : 'no-content';
+    const sessions = [ev.senderSessionId, getCurrentSessionId()].sort();
+    return `${ev.type}:${sessions[0]}:${sessions[1]}:${contentHash}`;
   }
   return `${ev.type}:${ev.id}`;
 }
@@ -369,6 +374,7 @@ export const NotificationRouter = {
       await new Promise(resolve => setTimeout(resolve, randomDelay));
 
       if (ev.isCreator) {
+        // BUSINESS RULE: Second liker (creator) - always in foreground → single alert
         // Creator is always in-app (must be to create match), show Alert
         console.log('Showing alert for match creator');
         
@@ -405,6 +411,7 @@ export const NotificationRouter = {
         );
         return;
       } else {
+        // BUSINESS RULE: First liker (counterpart/non-creator) - foreground → toast; background → push  
         // First liker (recipient) - check if in foreground for client-side notification
         const isForeground = getFg?.() ?? false;
         Sentry.addBreadcrumb({
@@ -469,6 +476,14 @@ export const NotificationRouter = {
           }
         } else {
           console.log('Match recipient not in foreground - server will handle push notification');
+          
+          // Schedule local notification fallback in case push fails
+          try {
+            const { LocalNotificationFallback } = await import('./LocalNotificationFallback');
+            await LocalNotificationFallback.scheduleLocalFallback(ev);
+          } catch (error) {
+            console.warn('NotificationRouter: Failed to schedule local fallback for match:', error);
+          }
         }
         return;
       }
@@ -647,6 +662,14 @@ export const NotificationRouter = {
         }, 100); // 100ms delay to allow app state to stabilize
       } else {
         console.log('Message recipient not in foreground - server will handle push notification');
+        
+        // Schedule local notification fallback in case push fails
+        try {
+          const { LocalNotificationFallback } = await import('./LocalNotificationFallback');
+          await LocalNotificationFallback.scheduleLocalFallback(ev);
+        } catch (error) {
+          console.warn('NotificationRouter: Failed to schedule local fallback for message:', error);
+        }
       }
       return;
     }

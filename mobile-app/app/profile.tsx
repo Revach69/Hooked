@@ -1493,7 +1493,8 @@ export default function Profile() {
     },
     imagePreviewPhoto: {
       width: '100%',
-      height: 400,
+      aspectRatio: 1, // Square aspect ratio like profile photos
+      maxHeight: 400,
       borderRadius: 12,
     },
     imagePreviewButtons: {
@@ -1536,7 +1537,18 @@ export default function Profile() {
         <View style={styles.photoSection}>
           <TouchableOpacity
             style={styles.photoContainer}
-            onPress={() => profile?.profile_photo_url ? setShowImagePreview(true) : handlePhotoUpload()}
+            onPress={() => {
+              console.log('Profile photo clicked:', {
+                hasProfilePhoto: !!profile?.profile_photo_url,
+                profilePhotoUrl: profile?.profile_photo_url,
+                cachedImageUri: cachedProfileImageUri
+              });
+              if (profile?.profile_photo_url || cachedProfileImageUri) {
+                setShowImagePreview(true);
+              } else {
+                handlePhotoUpload();
+              }
+            }}
             disabled={isUploadingPhoto}
             accessibilityLabel={profile?.profile_photo_url ? "View Profile Photo" : "Add Profile Photo"}
             accessibilityHint={profile?.profile_photo_url ? "Tap to view and edit your profile photo" : "Tap to add your profile photo"}
@@ -2055,7 +2067,18 @@ export default function Profile() {
       </Modal>
       
       {/* Image Preview Modal */}
-      <Modal visible={showImagePreview} transparent animationType="fade" onRequestClose={() => setShowImagePreview(false)}>
+      <Modal 
+        visible={showImagePreview} 
+        transparent 
+        animationType="fade" 
+        onRequestClose={() => setShowImagePreview(false)}
+        onShow={() => {
+          console.log('Image preview modal opened:', {
+            cachedImageUri: cachedProfileImageUri,
+            profilePhotoUrl: profile?.profile_photo_url
+          });
+        }}
+      >
         <View style={styles.imagePreviewOverlay}>
           <TouchableOpacity 
             style={styles.imagePreviewCloseArea}
@@ -2067,11 +2090,25 @@ export default function Profile() {
                 activeOpacity={1}
                 onPress={(e) => e.stopPropagation()}
               >
-                <Image
-                  source={{ uri: cachedProfileImageUri || profile?.profile_photo_url }}
-                  style={styles.imagePreviewPhoto}
-                  resizeMode="contain"
-                />
+                {(cachedProfileImageUri || profile?.profile_photo_url) ? (
+                  <Image
+                    source={{ uri: cachedProfileImageUri || profile?.profile_photo_url }}
+                    style={styles.imagePreviewPhoto}
+                    resizeMode="cover"
+                    onError={(error) => {
+                      console.log('Image preview load error:', error);
+                    }}
+                    onLoad={() => {
+                      console.log('Image preview loaded successfully');
+                    }}
+                  />
+                ) : (
+                  <View style={[styles.imagePreviewPhoto, { backgroundColor: profile?.profile_color || '#cccccc', justifyContent: 'center', alignItems: 'center' }]}>
+                    <Text style={{ color: 'white', fontSize: 48, fontWeight: 'bold' }}>
+                      {profile?.first_name?.[0] || 'U'}
+                    </Text>
+                  </View>
+                )}
                 <View style={styles.imagePreviewButtons}>
                   <TouchableOpacity 
                     style={styles.imagePreviewEditButton}
@@ -2092,6 +2129,14 @@ export default function Profile() {
       
       {/* Bottom Navigation */}
       <View style={styles.bottomNavigation}>
+        <TouchableOpacity
+          style={styles.navButton}
+          onPress={() => router.push('/discovery')}
+        >
+          <Users size={24} color="#9ca3af" />
+          <Text style={styles.navButtonText}>Discover</Text>
+        </TouchableOpacity>
+        
         <TouchableOpacity
           style={styles.navButton}
           onPress={() => router.push('/matches')}
@@ -2120,14 +2165,6 @@ export default function Profile() {
             )}
           </View>
           <Text style={styles.navButtonText}>Matches</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={styles.navButton}
-          onPress={() => router.push('/discovery')}
-        >
-          <Users size={24} color="#9ca3af" />
-          <Text style={styles.navButtonText}>Discover</Text>
         </TouchableOpacity>
         
         <TouchableOpacity

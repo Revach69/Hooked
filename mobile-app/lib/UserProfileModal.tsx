@@ -267,12 +267,20 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
   const handleLikePress = () => {
     if (onLike) {
       onLike(profile);
+      // Auto close modal after like action
+      setTimeout(() => {
+        onClose();
+      }, 500);
     }
   };
 
   const handleSkipPress = () => {
     if (onSkip) {
       onSkip(profile);
+      // Auto close modal after skip action
+      setTimeout(() => {
+        onClose();
+      }, 500);
     }
   };
 

@@ -116,107 +116,28 @@ async function checkIfRecipientMutedSender(recipientSessionId: string, senderSes
 
 
 
-// Show in-app message toast with navigation
+// DEPRECATED: This function is replaced by NotificationRouter.handleIncoming
+// Use NotificationRouter for all notification decisions
+// Keeping for backward compatibility only
 export async function showInAppMessageToast(senderName: string, senderSessionId: string): Promise<void> {
-  try {
-    // Check if sender is muted
-    const isMuted = await checkIfSenderIsMuted(senderSessionId);
-    if (isMuted) {
-      return; // Don't show toast if muted
-    }
-    
-    // APPROACH #1: Check if user is currently in the chat with this sender
-    const isInCurrentChat = await checkIfInCurrentChat(senderSessionId);
-    if (isInCurrentChat) {
-      return; // Don't show toast if user is viewing this chat
-    }
-    
-    // Check for recent notification to prevent duplicates
-    const notificationKey = `message_${senderName}_${senderSessionId}`;
-    const now = Date.now();
-    const lastNotification = recentNotifications.get(notificationKey);
-    
-    if (lastNotification && (now - lastNotification) < NOTIFICATION_COOLDOWN) {
-      return; // Skip if too recent
-    }
-    
-    // Update recent notifications
-    recentNotifications.set(notificationKey, now);
-    
-    // Clean up old entries (older than 10 seconds)
-    const entriesToDelete = [];
-    for (const [key, timestamp] of Array.from(recentNotifications.entries())) {
-      if (now - timestamp > 10000) {
-        entriesToDelete.push(key);
-      }
-    }
-    // Delete entries outside the iteration to avoid modifying during iteration
-    entriesToDelete.forEach(key => recentNotifications.delete(key));
-    
-    // Platform-specific configurations
-    const config = Platform.OS === 'ios' ? {
-      delay: 200,
-      topOffset: 60,
-      visibilityTime: 3500,
-    } : {
-      delay: 0,
-      topOffset: 40,
-      visibilityTime: 3500,
-    };
-    
-    // APPROACH #2: Add delay for iOS to allow message to be marked as seen
-    const delay = Platform.OS === 'ios' ? 150 : (Platform.OS === 'android' ? 100 : config.delay);
-    
-    setTimeout(async () => {
-      // Double-check if user is still in the current chat after delay
-      const stillInCurrentChat = await checkIfInCurrentChat(senderSessionId);
-      if (stillInCurrentChat) {
-        return; // Don't show toast if user is still viewing this chat
-      }
-      
-      Toast.show({
-        type: 'info',
-        text1: `New message from ${senderName}`,
-        text2: 'Tap to open chat',
-        position: 'top',
-        visibilityTime: 3500,
-        autoHide: true,
-        topOffset: config.topOffset,
-        onPress: () => {
-          Toast.hide();
-          if (senderSessionId) {
-            // Navigate to chat with the specific match
-            router.push(`/chat?matchId=${senderSessionId}&matchName=${senderName}`);
-          } else {
-            router.push('/matches');
-          }
-        }
-      });
-    }, delay);
-  } catch {
-    // Error showing message toast - try to show a basic toast as fallback
-    try {
-      Toast.show({
-        type: 'info',
-        text1: 'New message received',
-        text2: 'Tap to view',
-        position: 'top',
-        visibilityTime: 3500,
-        autoHide: true,
-        topOffset: Platform.OS === 'ios' ? 60 : 40,
-        onPress: () => {
-          Toast.hide();
-          router.push('/matches');
-        }
-      });
-    } catch {
-      // If even the fallback fails, just log the error
-    }
-  }
+  console.warn('showInAppMessageToast is deprecated. Use NotificationRouter.handleIncoming instead.');
+  
+  // Delegate to NotificationRouter
+  const { NotificationRouter } = await import('./notifications/NotificationRouter');
+  await NotificationRouter.handleIncoming({
+    type: 'message',
+    id: `legacy_${Date.now()}`,
+    senderName,
+    senderSessionId,
+    preview: 'New message'
+  });
 }
 
-// Show match notification toast
+// DEPRECATED: This function is replaced by NotificationRouter.handleIncoming
+// Use NotificationRouter for all notification decisions
+// Keeping for backward compatibility only
 export function showMatchToast(matchName: string): void {
+  console.warn('showMatchToast is deprecated. Use NotificationRouter.handleIncoming instead.');
   try {
     // Check for recent notification to prevent duplicates
     const notificationKey = `match_${matchName}`;

@@ -1517,27 +1517,35 @@ export default function Matches() {
     matchInfo: {
       flex: 1,
       justifyContent: 'center',
+      alignItems: 'center', // Center content horizontally
     },
     matchHeader: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
+      justifyContent: 'space-between', // Keep dropdown on right, but name centered
       marginBottom: 4,
+      width: '100%', // Take full width
     },
     matchNameContainer: {
+      position: 'absolute', // Position absolutely to center regardless of dropdown
+      left: 0,
+      right: 0,
       flexDirection: 'row',
       alignItems: 'center',
-      flex: 1,
+      justifyContent: 'center', // Center name horizontally
     },
     matchName: {
       fontSize: 16,
       fontWeight: '600',
       color: isDark ? '#ffffff' : '#1f2937',
+      textAlign: 'center', // Center text
     },
     messagePreview: {
       fontSize: 14,
       color: isDark ? '#9ca3af' : '#6b7280',
       lineHeight: 18,
+      textAlign: 'center', // Center text
+      width: '100%', // Take full width for proper centering
     },
     emptyState: {
       alignItems: 'center',
@@ -1976,6 +1984,17 @@ export default function Matches() {
       {/* Bottom Navigation */}
       <View style={styles.bottomNavigation}>
         <TouchableOpacity
+          style={styles.navButton}
+          onPress={() => router.push('/discovery')}
+          accessibilityRole="button"
+          accessibilityLabel="Discover"
+          accessibilityHint="Navigate to discovery page to browse profiles"
+        >
+          <Users size={24} color="#9ca3af" />
+          <Text style={styles.navButtonText}>Discover</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
           style={[styles.navButton, styles.navButtonActive]}
           onPress={() => {}} // Already on matches page
           accessibilityRole="button"
@@ -2007,17 +2026,6 @@ export default function Matches() {
             )}
           </View>
           <Text style={[styles.navButtonText, styles.navButtonTextActive]}>Matches</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={styles.navButton}
-          onPress={() => router.push('/discovery')}
-          accessibilityRole="button"
-          accessibilityLabel="Discover"
-          accessibilityHint="Navigate to discovery page to browse profiles"
-        >
-          <Users size={24} color="#9ca3af" />
-          <Text style={styles.navButtonText}>Discover</Text>
         </TouchableOpacity>
         
         <TouchableOpacity

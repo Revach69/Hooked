@@ -114,26 +114,38 @@ export async function registerPushToken(sessionId: string): Promise<boolean> {
       
       return true;
     } catch (callableError: any) {
-      console.error('savePushToken error:', {
-        code: callableError.code,
-        message: callableError.message,
-        details: callableError.details
-      });
-      
-      Sentry.captureException(callableError, {
-        tags: {
-          operation: 'push_token_registration',
-          source: 'savePushToken_callable'
-        },
-        extra: {
-          sessionId,
-          platform,
-          tokenLength: expoToken.data.length,
-          errorMessage: callableError.message,
-          errorCode: callableError.code,
-          errorDetails: callableError.details
-        }
-      });
+      // Log the error but don't treat it as critical since push notifications are optional
+      if (callableError.code === 'functions/unauthenticated') {
+        console.log('savePushToken: Skipping due to authentication requirements (App Check disabled)');
+        
+        // Don't send to Sentry for expected auth errors
+        Sentry.addBreadcrumb({
+          message: 'Push token registration skipped - authentication required',
+          level: 'info',
+          category: 'push_notification'
+        });
+      } else {
+        console.error('savePushToken error:', {
+          code: callableError.code,
+          message: callableError.message,
+          details: callableError.details
+        });
+        
+        Sentry.captureException(callableError, {
+          tags: {
+            operation: 'push_token_registration',
+            source: 'savePushToken_callable'
+          },
+          extra: {
+            sessionId,
+            platform,
+            tokenLength: expoToken.data.length,
+            errorMessage: callableError.message,
+            errorCode: callableError.code,
+            errorDetails: callableError.details
+          }
+        });
+      }
       return false;
     }
     

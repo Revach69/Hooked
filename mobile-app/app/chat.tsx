@@ -858,6 +858,7 @@ export default function Chat() {
     headerUserInfo: {
       flexDirection: 'row',
       alignItems: 'center',
+      flex: 1, // Take full width
     },
     headerAvatarContainer: {
       marginRight: 12,
@@ -881,20 +882,24 @@ export default function Chat() {
     },
     headerTextInfo: {
       flex: 1,
-      justifyContent: 'center',
+      flexDirection: 'row', // Change to row layout
       alignItems: 'center',
+      justifyContent: 'space-between', // Spread content
     },
     headerName: {
       fontSize: 18,
       fontWeight: 'bold',
       color: isDark ? '#ffffff' : '#1f2937',
-      textAlign: 'center',
+      flex: 0, // Don't expand
+      textAlign: 'left', // Align to left
+      maxWidth: '50%', // Prevent text from taking too much space
     },
     headerTimer: {
       fontSize: 14,
       color: isDark ? '#9ca3af' : '#6b7280',
-      textAlign: 'center',
-      marginTop: 2,
+      textAlign: 'center', // Keep centered
+      flex: 1, // Take remaining space and center within it
+      maxWidth: 120, // Prevent timer row breaks - limit to 2 characters for hour (99) + formatting
     },
     headerSubtitle: {
       fontSize: 14,
@@ -1136,7 +1141,7 @@ export default function Chat() {
                   )}
                 </View>
                 <View style={styles.headerTextInfo}>
-                  <Text style={styles.headerName}>
+                  <Text style={styles.headerName} numberOfLines={1} ellipsizeMode="tail">
                     {matchProfile?.first_name || matchName || 'Match'}
                   </Text>
                   {currentEvent?.expires_at && (

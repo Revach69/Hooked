@@ -1,0 +1,46 @@
+# Expo Prebuild Ignore File
+# Prevents 'npx expo prebuild' from overwriting critical manually-configured files
+
+# Android Critical Files
+android/app/build.gradle                    # Package name, version codes, signing config
+android/gradle.properties                   # Architecture settings (newArchEnabled=false)
+android/build.gradle                        # Google Services plugin classpath
+android/app/src/main/AndroidManifest.xml    # Permissions (camera, notifications, etc.)
+android/app/src/main/res/values/colors.xml  # iconBackground color
+android/app/google-services.json            # Firebase configuration
+android/app/src/main/java/                  # Kotlin source files
+
+# iOS Critical Files  
+ios/Podfile                                 # CocoaPods configuration, modular headers
+ios/Podfile.properties.json                # Architecture settings, framework config
+ios/Hooked/Info.plist                      # Permissions, bundle ID, version
+ios/Hooked/GoogleService-Info.plist        # Firebase configuration
+ios/Hooked/Hooked.entitlements            # Push notifications, associated domains
+ios/Hooked.xcodeproj/project.pbxproj       # Xcode project settings
+ios/Hooked/AppDelegate.swift               # App delegate configuration
+
+# Asset Files
+ios/Hooked/Images.xcassets/                # iOS app icons and assets
+android/app/src/main/res/mipmap*/          # Android app icons
+android/app/src/main/res/drawable*/        # Android splash screens and assets
+
+# Build Configuration
+ios/Podfile.lock                           # Lock file for consistent pod versions
+android/app/src/main/res/values/strings.xml # App name configuration
+
+# Firebase & Google Services
+**/GoogleService-Info.plist
+**/google-services.json
+
+# Version Control
+android/**/BuildConfig.java               # Generated build config
+ios/build/                                 # iOS build artifacts
+android/build/                             # Android build artifacts
+
+# Note: This prevents prebuild from corrupting:
+# 1. Package names and bundle identifiers
+# 2. Version codes and build numbers  
+# 3. Architecture settings (new arch disabled)
+# 4. Firebase/Google Services integration
+# 5. Critical permissions for camera/notifications
+# 6. Signing and deployment configurations
