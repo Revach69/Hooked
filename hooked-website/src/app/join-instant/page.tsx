@@ -103,53 +103,64 @@ function JoinInstantContent() {
             </>
           ) : isAndroid ? (
             <>
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
-                <h2 className="font-semibold text-amber-900 mb-2">🚧 Android App in Beta</h2>
-                <p className="text-sm text-amber-800">
-                  The Android app is currently in beta testing. To use it, you need to opt-in to our beta program.
+              <div className="bg-gradient-to-r from-orange-50 to-pink-50 border-2 border-orange-200 rounded-2xl p-6 mb-8">
+                <div className="flex items-center justify-center mb-3">
+                  <div className="bg-gradient-to-r from-orange-500 to-pink-500 rounded-full p-2">
+                    <span className="text-white text-xl">🚀</span>
+                  </div>
+                </div>
+                <h2 className="font-bold text-gray-900 mb-2 text-lg">Android Beta Access</h2>
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  Our Android app is in beta! Follow these simple steps to join the exclusive beta program.
                 </p>
               </div>
               
-              <div className="space-y-6">
-                <div className="bg-gray-50 rounded-lg p-4 text-left">
-                  <div className="flex items-center mb-2">
-                    <span className="bg-purple-100 text-purple-600 font-bold rounded-full w-7 h-7 flex items-center justify-center text-sm mr-2">1</span>
-                    <h3 className="font-semibold text-gray-900">Join Beta Group</h3>
+              <div className="space-y-5">
+                <div className="bg-white border-2 border-purple-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-center mb-3">
+                    <div className="bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold rounded-full w-8 h-8 flex items-center justify-center text-sm mr-3 shadow-md">1</div>
+                    <h3 className="font-bold text-gray-900 text-lg">Join Beta Group</h3>
                   </div>
-                  <p className="text-sm text-gray-600 mb-3 ml-9">
-                    First, join our Google Group to get access to the beta version.
+                  <p className="text-sm text-gray-600 mb-4 ml-11 leading-relaxed">
+                    Join our Google Group to unlock beta access
                   </p>
-                  <a
-                    href="https://groups.google.com/g/hooked-beta/about"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full inline-block bg-blue-600 text-white font-semibold py-3 px-6 rounded-xl hover:bg-blue-700 transition-colors text-center"
-                  >
-                    🔗 Join Beta Group
-                  </a>
+                  <div className="ml-11">
+                    <a
+                      href="https://groups.google.com/g/hooked-beta/about"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full inline-block bg-gradient-to-r from-blue-500 to-blue-600 text-white font-bold py-3 px-6 rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all transform hover:scale-105 text-center shadow-lg"
+                    >
+                      🔗 Join Beta Group
+                    </a>
+                  </div>
                 </div>
                 
-                <div className="bg-gray-50 rounded-lg p-4 text-left">
-                  <div className="flex items-center mb-2">
-                    <span className="bg-purple-100 text-purple-600 font-bold rounded-full w-7 h-7 flex items-center justify-center text-sm mr-2">2</span>
-                    <h3 className="font-semibold text-gray-900">Download App</h3>
+                <div className="bg-white border-2 border-green-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-center mb-3">
+                    <div className="bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold rounded-full w-8 h-8 flex items-center justify-center text-sm mr-3 shadow-md">2</div>
+                    <h3 className="font-bold text-gray-900 text-lg">Download App</h3>
                   </div>
-                  <p className="text-sm text-gray-600 mb-3 ml-9">
-                    After joining the group, you can download the beta app from Play Store.
+                  <p className="text-sm text-gray-600 mb-4 ml-11 leading-relaxed">
+                    Once approved, download the beta from Play Store
                   </p>
-                  <a
-                    href="https://play.google.com/apps/testing/com.hookedapp.app"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full inline-block bg-green-600 text-white font-semibold py-3 px-6 rounded-xl hover:bg-green-700 transition-colors text-center"
-                  >
-                    📱 Download from Play Store
-                  </a>
+                  <div className="ml-11">
+                    <a
+                      href="https://play.google.com/apps/testing/com.hookedapp.app"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full inline-block bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold py-3 px-6 rounded-xl hover:from-green-600 hover:to-emerald-600 transition-all transform hover:scale-105 text-center shadow-lg"
+                    >
+                      📱 Get Beta App
+                    </a>
+                  </div>
                 </div>
               </div>
               
-              <div className="mt-6 text-xs text-gray-500">
-                Note: It may take a few minutes after joining the group before you can access the beta.
+              <div className="mt-8 bg-purple-50 border border-purple-200 rounded-xl p-4">
+                <p className="text-xs text-purple-700 text-center font-medium">
+                  ⏱️ Beta access may take a few minutes after joining the group
+                </p>
               </div>
             </>
           ) : (
