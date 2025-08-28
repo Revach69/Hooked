@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import Header from '../../components/Header';
+import { trackCTAButton } from '../../components/GoogleAnalytics';
 
 // Dynamically import the EventsClient component to avoid build-time Firebase issues
 const EventsClient = dynamic(() => import('../../components/EventsClient'), {
@@ -48,6 +49,7 @@ export default function IRL() {
             <Link 
               href="/contact" 
               className="btn-primary"
+              onClick={() => trackCTAButton('get_started_host_event', 'irl_page')}
             >
               Get Started
             </Link>

@@ -38,6 +38,7 @@ export interface Event {
   updated_at: Date | Timestamp | string; // Support both formats for backwards compatibility
   expired?: boolean; // New field to track if event has expired and been processed
   analytics_id?: string; // Reference to analytics data for expired events
+  organizer_password?: string; // Password for event organizer stats access
 }
 
 export interface EventAnalytics {
@@ -131,11 +132,26 @@ export interface KickedUser {
   created_at: string;
 }
 
+// Helper function to generate organizer password (6-8 characters)
+const generateOrganizerPassword = (): string => {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  const length = Math.floor(Math.random() * 3) + 6; // Random length between 6-8
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+};
+
 // Event API - renamed to avoid conflict with browser Event
 export const EventAPI = {
   async create(data: Omit<Event, 'id' | 'created_at' | 'updated_at'>): Promise<Event> {
+    // Always generate organizer password automatically
+    const organizerPassword = generateOrganizerPassword();
+    
     const eventData = {
       ...data,
+      organizer_password: organizerPassword,
       created_at: serverTimestamp(),
       updated_at: serverTimestamp(),
     };
@@ -147,6 +163,7 @@ export const EventAPI = {
     return { 
       id: docRef.id, 
       ...data,
+      organizer_password: organizerPassword,
       created_at: new Date().toISOString(), // Convert serverTimestamp to ISO string
       updated_at: new Date().toISOString() // Convert serverTimestamp to ISO string
     } as Event;
@@ -539,4 +556,6 @@ export const EventAnalytics = {
     const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
     await Promise.all(deletePromises);
   },
-}; 
+};
+
+ 

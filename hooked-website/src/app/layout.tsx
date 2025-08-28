@@ -4,6 +4,7 @@ import "./globals.css";
 import Link from "next/link";
 import GoogleAnalytics from "../components/GoogleAnalytics";
 import SocialLinks from "../components/SocialLinks";
+import AppStoreButtons from "../components/AppStoreButtons";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -100,6 +101,22 @@ export default function RootLayout({
           media="(max-width: 767px)"
         />
         
+        {/* Google Analytics */}
+        <script async src="https://www.googletagmanager.com/gtag/js?id=G-GGPFTFPN7T"></script>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);}
+              gtag('js', new Date());
+              gtag('config', 'G-GGPFTFPN7T', {
+                page_title: document.title,
+                page_location: window.location.href,
+              });
+            `,
+          }}
+        />
+
         {/* Structured Data for Organization */}
         <script
           type="application/ld+json"
@@ -166,37 +183,7 @@ export default function RootLayout({
               <div className="flex flex-col sm:flex-row items-center space-y-3 sm:space-y-0 sm:space-x-4 order-2 md:order-3">
                 {/* App Store Buttons */}
                 <div className="flex flex-col items-center space-y-3">
-                  <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-                    {/* App Store Button */}
-                    <a 
-                      href="https://apps.apple.com/app/hooked/id6748921014" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="hover:opacity-80 transition-opacity"
-                      aria-label="Download Hooked on the App Store"
-                    >
-                      <img 
-                        src="/Apple Store Badge.png" 
-                        alt="Download on the App Store" 
-                        className="h-12 w-[160px] object-contain"
-                      />
-                    </a>
-
-                    {/* Play Store Button */}
-                    <a 
-                      href="https://play.google.com/store/apps/details?id=com.hookedapp.app" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="hover:opacity-80 transition-opacity"
-                      aria-label="Get Hooked on Google Play"
-                    >
-                      <img 
-                        src="/Play Store Badge.png" 
-                        alt="Get it on Google Play" 
-                        className="h-12 w-[160px] object-contain"
-                      />
-                    </a>
-                  </div>
+                  <AppStoreButtons />
                   
                   {/* Trademark Text */}
                   <p className="text-xs text-gray-500 dark:text-gray-400 text-center max-w-sm leading-relaxed">

@@ -100,6 +100,89 @@ export default function Matches() {
     periodicCheck?: number;
   }>({});
 
+  // Cache for latest messages to prevent losing data on navigation
+  const latestMessagesCache = useRef<Map<string, any>>(new Map());
+  
+  // Fetch latest messages for all matches when entering the page
+  const fetchLatestMessagesForMatches = useCallback(async (matchProfiles: any[]) => {
+    if (!currentEvent?.id || !currentUserProfile?.id || !matchProfiles.length) return;
+
+    console.log('Fetching latest messages for', matchProfiles.length, 'matches');
+
+    try {
+      const { collection, query, where, getDocs } = await import('firebase/firestore');
+      const { db } = await import('../lib/firebaseConfig');
+
+      // Fetch messages for each match
+      const messagePromises = matchProfiles.map(async (profile) => {
+        try {
+          // Check cache first - if we have recent data, use it immediately
+          const cachedMessage = latestMessagesCache.current.get(profile.session_id);
+          const cacheTime = cachedMessage?.fetchedAt || 0;
+          const isCacheRecent = Date.now() - cacheTime < 30000; // 30 seconds
+
+          // Get all messages for this conversation
+          const messagesFromUserQuery = query(
+            collection(db, 'messages'),
+            where('event_id', '==', currentEvent.id),
+            where('from_profile_id', '==', currentUserProfile.id),
+            where('to_profile_id', '==', profile.id)
+          );
+          
+          const messagesToUserQuery = query(
+            collection(db, 'messages'),
+            where('event_id', '==', currentEvent.id),
+            where('from_profile_id', '==', profile.id),
+            where('to_profile_id', '==', currentUserProfile.id)
+          );
+
+          const [fromUserSnapshot, toUserSnapshot] = await Promise.all([
+            getDocs(messagesFromUserQuery),
+            getDocs(messagesToUserQuery)
+          ]);
+
+          const allMessages = [
+            ...fromUserSnapshot.docs.map(doc => doc.data()),
+            ...toUserSnapshot.docs.map(doc => doc.data())
+          ];
+
+          if (allMessages.length > 0) {
+            allMessages.sort((a, b) => {
+              const aTime = a.created_at?.toMillis?.() || a.created_at || 0;
+              const bTime = b.created_at?.toMillis?.() || b.created_at || 0;
+              return bTime - aTime;
+            });
+
+            const latestMessage = allMessages[0];
+            const messageData = {
+              ...latestMessage,
+              fetchedAt: Date.now() // Add timestamp for cache management
+            };
+
+            // Cache the message
+            latestMessagesCache.current.set(profile.session_id, messageData);
+            
+            console.log(`Updated message cache for ${profile.first_name}:`, {
+              content: latestMessage?.content?.substring(0, 30) || latestMessage?.message?.substring(0, 30),
+              messageCount: allMessages.length
+            });
+
+            return { sessionId: profile.session_id, message: messageData };
+          }
+        } catch (error) {
+          console.warn(`Error fetching messages for ${profile.first_name}:`, error.message);
+        }
+        return { sessionId: profile.session_id, message: null };
+      });
+
+      await Promise.all(messagePromises);
+      console.log('Finished fetching latest messages for all matches');
+
+    } catch (error) {
+      console.error('Error in fetchLatestMessagesForMatches:', error);
+    }
+  }, [currentEvent?.id, currentUserProfile?.id]);
+
   useEffect(() => {
     // Move initializeSession inside useEffect to resolve dependency issue
     async function initializeSession() {
@@ -256,7 +339,12 @@ export default function Matches() {
       };
       
       reloadData();
-    }, [currentEvent?.id, currentSessionId, currentUserProfile?.id])
+      
+      // Fetch latest messages for all matches when entering the page
+      if (matches.length > 0 && currentUserProfile?.id) {
+        fetchLatestMessagesForMatches(matches);
+      }
+    }, [currentEvent?.id, currentSessionId, currentUserProfile?.id, fetchLatestMessagesForMatches, matches])
   );
 
   // Track app state changes
@@ -434,24 +522,20 @@ export default function Matches() {
             const { collection, query, where, orderBy, limit, getDocs } = await import('firebase/firestore');
             const { db } = await import('../lib/firebaseConfig');
             
-            // Query messages from current user to this match
+            // Simplified approach: Get ALL messages for this conversation, then sort locally
+            // This avoids Firestore index requirements
             const messagesFromUserQuery = query(
               collection(db, 'messages'),
               where('event_id', '==', currentEvent.id),
               where('from_profile_id', '==', currentUserProfile.id),
-              where('to_profile_id', '==', profile.id),
-              orderBy('created_at', 'desc'),
-              limit(1)
+              where('to_profile_id', '==', profile.id)
             );
             
-            // Query messages from this match to current user
             const messagesToUserQuery = query(
               collection(db, 'messages'),
               where('event_id', '==', currentEvent.id),
               where('from_profile_id', '==', profile.id),
-              where('to_profile_id', '==', currentUserProfile.id),
-              orderBy('created_at', 'desc'),
-              limit(1)
+              where('to_profile_id', '==', currentUserProfile.id)
             );
             
             // Execute both queries
@@ -460,24 +544,40 @@ export default function Matches() {
               getDocs(messagesToUserQuery)
             ]);
             
-            // Get the latest message from both directions
-            const fromUserMessage = fromUserSnapshot.docs.length > 0 ? fromUserSnapshot.docs[0].data() : null;
-            const toUserMessage = toUserSnapshot.docs.length > 0 ? toUserSnapshot.docs[0].data() : null;
+            // Combine all messages and sort locally to find the latest
+            const allMessages = [
+              ...fromUserSnapshot.docs.map(doc => doc.data()),
+              ...toUserSnapshot.docs.map(doc => doc.data())
+            ];
             
-            // Determine which is the latest message
+            // Sort messages by created_at timestamp (newest first)
             let latestMessage = null;
-            if (fromUserMessage && toUserMessage) {
-              const fromTime = fromUserMessage.created_at?.toMillis?.() || fromUserMessage.created_at || 0;
-              const toTime = toUserMessage.created_at?.toMillis?.() || toUserMessage.created_at || 0;
-              latestMessage = fromTime > toTime ? fromUserMessage : toUserMessage;
-            } else if (fromUserMessage) {
-              latestMessage = fromUserMessage;
-            } else if (toUserMessage) {
-              latestMessage = toUserMessage;
+            if (allMessages.length > 0) {
+              allMessages.sort((a, b) => {
+                const aTime = a.created_at?.toMillis?.() || a.created_at || 0;
+                const bTime = b.created_at?.toMillis?.() || b.created_at || 0;
+                return bTime - aTime; // Descending order (newest first)
+              });
+              latestMessage = allMessages[0]; // Get the most recent message
+              
+              // Debug logging to understand what we're getting
+              console.log(`Match ${profile.first_name}: Found ${allMessages.length} messages, latest:`, {
+                content: latestMessage?.content?.substring(0, 50),
+                message: latestMessage?.message?.substring(0, 50), // Check both field names
+                from: latestMessage?.from_profile_id === currentUserProfile.id ? 'You' : profile.first_name,
+                timestamp: latestMessage?.created_at,
+                seen: latestMessage?.seen,
+                fields: Object.keys(latestMessage || {})
+              });
             }
             
             // Check if this match has unread messages
             const hasUnread = unreadMessages.has(profile.session_id);
+            
+            // Cache the latest message for this profile
+            if (latestMessage) {
+              latestMessagesCache.current.set(profile.session_id, latestMessage);
+            }
             
             return {
               ...profile,
@@ -500,11 +600,17 @@ export default function Matches() {
                 ? 'New message - tap to view'  // If unread exists, there must be messages
                 : null;
               
+            console.log(`Error fetching messages for ${profile.first_name}:`, error.message, { hasUnread });
+            
+            // Try to use cached message as fallback
+            const cachedMessage = latestMessagesCache.current.get(profile.session_id);
+            const finalMessage = cachedMessage || (fallbackPreview ? { content: fallbackPreview, from_profile_id: null } : null);
+            
             return {
               ...profile,
-              latestMessageTimestamp: 0,
+              latestMessageTimestamp: cachedMessage?.created_at?.toMillis?.() || cachedMessage?.created_at || 0,
               hasUnreadMessages: hasUnread,
-              latestMessage: fallbackPreview ? { content: fallbackPreview, from_profile_id: null } : null,
+              latestMessage: finalMessage,
               matchCreatedAt: profile.matchCreatedAt // Preserve match creation time
             };
           }
@@ -670,6 +776,11 @@ export default function Matches() {
                   
                   // Cache the sorted matches to prevent visual reordering on next load
                   GlobalDataCache.set(CacheKeys.MATCHES_LIST, sortedMatches, 5 * 60 * 1000);
+                  
+                  // Fetch latest messages for caching when matches are loaded
+                  if (sortedMatches.length > 0 && userProfile?.id) {
+                    fetchLatestMessagesForMatches(sortedMatches);
+                  }
                   
                   // Cache match profile images
                   if (currentEvent?.id && matchedProfiles.length > 0) {
@@ -1514,7 +1625,7 @@ export default function Matches() {
       flexDirection: 'row',
       backgroundColor: isDark ? '#1e293b' : '#ffffff',
       borderRadius: 12,
-      paddingVertical: 8,
+      paddingVertical: 8, // Restored to original height
       paddingHorizontal: 12,
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 1 },
@@ -1525,6 +1636,7 @@ export default function Matches() {
       borderColor: isDark ? '#374151' : '#e5e7eb',
       alignItems: 'center',
       minHeight: 56,
+      position: 'relative', // Enable absolute positioning for children
     },
     matchImageContainer: {
       marginRight: 12,
@@ -1561,34 +1673,37 @@ export default function Matches() {
     },
     matchInfo: {
       flex: 1,
-      justifyContent: 'center',
+      justifyContent: 'flex-start', // Move content slightly toward the top
       alignItems: 'flex-start', // Align content to the left
-      paddingLeft: 12,
+      paddingLeft: 8, // Reduced padding to move text closer to thumbnail
+      paddingBottom: 4, // Add bottom padding to push content up
     },
     matchHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between', // Name on left, dropdown on right
       width: '100%',
-      marginBottom: 2, // Reduced from 4 to bring message preview closer to name
+      marginBottom: 4, // Small spacing between name and message preview
     },
     matchNameContainer: {
       flexDirection: 'row',
       alignItems: 'center',
       flex: 1, // Take available space, pushing dropdown to right
+      paddingRight: 5, // Add padding to prevent text overlap with menu button
     },
     matchName: {
       fontSize: 16,
       fontWeight: 'bold',
-      color: '#ffffff', // Always white as requested
+      color: isDark ? '#ffffff' : '#1f2937', // White in dark mode, dark gray in light mode
       textAlign: 'left', // Left align as requested
     },
     messagePreview: {
       fontSize: 14,
       color: isDark ? '#9ca3af' : '#6b7280',
-      lineHeight: 18,
+      lineHeight: 16, // Reduced line height to minimize vertical space
       textAlign: 'left', // Left align as requested
-      width: '100%',
+      paddingRight: 25, // Reduced padding to allow 3 more characters to show
+      marginTop: 0, // Reset margin for proper spacing
     },
     emptyState: {
       alignItems: 'center',
@@ -1967,8 +2082,9 @@ export default function Matches() {
                       )}
                     </View>
                     
-                    <DropdownMenu
-                      items={[
+                    <View style={{ position: 'absolute', right: -4, top: '50%', transform: [{ translateY: -8 }] }}>
+                      <DropdownMenu
+                        items={[
                         {
                           id: 'mute',
                           label: mutedMatches.has(match.session_id) ? 'Unmute' : 'Mute',
@@ -1988,8 +2104,9 @@ export default function Matches() {
                           onPress: () => handleReportMatch(match),
                           destructive: true,
                         },
-                      ]}
-                    />
+                        ]}
+                      />
+                    </View>
                   </View>
                   
                   {/* Message preview */}
@@ -2002,12 +2119,19 @@ export default function Matches() {
                     numberOfLines={1}
                     ellipsizeMode="tail"
                   >
-                    {match.latestMessage?.content 
-                      ? (match.latestMessage.from_profile_id === currentUserProfile?.id 
-                          ? `You: ${match.latestMessage.content}` 
-                          : match.latestMessage.content)
-                      : 'Tap to start chatting!'
-                    }
+                    {(() => {
+                      // First try cached message, then match.latestMessage
+                      const cachedMessage = latestMessagesCache.current.get(match.session_id);
+                      const messageToShow = cachedMessage || match.latestMessage;
+                      const messageContent = messageToShow?.content || messageToShow?.message;
+                      
+                      if (messageContent) {
+                        return messageToShow.from_profile_id === currentUserProfile?.id 
+                          ? `You: ${messageContent}` 
+                          : messageContent;
+                      }
+                      return 'Tap to start chatting!';
+                    })()}
                   </Text>
                 </View>
               </TouchableOpacity>

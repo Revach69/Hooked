@@ -504,6 +504,29 @@ export default function EventsPage() {
                     </p>
                   </div>
                 )}
+
+                {/* Organizer Password */}
+                <div className="mt-4">
+                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Organizer Password</h4>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={event.organizer_password || 'Not set'}
+                      readOnly
+                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm font-mono"
+                    />
+                    <button
+                      onClick={() => navigator.clipboard.writeText(event.organizer_password || '')}
+                      className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                      title="Copy to clipboard"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                    Use this password to access event stats at: <code className="bg-gray-100 dark:bg-gray-600 px-1 py-0.5 rounded text-xs">hooked-app.com/event-stats/{event.event_code}</code>
+                  </p>
+                </div>
               </div>
 
               {/* Right Side - Actions */}

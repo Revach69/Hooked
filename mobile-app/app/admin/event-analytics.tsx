@@ -133,7 +133,9 @@ export default function EventAnalytics() {
       ]);
 
       // Calculate analytics
-      const mutualLikes = likes.filter((like: any) => like.is_mutual);
+      // Count unique matches (mutual likes create 2 records, so divide by 2)
+      const mutualLikeRecords = likes.filter((like: any) => like.is_mutual);
+      const uniqueMatches = Math.floor(mutualLikeRecords.length / 2);
       const activeUsers = profiles.filter((profile: any) => {
         const userLikes = likes.filter((like: any) => like.from_profile_id === profile.id || like.to_profile_id === profile.id);
         const userMessages = messages.filter((msg: any) => msg.from_profile_id === profile.id || msg.to_profile_id === profile.id);
@@ -176,7 +178,7 @@ export default function EventAnalytics() {
       setAnalytics({
         totalProfiles: profiles.length,
         totalLikes: likes.length,
-        totalMatches: mutualLikes.length,
+        totalMatches: uniqueMatches,
         totalMessages: messages.length,
         activeUsers,
         engagementRate,

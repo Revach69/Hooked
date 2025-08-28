@@ -8,6 +8,7 @@ import AnimatedArrow from "../components/AnimatedArrow";
 import Header from "../components/Header";
 import Collage from "../components/Collage";
 import Head from "next/head";
+import { trackCTAButton } from "../components/GoogleAnalytics";
 
 export default function Home() {
   const [showHeadline, setShowHeadline] = useState(false);
@@ -96,14 +97,15 @@ export default function Home() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 items-center">
             {/* Left Side - Text Content */}
             <div className="text-center lg:col-span-2">
-              <p className="text-4xl md:text-5xl font-extrabold mb-4 font-heading ">Scan. Match. Meet IRL.</p>
-              <p className="text-base md:text-lg mb-8 text-white/90 font-bold font-body">
+              <p className="text-5xl md:text-6xl lg:text-7xl font-extrabold mb-6 font-heading ">Scan. Match. Meet IRL.</p>
+              <p className="text-lg md:text-xl lg:text-2xl mb-10 text-white/90 font-bold font-body">
                 A live social app for any kind of event - parties, conferences,weddings...
               </p>
               <div className="flex flex-col items-center space-y-4">
                 <Link
                   href="/event-organizers"
                   className="btn-primary px-8 py-4 text-lg inline-flex items-center justify-center text-center w-full max-w-sm"
+                  onClick={() => trackCTAButton('hooked_for_organizers', 'hero_section')}
                 >
                   Hooked for Organizers
                 </Link>
@@ -111,6 +113,7 @@ export default function Home() {
                 <Link
                   href="/irl"
                   className="btn-secondary px-8 py-4 text-lg inline-flex items-center justify-center text-center w-full max-w-sm"
+                  onClick={() => trackCTAButton('find_events', 'hero_section')}
                 >
                   Find Events
                 </Link>
@@ -119,7 +122,7 @@ export default function Home() {
             
             {/* Right Side - Visual Content */}
             <div className="relative flex justify-center lg:justify-end">
-              <div className="relative w-[250px] h-[350px] md:w-[300px] md:h-[400px]">
+              <div className="relative w-[350px] h-[500px] md:w-[400px] md:h-[550px] lg:w-[450px] lg:h-[600px]">
                 <MobileOptimizedImage
                   src="/Site Image.png"
                   alt="Hooked - One scan shows you who's single"
@@ -131,7 +134,7 @@ export default function Home() {
                   priority
                   fadeInDuration={50}
                   fallbackText="📱 Hooked App Preview"
-                  sizes="(max-width: 768px) 250px, 300px"
+                  sizes="(max-width: 768px) 350px, (max-width: 1024px) 400px, 450px"
                 />
               </div>
             </div>
@@ -438,6 +441,7 @@ export default function Home() {
           <Link
             href="/contact"
             className="btn-primary px-8 py-4 text-lg inline-flex items-center justify-center text-center"
+            onClick={() => trackCTAButton('talk_to_us', 'bottom_section')}
           >
             Talk To Us
           </Link>

@@ -77,8 +77,9 @@ export default function AnalyticsModal({
         Message.filter({ event_id: eventId })
       ]);
 
-      // Calculate mutual matches
-      const mutualLikes = likes.filter((like: Like) => like.is_mutual);
+      // Calculate mutual matches (divide by 2 since each match creates 2 mutual like records)
+      const mutualLikeRecords = likes.filter((like: Like) => like.is_mutual);
+      const uniqueMatches = Math.floor(mutualLikeRecords.length / 2);
 
       // Calculate average age
       const validAges = profiles
@@ -90,10 +91,10 @@ export default function AnalyticsModal({
 
       // Calculate gender breakdown
       const genderBreakdown = profiles.reduce((acc: { male: number; female: number; other: number }, profile: EventProfile) => {
-        const gender = profile.gender_identity?.toLowerCase() || 'other';
-        if (gender === 'male' || gender === 'm') {
+        const gender = profile.gender_identity || '';
+        if (gender === 'man') {
           acc.male++;
-        } else if (gender === 'female' || gender === 'f') {
+        } else if (gender === 'woman') {
           acc.female++;
         } else {
           acc.other++;
@@ -103,7 +104,7 @@ export default function AnalyticsModal({
 
       setAnalytics({
         totalProfiles: profiles.length,
-        mutualMatches: mutualLikes.length,
+        mutualMatches: uniqueMatches,
         messagesSent: messages.length,
         averageAge,
         genderBreakdown

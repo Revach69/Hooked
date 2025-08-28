@@ -113,6 +113,7 @@ export interface Event {
   updated_at: Timestamp;
   expired?: boolean; // New field to track if event has expired and been processed
   analytics_id?: string; // Reference to analytics data for expired events
+  organizer_password?: string; // Password for event organizer stats access
 }
 
 export interface EventAnalytics {
@@ -264,13 +265,28 @@ export interface AdminClient {
   createdByUid?: string | null;
 }
 
+// Helper function to generate organizer password (6-8 characters)
+const generateOrganizerPassword = (): string => {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  const length = Math.floor(Math.random() * 3) + 6; // Random length between 6-8
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+};
+
 // Event API
 export const EventAPI = {
   async create(data: Omit<Event, 'id' | 'created_at' | 'updated_at'>): Promise<Event> {
     return firebaseRetry(async () => {
       return trace('create_event', async () => {
+        // Generate organizer password if not provided
+        const organizerPassword = data.organizer_password || generateOrganizerPassword();
+        
         const docRef = await addDoc(collection(db, 'events'), {
           ...data,
+          organizer_password: organizerPassword,
           created_at: serverTimestamp(),
           updated_at: serverTimestamp()
         });
@@ -278,6 +294,7 @@ export const EventAPI = {
         return {
           id: docRef.id,
           ...data,
+          organizer_password: organizerPassword,
           created_at: Timestamp.now(),
           updated_at: Timestamp.now()
         };
