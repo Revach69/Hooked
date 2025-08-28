@@ -2142,14 +2142,14 @@ PODS:
     - React-logger (= 0.79.5)
     - React-perflogger (= 0.79.5)
     - React-utils (= 0.79.5)
-  - RNCAsyncStorage (2.1.2):
+  - RNCAsyncStorage (2.2.0):
     - React-Core
   - RNDateTimePicker (8.4.1):
     - React-Core
-  - RNFBApp (23.1.1):
+  - RNFBApp (23.1.2):
     - Firebase/CoreOnly (= 12.1.0)
     - React-Core
-  - RNFBAppCheck (23.1.1):
+  - RNFBAppCheck (23.1.2):
     - Firebase/AppCheck (= 12.1.0)
     - React-Core
     - RNFBApp
@@ -2326,7 +2326,7 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - Yoga
-  - RNSentry (6.14.0):
+  - RNSentry (6.20.0):
     - DoubleConversion
     - glog
     - hermes-engine
@@ -2349,7 +2349,7 @@ PODS:
     - ReactCodegen
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
-    - Sentry/HybridSDK (= 8.50.2)
+    - Sentry/HybridSDK (= 8.53.2)
     - Yoga
   - RNSVG (15.11.2):
     - React-Core
@@ -2357,7 +2357,7 @@ PODS:
   - SDWebImageWebPCoder (0.14.6):
     - libwebp (~> 1.0)
     - SDWebImage/Core (~> 5.17)
-  - Sentry/HybridSDK (8.50.2)
+  - Sentry/HybridSDK (8.53.2)
   - SocketRocket (0.7.1)
   - Yoga (0.0.0)
   - ZXingObjC/Core (3.6.9)
@@ -2844,18 +2844,18 @@ SPEC CHECKSUMS:
   ReactAppDependencyProvider: f3e842e6cb5a825b6918a74a38402ba1409411f8
   ReactCodegen: 542dbcd3d677ed7c4fe69e28b7c492998f48c9db
   ReactCommon: 1aa48867a0fc71a2b4f9e8a1529f5673648354f3
-  RNCAsyncStorage: b9f5f78da5d16a853fe3dc22e8268d932fc45a83
+  RNCAsyncStorage: b44e8a4e798c3e1f56bffccd0f591f674fb9198f
   RNDateTimePicker: 60f9e986d61e42169a2716c1b51f1f93dfa82665
-  RNFBApp: 053f79dccb3e34415dac9a5167bd33094d8a1441
-  RNFBAppCheck: e865a44d72f3bbbb746cfffae8f44bfa0ed7f076
+  RNFBApp: 3155b54dc88e7bf8d7aad86c014bed54747f4e0f
+  RNFBAppCheck: 8e49eaea8e57041f8954918db8c6c3c8c19e358a
   RNGestureHandler: e960beba92f592ee4a03b20aa4931806d0f16b06
   RNReanimated: 8442cd220122765de7d858946846a7513e40fe04
   RNScreens: 7f9d84a9901679dbb435592612d5ac57a044adce
-  RNSentry: 1afa17d5215474017b01dc9bd9bb989aa5d196ff
+  RNSentry: aa5ea704ad4589055404ac2c2c0825ba7e85593d
   RNSVG: ab84f2de7dd4f2c86d01825b8a65e0ef712fc36b
   SDWebImage: f29024626962457f3470184232766516dee8dfea
   SDWebImageWebPCoder: e38c0a70396191361d60c092933e22c20d5b1380
-  Sentry: d95f5f3b32d01324b3e27d3c52747005302cc026
+  Sentry: 59993bffde4a1ac297ba6d268dc4bbce068d7c1b
   SocketRocket: d4aabe649be1e368d1318fdf28a022d714d65748
   Yoga: bfcce202dba74007f8974ee9c5f903a9a286c445
   ZXingObjC: 8898711ab495761b2dbbdec76d90164a6d7e14c5
