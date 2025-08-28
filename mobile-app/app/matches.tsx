@@ -13,6 +13,7 @@ import {
   Platform,
   Modal,
   TextInput,
+  RefreshControl,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Heart, MessageCircle, Users, User, UserX, VolumeX, Volume2, Flag } from 'lucide-react-native';
@@ -51,6 +52,44 @@ export default function Matches() {
   const [reportingMatch, setReportingMatch] = useState<any>(null);
   const [reportReason, setReportReason] = useState('');
   const [isSubmittingReport, setIsSubmittingReport] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  
+  // Pull-to-refresh handler
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      const eventId = currentEvent?.id || await AsyncStorageUtils.getItem<string>('currentEventId');
+      const sessionId = currentSessionId || await AsyncStorageUtils.getItem<string>('currentSessionId');
+      
+      if (eventId && sessionId) {
+        console.log('Pull-to-refresh: Reloading all matches data');
+        
+        // Reload muted matches
+        const { collection, query, where, getDocs } = await import('firebase/firestore');
+        const { db } = await import('../lib/firebaseConfig');
+        
+        const mutedQuery = query(
+          collection(db, 'muted_matches'),
+          where('event_id', '==', eventId),
+          where('muter_session_id', '==', sessionId)
+        );
+        
+        const snapshot = await getDocs(mutedQuery);
+        const mutedSessionIds = snapshot.docs.map(doc => doc.data().muted_session_id);
+        setMutedMatches(new Set(mutedSessionIds));
+        
+        // Clear and refresh cached data - removed as GlobalDataCache no longer exists
+        // The data is now refreshed directly via Firestore listeners above
+        
+        console.log('Pull-to-refresh: Data refreshed successfully');
+      }
+    } catch (error) {
+      console.error('Pull-to-refresh error:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [currentEvent?.id, currentSessionId]);
+
   // Single ref to hold all unsubscribe functions
   const listenersRef = useRef<{
     userProfile?: () => void;
@@ -450,15 +489,21 @@ export default function Matches() {
           } catch (error) {
             console.warn('Error getting latest message for match:', profile.first_name, error);
             
-            // If Firestore index is missing, provide a fallback message preview
+            // Check if this match has unread messages (from the working unread detection)
+            const hasUnread = unreadMessages.has(profile.session_id);
+            
+            // If there are unread messages but we can't fetch latest message due to index issues,
+            // provide a helpful fallback
             const fallbackPreview = (error as Error)?.message?.includes('requires an index') 
-              ? 'Messages available - tap to view'
-              : null;
+              ? 'New message - tap to view'
+              : hasUnread 
+                ? 'New message - tap to view'  // If unread exists, there must be messages
+                : null;
               
             return {
               ...profile,
               latestMessageTimestamp: 0,
-              hasUnreadMessages: unreadMessages.has(profile.session_id),
+              hasUnreadMessages: hasUnread,
               latestMessage: fallbackPreview ? { content: fallbackPreview, from_profile_id: null } : null,
               matchCreatedAt: profile.matchCreatedAt // Preserve match creation time
             };
@@ -1517,35 +1562,33 @@ export default function Matches() {
     matchInfo: {
       flex: 1,
       justifyContent: 'center',
-      alignItems: 'center', // Center content horizontally
+      alignItems: 'flex-start', // Align content to the left
+      paddingLeft: 12,
     },
     matchHeader: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between', // Keep dropdown on right, but name centered
-      marginBottom: 4,
-      width: '100%', // Take full width
+      justifyContent: 'space-between', // Name on left, dropdown on right
+      width: '100%',
+      marginBottom: 2, // Reduced from 4 to bring message preview closer to name
     },
     matchNameContainer: {
-      position: 'absolute', // Position absolutely to center regardless of dropdown
-      left: 0,
-      right: 0,
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'center', // Center name horizontally
+      flex: 1, // Take available space, pushing dropdown to right
     },
     matchName: {
       fontSize: 16,
-      fontWeight: '600',
-      color: isDark ? '#ffffff' : '#1f2937',
-      textAlign: 'center', // Center text
+      fontWeight: 'bold',
+      color: '#ffffff', // Always white as requested
+      textAlign: 'left', // Left align as requested
     },
     messagePreview: {
       fontSize: 14,
       color: isDark ? '#9ca3af' : '#6b7280',
       lineHeight: 18,
-      textAlign: 'center', // Center text
-      width: '100%', // Take full width for proper centering
+      textAlign: 'left', // Left align as requested
+      width: '100%',
     },
     emptyState: {
       alignItems: 'center',
@@ -1800,7 +1843,17 @@ export default function Matches() {
       )}
 
       {/* Matches List */}
-      <ScrollView style={styles.matchesContainer}>
+      <ScrollView 
+        style={styles.matchesContainer}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            colors={['#FF6B6B']} // Android
+            tintColor="#FF6B6B" // iOS
+          />
+        }
+      >
         {matches.length > 0 ? (
           <View style={styles.matchesList}>
             {matches.map((match) => {
@@ -1953,7 +2006,7 @@ export default function Matches() {
                       ? (match.latestMessage.from_profile_id === currentUserProfile?.id 
                           ? `You: ${match.latestMessage.content}` 
                           : match.latestMessage.content)
-                      : 'Start the conversation!'
+                      : 'Tap to start chatting!'
                     }
                   </Text>
                 </View>

@@ -13,7 +13,7 @@ export interface NotificationChannel {
   name: string;
   description: string;
   importance: Notifications.AndroidImportance;
-  sound: boolean;
+  sound: string | null;
   vibrationPattern?: number[];
   lightColor?: string;
 }
@@ -25,7 +25,7 @@ const CHANNELS: NotificationChannel[] = [
     name: 'Matches',
     description: 'Notifications when you get matched with someone',
     importance: Notifications.AndroidImportance.HIGH,
-    sound: true,
+    sound: 'default',
     vibrationPattern: [0, 250, 250, 250],
     lightColor: '#8b5cf6' // Purple theme color
   },
@@ -34,7 +34,7 @@ const CHANNELS: NotificationChannel[] = [
     name: 'Messages',
     description: 'New chat messages from your matches',
     importance: Notifications.AndroidImportance.HIGH,
-    sound: true,
+    sound: 'default',
     vibrationPattern: [0, 200],
     lightColor: '#8b5cf6'
   },
@@ -43,7 +43,7 @@ const CHANNELS: NotificationChannel[] = [
     name: 'General',
     description: 'General app notifications and updates',
     importance: Notifications.AndroidImportance.DEFAULT,
-    sound: true,
+    sound: 'default',
     vibrationPattern: [0, 100],
     lightColor: '#8b5cf6'
   }

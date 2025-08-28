@@ -127,6 +127,8 @@ export async function showInAppMessageToast(senderName: string, senderSessionId:
   await NotificationRouter.handleIncoming({
     type: 'message',
     id: `legacy_${Date.now()}`,
+    createdAt: Date.now(),
+    senderProfileId: senderSessionId, // Using sessionId as profileId for backward compat
     senderName,
     senderSessionId,
     preview: 'New message'

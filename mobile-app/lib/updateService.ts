@@ -164,8 +164,13 @@ class UpdateService {
     Alert.alert(
       '🚀 Update Available',
       `Version ${latestVersion} is now available.\n\n${updateMessage}`,
-      [
-        !isForceUpdate && { 
+      isForceUpdate ? [
+        {
+          text: 'Update Now',
+          onPress: () => this.openStore()
+        }
+      ] : [
+        { 
           text: 'Later', 
           style: 'cancel' 
         },
@@ -173,7 +178,7 @@ class UpdateService {
           text: 'Update Now',
           onPress: () => this.openStore()
         }
-      ].filter(Boolean),
+      ],
       { cancelable: !isForceUpdate }
     );
   }

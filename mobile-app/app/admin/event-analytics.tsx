@@ -142,9 +142,9 @@ export default function EventAnalytics() {
 
       // Gender distribution
       const genderDistribution = {
-        male: profiles.filter((p: any) => p.gender_identity.toLowerCase().includes('male')).length,
-        female: profiles.filter((p: any) => p.gender_identity.toLowerCase().includes('female')).length,
-        other: profiles.filter((p: any) => !p.gender_identity.toLowerCase().includes('male') && !p.gender_identity.toLowerCase().includes('female')).length,
+        male: profiles.filter((p: any) => p.gender_identity === 'man').length,
+        female: profiles.filter((p: any) => p.gender_identity === 'woman').length,
+        other: profiles.filter((p: any) => p.gender_identity !== 'man' && p.gender_identity !== 'woman').length,
       };
 
       // Age distribution

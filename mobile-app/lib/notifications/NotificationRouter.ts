@@ -28,7 +28,7 @@ function dedupeKey(ev: AnyEvent) {
     const sessions = [ev.senderSessionId, getCurrentSessionId()].sort();
     return `${ev.type}:${sessions[0]}:${sessions[1]}:${contentHash}`;
   }
-  return `${ev.type}:${ev.id}`;
+  return `${(ev as any).type}:${(ev as any).id}`;
 }
 
 // Cleanup old entries from memory cache periodically

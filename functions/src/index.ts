@@ -1015,60 +1015,48 @@ export const onMutualLike = onDocumentWritten({
     // Send notifications based on app state
     // First liker (recipient) - send if not in foreground
     if (!likedIsForeground) {
-        // Apply circuit breaker to prevent notification spam
-        if (shouldSkipNotification(likedSession, 'match', likerSession)) {
-          console.log('Circuit breaker: Skipping match notification for recipient due to cooldown');
-          return;
-        }
-        
-        console.log('Enqueuing match notification for recipient (not in foreground)');
-        await enqueueNotificationJob({
-          type: 'match',
-          event_id: eventId,
-          subject_session_id: likedSession,
-          actor_session_id: likerSession,
-          payload: {
-            title: 'You got Hooked!',
-            body: 'You got a match! Tap to start chatting.',
-            data: { 
-              type: 'match', 
-              otherSessionId: likerSession,
-              aggregationKey: `match:${eventId}:${likedSession}`
-            }
-          },
-          aggregationKey: `match:${eventId}:${likedSession}`
-        });
-      } else {
-        console.log('Recipient is in foreground - client will handle notification');
-      }
+      console.log('Enqueuing match notification for recipient (not in foreground)');
+      await enqueueNotificationJob({
+        type: 'match',
+        event_id: eventId,
+        subject_session_id: likedSession,
+        actor_session_id: likerSession,
+        payload: {
+          title: '🔥 You got Hooked!',
+          body: `Start chatting!`,
+          data: { 
+            type: 'match', 
+            partnerSessionId: likerSession,
+            aggregationKey: `match:${eventId}:${likedSession}`
+          }
+        },
+        aggregationKey: `match:${eventId}:${likedSession}`
+      });
+    } else {
+      console.log('Recipient is in foreground - client will handle notification');
+    }
 
     // Second liker (creator) - send if not in foreground (edge case handling)
     // This handles scenarios where the creator might also be in background
     if (!likerIsForeground) {
       console.log('Creator is also in background - sending notification to creator too');
       
-      // Apply circuit breaker to prevent notification spam
-      if (shouldSkipNotification(likerSession, 'match', likedSession)) {
-        console.log('Circuit breaker: Skipping match notification for creator due to cooldown');
-      } else {
-        console.log('Enqueuing match notification for creator (also in background)');
-        await enqueueNotificationJob({
-          type: 'match',
-          event_id: eventId,
-          subject_session_id: likerSession,
-          actor_session_id: likedSession, // Other user becomes the "actor" from creator's perspective
-          payload: {
-            title: 'You got Hooked!',
-            body: 'You got a match! Tap to start chatting.',
-            data: { 
-              type: 'match', 
-              otherSessionId: likedSession,
-              aggregationKey: `match:${eventId}:${likerSession}`
-            }
-          },
-          aggregationKey: `match:${eventId}:${likerSession}`
-        });
-      }
+      await enqueueNotificationJob({
+        type: 'match',
+        event_id: eventId,
+        subject_session_id: likerSession,
+        actor_session_id: likedSession, 
+        payload: {
+          title: '🔥 You got Hooked!',
+          body: `Start chatting!`,
+          data: { 
+            type: 'match', 
+            partnerSessionId: likedSession,
+            aggregationKey: `match:${eventId}:${likerSession}`
+          }
+        },
+        aggregationKey: `match:${eventId}:${likerSession}`
+      });
     } else {
       console.log('Creator is in foreground - client will handle notification with alert/toast');
     }

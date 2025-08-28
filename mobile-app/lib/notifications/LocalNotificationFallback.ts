@@ -52,7 +52,7 @@ class LocalNotificationFallbackService {
         body = event.preview || 'New message';
         channelId = AndroidChannels.getChannelId('message');
       } else {
-        console.warn('LocalNotificationFallback: Unknown event type:', event.type);
+        console.warn('LocalNotificationFallback: Unknown event type:', (event as any).type);
         return null;
       }
       
@@ -65,10 +65,10 @@ class LocalNotificationFallbackService {
           title,
           body,
           data: {
-            type: event.type,
             eventId: event.id,
             source: 'local_fallback',
-            ...event
+            ...event,
+            type: event.type // Override to ensure type is preserved
           },
           sound: true,
           priority: Notifications.AndroidNotificationPriority.HIGH,

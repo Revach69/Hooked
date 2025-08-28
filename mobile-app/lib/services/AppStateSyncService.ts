@@ -9,6 +9,7 @@ class AppStateSyncServiceClass {
   private isRunning = false;
   private debounceTimeout: ReturnType<typeof setTimeout> | null = null;
   private appStateListener: ((_status: AppStateStatus) => void) | null = null;
+  private foregroundCallbacks: Set<() => void> = new Set();
 
   /**
    * Start syncing app state changes to Firestore
@@ -46,6 +47,11 @@ class AppStateSyncServiceClass {
           isForeground 
         }
       });
+
+      // Trigger refresh callbacks when app comes to foreground
+      if (isForeground) {
+        this.triggerForegroundCallbacks();
+      }
 
       // Debounce the write to avoid excessive Firestore calls
       this.debouncedWriteAppState(isForeground);
@@ -182,6 +188,36 @@ class AppStateSyncServiceClass {
       isRunning: this.isRunning,
       sessionId: this.sessionId
     };
+  }
+
+  /**
+   * Register a callback to be called when app comes to foreground
+   */
+  onAppForeground(callback: () => void): () => void {
+    this.foregroundCallbacks.add(callback);
+    
+    // Return unsubscribe function
+    return () => {
+      this.foregroundCallbacks.delete(callback);
+    };
+  }
+
+  /**
+   * Trigger all registered foreground callbacks
+   */
+  private triggerForegroundCallbacks(): void {
+    if (__DEV__) console.log('AppStateSyncService: Triggering foreground callbacks, count:', this.foregroundCallbacks.size);
+    
+    this.foregroundCallbacks.forEach((callback) => {
+      try {
+        callback();
+      } catch (error) {
+        console.error('AppStateSyncService: Error in foreground callback:', error);
+        Sentry.captureException(error, {
+          tags: { operation: 'foreground_callback' }
+        });
+      }
+    });
   }
 }
 

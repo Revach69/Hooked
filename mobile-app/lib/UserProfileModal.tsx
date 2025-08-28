@@ -138,7 +138,7 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
     profileImage: {
       width: '100%',
       height: '100%',
-      resizeMode: 'cover',
+      resizeMode: 'contain',
     },
     fallbackAvatar: {
       width: width * 0.4,

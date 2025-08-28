@@ -894,12 +894,18 @@ export default function Chat() {
       textAlign: 'left', // Align to left
       maxWidth: '50%', // Prevent text from taking too much space
     },
+    timerContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    expiresInText: {
+      fontSize: 14,
+      color: isDark ? '#9ca3af' : '#6b7280',
+    },
     headerTimer: {
       fontSize: 14,
       color: isDark ? '#9ca3af' : '#6b7280',
-      textAlign: 'center', // Keep centered
-      flex: 1, // Take remaining space and center within it
-      maxWidth: 120, // Prevent timer row breaks - limit to 2 characters for hour (99) + formatting
     },
     headerSubtitle: {
       fontSize: 14,
@@ -1145,11 +1151,14 @@ export default function Chat() {
                     {matchProfile?.first_name || matchName || 'Match'}
                   </Text>
                   {currentEvent?.expires_at && (
-                    <CountdownTimer
-                      expiresAt={currentEvent.expires_at}
-                      format="time-only"
-                      style={styles.headerTimer}
-                    />
+                    <View style={styles.timerContainer}>
+                      <Text style={styles.expiresInText}>Expires in </Text>
+                      <CountdownTimer
+                        expiresAt={currentEvent.expires_at}
+                        format="time-only"
+                        style={styles.headerTimer}
+                      />
+                    </View>
                   )}
                 </View>
               </View>
