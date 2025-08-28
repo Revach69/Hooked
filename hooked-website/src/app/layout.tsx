@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Link from "next/link";
-import GoogleAnalytics from "../components/GoogleAnalytics";
+import Script from "next/script";
 import SocialLinks from "../components/SocialLinks";
 import AppStoreButtons from "../components/AppStoreButtons";
+import RouteTracker from "../components/RouteTracker";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -101,21 +102,6 @@ export default function RootLayout({
           media="(max-width: 767px)"
         />
         
-        {/* Google Analytics */}
-        <script async src="https://www.googletagmanager.com/gtag/js?id=G-GGPFTFPN7T"></script>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              window.dataLayer = window.dataLayer || [];
-              function gtag(){dataLayer.push(arguments);}
-              gtag('js', new Date());
-              gtag('config', 'G-GGPFTFPN7T', {
-                page_title: document.title,
-                page_location: window.location.href,
-              });
-            `,
-          }}
-        />
 
         {/* Structured Data for Organization */}
         <script
@@ -144,8 +130,28 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen flex flex-col dark-mode-bg`}
       >
-        {/* Google Analytics */}
-        <GoogleAnalytics />
+        {/* Google Analytics 4 - Using Firebase-linked property */}
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-6YHKXLN806"
+          strategy="afterInteractive"
+        />
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            
+            gtag('config', 'G-6YHKXLN806', {
+              send_page_view: true,
+              debug_mode: false
+            });
+            
+            console.log('🚀 GA4 configured with measurement ID: G-6YHKXLN806');
+          `}
+        </Script>
+
+        {/* Route tracker for Google Analytics */}
+        <RouteTracker />
         
         {/* Main content */}
         <main className="flex-1">

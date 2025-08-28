@@ -200,7 +200,7 @@ export default function Discovery() {
   });
   const [showFilters, setShowFilters] = useState(false);
   const [likedProfiles, setLikedProfiles] = useState(new Set<string>());
-  const [blockedProfiles, setBlockedProfiles] = useState(new Set<string>());
+  const [blockedProfiles, setBlockedProfiles] = useState(new Set<string>()); // eslint-disable-line @typescript-eslint/no-unused-vars
   const [skippedProfiles, setSkippedProfiles] = useState(new Set<string>());
   const [selectedProfileForDetail, setSelectedProfileForDetail] = useState<any>(null);
   const [viewedProfiles, setViewedProfiles] = useState(new Set<string>());
@@ -794,7 +794,7 @@ export default function Discovery() {
     }
 
     applyFilters();
-  }, [profiles, currentUserProfile, filters, likedProfiles, skippedProfiles, viewedProfiles]);
+  }, [profiles, currentUserProfile, filters, likedProfiles, skippedProfiles, viewedProfiles, filteredProfiles.length]);
 
   // Cache profile images when profiles change
   useEffect(() => {

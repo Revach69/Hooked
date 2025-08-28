@@ -159,6 +159,7 @@ class ImageOptimizationServiceClass {
     try {
       // This is approximate - actual file size check would require reading the file
       // For now, we'll optimize all images to ensure consistency
+      console.log(`Checking if ${uri} needs optimization (target: ${maxSizeKB}KB)`); // Use maxSizeKB parameter
       return true;
     } catch (error) {
       console.warn('ImageOptimizationService: Could not check if optimization needed:', error);

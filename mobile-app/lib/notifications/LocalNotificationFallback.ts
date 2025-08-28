@@ -44,7 +44,7 @@ class LocalNotificationFallbackService {
       let channelId: string;
       
       if (event.type === 'match') {
-        title = "You got Hooked! 💘";
+        title = "You got Hooked!"; // NO emoji for client fallback identification
         body = `Start chatting with ${event.otherName || 'your match'}!`;
         channelId = AndroidChannels.getChannelId('match');
       } else if (event.type === 'message') {

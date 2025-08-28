@@ -67,7 +67,7 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
     setTimeLeft(calculateTimeLeft());
 
     return () => clearInterval(timer);
-  }, [expiresAt]);
+  }, [expiresAt, calculateTimeLeft]);
 
   const displayText = format === 'time-only' ? timeLeft : `${prefix}${timeLeft}`;
 

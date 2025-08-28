@@ -1,11 +1,5 @@
 'use client';
 
-import { useEffect } from 'react';
-import { usePathname } from 'next/navigation';
-
-// Google Analytics 4 configuration
-const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || 'G-GGPFTFPN7T';
-
 // Initialize GA4
 declare global {
   interface Window {
@@ -14,40 +8,8 @@ declare global {
   }
 }
 
-// Load GA4 script
-const loadGA = () => {
-  if (typeof window !== 'undefined' && !window.gtag) {
-    const script = document.createElement('script');
-    script.async = true;
-    script.src = `https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`;
-    document.head.appendChild(script);
-
-    window.dataLayer = window.dataLayer || [];
-    window.gtag = function(...args: unknown[]) {
-      window.dataLayer.push(args);
-    };
-    window.gtag('js', new Date());
-    window.gtag('config', GA_MEASUREMENT_ID, {
-      page_title: document.title,
-      page_location: window.location.href,
-      send_page_view: true,
-      custom_map: {
-        custom_parameter_1: 'dimension1',
-      }
-    });
-    
-    // Enhanced measurement events
-    window.gtag('config', GA_MEASUREMENT_ID, {
-      enhanced_measurements: {
-        scrolls: true,
-        outbound_clicks: true,
-        site_search: true,
-        video_engagement: true,
-        file_downloads: true,
-      }
-    });
-  }
-};
+// GA4 script is loaded via Next.js Script component in layout.tsx
+// This component only provides tracking functions now
 
 // Analytics tracking functions
 export const trackEvent = (action: string, category: string, label?: string, value?: number) => {
@@ -101,48 +63,5 @@ export const trackScrollDepth = (depth: number) => {
   trackEvent('scroll', 'engagement', 'scroll_depth', depth);
 };
 
-// Main Analytics component
-export default function GoogleAnalytics() {
-  const pathname = usePathname();
-
-  useEffect(() => {
-    loadGA();
-  }, []);
-
-  useEffect(() => {
-    const startTime = Date.now();
-
-    if (typeof window !== 'undefined' && window.gtag) {
-      // Track page views
-      window.gtag('config', GA_MEASUREMENT_ID, {
-        page_path: pathname,
-        page_title: document.title,
-      });
-
-      // Track specific pages
-      if (pathname === '/contact') {
-        trackContactPage();
-      }
-
-      // Track page entry time
-      const hour = new Date().getHours();
-      let timeOfDay = 'morning';
-      if (hour >= 12 && hour < 17) timeOfDay = 'afternoon';
-      else if (hour >= 17) timeOfDay = 'evening';
-      
-      trackEvent('page_entry_time', 'timing', `${pathname}_${timeOfDay}`);
-    }
-
-    // Track time spent on page when component unmounts or pathname changes
-    return () => {
-      if (typeof window !== 'undefined' && typeof window.gtag === 'function') {
-        const timeSpent = Math.round((Date.now() - startTime) / 1000);
-        if (timeSpent > 5) { // Only track if spent more than 5 seconds
-          trackTimeSpent(pathname, timeSpent);
-        }
-      }
-    };
-  }, [pathname]);
-
-  return null;
-}
+// Page tracking is now handled by RouteTracker component
+// This component is kept only for the tracking function exports

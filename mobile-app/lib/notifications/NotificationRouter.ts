@@ -384,7 +384,7 @@ export const NotificationRouter = {
           category: 'notification'
         });
         Alert.alert(
-          "You got Hooked!",
+          "You got Hooked!", // NO emoji for client fallback identification
           `Start chatting with ${ev.otherName || 'your match'}!`,
           [
             { text: 'Dismiss', style: 'cancel' },
@@ -439,7 +439,7 @@ export const NotificationRouter = {
             const otherName = ev.otherName || 'Someone';
             Toast.show({ 
               type: 'matchSuccess', 
-              text1: `You got Hooked with ${otherName}!`, 
+              text1: `You got Hooked with ${otherName}!`, // NO emoji for client fallback identification
               text2: 'Tap to start chatting',
               position: 'top',
               visibilityTime: 3500,

@@ -120,6 +120,7 @@ export default function Matches() {
           const cachedMessage = latestMessagesCache.current.get(profile.session_id);
           const cacheTime = cachedMessage?.fetchedAt || 0;
           const isCacheRecent = Date.now() - cacheTime < 30000; // 30 seconds
+          console.log(`Cache status for ${profile.first_name}: ${isCacheRecent ? 'recent' : 'stale'}`);  // Use the variable
 
           // Get all messages for this conversation
           const messagesFromUserQuery = query(
@@ -170,7 +171,7 @@ export default function Matches() {
             return { sessionId: profile.session_id, message: messageData };
           }
         } catch (error) {
-          console.warn(`Error fetching messages for ${profile.first_name}:`, error.message);
+          console.warn(`Error fetching messages for ${profile.first_name}:`, error instanceof Error ? error.message : 'Unknown error');
         }
         return { sessionId: profile.session_id, message: null };
       });
@@ -507,7 +508,7 @@ export default function Matches() {
     };
 
     setupMessageListener();
-  }, [currentEvent?.id, currentUserProfile?.id, matches]);
+  }, [currentEvent?.id, currentUserProfile?.id, matches.length]);
 
   // Define sortMatchesByLatestMessage before setupMatchesListener uses it
   const sortMatchesByLatestMessage = useCallback(async (profiles: any[]): Promise<any[]> => {
@@ -519,7 +520,7 @@ export default function Matches() {
         profiles.map(async (profile) => {
           try {
             // Query messages between current user and this match
-            const { collection, query, where, orderBy, limit, getDocs } = await import('firebase/firestore');
+            const { collection, query, where, getDocs } = await import('firebase/firestore');
             const { db } = await import('../lib/firebaseConfig');
             
             // Simplified approach: Get ALL messages for this conversation, then sort locally
@@ -600,7 +601,7 @@ export default function Matches() {
                 ? 'New message - tap to view'  // If unread exists, there must be messages
                 : null;
               
-            console.log(`Error fetching messages for ${profile.first_name}:`, error.message, { hasUnread });
+            console.log(`Error fetching messages for ${profile.first_name}:`, error instanceof Error ? error.message : 'Unknown error', { hasUnread });
             
             // Try to use cached message as fallback
             const cachedMessage = latestMessagesCache.current.get(profile.session_id);

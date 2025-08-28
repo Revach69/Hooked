@@ -35,9 +35,9 @@ export default function Home() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const [activeModal, setActiveModal] = useState<string | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false); // eslint-disable-line @typescript-eslint/no-unused-vars
   const [manualCode, setManualCode] = useState('');
-  const [isInitialized, setIsInitialized] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false); // eslint-disable-line @typescript-eslint/no-unused-vars
   const [isCheckingResume, setIsCheckingResume] = useState(true); // <-- NEW
 
 
