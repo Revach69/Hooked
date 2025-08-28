@@ -7,9 +7,11 @@ import Head from 'next/head';
 interface EventStats {
   totalProfiles: number;
   activeUsers: number;
+  totalLikes: number;
   totalMatches: number;
   totalMessages: number;
   engagementRate: number;
+  averageAge: number;
   genderDistribution: {
     male: number;
     female: number;
@@ -160,12 +162,19 @@ export default function EventStatsPage() {
           {stats && (
             <>
               {/* Overview Stats */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-6">
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 text-center">
                   <div className="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-2">
                     {stats.totalProfiles}
                   </div>
                   <div className="text-gray-600 dark:text-gray-400">Total Users</div>
+                </div>
+
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 text-center">
+                  <div className="text-3xl font-bold text-pink-600 dark:text-pink-400 mb-2">
+                    {stats.totalLikes}
+                  </div>
+                  <div className="text-gray-600 dark:text-gray-400">Likes Sent</div>
                 </div>
 
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 text-center">
@@ -247,6 +256,14 @@ export default function EventStatsPage() {
                       <span className="font-semibold text-gray-900 dark:text-white">
                         {stats.ageDistribution['45+']}
                       </span>
+                    </div>
+                    <div className="pt-4 mt-4 border-t border-gray-200 dark:border-gray-600">
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600 dark:text-gray-400">Average Age</span>
+                        <span className="font-semibold text-gray-900 dark:text-white">
+                          {stats.averageAge ? Math.round(stats.averageAge) : 'N/A'}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>

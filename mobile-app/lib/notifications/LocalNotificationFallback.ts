@@ -26,7 +26,7 @@ class LocalNotificationFallbackService {
    * Schedule a local notification as fallback
    * Only triggers if push notification doesn't arrive within the delay window
    */
-  async scheduleLocalFallback(event: AnyEvent, recipientName?: string): Promise<string | null> {
+  async scheduleLocalFallback(event: AnyEvent): Promise<string | null> {
     try {
       // Generate unique notification ID
       const notificationId = `local_fallback_${event.type}_${event.id}_${Date.now()}`;

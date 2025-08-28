@@ -192,22 +192,25 @@ class AppInitializationServiceClass {
       });
     });
 
-    // Step 10: Register push token if session exists (BEFORE notification services)
-    await this.executeStep('push_token_registration', async () => {
+    // Step 10: Ensure push setup with idempotent service (BEFORE notification services)
+    await this.executeStep('push_setup_idempotent', async () => {
       const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
       const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
       
       if (sessionId && eventId) {
         try {
-          const { registerPushToken } = await import('../notifications/registerPushToken');
-          const success = await registerPushToken(sessionId);
-          console.log('AppInitializationService: Push token registration:', { success });
+          const { ensurePushSetupFunction } = await import('../notifications/ensurePushSetup');
+          const success = await ensurePushSetupFunction({ sessionId });
+          console.log('AppInitializationService: Idempotent push setup result:', { success });
+          
+          // Set up AppState integration for push token refresh
+          this.setupAppStatePushTokenRefresh();
         } catch (error) {
-          console.warn('AppInitializationService: Push token registration failed:', error);
+          console.warn('AppInitializationService: Push setup failed:', error);
           // Don't fail initialization for push token issues
         }
       } else {
-        console.log('AppInitializationService: Skipping push token registration (no session)');
+        console.log('AppInitializationService: Skipping push setup (no session)');
       }
     });
 
@@ -405,6 +408,58 @@ class AppInitializationServiceClass {
    */
   getDiagnostics() {
     return { ...this.diagnostics };
+  }
+
+  /**
+   * Set up AppState integration for idempotent push setup
+   */
+  private setupAppStatePushTokenRefresh(): void {
+    try {
+      // Import AppStateSyncService dynamically to avoid circular dependencies
+      import('./AppStateSyncService').then(({ AppStateSyncService }) => {
+        // Register callback to refresh push setup when app comes to foreground
+        AppStateSyncService.onAppForeground(async () => {
+          try {
+            console.log('AppInitializationService: App came to foreground, ensuring push setup');
+            
+            // Use idempotent push setup - it will check if refresh is needed
+            const { ensurePushSetupFunction } = await import('../notifications/ensurePushSetup');
+            const success = await ensurePushSetupFunction({ 
+              forceRefresh: false // Let the service decide if refresh is needed
+            });
+            
+            console.log('AppInitializationService: Foreground push setup result:', { success });
+            
+            Sentry.addBreadcrumb({
+              message: 'Push setup ensured on app foreground',
+              level: 'info',
+              category: 'push_notification',
+              data: { success }
+            });
+            
+          } catch (error) {
+            console.warn('AppInitializationService: Failed to ensure push setup on foreground:', error);
+            Sentry.captureException(error, {
+              tags: {
+                operation: 'foreground_push_setup_ensure',
+                source: 'app_initialization_service'
+              }
+            });
+          }
+        });
+        
+        console.log('AppInitializationService: AppState push setup callback registered');
+        
+        // Store unsubscribe function (could be used for cleanup if needed)
+        // For now, we keep it running for the entire app lifetime
+        
+      }).catch(error => {
+        console.warn('AppInitializationService: Failed to set up AppState push token refresh:', error);
+      });
+      
+    } catch (error) {
+      console.warn('AppInitializationService: Error setting up AppState push token refresh:', error);
+    }
   }
 
   /**

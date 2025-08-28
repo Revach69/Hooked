@@ -219,7 +219,7 @@ export default function EventForm({
       
               // Image uploaded successfully
       return downloadURL;
-    } catch (error) {
+    } catch {
       // Error uploading image
       return null;
     } finally {
@@ -325,7 +325,7 @@ export default function EventForm({
               }
               imageUrl = uploadedUrl;
               // Processed image uploaded successfully
-                          } catch (error) {
+                          } catch {
                 // Error uploading blob data
                 setErrors({ submit: 'Failed to process image. Please try again.' });
                 setIsLoading(false);
@@ -371,7 +371,7 @@ export default function EventForm({
                 img.onerror = reject;
                 img.src = imagePreview;
               });
-            } catch (error) {
+            } catch {
               // Error converting blob to file via canvas
               setErrors({ submit: 'Failed to process image. Please try again.' });
               setIsLoading(false);

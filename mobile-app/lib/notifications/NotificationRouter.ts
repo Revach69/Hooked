@@ -290,7 +290,6 @@ export const NotificationRouter = {
       const sessions = [ev.otherSessionId, getCurrentSessionId()].sort();
       const persistentKey = `match_notification_${sessions[0]}_${sessions[1]}`;
       let shouldSkipNotification = false;
-      let storageWorking = true;
       
       // First, try persistent storage
       try {
@@ -315,7 +314,7 @@ export const NotificationRouter = {
         }
       } catch (error) {
         console.warn('AsyncStorage failed, using memory fallback cache:', error);
-        storageWorking = false;
+        // Storage not working, using memory fallback
         
         // Log to Sentry for monitoring
         Sentry.captureException(error, {

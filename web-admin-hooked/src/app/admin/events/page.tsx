@@ -155,9 +155,9 @@ export default function EventsPage() {
           is_active: eventData.is_active !== undefined ? eventData.is_active : true,
           organizer_email: eventData.organizer_email || '',
           // IMPORTANT: Use timezone-converted Timestamps directly from EventForm
-          starts_at: eventData.starts_at,  // Already converted to UTC Timestamp
+          starts_at: eventData.starts_at!,  // Already converted to UTC Timestamp
           start_date: eventData.start_date,  // Already converted to UTC Timestamp  
-          expires_at: eventData.expires_at,  // Already converted to UTC Timestamp
+          expires_at: eventData.expires_at!,  // Already converted to UTC Timestamp
           country: eventData.country,
           timezone: eventData.timezone,
           region: eventData.region,
@@ -247,9 +247,9 @@ export default function EventsPage() {
       const messages = await Message.filter({ event_id: eventId });
 
       // Convert to CSV
-      const profilesCsv = convertToCSV(profiles as unknown as Record<string, unknown>[], 'profiles');
-      const likesCsv = convertToCSV(likes as unknown as Record<string, unknown>[], 'likes');
-      const messagesCsv = convertToCSV(messages as unknown as Record<string, unknown>[], 'messages');
+      const profilesCsv = convertToCSV(profiles as unknown as Record<string, unknown>[]);
+      const likesCsv = convertToCSV(likes as unknown as Record<string, unknown>[]);
+      const messagesCsv = convertToCSV(messages as unknown as Record<string, unknown>[]);
 
       // Download files
       downloadCSV(profilesCsv, `${event.name}-profiles.csv`);
@@ -372,7 +372,7 @@ export default function EventsPage() {
       timezone
     });
     
-    return formatDateWithTimezone(date.toISOString(), timezone);
+    return formatDateWithTimezone(date.toISOString(), timezone || 'UTC');
   };
 
   const renderEventCard = (event: Event) => {
@@ -608,7 +608,7 @@ export default function EventsPage() {
     );
   };
 
-  const convertToCSV = (data: Record<string, unknown>[], _type: string): string => {
+  const convertToCSV = (data: Record<string, unknown>[]): string => {
     if (data.length === 0) return '';
 
     const headers = Object.keys(data[0]);

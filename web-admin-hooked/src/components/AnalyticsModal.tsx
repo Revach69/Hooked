@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { EventProfile, Like, Message, EventAPI, EventAnalytics } from '@/lib/firebaseApi';
-import { X, Users, Heart, MessageCircle, Calendar } from 'lucide-react';
+import { X } from 'lucide-react';
 
 interface AnalyticsModalProps {
   eventId: string;
@@ -13,13 +13,22 @@ interface AnalyticsModalProps {
 
 interface AnalyticsData {
   totalProfiles: number;
+  activeUsers: number;
+  totalLikes: number;
   mutualMatches: number;
   messagesSent: number;
+  engagementRate: number;
   averageAge: number;
   genderBreakdown: {
     male: number;
     female: number;
     other: number;
+  };
+  ageDistribution: {
+    '18-25': number;
+    '26-35': number;
+    '36-45': number;
+    '45+': number;
   };
 }
 
@@ -31,24 +40,27 @@ export default function AnalyticsModal({
 }: AnalyticsModalProps) {
   const [analytics, setAnalytics] = useState<AnalyticsData>({
     totalProfiles: 0,
+    activeUsers: 0,
+    totalLikes: 0,
     mutualMatches: 0,
     messagesSent: 0,
+    engagementRate: 0,
     averageAge: 0,
     genderBreakdown: {
       male: 0,
       female: 0,
       other: 0
+    },
+    ageDistribution: {
+      '18-25': 0,
+      '26-35': 0,
+      '36-45': 0,
+      '45+': 0
     }
   });
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    if (isOpen && eventId) {
-      loadAnalytics();
-    }
-  }, [isOpen, eventId]);
-
-  const loadAnalytics = async () => {
+  const loadAnalytics = useCallback(async () => {
     setIsLoading(true);
     try {
       // First check if this is an expired event with preserved analytics
@@ -59,12 +71,26 @@ export default function AnalyticsModal({
         const savedAnalytics = await EventAnalytics.get(event.analytics_id);
         
         if (savedAnalytics) {
+          // Calculate engagement rate from preserved metrics
+          const engagementRate = savedAnalytics.total_profiles > 0 
+            ? ((savedAnalytics.engagement_metrics.profiles_with_matches + savedAnalytics.engagement_metrics.profiles_with_messages) / savedAnalytics.total_profiles) * 100
+            : 0;
+
           setAnalytics({
             totalProfiles: savedAnalytics.total_profiles,
+            activeUsers: savedAnalytics.engagement_metrics.profiles_with_matches + savedAnalytics.engagement_metrics.profiles_with_messages,
+            totalLikes: 0, // Not preserved separately
             mutualMatches: savedAnalytics.total_matches,
             messagesSent: savedAnalytics.total_messages,
+            engagementRate,
             averageAge: savedAnalytics.age_stats.average,
-            genderBreakdown: savedAnalytics.gender_breakdown
+            genderBreakdown: savedAnalytics.gender_breakdown,
+            ageDistribution: {
+              '18-25': 0, // We don't have this granular data in preserved analytics
+              '26-35': 0,
+              '36-45': 0,
+              '45+': 0,
+            }
           });
           return;
         }
@@ -80,6 +106,20 @@ export default function AnalyticsModal({
       // Calculate mutual matches (divide by 2 since each match creates 2 mutual like records)
       const mutualLikeRecords = likes.filter((like: Like) => like.is_mutual);
       const uniqueMatches = Math.floor(mutualLikeRecords.length / 2);
+      
+      // Calculate active users
+      const activeUsers = profiles.filter((profile: EventProfile) => {
+        const userLikes = likes.filter((like: Like) => 
+          like.from_profile_id === profile.id || like.to_profile_id === profile.id
+        );
+        const userMessages = messages.filter((msg: Message) => 
+          msg.from_profile_id === profile.id || msg.to_profile_id === profile.id
+        );
+        return userLikes.length > 0 || userMessages.length > 0;
+      }).length;
+
+      // Calculate engagement rate
+      const engagementRate = profiles.length > 0 ? (activeUsers / profiles.length) * 100 : 0;
 
       // Calculate average age
       const validAges = profiles
@@ -102,19 +142,37 @@ export default function AnalyticsModal({
         return acc;
       }, { male: 0, female: 0, other: 0 });
 
+      // Calculate age distribution
+      const ageDistribution = {
+        '18-25': profiles.filter((p: EventProfile) => p.age >= 18 && p.age <= 25).length,
+        '26-35': profiles.filter((p: EventProfile) => p.age >= 26 && p.age <= 35).length,
+        '36-45': profiles.filter((p: EventProfile) => p.age >= 36 && p.age <= 45).length,
+        '45+': profiles.filter((p: EventProfile) => p.age > 45).length,
+      };
+
       setAnalytics({
         totalProfiles: profiles.length,
+        activeUsers,
+        totalLikes: likes.length,
         mutualMatches: uniqueMatches,
         messagesSent: messages.length,
+        engagementRate,
         averageAge,
-        genderBreakdown
+        genderBreakdown,
+        ageDistribution
       });
     } catch {
       // Error loading analytics
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [eventId]);
+
+  useEffect(() => {
+    if (isOpen && eventId) {
+      loadAnalytics();
+    }
+  }, [isOpen, eventId, loadAnalytics]);
 
   if (!isOpen) return null;
 
@@ -141,92 +199,112 @@ export default function AnalyticsModal({
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             </div>
           ) : (
-            <div className="space-y-8">
-              {/* Metrics Grid */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                <div className="bg-white dark:bg-gray-700 rounded-xl p-6 border border-gray-200 dark:border-gray-600">
-                  <div className="flex flex-col items-center text-center">
-                    <div className="p-3 bg-blue-100 dark:bg-blue-900 rounded-lg mb-3">
-                      <Users className="h-8 w-8 text-blue-600 dark:text-blue-400" />
-                    </div>
-                    <div className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
-                      {analytics.totalProfiles}
-                    </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">
-                      Total Profiles
-                    </div>
+            <div className="space-y-6">
+              {/* Overview Stats */}
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div className="bg-white dark:bg-gray-700 rounded-xl shadow-sm p-4 text-center">
+                  <div className="text-2xl font-bold text-blue-600 dark:text-blue-400 mb-1">
+                    {analytics.totalProfiles}
                   </div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Total Users</div>
                 </div>
 
-                <div className="bg-white dark:bg-gray-700 rounded-xl p-6 border border-gray-200 dark:border-gray-600">
-                  <div className="flex flex-col items-center text-center">
-                    <div className="p-3 bg-pink-100 dark:bg-pink-900 rounded-lg mb-3">
-                      <Heart className="h-8 w-8 text-pink-600 dark:text-pink-400" />
-                    </div>
-                    <div className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
-                      {analytics.mutualMatches}
-                    </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">
-                      Mutual Matches
-                    </div>
+                <div className="bg-white dark:bg-gray-700 rounded-xl shadow-sm p-4 text-center">
+                  <div className="text-2xl font-bold text-pink-600 dark:text-pink-400 mb-1">
+                    {analytics.totalLikes}
                   </div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Likes Sent</div>
                 </div>
 
-                <div className="bg-white dark:bg-gray-700 rounded-xl p-6 border border-gray-200 dark:border-gray-600">
-                  <div className="flex flex-col items-center text-center">
-                    <div className="p-3 bg-green-100 dark:bg-green-900 rounded-lg mb-3">
-                      <MessageCircle className="h-8 w-8 text-green-600 dark:text-green-400" />
-                    </div>
-                    <div className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
-                      {analytics.messagesSent}
-                    </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">
-                      Messages Sent
-                    </div>
+                <div className="bg-white dark:bg-gray-700 rounded-xl shadow-sm p-4 text-center">
+                  <div className="text-2xl font-bold text-green-600 dark:text-green-400 mb-1">
+                    {analytics.mutualMatches}
                   </div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Matches</div>
                 </div>
 
-                <div className="bg-white dark:bg-gray-700 rounded-xl p-6 border border-gray-200 dark:border-gray-600">
-                  <div className="flex flex-col items-center text-center">
-                    <div className="p-3 bg-purple-100 dark:bg-purple-900 rounded-lg mb-3">
-                      <Calendar className="h-8 w-8 text-purple-600 dark:text-purple-400" />
-                    </div>
-                    <div className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
-                      {analytics.averageAge}
-                    </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">
-                      Average Age
-                    </div>
+                <div className="bg-white dark:bg-gray-700 rounded-xl shadow-sm p-4 text-center">
+                  <div className="text-2xl font-bold text-purple-600 dark:text-purple-400 mb-1">
+                    {analytics.messagesSent}
                   </div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Messages</div>
+                </div>
+
+                <div className="bg-white dark:bg-gray-700 rounded-xl shadow-sm p-4 text-center">
+                  <div className="text-2xl font-bold text-orange-600 dark:text-orange-400 mb-1">
+                    {analytics.engagementRate.toFixed(1)}%
+                  </div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Engagement</div>
                 </div>
               </div>
 
-              {/* Gender Breakdown */}
-              <div className="bg-white dark:bg-gray-700 rounded-xl p-6 border border-gray-200 dark:border-gray-600">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                  Gender Breakdown
-                </h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-700 dark:text-gray-300">Man</span>
-                    <span className="font-semibold text-gray-900 dark:text-white">
-                      {analytics.genderBreakdown.male}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-700 dark:text-gray-300">Woman</span>
-                    <span className="font-semibold text-gray-900 dark:text-white">
-                      {analytics.genderBreakdown.female}
-                    </span>
-                  </div>
-                  {analytics.genderBreakdown.other > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Gender Distribution */}
+                <div className="bg-white dark:bg-gray-700 rounded-xl shadow-sm p-4">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                    Gender Distribution
+                  </h3>
+                  <div className="space-y-3">
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-700 dark:text-gray-300">Other</span>
+                      <span className="text-gray-600 dark:text-gray-400">Men</span>
+                      <span className="font-semibold text-gray-900 dark:text-white">
+                        {analytics.genderBreakdown.male}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600 dark:text-gray-400">Women</span>
+                      <span className="font-semibold text-gray-900 dark:text-white">
+                        {analytics.genderBreakdown.female}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600 dark:text-gray-400">Other</span>
                       <span className="font-semibold text-gray-900 dark:text-white">
                         {analytics.genderBreakdown.other}
                       </span>
                     </div>
-                  )}
+                  </div>
+                </div>
+
+                {/* Age Distribution */}
+                <div className="bg-white dark:bg-gray-700 rounded-xl shadow-sm p-4">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                    Age Distribution
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600 dark:text-gray-400">18-25</span>
+                      <span className="font-semibold text-gray-900 dark:text-white">
+                        {analytics.ageDistribution['18-25']}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600 dark:text-gray-400">26-35</span>
+                      <span className="font-semibold text-gray-900 dark:text-white">
+                        {analytics.ageDistribution['26-35']}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600 dark:text-gray-400">36-45</span>
+                      <span className="font-semibold text-gray-900 dark:text-white">
+                        {analytics.ageDistribution['36-45']}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600 dark:text-gray-400">45+</span>
+                      <span className="font-semibold text-gray-900 dark:text-white">
+                        {analytics.ageDistribution['45+']}
+                      </span>
+                    </div>
+                    <div className="pt-3 mt-3 border-t border-gray-200 dark:border-gray-600">
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600 dark:text-gray-400">Average Age</span>
+                        <span className="font-semibold text-gray-900 dark:text-white">
+                          {analytics.averageAge || 'N/A'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

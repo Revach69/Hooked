@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import * as QRCode from 'qrcode';
 
 interface QRCodeDisplayProps {
@@ -12,11 +12,7 @@ export default function QRCodeDisplay({ joinLink, eventCode }: QRCodeDisplayProp
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    generateQRCode();
-  }, [joinLink]);
-
-  const generateQRCode = async () => {
+  const generateQRCode = useCallback(async () => {
     try {
       setIsLoading(true);
       const qrDataUrl = await QRCode.toDataURL(joinLink, {
@@ -33,7 +29,11 @@ export default function QRCodeDisplay({ joinLink, eventCode }: QRCodeDisplayProp
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [joinLink]);
+
+  useEffect(() => {
+    generateQRCode();
+  }, [generateQRCode]);
 
   if (isLoading) {
     return (

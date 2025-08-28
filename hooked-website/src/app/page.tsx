@@ -8,7 +8,22 @@ import AnimatedArrow from "../components/AnimatedArrow";
 import Header from "../components/Header";
 import Collage from "../components/Collage";
 import Head from "next/head";
-import { trackCTAButton } from "../components/GoogleAnalytics";
+// Declare gtag for TypeScript
+declare global {
+  interface Window {
+    gtag: (...args: unknown[]) => void;
+  }
+}
+
+// Analytics helper function
+const trackCTAButton = (buttonName: string, location: string) => {
+  if (typeof window !== 'undefined' && typeof window.gtag === 'function') {
+    window.gtag('event', 'click', {
+      event_category: 'cta_button',
+      event_label: `${buttonName}_${location}`,
+    });
+  }
+};
 
 export default function Home() {
   const [showHeadline, setShowHeadline] = useState(false);

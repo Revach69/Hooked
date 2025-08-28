@@ -18,7 +18,7 @@ export function EventViewerModal({ event, isOpen, onClose }: EventViewerModalPro
   const formatDate = (dateInput: string | Date | { toDate?: () => Date; seconds?: number }) => {
     const date = toDate(dateInput);
     if (!date) return 'Invalid Date';
-    return formatDateWithTimezone(date.toISOString(), event.timezone);
+    return formatDateWithTimezone(date.toISOString(), (event as Event & { timezone?: string }).timezone || 'UTC');
   };
 
   const handleDownloadQR = async () => {
@@ -46,7 +46,7 @@ export function EventViewerModal({ event, isOpen, onClose }: EventViewerModalPro
   };
 
   const getEventStatus = (event: Event): { status: string; color: string; bgColor: string } => {
-    const eventTimezone = event.timezone || 'UTC';
+    const eventTimezone = (event as Event & { timezone?: string }).timezone || 'UTC';
     
     // Get current time in the event's local timezone
     const now = new Date();

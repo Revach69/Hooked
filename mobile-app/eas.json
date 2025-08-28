@@ -4,13 +4,19 @@
     "appVersionSource": "remote"
   },
   "build": {
+    "base": {
+      "node": "22.11.0",
+      "cache": {
+        "disabled": true
+      }
+    },
     "development": {
+      "extends": "base",
       "developmentClient": true,
       "env": {
         "EXPO_PUBLIC_ENV": "development"
       },
       "distribution": "internal",
-      "node": "22.11.0",
       "ios": {
         "resourceClass": "m-medium",
         "env": {
@@ -22,6 +28,7 @@
       }
     },
     "staging": {
+      "extends": "base",
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_ENV": "staging"
@@ -35,6 +42,7 @@
       }
     },
     "preview": {
+      "extends": "base",
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_ENV": "preview"
@@ -47,6 +55,7 @@
       }
     },
     "production": {
+      "extends": "base",
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_ENV": "production",

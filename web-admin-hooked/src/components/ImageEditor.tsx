@@ -37,7 +37,7 @@ export default function ImageEditor({ imageUrl, onSave, onCancel, aspectRatio = 
   // Mouse wheel/trackpad zoom
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
-    const delta = e.deltaY || (e as any).detail || (e as any).wheelDelta;
+    const delta = e.deltaY || (e as unknown as { detail?: number; wheelDelta?: number }).detail || (e as unknown as { detail?: number; wheelDelta?: number }).wheelDelta || 0;
     setScale(prev => {
       let next = prev - delta * 0.001; // Invert for natural zoom
       if (next < 0.01) next = 0.01;
@@ -81,7 +81,7 @@ export default function ImageEditor({ imageUrl, onSave, onCancel, aspectRatio = 
     }
   };
 
-  const handleTouchEnd = (e: React.TouchEvent) => {
+  const handleTouchEnd = () => {
     setIsDragging(false);
     setLastTouchDistance(null);
     setLastTouchPosition(null);
@@ -175,7 +175,7 @@ export default function ImageEditor({ imageUrl, onSave, onCancel, aspectRatio = 
           // Failed to load image
     setImageLoaded(false);
     setImageError(true);
-  }, [imageUrl]);
+  }, []);
 
   const getCroppedImg = useCallback(async (): Promise<string> => {
     if (!imageRef.current || !containerRef.current) {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ReportAPI, EventProfile, KickedUserAPI, type Report } from '@/lib/firebaseApi';
 import { 
   X, 
@@ -36,13 +36,7 @@ export default function ReportsModal({ isOpen, onClose, eventId, eventName }: Re
     report: ReportWithProfiles;
   } | null>(null);
 
-  useEffect(() => {
-    if (isOpen) {
-      loadReports();
-    }
-  }, [isOpen, eventId]);
-
-  const loadReports = async () => {
+  const loadReports = useCallback(async () => {
     setIsLoading(true);
     try {
       // Loading reports for event
@@ -77,7 +71,13 @@ export default function ReportsModal({ isOpen, onClose, eventId, eventName }: Re
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [eventId]);
+
+  useEffect(() => {
+    if (isOpen) {
+      loadReports();
+    }
+  }, [isOpen, loadReports]);
 
   const handleAcceptReport = (report: ReportWithProfiles) => {
     if (!report.reportedProfile) return;
