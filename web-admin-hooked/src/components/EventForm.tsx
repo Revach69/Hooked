@@ -16,6 +16,10 @@ import {
   utcTimestampToLocalEventTimeString,
   getTimezoneDisplayName
 } from '../lib/timezoneUtils';
+import { 
+  getRegionStatus,
+  getEstimatedLatencyImprovement
+} from '../lib/regionUtils';
 
 interface EventFormProps {
   event?: Event | null;
@@ -666,15 +670,93 @@ export default function EventForm({
               ))}
             </select>
             {formData.country && (
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Timezone: {getTimezoneDisplayName(formData.timezone)}
-              </p>
+              <>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  Timezone: {getTimezoneDisplayName(formData.timezone)}
+                </p>
+                
+                {/* Multi-Region System - Region Configuration Display */}
+                <div className="mt-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-3 flex items-center">
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Region Configuration
+                  </h4>
+                  
+                  {(() => {
+                    const regionStatus = getRegionStatus(formData.country);
+                    const latencyInfo = getEstimatedLatencyImprovement(formData.country);
+                    
+                    return (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-blue-700 dark:text-blue-300">
+                          <div>
+                            <span className="font-medium">Database:</span>
+                            <div className="font-mono mt-1">{regionStatus.region.database}</div>
+                          </div>
+                          <div>
+                            <span className="font-medium">Storage:</span>
+                            <div className="font-mono mt-1">{regionStatus.region.storage}</div>
+                          </div>
+                          <div>
+                            <span className="font-medium">Functions:</span>
+                            <div className="font-mono mt-1">{regionStatus.region.functions}</div>
+                          </div>
+                          <div>
+                            <span className="font-medium">Display Name:</span>
+                            <div className="mt-1">{regionStatus.region.displayName}</div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center justify-between pt-2 border-t border-blue-200 dark:border-blue-700">
+                          <div className="flex items-center space-x-2">
+                            <span className="font-medium text-xs">Status:</span>
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              regionStatus.status === 'active' 
+                                ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300'
+                                : regionStatus.status === 'pending'
+                                ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300'
+                                : 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-300'
+                            }`}>
+                              {regionStatus.status === 'active' ? '🟢 Active' : 
+                               regionStatus.status === 'pending' ? '🟡 Pending Setup' : '🔘 Fallback'}
+                            </span>
+                          </div>
+                          
+                          {latencyInfo.improvement > 0 && (
+                            <div className="text-xs text-blue-600 dark:text-blue-400">
+                              <span className="font-medium">Performance:</span> {latencyInfo.description}
+                            </div>
+                          )}
+                        </div>
+                        
+                        {regionStatus.status === 'pending' && (
+                          <div className="mt-2 p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded border border-yellow-200 dark:border-yellow-700">
+                            <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                              ⚠️ This region is not yet active. Events will be stored in the default region (Israel) until regional resources are provisioned.
+                            </p>
+                          </div>
+                        )}
+                        
+                        {regionStatus.status === 'fallback' && (
+                          <div className="mt-2 p-2 bg-gray-50 dark:bg-gray-900/20 rounded border border-gray-200 dark:border-gray-700">
+                            <p className="text-xs text-gray-600 dark:text-gray-400">
+                              🔘 Using default region configuration for optimal reliability.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </>
             )}
             {errors.country && (
               <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.country}</p>
             )}
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              The event timezone will be automatically set based on the selected country
+              The event timezone and database region will be automatically set based on the selected country
             </p>
           </div>
 

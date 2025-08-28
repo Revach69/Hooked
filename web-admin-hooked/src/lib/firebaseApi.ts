@@ -1,4 +1,6 @@
 import { getDbInstance } from './firebaseConfig';
+import { getEventSpecificFirestore } from './firebaseRegionConfig';
+import { getRegionForCountry } from './regionUtils';
 import {
   collection,
   doc,
@@ -13,6 +15,7 @@ import {
   serverTimestamp,
   deleteField,
   Timestamp,
+  Firestore,
 } from 'firebase/firestore';
 
 // Types matching the mobile app
@@ -34,6 +37,13 @@ export interface Event {
   timezone?: string; // Event's timezone
   country?: string; // Event's country
   region?: string; // Database region for future use
+  regionConfig?: {
+    database: string;
+    storage: string;
+    functions: string;
+    displayName: string;
+    isActive: boolean;
+  }; // Cached region configuration for performance
   created_at: Date | Timestamp | string; // Support both formats for backwards compatibility
   updated_at: Date | Timestamp | string; // Support both formats for backwards compatibility
   expired?: boolean; // New field to track if event has expired and been processed
@@ -143,74 +153,272 @@ const generateOrganizerPassword = (): string => {
   return result;
 };
 
+// Helper function to get database instance with region awareness
+const getDbInstanceForEvent = (eventCountry?: string): Firestore => {
+  if (eventCountry) {
+    // Use region-specific database for events with country
+    return getEventSpecificFirestore(eventCountry);
+  }
+  // Fall back to default database
+  return getDbInstance();
+};
+
+// Helper function to populate region configuration for events
+const populateRegionConfig = (event: Event): Event => {
+  if (event.country) {
+    const regionConfig = getRegionForCountry(event.country);
+    return {
+      ...event,
+      region: regionConfig.database, // Set region field for backward compatibility
+      regionConfig: {
+        database: regionConfig.database,
+        storage: regionConfig.storage,
+        functions: regionConfig.functions,
+        displayName: regionConfig.displayName,
+        isActive: regionConfig.isActive
+      }
+    };
+  }
+  return event;
+};
+
 // Event API - renamed to avoid conflict with browser Event
 export const EventAPI = {
   async create(data: Omit<Event, 'id' | 'created_at' | 'updated_at'>): Promise<Event> {
     // Always generate organizer password automatically
     const organizerPassword = generateOrganizerPassword();
     
+    // Populate region configuration if country is provided
+    let eventDataWithRegion = { ...data };
+    if (data.country) {
+      const regionConfig = getRegionForCountry(data.country);
+      eventDataWithRegion = {
+        ...data,
+        region: regionConfig.database, // Set region field for backward compatibility
+        regionConfig: {
+          database: regionConfig.database,
+          storage: regionConfig.storage,
+          functions: regionConfig.functions,
+          displayName: regionConfig.displayName,
+          isActive: regionConfig.isActive
+        }
+      };
+    }
+    
     const eventData = {
-      ...data,
+      ...eventDataWithRegion,
       organizer_password: organizerPassword,
       created_at: serverTimestamp(),
       updated_at: serverTimestamp(),
     };
     
-    const dbInstance = getDbInstance();
+    // Use region-specific database for event creation
+    const dbInstance = getDbInstanceForEvent(data.country);
     const docRef = await addDoc(collection(dbInstance, 'events'), eventData);
     
-    // Return the data we already have with the document ID
-    return { 
+    console.log(`Created event in region-specific database:`, {
+      eventId: docRef.id,
+      country: data.country,
+      region: eventDataWithRegion.region,
+      regionDisplayName: eventDataWithRegion.regionConfig?.displayName
+    });
+    
+    // Return the event with populated region configuration
+    const createdEvent = { 
       id: docRef.id, 
-      ...data,
+      ...eventDataWithRegion,
       organizer_password: organizerPassword,
       created_at: new Date().toISOString(), // Convert serverTimestamp to ISO string
       updated_at: new Date().toISOString() // Convert serverTimestamp to ISO string
     } as Event;
+    
+    return populateRegionConfig(createdEvent);
   },
 
   async filter(filters: Partial<Event> = {}): Promise<Event[]> {
-    const dbInstance = getDbInstance();
-    let q = query(collection(dbInstance, 'events'));
+    // For admin dashboard, we need to search across all regions
+    // This is acceptable as admin operations are infrequent
+    
+    const allEvents: Event[] = [];
+    
+    // First, search the default region (covers most existing events)
+    const defaultDbInstance = getDbInstance();
+    let defaultQuery = query(collection(defaultDbInstance, 'events'));
     
     if (filters.event_code) {
-      q = query(q, where('event_code', '==', filters.event_code));
+      defaultQuery = query(defaultQuery, where('event_code', '==', filters.event_code));
     }
     if (filters.id) {
-      q = query(q, where('__name__', '==', filters.id));
+      defaultQuery = query(defaultQuery, where('__name__', '==', filters.id));
     }
     
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Event);
+    const defaultSnapshot = await getDocs(defaultQuery);
+    const defaultEvents = defaultSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Event);
+    allEvents.push(...defaultEvents);
+    
+    // If searching for a specific event by ID or code and found in default region, return early
+    if ((filters.id || filters.event_code) && defaultEvents.length > 0) {
+      return defaultEvents.map(populateRegionConfig);
+    }
+    
+    // Search active regional databases
+    // Note: For production, this could be optimized to search specific regions based on filters
+    try {
+      const { getActiveRegions } = await import('./regionUtils');
+      const activeRegions = getActiveRegions();
+      
+      // Search each active region (excluding default which we already searched)
+      const regionSearchPromises = activeRegions
+        .filter(({ country }) => country !== 'Israel') // Skip default region
+        .map(async ({ country }) => {
+          try {
+            const regionDb = getEventSpecificFirestore(country);
+            let regionQuery = query(collection(regionDb, 'events'));
+            
+            if (filters.event_code) {
+              regionQuery = query(regionQuery, where('event_code', '==', filters.event_code));
+            }
+            if (filters.id) {
+              regionQuery = query(regionQuery, where('__name__', '==', filters.id));
+            }
+            
+            const regionSnapshot = await getDocs(regionQuery);
+            return regionSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Event);
+          } catch (error) {
+            console.warn(`Failed to search region ${country}:`, error);
+            return [];
+          }
+        });
+      
+      const regionResults = await Promise.all(regionSearchPromises);
+      const regionalEvents = regionResults.flat();
+      allEvents.push(...regionalEvents);
+      
+    } catch (error) {
+      console.warn('Failed to search regional databases:', error);
+      // Continue with default region results only
+    }
+    
+    // Remove duplicates (in case an event exists in multiple regions)
+    const uniqueEvents = allEvents.filter((event, index, array) => 
+      array.findIndex(e => e.id === event.id) === index
+    );
+    
+    // Populate region configuration for all events
+    return uniqueEvents.map(populateRegionConfig);
   },
 
-  async get(id: string): Promise<Event | null> {
+  async get(id: string, eventCountry?: string): Promise<Event | null> {
+    // Try to get from the specified region first, then fall back to multi-region search
+    if (eventCountry) {
+      try {
+        const dbInstance = getDbInstanceForEvent(eventCountry);
+        const docSnap = await getDoc(doc(dbInstance, 'events', id));
+        if (docSnap.exists()) {
+          const event = { id: docSnap.id, ...docSnap.data() } as Event;
+          return populateRegionConfig(event);
+        }
+      } catch (error) {
+        console.warn(`Failed to get event from region ${eventCountry}:`, error);
+      }
+    }
+    
+    // Multi-region search (first check default, then active regions)
     const dbInstance = getDbInstance();
     const docSnap = await getDoc(doc(dbInstance, 'events', id));
-    if (!docSnap.exists()) return null;
-    return { id: docSnap.id, ...docSnap.data() } as Event;
+    if (docSnap.exists()) {
+      const event = { id: docSnap.id, ...docSnap.data() } as Event;
+      return populateRegionConfig(event);
+    }
+    
+    // Search active regions if not found in default
+    try {
+      const { getActiveRegions } = await import('./regionUtils');
+      const activeRegions = getActiveRegions();
+      
+      for (const { country } of activeRegions) {
+        if (country === 'Israel') continue; // Skip default region (already searched)
+        
+        try {
+          const regionDb = getEventSpecificFirestore(country);
+          const regionDocSnap = await getDoc(doc(regionDb, 'events', id));
+          if (regionDocSnap.exists()) {
+            const event = { id: regionDocSnap.id, ...regionDocSnap.data() } as Event;
+            return populateRegionConfig(event);
+          }
+        } catch (error) {
+          console.warn(`Failed to search region ${country} for event ${id}:`, error);
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to search regional databases for event:', error);
+    }
+    
+    return null;
   },
 
   async update(id: string, data: Partial<Event>): Promise<void> {
+    // First, find which region the event is in
+    const existingEvent = await this.get(id);
+    if (!existingEvent) {
+      throw new Error(`Event with id ${id} not found`);
+    }
+
     // Process the data to handle null values properly
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updateData: any = {
+    let updateData: any = {
       ...data,
       updated_at: serverTimestamp(),
     };
+
+    // If country is being updated, update region configuration
+    if (data.country && data.country !== existingEvent.country) {
+      const regionConfig = getRegionForCountry(data.country);
+      updateData = {
+        ...updateData,
+        region: regionConfig.database,
+        regionConfig: {
+          database: regionConfig.database,
+          storage: regionConfig.storage,
+          functions: regionConfig.functions,
+          displayName: regionConfig.displayName,
+          isActive: regionConfig.isActive
+        }
+      };
+      
+      console.log(`Event ${id} country changed from ${existingEvent.country} to ${data.country}, updating region config`);
+    }
 
     // If image_url is explicitly null, use deleteField to remove it
     if (data.image_url === null) {
       updateData.image_url = deleteField();
     }
 
-    const dbInstance = getDbInstance();
+    // Use the same region as the existing event for updates
+    const dbInstance = getDbInstanceForEvent(existingEvent.country);
     await updateDoc(doc(dbInstance, 'events', id), updateData);
+    
+    console.log(`Updated event ${id} in region:`, {
+      country: existingEvent.country,
+      region: existingEvent.regionConfig?.displayName || 'Default'
+    });
   },
 
   async delete(id: string): Promise<void> {
-    const dbInstance = getDbInstance();
+    // Find which region the event is in before deleting
+    const existingEvent = await this.get(id);
+    if (!existingEvent) {
+      throw new Error(`Event with id ${id} not found`);
+    }
+
+    // Use the same region as the existing event for deletion
+    const dbInstance = getDbInstanceForEvent(existingEvent.country);
     await deleteDoc(doc(dbInstance, 'events', id));
+    
+    console.log(`Deleted event ${id} from region:`, {
+      country: existingEvent.country,
+      region: existingEvent.regionConfig?.displayName || 'Default'
+    });
   },
 };
 

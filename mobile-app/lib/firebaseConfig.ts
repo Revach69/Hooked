@@ -5,6 +5,12 @@ import { getFunctions as getFirebaseFunctions, type Functions } from 'firebase/f
 import NetInfo from '@react-native-community/netinfo';
 import * as Sentry from '@sentry/react-native';
 import { Platform } from 'react-native';
+// Multi-region support
+import { 
+  getEventSpecificFirestore, 
+  getEventSpecificStorage, 
+  getEventSpecificFunctions 
+} from './firebaseRegionConfig';
 
 // Firebase configuration with platform-specific app IDs
 const firebaseConfig = {
@@ -68,6 +74,33 @@ export function getFunctions(): Functions {
 export const db: Firestore = getDb();
 export const storage: FirebaseStorage = getStorage();
 export const functions: Functions = getFunctions();
+
+// Multi-Region System - Region-aware Firebase services
+// These functions automatically select the optimal region based on event country
+
+/**
+ * Get Firestore instance for a specific event country
+ * Falls back to default region if country is not provided or region is inactive
+ */
+export function getDbForEvent(eventCountry?: string | null): Firestore {
+  return getEventSpecificFirestore(eventCountry);
+}
+
+/**
+ * Get Storage instance for a specific event country
+ * Falls back to default region if country is not provided or region is inactive
+ */
+export function getStorageForEvent(eventCountry?: string | null): FirebaseStorage {
+  return getEventSpecificStorage(eventCountry);
+}
+
+/**
+ * Get Functions instance for a specific event country
+ * Falls back to default region if country is not provided or region is inactive
+ */
+export function getFunctionsForEvent(eventCountry?: string | null): Functions {
+  return getEventSpecificFunctions(eventCountry);
+}
 
 // Check if Firebase is initialized
 export function isFirebaseInitialized(): boolean {
