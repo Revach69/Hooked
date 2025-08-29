@@ -12,6 +12,8 @@ interface EventStats {
   totalMessages: number;
   engagementRate: number;
   averageAge: number;
+  passiveUsers: number;
+  averageLikesPerActiveUser: number;
   genderDistribution: {
     male: number;
     female: number;
@@ -19,7 +21,8 @@ interface EventStats {
   };
   ageDistribution: {
     '18-25': number;
-    '26-35': number;
+    '26-30': number;
+    '31-35': number;
     '36-45': number;
     '45+': number;
   };
@@ -35,6 +38,28 @@ export default function EventStatsPage() {
   const [error, setError] = useState('');
   const [stats, setStats] = useState<EventStats | null>(null);
   const [eventName, setEventName] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const fetchStats = async (currentPassword: string) => {
+    const response = await fetch(`/api/event-stats`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        eventId,
+        password: currentPassword
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Invalid password');
+    }
+
+    return data;
+  };
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,23 +67,7 @@ export default function EventStatsPage() {
     setError('');
 
     try {
-      const response = await fetch(`/api/event-stats`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          eventId,
-          password
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Invalid password');
-      }
-
+      const data = await fetchStats(password);
       setStats(data.stats);
       setEventName(data.eventName);
       setStep('stats');
@@ -66,6 +75,20 @@ export default function EventStatsPage() {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      const data = await fetchStats(password);
+      setStats(data.stats);
+      setEventName(data.eventName);
+    } catch (err) {
+      // If refresh fails, just keep showing current data
+      console.error('Failed to refresh stats:', err);
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -149,11 +172,23 @@ export default function EventStatsPage() {
                 </p>
               </div>
               <button
-                onClick={() => setStep('password')}
-                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-transform duration-300"
+                title="Refresh stats"
               >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <svg 
+                  className={`w-6 h-6 ${isRefreshing ? 'animate-spin' : ''}`} 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth={2} 
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" 
+                  />
                 </svg>
               </button>
             </div>
@@ -170,11 +205,23 @@ export default function EventStatsPage() {
                   <div className="text-gray-600 dark:text-gray-400">Total Users</div>
                 </div>
 
-                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 text-center">
-                  <div className="text-3xl font-bold text-pink-600 dark:text-pink-400 mb-2">
-                    {stats.totalLikes}
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6">
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-pink-600 dark:text-pink-400 mb-2">
+                      {stats.totalLikes}
+                    </div>
+                    <div className="text-gray-600 dark:text-gray-400 mb-3">Likes Sent</div>
                   </div>
-                  <div className="text-gray-600 dark:text-gray-400">Likes Sent</div>
+                  <div className="border-t border-gray-200 dark:border-gray-700 pt-3 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-500 dark:text-gray-400">Passive Users:</span>
+                      <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{stats.passiveUsers}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-500 dark:text-gray-400">Avg/Active:</span>
+                      <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{stats.averageLikesPerActiveUser}</span>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 text-center">
@@ -240,9 +287,15 @@ export default function EventStatsPage() {
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-600 dark:text-gray-400">26-35</span>
+                      <span className="text-gray-600 dark:text-gray-400">26-30</span>
                       <span className="font-semibold text-gray-900 dark:text-white">
-                        {stats.ageDistribution['26-35']}
+                        {stats.ageDistribution['26-30']}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600 dark:text-gray-400">31-35</span>
+                      <span className="font-semibold text-gray-900 dark:text-white">
+                        {stats.ageDistribution['31-35']}
                       </span>
                     </div>
                     <div className="flex justify-between items-center">

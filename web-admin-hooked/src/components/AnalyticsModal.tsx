@@ -19,6 +19,8 @@ interface AnalyticsData {
   messagesSent: number;
   engagementRate: number;
   averageAge: number;
+  passiveUsers: number;
+  averageLikesPerActiveUser: number;
   genderBreakdown: {
     male: number;
     female: number;
@@ -26,7 +28,8 @@ interface AnalyticsData {
   };
   ageDistribution: {
     '18-25': number;
-    '26-35': number;
+    '26-30': number;
+    '31-35': number;
     '36-45': number;
     '45+': number;
   };
@@ -46,6 +49,8 @@ export default function AnalyticsModal({
     messagesSent: 0,
     engagementRate: 0,
     averageAge: 0,
+    passiveUsers: 0,
+    averageLikesPerActiveUser: 0,
     genderBreakdown: {
       male: 0,
       female: 0,
@@ -53,7 +58,8 @@ export default function AnalyticsModal({
     },
     ageDistribution: {
       '18-25': 0,
-      '26-35': 0,
+      '26-30': 0,
+      '31-35': 0,
       '36-45': 0,
       '45+': 0
     }
@@ -84,10 +90,13 @@ export default function AnalyticsModal({
             messagesSent: savedAnalytics.total_messages,
             engagementRate,
             averageAge: savedAnalytics.age_stats.average,
+            passiveUsers: 0, // Not preserved separately
+            averageLikesPerActiveUser: 0, // Not preserved separately
             genderBreakdown: savedAnalytics.gender_breakdown,
             ageDistribution: {
               '18-25': 0, // We don't have this granular data in preserved analytics
-              '26-35': 0,
+              '26-30': 0,
+              '31-35': 0,
               '36-45': 0,
               '45+': 0,
             }
@@ -107,16 +116,33 @@ export default function AnalyticsModal({
       const mutualLikeRecords = likes.filter((like: Like) => like.is_mutual);
       const uniqueMatches = Math.floor(mutualLikeRecords.length / 2);
       
-      // Calculate active users
+      // Calculate active users (users who SENT likes or messages)
       const activeUsers = profiles.filter((profile: EventProfile) => {
-        const userLikes = likes.filter((like: Like) => 
-          like.from_profile_id === profile.id || like.to_profile_id === profile.id
+        const userSentLikes = likes.filter((like: Like) => 
+          like.from_profile_id === profile.id
         );
-        const userMessages = messages.filter((msg: Message) => 
-          msg.from_profile_id === profile.id || msg.to_profile_id === profile.id
+        const userSentMessages = messages.filter((msg: Message) => 
+          msg.from_profile_id === profile.id
         );
-        return userLikes.length > 0 || userMessages.length > 0;
+        return userSentLikes.length > 0 || userSentMessages.length > 0;
       }).length;
+
+      // Calculate passive users (users who didn't send any likes)
+      const passiveUsers = profiles.filter((profile: EventProfile) => {
+        const userSentLikes = likes.filter((like: Like) => 
+          like.from_profile_id === profile.id
+        );
+        return userSentLikes.length === 0;
+      }).length;
+
+      // Calculate average likes per active user (who sent likes)
+      const usersWhoSentLikes = profiles.filter((profile: EventProfile) => {
+        const userSentLikes = likes.filter((like: Like) => 
+          like.from_profile_id === profile.id
+        );
+        return userSentLikes.length > 0;
+      }).length;
+      const averageLikesPerActiveUser = usersWhoSentLikes > 0 ? Math.round(likes.length / usersWhoSentLikes) : 0;
 
       // Calculate engagement rate
       const engagementRate = profiles.length > 0 ? (activeUsers / profiles.length) * 100 : 0;
@@ -145,7 +171,8 @@ export default function AnalyticsModal({
       // Calculate age distribution
       const ageDistribution = {
         '18-25': profiles.filter((p: EventProfile) => p.age >= 18 && p.age <= 25).length,
-        '26-35': profiles.filter((p: EventProfile) => p.age >= 26 && p.age <= 35).length,
+        '26-30': profiles.filter((p: EventProfile) => p.age >= 26 && p.age <= 30).length,
+        '31-35': profiles.filter((p: EventProfile) => p.age >= 31 && p.age <= 35).length,
         '36-45': profiles.filter((p: EventProfile) => p.age >= 36 && p.age <= 45).length,
         '45+': profiles.filter((p: EventProfile) => p.age > 45).length,
       };
@@ -158,6 +185,8 @@ export default function AnalyticsModal({
         messagesSent: messages.length,
         engagementRate,
         averageAge,
+        passiveUsers,
+        averageLikesPerActiveUser,
         genderBreakdown,
         ageDistribution
       });
@@ -209,11 +238,23 @@ export default function AnalyticsModal({
                   <div className="text-sm text-gray-600 dark:text-gray-400">Total Users</div>
                 </div>
 
-                <div className="bg-white dark:bg-gray-700 rounded-xl shadow-sm p-4 text-center">
-                  <div className="text-2xl font-bold text-pink-600 dark:text-pink-400 mb-1">
-                    {analytics.totalLikes}
+                <div className="bg-white dark:bg-gray-700 rounded-xl shadow-sm p-4">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-pink-600 dark:text-pink-400 mb-1">
+                      {analytics.totalLikes}
+                    </div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">Likes Sent</div>
                   </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">Likes Sent</div>
+                  <div className="border-t border-gray-200 dark:border-gray-600 mt-2 pt-2 space-y-1">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Passive Users:</span>
+                      <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{analytics.passiveUsers}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Avg/Active:</span>
+                      <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{analytics.averageLikesPerActiveUser}</span>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="bg-white dark:bg-gray-700 rounded-xl shadow-sm p-4 text-center">
@@ -279,9 +320,15 @@ export default function AnalyticsModal({
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-600 dark:text-gray-400">26-35</span>
+                      <span className="text-gray-600 dark:text-gray-400">26-30</span>
                       <span className="font-semibold text-gray-900 dark:text-white">
-                        {analytics.ageDistribution['26-35']}
+                        {analytics.ageDistribution['26-30']}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600 dark:text-gray-400">31-35</span>
+                      <span className="font-semibold text-gray-900 dark:text-white">
+                        {analytics.ageDistribution['31-35']}
                       </span>
                     </div>
                     <div className="flex justify-between items-center">

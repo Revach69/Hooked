@@ -35,11 +35,11 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
         expiry = expiresAt.seconds * 1000;
       } else {
         console.warn('CountdownTimer: Invalid expiresAt format:', expiresAt);
-        return '00:00:00';
+        return '00h:00m:00s';
       }
     } else {
       console.warn('CountdownTimer: expiresAt is undefined or null:', expiresAt);
-      return '00:00:00';
+      return '00h:00m:00s';
     }
     
     const difference = expiry - now;
@@ -48,14 +48,14 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
       if (onExpired) {
         onExpired();
       }
-      return '00:00:00';
+      return '00h:00m:00s';
     }
 
     const hours = Math.floor(difference / (1000 * 60 * 60));
     const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
     const seconds = Math.floor((difference % (1000 * 60)) / 1000);
 
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    return `${hours.toString().padStart(2, '0')}h:${minutes.toString().padStart(2, '0')}m:${seconds.toString().padStart(2, '0')}s`;
   };
 
   useEffect(() => {
