@@ -41,10 +41,52 @@ import { CustomMatchToast } from '../lib/components/CustomMatchToast';
 import * as Notifications from 'expo-notifications';
 import { AppStateSyncService } from '../lib/services/AppStateSyncService';
 import * as Linking from 'expo-linking';
+import * as Updates from 'expo-updates';
+import { AppState } from 'react-native';
 
 import { getSessionAndInstallationIds } from '../lib/session/sessionId';
 
 // ===== Helpers to read current context =====
+
+// ===== OTA Update Helper =====
+async function checkForOTAUpdates(): Promise<void> {
+  if (!Updates.isEnabled) {
+    console.log('_layout.tsx: Updates not enabled, skipping OTA check');
+    return;
+  }
+
+  try {
+    console.log('_layout.tsx: Checking for OTA updates...');
+    const update = await Updates.checkForUpdateAsync();
+    
+    if (update.isAvailable) {
+      console.log('_layout.tsx: OTA update available, downloading...');
+      await Updates.fetchUpdateAsync();
+      console.log('_layout.tsx: OTA update downloaded, will apply on next app launch');
+      
+      // Log to Sentry for tracking
+      Sentry.addBreadcrumb({
+        message: 'OTA update downloaded successfully',
+        level: 'info',
+        category: 'app_updates',
+        data: {
+          updateId: update.manifest?.id,
+          currentUpdateId: Updates.updateId
+        }
+      });
+    } else {
+      console.log('_layout.tsx: No OTA updates available');
+    }
+  } catch (error) {
+    console.warn('_layout.tsx: OTA update check failed:', error);
+    Sentry.captureException(error, {
+      tags: {
+        operation: 'ota_update_check',
+        source: '_layout.tsx'
+      }
+    });
+  }
+}
 
 
 
@@ -264,6 +306,13 @@ export default function RootLayout() {
           });
         }
         
+        // Check for OTA updates after app initialization
+        try {
+          await checkForOTAUpdates();
+        } catch (updateError) {
+          console.warn('_layout.tsx: OTA update check failed:', updateError);
+        }
+        
         setAppIsReady(true);
         
       } catch (error) {
@@ -322,6 +371,23 @@ export default function RootLayout() {
       cancelled = true; 
       AppStateSyncService.stopAppStateSync();
     };
+  }, [appIsReady]);
+
+  // 3.7) Check for updates when app resumes from background
+  useEffect(() => {
+    if (!appIsReady) return;
+
+    const handleAppStateChange = (nextAppState: string) => {
+      if (nextAppState === 'active') {
+        // Check for updates when app becomes active (resumed from background)
+        checkForOTAUpdates().catch(error => {
+          console.warn('_layout.tsx: Background OTA update check failed:', error);
+        });
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription.remove();
   }, [appIsReady]);
 
   // Legacy Firestore listeners removed - now handled by GlobalNotificationService

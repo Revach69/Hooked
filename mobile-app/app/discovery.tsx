@@ -11,6 +11,7 @@ import {
   Modal,
   Alert,
   useColorScheme,
+  StatusBar,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { router } from 'expo-router';
@@ -1417,6 +1418,10 @@ export default function Discovery() {
   if (currentUserProfile && !currentUserProfile.is_visible) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
+        <StatusBar 
+          barStyle={isDark ? 'light-content' : 'dark-content'}
+          backgroundColor={isDark ? '#000' : '#fff'}
+        />
         {/* Logo Section */}
         <View style={styles.logoContainer}>
           <Image 
@@ -1498,6 +1503,10 @@ export default function Discovery() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
+      <StatusBar 
+        barStyle={isDark ? 'light-content' : 'dark-content'}
+        backgroundColor={isDark ? '#000' : '#fff'}
+      />
       {/* Logo Section */}
       <View style={styles.logoContainer}>
         <Image 

@@ -141,7 +141,22 @@ class GlobalNotificationServiceClass {
               
               // Determine if I'm the creator or recipient
               const isCreator = matchData.liker_session_id === this.currentSessionId;
-              const otherSessionId = isCreator ? matchData.liked_session_id : matchData.liker_session_id;
+              const isRecipient = matchData.liked_session_id === this.currentSessionId;
+              
+              // BUSINESS RULE: Only the recipient (first liker) gets notifications
+              // The creator (second liker) should not receive match notifications
+              if (!isRecipient) {
+                console.log('GlobalNotificationService: Skipping notification - this user is the creator, not recipient:', {
+                  currentSessionId: this.currentSessionId,
+                  likerSessionId: matchData.liker_session_id,
+                  likedSessionId: matchData.liked_session_id,
+                  isCreator,
+                  isRecipient
+                });
+                continue;
+              }
+              
+              const otherSessionId = matchData.liker_session_id; // The one who initiated the match
               
               // Get the other user's profile for their name
               let otherName = 'Someone';
@@ -158,12 +173,19 @@ class GlobalNotificationServiceClass {
                 console.warn('Failed to get other user profile for match notification:', profileError);
               }
               
-              // Trigger match notification
+              console.log('GlobalNotificationService: Triggering match notification for recipient:', {
+                currentSessionId: this.currentSessionId,
+                otherSessionId,
+                otherName,
+                matchId: change.doc.id
+              });
+              
+              // Trigger match notification - recipient gets push notification
               await NotificationRouter.handleIncoming({
                 type: 'match',
                 id: change.doc.id,
                 createdAt: matchTime.getTime(),
-                isCreator: isCreator,
+                isCreator: false, // Recipient is never the creator
                 otherSessionId: otherSessionId,
                 otherName: otherName
               });

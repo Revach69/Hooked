@@ -69,15 +69,33 @@ export async function POST(request: NextRequest) {
     const mutualLikeRecords = likes.filter((like) => (like as Record<string, unknown>).is_mutual);
     const uniqueMatches = Math.floor(mutualLikeRecords.length / 2);
     
+    // Calculate active users (users who SENT likes or messages)
     const activeUsers = profiles.filter((profile) => {
-      const userLikes = likes.filter((like) => 
-        (like as Record<string, unknown>).from_profile_id === profile.id || (like as Record<string, unknown>).to_profile_id === profile.id
+      const userSentLikes = likes.filter((like) => 
+        (like as Record<string, unknown>).from_profile_id === profile.id
       );
-      const userMessages = messages.filter((msg) => 
-        (msg as Record<string, unknown>).from_profile_id === profile.id || (msg as Record<string, unknown>).to_profile_id === profile.id
+      const userSentMessages = messages.filter((msg) => 
+        (msg as Record<string, unknown>).from_profile_id === profile.id
       );
-      return userLikes.length > 0 || userMessages.length > 0;
+      return userSentLikes.length > 0 || userSentMessages.length > 0;
     }).length;
+
+    // Calculate passive users (users who didn't send any likes)
+    const passiveUsers = profiles.filter((profile) => {
+      const userSentLikes = likes.filter((like) => 
+        (like as Record<string, unknown>).from_profile_id === profile.id
+      );
+      return userSentLikes.length === 0;
+    }).length;
+
+    // Calculate average likes per active user (who sent likes)
+    const usersWhoSentLikes = profiles.filter((profile) => {
+      const userSentLikes = likes.filter((like) => 
+        (like as Record<string, unknown>).from_profile_id === profile.id
+      );
+      return userSentLikes.length > 0;
+    }).length;
+    const averageLikesPerActiveUser = usersWhoSentLikes > 0 ? Math.round(likes.length / usersWhoSentLikes) : 0;
 
     // Gender distribution (fixed to use correct values)
     const genderDistribution = {
@@ -94,9 +112,13 @@ export async function POST(request: NextRequest) {
         const age = (p as Record<string, unknown>).age as number;
         return age >= 18 && age <= 25;
       }).length,
-      '26-35': profiles.filter((p) => {
+      '26-30': profiles.filter((p) => {
         const age = (p as Record<string, unknown>).age as number;
-        return age >= 26 && age <= 35;
+        return age >= 26 && age <= 30;
+      }).length,
+      '31-35': profiles.filter((p) => {
+        const age = (p as Record<string, unknown>).age as number;
+        return age >= 31 && age <= 35;
       }).length,
       '36-45': profiles.filter((p) => {
         const age = (p as Record<string, unknown>).age as number;
@@ -127,6 +149,8 @@ export async function POST(request: NextRequest) {
       totalMessages: messages.length,
       engagementRate,
       averageAge,
+      passiveUsers,
+      averageLikesPerActiveUser,
       genderDistribution,
       ageDistribution,
     };

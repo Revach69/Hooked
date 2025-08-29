@@ -1,7 +1,7 @@
 {
   "name": "hooked",
   "private": true,
-  "version": "1.1.5",
+  "version": "1.1.8",
   "license": "UNLICENSED",
   "main": "expo-router/entry",
   "scripts": {
