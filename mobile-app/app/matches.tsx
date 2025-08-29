@@ -78,8 +78,16 @@ export default function Matches() {
         const mutedSessionIds = snapshot.docs.map(doc => doc.data().muted_session_id);
         setMutedMatches(new Set(mutedSessionIds));
         
-        // Clear and refresh cached data - removed as GlobalDataCache no longer exists
-        // The data is now refreshed directly via Firestore listeners above
+        // 🔄 NEW: Refresh latest messages for all matches on pull-to-refresh
+        if (matches.length > 0) {
+          console.log('Pull-to-refresh: Refreshing latest messages for all matches');
+          try {
+            await fetchLatestMessagesForMatches(matches);
+            console.log('✅ Pull-to-refresh: Successfully refreshed latest messages');
+          } catch (error) {
+            console.warn('⚠️ Pull-to-refresh: Failed to refresh latest messages:', error);
+          }
+        }
         
         console.log('Pull-to-refresh: Data refreshed successfully');
       }
@@ -95,7 +103,7 @@ export default function Matches() {
     userProfile?: () => void;
     matches?: () => void;
     likes?: () => void;
-    mutualMatches?: () => void;
+    // mutualMatches removed - handled by GlobalNotificationService
     messages?: () => void;
     periodicCheck?: number;
   }>({});
@@ -483,6 +491,27 @@ export default function Matches() {
               setUnreadMessages(unseenSessionIds);
               setHasUnreadMessages(unseenSessionIds.size > 0);
               
+              // 🔄 NEW: Refresh latest messages for affected matches
+              // This ensures match cards show the most recent message content
+              if (unseenSessionIds.size > 0 && matches.length > 0) {
+                console.log('🔄 Refreshing match cards with new messages');
+                try {
+                  // Find matches that have new messages and update their latest message cache
+                  const affectedMatches = matches.filter(match => 
+                    unseenSessionIds.has(match.session_id)
+                  );
+                  
+                  if (affectedMatches.length > 0) {
+                    // Update latest messages cache for affected matches
+                    await fetchLatestMessagesForMatches(affectedMatches);
+                    
+                    console.log('✅ Refreshed latest messages for', affectedMatches.length, 'matches');
+                  }
+                } catch (error) {
+                  console.warn('⚠️ Failed to refresh match cards:', error);
+                }
+              }
+              
               // Debug: Log current unread state after update
               console.log('🔴 Updated unreadMessages state:', {
                 platform: Platform.OS,
@@ -867,126 +896,9 @@ export default function Matches() {
 
               listenersRef.current.likes = likesUnsubscribe;
 
-              // Add mutual matches listener for real-time match notifications
-              const mutualMatchesQuery = query(
-                collection(db, 'likes'),
-                where('event_id', '==', currentEvent.id),
-                where('is_mutual', '==', true)
-              );
-
-              const mutualMatchesUnsubscribe = onSnapshot(mutualMatchesQuery, async (snapshot) => {
-                try {
-                  // Only process document changes for real-time match notifications
-                  // Use 'added' changes only and ensure we haven't processed this doc before
-                  const newChanges = snapshot.docChanges().filter(change => {
-                    const isNewAdd = change.type === 'added';
-                    const notProcessed = !processedMatchesRef.current.has(change.doc.id);
-                    
-                    // Additional check: ensure this is a recent match (within last 5 minutes)
-                    // to prevent processing old matches on listener setup
-                    const matchData = change.doc.data();
-                    const createdAt = matchData.created_at?.toDate?.() || matchData.updated_at?.toDate?.();
-                    const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
-                    const isRecent = createdAt ? createdAt.getTime() > fiveMinutesAgo : false;
-                    
-                    return isNewAdd && notProcessed && isRecent;
-                  });
-                  
-                  if (newChanges.length > 0) {
-                    console.log('Matches screen: Processing', newChanges.length, 'new mutual match changes');
-                  }
-                  
-                  for (const change of newChanges) {
-                    const matchData = change.doc.data();
-                    const docId = change.doc.id;
-                    
-                    // Mark as processed immediately to prevent reprocessing
-                    processedMatchesRef.current.add(docId);
-                    
-                    // Validate required fields to prevent processing invalid documents
-                    if (!matchData.liker_session_id || !matchData.liked_session_id) {
-                      console.warn('Skipping invalid match document - missing session IDs:', {
-                        docId,
-                        likerSessionId: matchData.liker_session_id,
-                        likedSessionId: matchData.liked_session_id
-                      });
-                      continue;
-                    }
-                    
-                    console.log('Matches screen: New mutual match detected:', {
-                      docId,
-                      likerSessionId: matchData.liker_session_id,
-                      likedSessionId: matchData.liked_session_id,
-                      currentSession: currentSessionId
-                    });
-                    
-                    // Only trigger notification if this user is the recipient (liked_session_id)
-                    // The liker_session_id is the one who created the mutual match
-                    if (matchData.liked_session_id === currentSessionId) {
-                      console.log('This user is the match recipient, processing notification');
-                      
-                      // Get the liker's profile for notification
-                      let likerName = 'Someone';
-                      try {
-                        const { EventProfileAPI } = await import('../lib/firebaseApi');
-                        const likerProfiles = await EventProfileAPI.filter({
-                          session_id: matchData.liker_session_id,
-                          event_id: currentEvent?.id
-                        });
-                        if (likerProfiles.length > 0) {
-                          likerName = likerProfiles[0].first_name || 'Someone';
-                        }
-                      } catch (profileError) {
-                        console.warn('Failed to get liker profile for match notification:', profileError);
-                      }
-                      
-                      // Import and trigger match notification
-                      try {
-                        const { NotificationRouter } = await import('../lib/notifications/NotificationRouter');
-                        console.log('Triggering match notification for recipient:', {
-                          docId,
-                          likerSessionId: matchData.liker_session_id,
-                          likerName,
-                          currentUser: currentSessionId
-                        });
-                        
-                        await NotificationRouter.handleIncoming({
-                          type: 'match',
-                          id: docId,
-                          createdAt: matchData.created_at?.toDate?.()?.getTime() || Date.now(),
-                          isCreator: false, // This user is the recipient
-                          otherSessionId: matchData.liker_session_id,
-                          otherName: likerName
-                        });
-                      } catch (notificationError) {
-                        console.error('Failed to trigger match notification:', notificationError);
-                      }
-                    } else {
-                      console.log('This user is not the match recipient, skipping notification:', {
-                        likedSessionId: matchData.liked_session_id,
-                        currentSessionId,
-                        isRecipient: false
-                      });
-                    }
-                  }
-                  
-                  // Matches list will be updated automatically by the Firestore listener
-                  
-                } catch (error) {
-                  console.error('Error in mutual matches listener:', error);
-                }
-              }, (error) => {
-                // Handle Firestore listener errors gracefully
-                if (error.code === 'permission-denied') {
-                  // Permission denied for mutual matches listener
-                } else if (error.code === 'unavailable') {
-                  // Firestore temporarily unavailable
-                } else {
-                  // Error in mutual matches listener
-                }
-              });
-
-              listenersRef.current.mutualMatches = mutualMatchesUnsubscribe;
+              // NOTE: Match notifications are now handled globally by GlobalNotificationService
+              // Removed duplicate listener to prevent multiple notifications for the same match
+              console.log('Matches screen: Match notifications handled by GlobalNotificationService');
 
             } catch {
               // Error setting up matches listener
@@ -1109,10 +1021,7 @@ export default function Matches() {
         listenersRef.current.likes();
         listenersRef.current.likes = undefined;
       }
-      if (listenersRef.current.mutualMatches) {
-        listenersRef.current.mutualMatches();
-        listenersRef.current.mutualMatches = undefined;
-      }
+      // mutualMatches listener removed - handled by GlobalNotificationService
       if (listenersRef.current.messages) {
         listenersRef.current.messages();
         listenersRef.current.messages = undefined;
