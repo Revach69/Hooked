@@ -162,7 +162,7 @@ export async function deleteEventUserData(eventId: string): Promise<void> {
     ]);
 
     // Delete in batches to avoid overwhelming the database
-    const _BATCH_SIZE = 50;
+    const BATCH_SIZE = 50;
 
     // Delete profiles
     await deleteBatch(profiles, async (profile) => {
@@ -214,7 +214,7 @@ export async function deleteEventUserData(eventId: string): Promise<void> {
  */
 async function deleteBatch<T>(
   items: T[], 
-  deleteFunction: (_item: T) => Promise<void>,
+  deleteFunction: (item: T) => Promise<void>,
   itemType: string,
   batchSize: number = 50
 ): Promise<void> {

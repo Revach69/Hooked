@@ -66,7 +66,7 @@ export default function ClientsPage() {
     }
   };
 
-  const handleUpdateClient = async (clientId: string, field: string, value: any) => {
+  const handleUpdateClient = async (clientId: string, field: string, value: unknown) => {
     try {
       const client = clients.find(c => c.id === clientId);
       if (!client) return;

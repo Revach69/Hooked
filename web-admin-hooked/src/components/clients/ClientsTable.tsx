@@ -22,7 +22,7 @@ interface ClientsTableProps {
   clients: AdminClient[];
   onEdit: (client: AdminClient) => void;
   onDelete: (clientId: string) => void;
-  onUpdate: (clientId: string, field: string, value: any) => void;
+  onUpdate: (clientId: string, field: string, value: unknown) => void;
   onViewForm?: (formId: string) => void;
   onViewEvent?: (eventId: string) => void;
   searchQuery: string;
@@ -366,7 +366,7 @@ export function ClientsTable({
         ),
       }),
     ],
-    [onEdit, onDelete, onViewForm]
+    [onEdit, onDelete, onUpdate, onViewForm, onViewEvent]
   );
 
   const filteredData = useMemo(() => {
@@ -464,7 +464,7 @@ export function ClientsTable({
                     return (
                       <td
                         key={cell.id}
-                        onClick={(e) => {
+                        onClick={() => {
                           // Allow clicking on non-select cells to edit
                           if (!isSelectField && cell.column.id !== 'actions') {
                             onEdit(row.original);

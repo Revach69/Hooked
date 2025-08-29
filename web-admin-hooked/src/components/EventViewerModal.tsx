@@ -4,8 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Calendar, MapPin, Clock, Copy, Download } from 'lucide-react';
 import type { Event } from '@/types/admin';
-import { formatDateWithTimezone } from '@/lib/utils';
-import { toDate } from '@/lib/timezoneUtils';
+import { formatDateWithTimezone, toDate } from '@/lib/timezoneUtils';
 
 interface EventViewerModalProps {
   event: Event | null;
@@ -19,7 +18,7 @@ export function EventViewerModal({ event, isOpen, onClose }: EventViewerModalPro
   const formatDate = (dateInput: string | Date | { toDate?: () => Date; seconds?: number }) => {
     const date = toDate(dateInput);
     if (!date) return 'Invalid Date';
-    return formatDateWithTimezone(date.toISOString());
+    return formatDateWithTimezone(date.toISOString(), (event as Event & { timezone?: string }).timezone || 'UTC');
   };
 
   const handleDownloadQR = async () => {
@@ -47,7 +46,29 @@ export function EventViewerModal({ event, isOpen, onClose }: EventViewerModalPro
   };
 
   const getEventStatus = (event: Event): { status: string; color: string; bgColor: string } => {
+    const eventTimezone = (event as Event & { timezone?: string }).timezone || 'UTC';
+    
+    // Get current time in the event's local timezone
     const now = new Date();
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: eventTimezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+    
+    const parts = formatter.formatToParts(now);
+    const values: Record<string, string> = {};
+    parts.forEach(part => { if (part.type !== 'literal') values[part.type] = part.value; });
+    
+    // Create Date object representing current time in event timezone
+    const nowInEventTimezone = new Date(`${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}:${values.second}`);
+    
+    // Convert event dates to event timezone for comparison
     const eventDate = toDate(event.starts_at);
     const eventEndDate = toDate(event.expires_at);
 
@@ -55,9 +76,13 @@ export function EventViewerModal({ event, isOpen, onClose }: EventViewerModalPro
       return { status: 'Unknown', color: 'text-gray-600', bgColor: 'bg-gray-100' };
     }
 
-    if (now < eventDate) {
+    // Convert UTC event times to local event time for comparison
+    const eventStartLocal = new Date(eventDate.toLocaleString('sv-SE', { timeZone: eventTimezone }));
+    const eventEndLocal = new Date(eventEndDate.toLocaleString('sv-SE', { timeZone: eventTimezone }));
+
+    if (nowInEventTimezone < eventStartLocal) {
       return { status: 'Upcoming', color: 'text-blue-600', bgColor: 'bg-blue-100' };
-    } else if (now >= eventDate && now <= eventEndDate) {
+    } else if (nowInEventTimezone >= eventStartLocal && nowInEventTimezone <= eventEndLocal) {
       return { status: 'Live', color: 'text-green-600', bgColor: 'bg-green-100' };
     } else {
       return { status: 'Past', color: 'text-gray-600', bgColor: 'bg-gray-100' };

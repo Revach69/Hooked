@@ -1,6 +1,4 @@
-import { initializeAppCheck as firebaseInitializeAppCheck, getToken, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
-import { app } from './firebaseConfig';
-import { Platform } from 'react-native';
+import { getToken } from 'firebase/app-check';
 import * as Sentry from '@sentry/react-native';
 
 let appCheckInitialized = false;

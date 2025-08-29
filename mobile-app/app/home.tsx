@@ -3,7 +3,6 @@ import {
   View,
   Text,
   TouchableOpacity,
-  Alert,
   StyleSheet,
   Dimensions,
   Modal,
@@ -36,10 +35,9 @@ export default function Home() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const [activeModal, setActiveModal] = useState<string | null>(null);
-
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false); // eslint-disable-line @typescript-eslint/no-unused-vars
   const [manualCode, setManualCode] = useState('');
-  const [isInitialized, setIsInitialized] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false); // eslint-disable-line @typescript-eslint/no-unused-vars
   const [isCheckingResume, setIsCheckingResume] = useState(true); // <-- NEW
 
 
@@ -50,6 +48,98 @@ export default function Home() {
 
   useEffect(() => {
     MemoryManager.registerComponent(componentId);
+    
+    // Move functions inside useEffect to resolve dependency issues
+    async function checkForSurvey() {
+      if (!MemoryManager.isComponentMounted(componentId)) return;
+      
+      try {
+        const surveyData = await SurveyService.shouldShowSurvey();
+        if (surveyData && MemoryManager.isComponentMounted(componentId)) {
+          // Add delay to avoid interrupting immediate user actions
+          setTimeout(() => {
+            if (MemoryManager.isComponentMounted(componentId)) {
+              router.push({
+                pathname: '/survey',
+                params: {
+                  eventId: surveyData.eventId,
+                  eventName: surveyData.eventName,
+                  sessionId: surveyData.sessionId,
+                  source: 'app_load'
+                }
+              });
+            }
+          }, 3000);
+        }
+      } catch {
+        // Error checking for survey
+      }
+    }
+
+    async function initializeApp() {
+      if (!MemoryManager.isComponentMounted(componentId)) {
+        setIsCheckingResume(false);
+        return;
+      }
+
+      try {
+        // Check for existing session first
+        const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
+        const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
+        
+        if (eventId && sessionId) {
+          // Check if the event has expired before allowing access
+          try {
+            const { EventAPI } = await import('../lib/firebaseApi');
+            const eventData = await EventAPI.get(eventId);
+            
+            if (!eventData || eventData.expired) {
+              // Event has expired or doesn't exist, clear session data
+              console.log('Event has expired or no longer exists, clearing session data');
+              await AsyncStorageUtils.removeItem('currentEventId');
+              await AsyncStorageUtils.removeItem('currentSessionId');
+              await AsyncStorageUtils.removeItem('currentEventCode');
+              // Don't navigate to discovery, stay on home screen
+              setIsCheckingResume(false);
+              return;
+            }
+          } catch (error) {
+            console.error('Error checking event expiration:', error);
+            // If we can't check the event, clear session data to be safe
+            await AsyncStorageUtils.removeItem('currentEventId');
+            await AsyncStorageUtils.removeItem('currentSessionId');
+            await AsyncStorageUtils.removeItem('currentEventCode');
+            setIsCheckingResume(false);
+            return;
+          }
+          
+          router.replace('/discovery');
+          return; // navigation will unmount, no need to set isCheckingResume
+        }
+        
+        // Simple initialization without complex async operations
+        setIsInitialized(true);
+        
+        // Check for survey with delay (only shows if within survey visibility timeframe)
+        setTimeout(async () => {
+          if (MemoryManager.isComponentMounted(componentId)) {
+            await checkForSurvey();
+          }
+        }, 2000);
+
+        // Check notification permissions after a delay
+        setTimeout(async () => {
+          if (MemoryManager.isComponentMounted(componentId)) {
+            await checkNotificationPermissions();
+          }
+        }, 3000);
+        
+      } catch {
+        // Error during app initialization
+      } finally {
+        setIsCheckingResume(false); // <-- NEW
+      }
+    }
     
     // Initialize with a delay to prevent immediate crashes
     initializationTimeoutRef.current = setTimeout(() => {
@@ -80,46 +170,6 @@ export default function Home() {
     }
   }, [activeModal]);
 
-  async function initializeApp() {
-    if (!MemoryManager.isComponentMounted(componentId) || isInitialized) {
-      setIsCheckingResume(false); // <-- NEW
-      return;
-    }
-
-    try {
-      // Check for existing session first
-      const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
-      const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
-      
-      if (eventId && sessionId) {
-        router.replace('/discovery');
-        return; // navigation will unmount, no need to set isCheckingResume
-      }
-      
-      // Simple initialization without complex async operations
-      setIsInitialized(true);
-      
-      // Check for survey with delay (only shows if within survey visibility timeframe)
-      setTimeout(async () => {
-        if (MemoryManager.isComponentMounted(componentId)) {
-          await checkForSurvey();
-        }
-      }, 2000);
-
-      // Check notification permissions after a delay
-      setTimeout(async () => {
-        if (MemoryManager.isComponentMounted(componentId)) {
-          await checkNotificationPermissions();
-        }
-      }, 3000);
-      
-    } catch {
-      // Error during app initialization
-    } finally {
-      setIsCheckingResume(false); // <-- NEW
-    }
-  }
-
   const checkNotificationPermissions = async () => {
     try {
       const { checkNotificationPermission, requestNotificationPermission } = await import('../lib/utils/notificationUtils');
@@ -133,32 +183,6 @@ export default function Home() {
       }
     } catch (error) {
       Sentry.captureException(error);
-    }
-  }
-
-  async function checkForSurvey() {
-    if (!MemoryManager.isComponentMounted(componentId)) return;
-    
-    try {
-      const surveyData = await SurveyService.shouldShowSurvey();
-      if (surveyData && MemoryManager.isComponentMounted(componentId)) {
-        // Add delay to avoid interrupting immediate user actions
-        setTimeout(() => {
-          if (MemoryManager.isComponentMounted(componentId)) {
-            router.push({
-              pathname: '/survey',
-              params: {
-                eventId: surveyData.eventId,
-                eventName: surveyData.eventName,
-                sessionId: surveyData.sessionId,
-                source: 'app_load'
-              }
-            });
-          }
-        }, 3000);
-      }
-    } catch {
-              // Error checking for survey
     }
   }
 
@@ -495,7 +519,7 @@ export default function Home() {
               style={styles.button}
               onPress={handleCameraAccess}
               disabled={isProcessing}
-              accessibilityLabel="Scan QR Code"
+              accessibilityLabel="Scan Event QR"
               accessibilityHint="Opens camera to scan event QR code"
             >
               {isProcessing ? (
@@ -503,7 +527,7 @@ export default function Home() {
               ) : (
                 <>
                   <QrCode size={24} color="black" />
-                  <Text style={styles.buttonText}>Scan QR Code</Text>
+                  <Text style={styles.buttonText}>Scan Event QR</Text>
                 </>
               )}
             </TouchableOpacity>

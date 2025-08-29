@@ -193,10 +193,10 @@ class FirebaseNotificationServiceClass {
    * Register notification handlers for Firebase notifications
    */
   registerNotificationHandlers(): (() => void) {
-    // Handle notifications when app is in foreground
-    const foregroundSubscription = Notifications.addNotificationReceivedListener(notification => {
-      this.handleIncomingFirebaseNotification(notification);
-    });
+    // DISABLED: Creating duplicate notifications - NotificationRouter handles this now
+    // const foregroundSubscription = Notifications.addNotificationReceivedListener(notification => {
+    //   this.handleIncomingFirebaseNotification(notification);
+    // });
 
     // Handle notification taps
     const responseSubscription = Notifications.addNotificationResponseReceivedListener(response => {
@@ -210,7 +210,7 @@ class FirebaseNotificationServiceClass {
     });
 
     return () => {
-      foregroundSubscription.remove();
+      // foregroundSubscription.remove();
       responseSubscription.remove();
     };
   }

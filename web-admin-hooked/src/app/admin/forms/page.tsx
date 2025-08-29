@@ -9,6 +9,7 @@ import { EventFormModal } from '@/components/EventFormModal';
 import { LinkFormModal } from '@/components/LinkFormModal';
 import { EventFormAPI } from '@/lib/firestore/eventForms';
 import { AdminClientAPI } from '@/lib/firestore/clients';
+import { mapFormEventTypeToClientData, convertExpectedAttendees } from '@/lib/utils';
 import { FileText, Search } from 'lucide-react';
 import type { EventForm, AdminClient } from '@/types/admin';
 
@@ -64,6 +65,50 @@ export default function FormsPage() {
   const handleLinkForm = (form: EventForm) => {
     setSelectedForm(form);
     setIsLinkModalOpen(true);
+  };
+
+  const handleCreateClientFromForm = async (form: EventForm) => {
+    try {
+      // Map form event type to client type and event kind
+      const { type, eventKind } = mapFormEventTypeToClientData(form.eventType, form.otherEventType);
+      
+      // Convert expected attendees from string to number
+      const expectedAttendees = convertExpectedAttendees(form.expectedAttendees);
+      
+      // Create client data from form
+      const clientData: Omit<AdminClient, 'id' | 'createdAt' | 'updatedAt'> = {
+        name: form.fullName, // Use fullName as client name initially
+        type,
+        eventKind,
+        pocName: form.fullName,
+        phone: form.phone,
+        email: form.email,
+        expectedAttendees,
+        eventDate: form.eventDate,
+        status: 'Initial Discussion',
+        source: 'Contact Form',
+        description: form.eventDetails || `Event: ${form.eventName} at ${form.venueName}`,
+        organizerFormSent: 'Yes',
+        eventCardCreated: 'No',
+        linkedFormId: form.id, // Link to this form
+        linkedEventId: null
+      };
+
+      // Create the client
+      const newClient = await AdminClientAPI.create(clientData);
+      
+      // Link the form to the new client
+      await EventFormAPI.update(form.id, { linkedClientId: newClient.id });
+      
+      // Reload data to reflect changes
+      await loadData();
+      
+      // Show success message
+      alert(`Client "${newClient.name}" created successfully and linked to form!`);
+    } catch (error) {
+      console.error('Failed to create client from form:', error);
+      throw error;
+    }
   };
 
   const handleSaveForm = async (formId: string, updates: Partial<EventForm>) => {
@@ -243,6 +288,7 @@ export default function FormsPage() {
               onEdit={handleEditForm}
               onDelete={handleDeleteForm}
               onLink={handleLinkForm}
+              onCreateClient={handleCreateClientFromForm}
               linkedClientName={form.linkedClientId ? getClientName(form.linkedClientId) : undefined}
             />
           ))}

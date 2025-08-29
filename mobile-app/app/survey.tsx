@@ -57,10 +57,16 @@ export default function SurveyScreen() {
             topOffset: 0,
           });
           router.replace('/home');
+        } else {
+          // Mark survey as shown immediately when screen loads
+          // This ensures "show once" logic works even if app crashes before user exits/completes
+          if (eventId && sessionId) {
+            SurveyService.markSurveyFilledForEvent(eventId, sessionId);
+          }
         }
       });
     }
-  }, [eventId]);
+  }, [eventId, sessionId]);
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -149,10 +155,8 @@ export default function SurveyScreen() {
         { 
           text: 'Exit', 
           style: 'destructive',
-          onPress: async () => {
-            // Mark survey as filled for this specific event even if user exits
-            await SurveyService.markSurveyFilledForEvent(eventId, sessionId);
-            
+          onPress: () => {
+            // Survey is already marked as shown when screen loads
             router.replace('/home');
           }
         }
@@ -167,7 +171,7 @@ export default function SurveyScreen() {
     label 
   }: { 
     value: number; 
-    onChange: (_value: number) => void; 
+    onChange: (value: number) => void; 
     error?: string;
     label: string;
   }) => (
@@ -202,7 +206,7 @@ export default function SurveyScreen() {
     label 
   }: { 
     value: string; 
-    onChange: (_value: string) => void; 
+    onChange: (value: string) => void; 
     error?: string;
     label: string;
   }) => (
@@ -255,7 +259,7 @@ export default function SurveyScreen() {
     label 
   }: { 
     value: string; 
-    onChange: (_value: string) => void; 
+    onChange: (value: string) => void; 
     error?: string;
     label: string;
   }) => (

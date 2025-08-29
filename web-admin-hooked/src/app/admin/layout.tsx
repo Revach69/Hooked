@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Calendar, Users, FileText, MapPin, LogOut } from 'lucide-react';
@@ -39,8 +40,17 @@ export default function AdminLayout({
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-8">
-              <Link href="/admin/events" className="text-xl font-bold text-gray-900 dark:text-white">
-                Hooked Admin
+              <Link href="/admin/events" className="flex items-center space-x-3">
+                <Image
+                  src="/hooked-logo.png"
+                  alt="Hooked Logo"
+                  width={120}
+                  height={32}
+                  className="h-8 w-auto"
+                />
+                <span className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Admin
+                </span>
               </Link>
               
               <nav className="flex space-x-4">

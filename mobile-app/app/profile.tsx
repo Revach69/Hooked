@@ -29,6 +29,7 @@ import { ImageCacheService } from '../lib/services/ImageCacheService';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { checkSimpleNetworkConnectivity } from '../lib/utils';
 import * as Sentry from '@sentry/react-native';
+import { GlobalDataCache, CacheKeys } from '../lib/cache/GlobalDataCache';
 
 
 export default function Profile() {
@@ -36,7 +37,6 @@ export default function Profile() {
   const isDark = colorScheme === 'dark';
   const [profile, setProfile] = useState<any>(null);
   const [currentEvent, setCurrentEvent] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [tempPhotoUri, setTempPhotoUri] = useState<string | null>(null);
   const [aboutMe, setAboutMe] = useState(profile?.about_me || '');
@@ -48,15 +48,11 @@ export default function Profile() {
   const [inches, setInches] = useState('');
   const [interests, setInterests] = useState(profile?.interests || []);
   const [showInterests, setShowInterests] = useState(false);
-  const [showExtendedInterests, setShowExtendedInterests] = useState(false);
   const [eventVisible, setEventVisible] = useState(profile?.is_visible ?? true);
   const [saving, setSaving] = useState(false);
   const [editingBasicProfile, setEditingBasicProfile] = useState(false);
-  const BASIC_INTERESTS = [
-    'music', 'tech', 'food', 'books', 'travel', 'art', 'fitness', 'nature', 'movies', 'business', 'photography', 'dancing'
-  ];
-  
-  const EXTENDED_INTERESTS = [
+  const ALL_INTERESTS = [
+    'music', 'tech', 'food', 'books', 'travel', 'art', 'fitness', 'nature', 'movies', 'business', 'photography', 'dancing',
     'yoga', 'gaming', 'comedy', 'startups', 'fashion', 'spirituality', 'volunteering', 'crypto', 'cocktails', 'politics', 'hiking', 'design', 'podcasts', 'pets', 'wellness'
   ];
   
@@ -71,8 +67,166 @@ export default function Profile() {
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
   const [cachedProfileImageUri, setCachedProfileImageUri] = useState<string | null>(null);
   const [cachedUserImageUris, setCachedUserImageUris] = useState<Map<string, string>>(new Map());
+  const [showImagePreview, setShowImagePreview] = useState(false);
+
+  // Load cached image URI immediately on mount to prevent flash
+  useEffect(() => {
+    const loadCachedImageUri = async () => {
+      const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
+      if (sessionId) {
+        const imageCacheKey = `profile_image_${sessionId}`;
+        const cachedImageUri = GlobalDataCache.get<string>(imageCacheKey);
+        
+        if (cachedImageUri) {
+          setCachedProfileImageUri(cachedImageUri);
+          console.log('Profile: Loaded cached image URI immediately to prevent flash');
+        }
+      }
+    };
+    
+    loadCachedImageUri();
+  }, []);
 
   useEffect(() => {
+    // Move initializeSession inside useEffect to resolve dependency issue
+    const initializeSession = async () => {
+      // Ensure Firebase is initialized
+      const firebaseReady = await ensureFirebaseReady();
+      if (!firebaseReady) {
+        Alert.alert(
+          'Connection Error',
+          'Unable to connect to the server. Please check your internet connection and try again.',
+          [
+            {
+              text: 'OK',
+              onPress: () => router.replace('/home')
+            }
+          ]
+        );
+        return;
+      }
+      await new Promise(resolve => setTimeout(resolve, 100));
+      const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
+      const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
+      
+      if (!eventId || !sessionId) {
+        router.replace('/home');
+        return;
+      }
+      
+      try {
+        let currentEventData = null;
+        
+        // Check cache first for event data
+        const cachedEvent = GlobalDataCache.get<any>(CacheKeys.PROFILE_EVENT);
+        if (cachedEvent && cachedEvent.id === eventId) {
+          setCurrentEvent(cachedEvent);
+          currentEventData = cachedEvent;
+          console.log('Profile: Using cached event data');
+        } else {
+          // Add timeout to prevent hanging indefinitely
+          const eventTimeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error('Event loading timeout')), 30000); // 30 second timeout - give more time
+          });
+          
+          const eventPromise = EventAPI.filter({ id: eventId });
+          const events = await Promise.race([eventPromise, eventTimeoutPromise]);
+          
+          if (events.length > 0) {
+            currentEventData = events[0];
+            setCurrentEvent(currentEventData);
+            GlobalDataCache.set(CacheKeys.PROFILE_EVENT, currentEventData, 10 * 60 * 1000); // Cache for 10 minutes
+            console.log('Profile: Loaded and cached event data');
+          } else {
+            // Event doesn't exist - clear only after confirmation
+            console.log('Event not found in profile, clearing session data');
+            await AsyncStorageUtils.multiRemove([
+              'currentEventId',
+              'currentSessionId',
+              'currentEventCode',
+              'currentProfileColor',
+              'currentProfilePhotoUrl'
+            ]);
+            router.replace('/home');
+            return;
+          }
+        }
+
+        // Add timeout for profile lookup
+        const profileTimeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('Profile loading timeout')), 30000); // 30 second timeout - give more time
+        });
+        
+        const profilePromise = EventProfileAPI.filter({ 
+          session_id: sessionId,
+          event_id: eventId 
+        });
+        const profiles = await Promise.race([profilePromise, profileTimeoutPromise]);
+        
+        if (profiles.length > 0) {
+          setProfile(profiles[0]);
+          
+          // Load cached profile image URI immediately to prevent placeholder flash
+          const userProfile = profiles[0];
+          const imageCacheKey = `profile_image_${sessionId}`;
+          const cachedImageUri = GlobalDataCache.get<string>(imageCacheKey);
+          
+          if (cachedImageUri) {
+            setCachedProfileImageUri(cachedImageUri);
+            console.log('Profile: Using cached image URI');
+          }
+          
+          // Cache user's own profile image in background
+          if (userProfile.profile_photo_url && currentEventData) {
+            try {
+              const cachedUri = await ImageCacheService.getCachedImageUri(
+                userProfile.profile_photo_url,
+                currentEventData.id,
+                userProfile.session_id
+              );
+              setCachedProfileImageUri(cachedUri);
+              // Cache the URI for next time
+              GlobalDataCache.set(imageCacheKey, cachedUri, 30 * 60 * 1000); // Cache for 30 minutes
+            } catch (error) {
+              console.warn('Failed to cache profile image:', error);
+              setCachedProfileImageUri(userProfile.profile_photo_url);
+              // Cache the original URL
+              GlobalDataCache.set(imageCacheKey, userProfile.profile_photo_url, 30 * 60 * 1000);
+            }
+          }
+        } else {
+          // Profile doesn't exist in database (user left event and deleted profile)
+          // Clear session data only after confirming profile is truly gone
+          console.log('User profile not found in profile initialization - clearing session data');
+          await AsyncStorageUtils.multiRemove([
+            'currentEventId',
+            'currentSessionId',
+            'currentEventCode',
+            'currentProfileColor',
+            'currentProfilePhotoUrl'
+          ]);
+          router.replace('/home');
+          return;
+        }
+      } catch (error) {
+        console.error('Error initializing profile session:', error);
+        Sentry.captureException(error);
+        
+        // Don't clear session data on network/timeout errors
+        // And don't redirect - let user stay on profile page
+        if (error instanceof Error && error.message.includes('timeout')) {
+          console.log('Profile initialization timeout - continuing with cached data if available');
+          // User can still use the profile page with cached data
+        } else {
+          console.log('Profile initialization error - staying on profile page with cached data');
+        }
+        
+        // DO NOT redirect on errors - let user continue using the app
+        // They still have their session and can navigate manually if needed
+        return;
+      }
+    };
+
     initializeSession();
     // Initialize image cache service
     ImageCacheService.initialize();
@@ -124,117 +278,6 @@ export default function Profile() {
     }, [profile?.id])
   );
 
-  const initializeSession = async () => {
-    // Ensure Firebase is initialized
-    const firebaseReady = await ensureFirebaseReady();
-    if (!firebaseReady) {
-      Alert.alert(
-        'Connection Error',
-        'Unable to connect to the server. Please check your internet connection and try again.',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.replace('/home')
-          }
-        ]
-      );
-      return;
-    }
-    await new Promise(resolve => setTimeout(resolve, 100));
-    const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
-    const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
-    
-    if (!eventId || !sessionId) {
-      router.replace('/home');
-      return;
-    }
-    
-    try {
-      // Add timeout to prevent hanging indefinitely
-      const eventTimeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Event loading timeout')), 15000); // 15 second timeout
-      });
-      
-      const eventPromise = EventAPI.filter({ id: eventId });
-      const events = await Promise.race([eventPromise, eventTimeoutPromise]);
-      
-      if (events.length > 0) {
-        setCurrentEvent(events[0]);
-      } else {
-        // Event doesn't exist - clear only after confirmation
-        console.log('Event not found in profile, clearing session data');
-        await AsyncStorageUtils.multiRemove([
-          'currentEventId',
-          'currentSessionId',
-          'currentEventCode',
-          'currentProfileColor',
-          'currentProfilePhotoUrl'
-        ]);
-        router.replace('/home');
-        return;
-      }
-
-      // Add timeout for profile lookup
-      const profileTimeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Profile loading timeout')), 15000); // 15 second timeout
-      });
-      
-      const profilePromise = EventProfileAPI.filter({ 
-        session_id: sessionId,
-        event_id: eventId 
-      });
-      const profiles = await Promise.race([profilePromise, profileTimeoutPromise]);
-      
-      if (profiles.length > 0) {
-        setProfile(profiles[0]);
-        
-        // Cache user's own profile image
-        const userProfile = profiles[0];
-        if (userProfile.profile_photo_url && currentEvent) {
-          try {
-            const cachedUri = await ImageCacheService.getCachedImageUri(
-              userProfile.profile_photo_url,
-              currentEvent.id,
-              userProfile.session_id
-            );
-            setCachedProfileImageUri(cachedUri);
-          } catch (error) {
-            console.warn('Failed to cache profile image:', error);
-            setCachedProfileImageUri(userProfile.profile_photo_url);
-          }
-        }
-      } else {
-        // Profile doesn't exist in database (user left event and deleted profile)
-        // Clear session data only after confirming profile is truly gone
-        console.log('User profile not found in profile initialization - clearing session data');
-        await AsyncStorageUtils.multiRemove([
-          'currentEventId',
-          'currentSessionId',
-          'currentEventCode',
-          'currentProfileColor',
-          'currentProfilePhotoUrl'
-        ]);
-        router.replace('/home');
-        return;
-      }
-    } catch (error) {
-      console.error('Error initializing profile session:', error);
-      Sentry.captureException(error);
-      
-      // Don't clear session data on network/timeout errors
-      // Let homepage restoration handle session recovery
-      if (error instanceof Error && error.message.includes('timeout')) {
-        console.log('Profile initialization timeout - keeping session data for retry');
-      } else {
-        console.log('Profile initialization error - redirecting to home but keeping session data');
-      }
-      
-      // Redirect to home but don't clear session data
-      router.replace('/home');
-      return;
-    }
-    setIsLoading(false);
-  };
 
   const handlePhotoUpload = async () => {
     try {
@@ -390,13 +433,14 @@ export default function Profile() {
       let uploadAttempts = 0;
       const maxAttempts = 2; // Reduced from 3 attempts
       
-      // Reduced timeout from 30s to 25s for faster feedback
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Upload timeout - please try again')), 25000);
-      });
-      
       while (uploadAttempts < maxAttempts) {
         try {
+          // Create timeout promise only for the actual upload operation
+          // This excludes the library browsing time since it's created here
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error('Upload timeout - please try again')), 30000);
+          });
+          
           const uploadPromise = StorageAPI.uploadFile(fileObject);
           const { file_url } = await Promise.race([uploadPromise, timeoutPromise]);
           
@@ -664,9 +708,45 @@ export default function Profile() {
         throw new Error('Report creation failed - no ID returned');
       }
 
+      // Auto-unmatch after successful report
+      try {
+        // Import LikeAPI if not already imported
+        const { LikeAPI } = await import('../lib/firebaseApi');
+        
+        // Find the like record between reporter and reported user
+        const mutualLikes = await LikeAPI.filter({
+          event_id: eventId,
+          is_mutual: true
+        });
+        
+        const likeToDelete = mutualLikes.find(like => 
+          (like.liker_session_id === sessionId && like.liked_session_id === selectedUserToReport.session_id) ||
+          (like.liker_session_id === selectedUserToReport.session_id && like.liked_session_id === sessionId)
+        );
+        
+        if (likeToDelete) {
+          // Delete the like to unmatch
+          await LikeAPI.delete(likeToDelete.id);
+          
+          // Update the other user's like to set is_mutual to false
+          const otherLikes = await LikeAPI.filter({
+            event_id: eventId,
+            liker_session_id: selectedUserToReport.session_id,
+            liked_session_id: sessionId
+          });
+          
+          if (otherLikes.length > 0) {
+            await LikeAPI.update(otherLikes[0].id, { is_mutual: false });
+          }
+        }
+      } catch (unmatchError) {
+        console.error('Error unmatching after report:', unmatchError);
+        // Continue even if unmatch fails - report is more important
+      }
+      
       Alert.alert(
         "Report Submitted",
-        `Thank you for your report. We will review the information about ${selectedUserToReport.first_name}.`,
+        `Thank you for your report. We will review the information about ${selectedUserToReport.first_name}. This user has been unmatched.`,
         [
           {
             text: "OK",
@@ -961,7 +1041,7 @@ export default function Profile() {
       position: 'relative',
       width: 100,
       height: 100,
-      borderRadius: 50,
+      borderRadius: 16,
       overflow: 'hidden',
       marginBottom: 10,
       borderWidth: 2,
@@ -1097,7 +1177,7 @@ export default function Profile() {
       backgroundColor: 'rgba(0, 0, 0, 0.3)',
       justifyContent: 'center',
       alignItems: 'center',
-      borderRadius: 50,
+      borderRadius: 16,
     },
     saveButton: {
       backgroundColor: '#8b5cf6',
@@ -1393,17 +1473,55 @@ export default function Profile() {
       shadowRadius: 4,
       elevation: 3,
     },
+    
+    // Image Preview Modal Styles
+    imagePreviewOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.9)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    imagePreviewCloseArea: {
+      flex: 1,
+      width: '100%',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    imagePreviewContainer: {
+      width: '90%',
+      alignItems: 'center',
+    },
+    imagePreviewPhoto: {
+      width: '100%',
+      aspectRatio: 1, // Square aspect ratio like profile photos
+      maxHeight: 400,
+      borderRadius: 12,
+    },
+    imagePreviewButtons: {
+      marginTop: 20,
+      alignItems: 'center',
+    },
+    imagePreviewEditButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: '#8b5cf6',
+      paddingHorizontal: 24,
+      paddingVertical: 12,
+      borderRadius: 25,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+      elevation: 5,
+    },
+    imagePreviewEditText: {
+      color: 'white',
+      fontSize: 16,
+      fontWeight: '600',
+      marginLeft: 8,
+    },
 
   });
-
-  if (isLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#8b5cf6" />
-        <Text style={styles.loadingText}>Loading your profile...</Text>
-      </View>
-    );
-  }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
@@ -1419,10 +1537,21 @@ export default function Profile() {
         <View style={styles.photoSection}>
           <TouchableOpacity
             style={styles.photoContainer}
-            onPress={handlePhotoUpload}
+            onPress={() => {
+              console.log('Profile photo clicked:', {
+                hasProfilePhoto: !!profile?.profile_photo_url,
+                profilePhotoUrl: profile?.profile_photo_url,
+                cachedImageUri: cachedProfileImageUri
+              });
+              if (profile?.profile_photo_url || cachedProfileImageUri) {
+                setShowImagePreview(true);
+              } else {
+                handlePhotoUpload();
+              }
+            }}
             disabled={isUploadingPhoto}
-            accessibilityLabel="Edit Profile Photo"
-            accessibilityHint="Tap to change your profile photo"
+            accessibilityLabel={profile?.profile_photo_url ? "View Profile Photo" : "Add Profile Photo"}
+            accessibilityHint={profile?.profile_photo_url ? "Tap to view and edit your profile photo" : "Tap to add your profile photo"}
           >
             {isUploadingPhoto ? (
               <>
@@ -1434,7 +1563,7 @@ export default function Profile() {
                     resizeMode="cover"
                   />
                 ) : (
-                  <View style={[styles.fallbackAvatar, { backgroundColor: profile.profile_color || '#cccccc' }]}>
+                  <View style={[styles.fallbackAvatar, { backgroundColor: profile?.profile_color || '#cccccc' }]}>
                     <ActivityIndicator size="large" color="white" />
                   </View>
                 )}
@@ -1444,7 +1573,7 @@ export default function Profile() {
                 </View>
               </>
             
-            ) : profile.profile_photo_url ? (
+            ) : profile?.profile_photo_url ? (
               <Image
                 source={{ uri: cachedProfileImageUri || profile.profile_photo_url }}
                 onError={() => {}}
@@ -1452,14 +1581,14 @@ export default function Profile() {
                 resizeMode="cover"
               />
             ) : (
-              <View style={[styles.fallbackAvatar, { backgroundColor: profile.profile_color || '#cccccc' }]}>
-                <Text style={styles.fallbackText}>{profile.first_name[0]}</Text>
+              <View style={[styles.fallbackAvatar, { backgroundColor: profile?.profile_color || '#cccccc' }]}>
+                <Text style={styles.fallbackText}>{profile?.first_name?.[0] || '?'}</Text>
               </View>
             )}
           </TouchableOpacity>
           
-          <Text style={styles.name}>{profile.first_name}</Text>
-          <Text style={styles.age}>{profile.age} years old</Text>
+          <Text style={styles.name}>{profile?.first_name || 'Loading...'}</Text>
+          <Text style={styles.age}>{profile?.age ? `${profile.age} years old` : ''}</Text>
         </View>
 
         {/* Profile Details */}
@@ -1554,15 +1683,16 @@ export default function Profile() {
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Gender</Text>
                 <Text style={styles.detailValue}>
-                  {profile.gender_identity === 'man' ? 'Man' : 'Woman'}
+                  {profile?.gender_identity === 'man' ? 'Man' : profile?.gender_identity === 'woman' ? 'Woman' : 'Not set'}
                 </Text>
               </View>
               
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Interested in</Text>
                 <Text style={styles.detailValue}>
-                  {profile.interested_in === 'men' ? 'Men' : 
-                   profile.interested_in === 'women' ? 'Women' : 'Everybody'}
+                  {profile?.interested_in === 'men' ? 'Men' : 
+                   profile?.interested_in === 'women' ? 'Women' : 
+                   profile?.interested_in === 'everybody' ? 'Everybody' : 'Not set'}
                 </Text>
               </View>
             </View>
@@ -1603,16 +1733,16 @@ export default function Profile() {
                 style={[styles.input, { marginTop: 8 }]}
                 value={aboutMe}
                 onChangeText={setAboutMe}
-                placeholder="No bio yet. Add one!"
+                placeholder=""
                 multiline
               />
               <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 8 }}>
                 <TouchableOpacity onPress={handleSaveAboutMe} disabled={saving} style={styles.saveButton}><Text style={styles.saveButtonText}>Save</Text></TouchableOpacity>
-                <TouchableOpacity onPress={() => { setEditingAboutMe(false); setAboutMe(profile.about_me || ''); }} style={styles.cancelButton}><Text style={styles.cancelButtonText}>Cancel</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => { setEditingAboutMe(false); setAboutMe(profile?.about_me || ''); }} style={styles.cancelButton}><Text style={styles.cancelButtonText}>Cancel</Text></TouchableOpacity>
               </View>
             </View>
           ) : (
-            <Text style={{ color: isDark ? '#9ca3af' : '#6b7280', marginTop: 4 }}>{profile.about_me || 'No bio yet. Add one!'}</Text>
+            <Text style={{ color: isDark ? '#9ca3af' : '#6b7280', marginTop: 4 }}>{profile?.about_me || ''}</Text>
           )}
         </View>
         {/* Interests */}
@@ -1624,7 +1754,7 @@ export default function Profile() {
             </TouchableOpacity>
           </View>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 4 }}>
-            {(profile.interests && profile.interests.length > 0) ? profile.interests.map((i: string) => (
+            {(profile?.interests && profile.interests.length > 0) ? profile.interests.map((i: string) => (
               <View key={i} style={styles.interestChip}><Text style={styles.interestChipText}>{i}</Text></View>
             )) : <Text style={{ color: isDark ? '#9ca3af' : '#6b7280' }}>No interests added yet.</Text>}
           </View>
@@ -1640,7 +1770,7 @@ export default function Profile() {
               activeOpacity={1}
               onPress={(e) => e.stopPropagation()}
             >
-              <Text style={{ fontWeight: 'bold', fontSize: 18, marginBottom: 16 }}>Select up to 3 interests</Text>
+              <Text style={styles.modalTitle}>Select up to 3 interests</Text>
               
               <ScrollView 
                 style={styles.interestsModalContainer} 
@@ -1648,10 +1778,10 @@ export default function Profile() {
                 horizontal={false}
                 showsHorizontalScrollIndicator={false}
               >
-                {/* Basic Interests - Always Visible */}
+                {/* All Interests - Always Visible */}
                 <View style={styles.interestsSection}>
                   <View style={styles.interestsModalGrid}>
-                    {BASIC_INTERESTS.map((interest) => (
+                    {ALL_INTERESTS.map((interest) => (
                       <TouchableOpacity
                         key={interest}
                         style={[styles.interestOption, interests.includes(interest) && styles.interestOptionSelected]}
@@ -1665,38 +1795,11 @@ export default function Profile() {
                     ))}
                   </View>
                 </View>
-
-                {/* Extended Interests - Collapsible */}
-                <View style={styles.interestsSection}>
-                  <TouchableOpacity 
-                    style={styles.interestsSectionHeader}
-                    onPress={() => setShowExtendedInterests(!showExtendedInterests)}
-                  >
-                    <Text style={styles.toggleIcon}>{showExtendedInterests ? '↑' : '↓'}</Text>
-                  </TouchableOpacity>
-                  
-                  {showExtendedInterests && (
-                    <View style={styles.interestsModalGrid}>
-                      {EXTENDED_INTERESTS.map((interest) => (
-                        <TouchableOpacity
-                          key={interest}
-                          style={[styles.interestOption, interests.includes(interest) && styles.interestOptionSelected]}
-                          onPress={() => handleToggleInterest(interest)}
-                          disabled={!interests.includes(interest) && interests.length >= 3}
-                        >
-                          <Text style={[styles.interestOptionText, interests.includes(interest) && styles.interestOptionTextSelected]}>
-                            {interest.charAt(0).toUpperCase() + interest.slice(1)}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  )}
-                </View>
               </ScrollView>
               
               <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 16 }}>
                 <TouchableOpacity onPress={handleSaveInterests} disabled={saving} style={styles.saveButton}><Text style={styles.saveButtonText}>Save</Text></TouchableOpacity>
-                <TouchableOpacity onPress={() => { setShowInterests(false); setInterests(profile.interests || []); setShowExtendedInterests(false); }} style={styles.cancelButton}><Text style={styles.cancelButtonText}>Cancel</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => { setShowInterests(false); setInterests(profile?.interests || []); }} style={styles.cancelButton}><Text style={styles.cancelButtonText}>Cancel</Text></TouchableOpacity>
               </View>
             </TouchableOpacity>
           </TouchableOpacity>
@@ -1744,7 +1847,7 @@ export default function Profile() {
                   style={styles.heightInput}
                   value={height}
                   onChangeText={setHeight}
-                  placeholder="180"
+                  placeholder=""
                   keyboardType="numeric"
                   maxLength={3}
                   textAlign="center"
@@ -1755,7 +1858,7 @@ export default function Profile() {
                     style={[styles.heightInput, { flex: 1, maxWidth: 80 }]}
                     value={feet}
                     onChangeText={setFeet}
-                    placeholder="5"
+                    placeholder=""
                     keyboardType="numeric"
                     maxLength={2}
                     textAlign="center"
@@ -1765,7 +1868,7 @@ export default function Profile() {
                     style={[styles.heightInput, { flex: 1, maxWidth: 80 }]}
                     value={inches}
                     onChangeText={setInches}
-                    placeholder="10"
+                    placeholder=""
                     keyboardType="numeric"
                     maxLength={2}
                     textAlign="center"
@@ -1778,7 +1881,7 @@ export default function Profile() {
                 <TouchableOpacity onPress={handleSaveHeight} disabled={saving} style={styles.saveButton}><Text style={styles.saveButtonText}>Save</Text></TouchableOpacity>
                 <TouchableOpacity onPress={() => { 
                   setEditingHeight(false); 
-                  setHeight(profile.height_cm ? String(profile.height_cm) : ''); 
+                  setHeight(profile?.height_cm ? String(profile.height_cm) : ''); 
                   setHeightUnit('cm');
                   setFeet('');
                   setInches('');
@@ -1786,7 +1889,7 @@ export default function Profile() {
               </View>
             </View>
           ) : (
-            <Text style={{ color: isDark ? '#9ca3af' : '#6b7280', marginTop: 8 }}>{profile.height_cm ? `${profile.height_cm} cm` : 'Height not defined yet'}</Text>
+            <Text style={{ color: isDark ? '#9ca3af' : '#6b7280', marginTop: 8 }}>{profile?.height_cm ? `${profile.height_cm} cm` : 'Height not defined yet'}</Text>
           )}
         </View>
 
@@ -1962,16 +2065,70 @@ export default function Profile() {
           </KeyboardAvoidingView>
         </TouchableOpacity>
       </Modal>
+      
+      {/* Image Preview Modal */}
+      <Modal 
+        visible={showImagePreview} 
+        transparent 
+        animationType="fade" 
+        onRequestClose={() => setShowImagePreview(false)}
+        onShow={() => {
+          console.log('Image preview modal opened:', {
+            cachedImageUri: cachedProfileImageUri,
+            profilePhotoUrl: profile?.profile_photo_url
+          });
+        }}
+      >
+        <View style={styles.imagePreviewOverlay}>
+          <TouchableOpacity 
+            style={styles.imagePreviewCloseArea}
+            onPress={() => setShowImagePreview(false)}
+            activeOpacity={1}
+          >
+            <View style={styles.imagePreviewContainer}>
+              <TouchableOpacity 
+                activeOpacity={1}
+                onPress={(e) => e.stopPropagation()}
+              >
+                {(cachedProfileImageUri || profile?.profile_photo_url) ? (
+                  <Image
+                    source={{ uri: cachedProfileImageUri || profile?.profile_photo_url }}
+                    style={styles.imagePreviewPhoto}
+                    resizeMode="cover"
+                    onError={(error) => {
+                      console.log('Image preview load error:', error);
+                    }}
+                    onLoad={() => {
+                      console.log('Image preview loaded successfully');
+                    }}
+                  />
+                ) : (
+                  <View style={[styles.imagePreviewPhoto, { backgroundColor: profile?.profile_color || '#cccccc', justifyContent: 'center', alignItems: 'center' }]}>
+                    <Text style={{ color: 'white', fontSize: 48, fontWeight: 'bold' }}>
+                      {profile?.first_name?.[0] || 'U'}
+                    </Text>
+                  </View>
+                )}
+                <View style={styles.imagePreviewButtons}>
+                  <TouchableOpacity 
+                    style={styles.imagePreviewEditButton}
+                    onPress={() => {
+                      setShowImagePreview(false);
+                      handlePhotoUpload();
+                    }}
+                  >
+                    <Edit size={20} color="white" />
+                    <Text style={styles.imagePreviewEditText}>Edit</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+      
       {/* Bottom Navigation */}
       <View style={styles.bottomNavigation}>
-        <TouchableOpacity
-          style={[styles.navButton, styles.navButtonActive]}
-          onPress={() => {}} // Already on profile page
-        >
-          <User size={24} color="#8b5cf6" />
-          <Text style={[styles.navButtonText, styles.navButtonTextActive]}>Profile</Text>
-        </TouchableOpacity>
-        
         <TouchableOpacity
           style={styles.navButton}
           onPress={() => router.push('/discovery')}
@@ -2008,6 +2165,14 @@ export default function Profile() {
             )}
           </View>
           <Text style={styles.navButtonText}>Matches</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[styles.navButton, styles.navButtonActive]}
+          onPress={() => {}} // Already on profile page
+        >
+          <User size={24} color="#8b5cf6" />
+          <Text style={[styles.navButtonText, styles.navButtonTextActive]}>Profile</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

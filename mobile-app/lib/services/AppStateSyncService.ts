@@ -1,7 +1,6 @@
 import { AppState, AppStateStatus } from 'react-native';
 import { app } from '../firebaseConfig';
-import { httpsCallable } from 'firebase/functions';
-import { getFunctions } from 'firebase/functions';
+import { getFirestore, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import * as Sentry from '@sentry/react-native';
 import { getInstallationId } from '../session/sessionId';
 
@@ -10,6 +9,7 @@ class AppStateSyncServiceClass {
   private isRunning = false;
   private debounceTimeout: ReturnType<typeof setTimeout> | null = null;
   private appStateListener: ((_status: AppStateStatus) => void) | null = null;
+  private foregroundCallbacks: Set<() => void> = new Set();
 
   /**
    * Start syncing app state changes to Firestore
@@ -30,7 +30,7 @@ class AppStateSyncServiceClass {
       data: { sessionId }
     });
 
-    // Write initial state
+    // Write initial state immediately - using direct Firestore writes
     this.writeAppState(AppState.currentState === 'active');
 
     // Set up listener for app state changes
@@ -47,6 +47,11 @@ class AppStateSyncServiceClass {
           isForeground 
         }
       });
+
+      // Trigger refresh callbacks when app comes to foreground
+      if (isForeground) {
+        this.triggerForegroundCallbacks();
+      }
 
       // Debounce the write to avoid excessive Firestore calls
       this.debouncedWriteAppState(isForeground);
@@ -116,37 +121,34 @@ class AppStateSyncServiceClass {
   }
 
   /**
-   * Write app state to Firestore via callable function
+   * Write app state directly to Firestore - bypasses callable function authentication issues
    */
   private async writeAppState(isForeground: boolean): Promise<void> {
     if (!this.sessionId) {
       return;
     }
 
-    const isProduction = process.env.EXPO_PUBLIC_ENV === 'production';
-    
-    if (__DEV__ && !isProduction) {
-      // Skip app state sync in development to avoid authentication errors
-      if (__DEV__) console.log('AppStateSyncService: Skipped in development mode');
-      return;
-    }
-
     try {
-      // Note: No authentication required - app state tracking works with session IDs only
-      const functions = getFunctions(app, 'us-central1');
-      const setAppState = httpsCallable(functions, 'setAppState');
+      // Write directly to Firestore - no callable function needed
+      const db = getFirestore(app);
+      const appStateRef = doc(db, 'app_states', this.sessionId);
       
       // Get installation ID
       const installationId = await getInstallationId();
       
-      await setAppState({
-        sessionId: this.sessionId,
+      await setDoc(appStateRef, {
         isForeground,
-        installationId
+        installationId: installationId || null,
+        updatedAt: serverTimestamp(),
+      });
+
+      console.log('AppStateSyncService: App state written directly to Firestore', {
+        sessionId: this.sessionId.substring(0, 8) + '...',
+        isForeground
       });
 
       Sentry.addBreadcrumb({
-        message: 'AppStateSyncService: App state written via callable',
+        message: 'AppStateSyncService: App state written directly to Firestore',
         level: 'info',
         category: 'app_state',
         data: { 
@@ -156,16 +158,23 @@ class AppStateSyncServiceClass {
         }
       });
 
-    } catch (error) {
-      console.error('AppStateSyncService: Error writing app state:', error);
+    } catch (error: any) {
+      console.error('AppStateSyncService: Error writing app state to Firestore:', {
+        error: error.message,
+        code: error.code,
+        sessionId: this.sessionId.substring(0, 8) + '...'
+      });
+      
       Sentry.captureException(error, {
         tags: {
           operation: 'app_state_sync',
-          source: 'writeAppState'
+          source: 'writeAppState_direct'
         },
         extra: {
           sessionId: this.sessionId,
-          isForeground
+          isForeground,
+          errorCode: error.code,
+          errorMessage: error.message
         }
       });
     }
@@ -179,6 +188,36 @@ class AppStateSyncServiceClass {
       isRunning: this.isRunning,
       sessionId: this.sessionId
     };
+  }
+
+  /**
+   * Register a callback to be called when app comes to foreground
+   */
+  onAppForeground(callback: () => void): () => void {
+    this.foregroundCallbacks.add(callback);
+    
+    // Return unsubscribe function
+    return () => {
+      this.foregroundCallbacks.delete(callback);
+    };
+  }
+
+  /**
+   * Trigger all registered foreground callbacks
+   */
+  private triggerForegroundCallbacks(): void {
+    if (__DEV__) console.log('AppStateSyncService: Triggering foreground callbacks, count:', this.foregroundCallbacks.size);
+    
+    this.foregroundCallbacks.forEach((callback) => {
+      try {
+        callback();
+      } catch (error) {
+        console.error('AppStateSyncService: Error in foreground callback:', error);
+        Sentry.captureException(error, {
+          tags: { operation: 'foreground_callback' }
+        });
+      }
+    });
   }
 }
 

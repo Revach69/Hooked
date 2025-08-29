@@ -2,7 +2,7 @@
   "expo": {
     "name": "Hooked Dev",
     "slug": "hooked",
-    "version": "1.1.0",
+    "version": "1.1.8",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -17,7 +17,8 @@
     ],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.hookedapp.app.dev",
+      "bundleIdentifier": "com.hookedapp.app",
+      "buildNumber": "1.1.8",
       "splash": {
         "image": "./assets/icon-rounded.png",
         "resizeMode": "contain",
@@ -34,12 +35,13 @@
       ],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSCameraUsageDescription": "Hooked Dev needs camera access to let you take profile photos and scan QR codes at events.",
-        "NSPhotoLibraryUsageDescription": "Hooked Dev needs photo library access to let you select existing photos for your dating profile at events.",
-        "NSUserNotificationUsageDescription": "Hooked Dev needs notification access to send you alerts about new matches and messages at events.",
-        "NSLocationWhenInUseUsageDescription": "Hooked Dev needs location access to show you on the event map and help you discover nearby attendees.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Hooked Dev needs location access to show you on the event map and help you discover nearby attendees.",
-        "UIBackgroundModes": ["remote-notification", "location"]
+        "NSCameraUsageDescription": "Hooked needs camera access to let you take profile photos and scan QR codes at events.",
+        "NSPhotoLibraryUsageDescription": "Hooked needs photo library access to let you select existing photos for your dating profile at events.",
+        "NSUserNotificationUsageDescription": "Hooked needs notification access to send you alerts about new matches and messages at events.",
+        "UIBackgroundModes": [
+          "remote-notification",
+          "remote-notification"
+        ]
       },
       "entitlements": {
         "aps-environment": "development"
@@ -61,21 +63,25 @@
           "backgroundColor": "#1a1a1a"
         }
       },
-      "package": "com.hooked.hookeddev",
-      "googleServicesFile": "./android/app/google-services-dev.json",
+      "package": "com.hookedapp.app",
+      "versionCode": 8,
+      "googleServicesFile": "./android/app/google-services.json",
       "intentFilters": [
         {
           "action": "VIEW",
           "autoVerify": true,
-          "category": ["BROWSABLE", "DEFAULT"],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ],
           "data": [
             {
               "scheme": "https",
               "host": "dev.hooked-app.com"
             },
             {
-              "scheme": "https", 
-              "host": "dev-www.hooked-app.com"
+              "scheme": "https",
+              "host": "www.hooked-app.com"
             }
           ]
         }
@@ -121,18 +127,11 @@
         }
       ],
       [
-        "@rnmapbox/maps",
-        {
-          "RNMapboxMapsImpl": "mapbox",
-          "RNMapboxMapsDownloadToken": "$MAPBOX_DOWNLOADS_TOKEN"
-        }
-      ],
-      [
         "expo-build-properties",
         {
           "ios": {
             "useFrameworks": "static",
-            "useModularHeaders": true,
+            "useModularHeaders": false,
             "newArchEnabled": false
           },
           "android": {
@@ -141,7 +140,7 @@
         }
       ]
     ],
-    "scheme": "hooked-dev", 
+    "scheme": "hooked",
     "extra": {
       "firebaseConfig": {
         "apiKey": "AIzaSyBhGESZT7wVnFX7zLm6_ztJJHzKL5JLhf8",
@@ -168,6 +167,10 @@
         "checkAutomatically": "ON_LOAD",
         "fallbackToCacheTimeout": 30000
       }
+    },
+    "runtimeVersion": "1.0.0",
+    "updates": {
+      "url": "https://u.expo.dev/7a1de260-e3cb-4cbb-863c-1557213d69f0"
     }
   }
 }

@@ -1,11 +1,5 @@
 'use client';
 
-import { useEffect } from 'react';
-import { usePathname } from 'next/navigation';
-
-// Google Analytics 4 configuration
-const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || 'G-6YHKXLN806';
-
 // Initialize GA4
 declare global {
   interface Window {
@@ -14,25 +8,8 @@ declare global {
   }
 }
 
-// Load GA4 script
-const loadGA = () => {
-  if (typeof window !== 'undefined' && !window.gtag) {
-    const script = document.createElement('script');
-    script.async = true;
-    script.src = `https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`;
-    document.head.appendChild(script);
-
-    window.dataLayer = window.dataLayer || [];
-    window.gtag = function(...args: unknown[]) {
-      window.dataLayer.push(args);
-    };
-    window.gtag('js', new Date());
-    window.gtag('config', GA_MEASUREMENT_ID, {
-      page_title: document.title,
-      page_location: window.location.href,
-    });
-  }
-};
+// GA4 script is loaded via Next.js Script component in layout.tsx
+// This component only provides tracking functions now
 
 // Analytics tracking functions
 export const trackEvent = (action: string, category: string, label?: string, value?: number) => {
@@ -78,28 +55,13 @@ export const trackModalOpen = (eventName: string, eventId: string) => {
   trackEvent('click', 'modal_open', `${eventName}_${eventId}`);
 };
 
-// Main Analytics component
-export default function GoogleAnalytics() {
-  const pathname = usePathname();
+export const trackTimeSpent = (pageName: string, timeSeconds: number) => {
+  trackEvent('timing_complete', 'page_timing', pageName, timeSeconds);
+};
 
-  useEffect(() => {
-    loadGA();
-  }, []);
+export const trackScrollDepth = (depth: number) => {
+  trackEvent('scroll', 'engagement', 'scroll_depth', depth);
+};
 
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.gtag) {
-      // Track page views
-      window.gtag('config', GA_MEASUREMENT_ID, {
-        page_path: pathname,
-        page_title: document.title,
-      });
-
-      // Track specific pages
-      if (pathname === '/contact') {
-        trackContactPage();
-      }
-    }
-  }, [pathname]);
-
-  return null;
-}
+// Page tracking is now handled by RouteTracker component
+// This component is kept only for the tracking function exports

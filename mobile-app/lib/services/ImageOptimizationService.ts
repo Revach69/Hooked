@@ -1,9 +1,9 @@
 import * as Sentry from '@sentry/react-native';
+import * as ImageManipulator from 'expo-image-manipulator';
 
-// Import with fallback handling for native module issues
-let ImageManipulator: any = null;
+// Fallback handling for native module issues
 try {
-  ImageManipulator = require('expo-image-manipulator');
+  require('expo-image-manipulator');
 } catch (error) {
   console.warn('ImageOptimizationService: expo-image-manipulator not available:', error);
   Sentry.captureException(error, {
@@ -159,6 +159,7 @@ class ImageOptimizationServiceClass {
     try {
       // This is approximate - actual file size check would require reading the file
       // For now, we'll optimize all images to ensure consistency
+      console.log(`Checking if ${uri} needs optimization (target: ${maxSizeKB}KB)`); // Use maxSizeKB parameter
       return true;
     } catch (error) {
       console.warn('ImageOptimizationService: Could not check if optimization needed:', error);

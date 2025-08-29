@@ -7,7 +7,6 @@ import Image from "next/image";
 
 export default function Header() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [logoLoaded, setLogoLoaded] = useState(false);
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -21,12 +20,6 @@ export default function Header() {
           <div className="flex-shrink-0">
             <Link href="/" className="flex items-center" aria-label="Hooked - Home">
               <div className="relative w-[120px] h-[32px] md:w-[156px] md:h-[42px]">
-                {/* Text fallback - always visible until logo loads */}
-                <div className={`absolute inset-0 flex items-center justify-start transition-opacity duration-200 ${logoLoaded ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-                  <span className="text-xl md:text-2xl font-bold text-purple-600 tracking-tight">
-                    Hooked
-                  </span>
-                </div>
                 
                 {/* Mobile: Optimized loading with smaller dimensions */}
                 <div className="block md:hidden">
@@ -38,10 +31,6 @@ export default function Header() {
                     priority
                     quality={75}
                     sizes="120px"
-                    onLoad={() => setLogoLoaded(true)}
-                    style={{
-                      filter: logoLoaded ? 'none' : 'blur(0px)',
-                    }}
                   />
                 </div>
                 

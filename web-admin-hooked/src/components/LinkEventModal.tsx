@@ -54,16 +54,6 @@ export function LinkEventModal({ event, clients, isOpen, onClose, onLink }: Link
     }
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
 
   if (!event) return null;
 

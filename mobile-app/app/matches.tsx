@@ -13,17 +13,21 @@ import {
   Platform,
   Modal,
   TextInput,
+  RefreshControl,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Heart, MessageCircle, Users, User, UserX, VolumeX, Volume2, Flag } from 'lucide-react-native';
 import { EventProfileAPI, LikeAPI, EventAPI, MessageAPI, MutedMatchAPI, ReportAPI } from '../lib/firebaseApi';
+import * as Sentry from '@sentry/react-native';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { ImageCacheService } from '../lib/services/ImageCacheService';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebaseConfig';
+import CountdownTimer from '../lib/components/CountdownTimer';
 import UserProfileModal from '../lib/UserProfileModal';
 import DropdownMenu from '../components/DropdownMenu';
+import { GlobalDataCache, CacheKeys } from '../lib/cache/GlobalDataCache';
 
 import { updateUserActivity } from '../lib/messageNotificationHelper';
 import { setMuteStatus } from '../lib/utils/notificationUtils';
@@ -36,7 +40,6 @@ export default function Matches() {
   const [currentEvent, setCurrentEvent] = useState<any>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [currentUserProfile, setCurrentUserProfile] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [selectedProfileForDetail, setSelectedProfileForDetail] = useState<any>(null);
   const [likedProfiles, setLikedProfiles] = useState<Set<string>>(new Set());
   const [unreadMessages, setUnreadMessages] = useState<Set<string>>(new Set());
@@ -49,17 +52,214 @@ export default function Matches() {
   const [reportingMatch, setReportingMatch] = useState<any>(null);
   const [reportReason, setReportReason] = useState('');
   const [isSubmittingReport, setIsSubmittingReport] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  
+  // Pull-to-refresh handler
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      const eventId = currentEvent?.id || await AsyncStorageUtils.getItem<string>('currentEventId');
+      const sessionId = currentSessionId || await AsyncStorageUtils.getItem<string>('currentSessionId');
+      
+      if (eventId && sessionId) {
+        console.log('Pull-to-refresh: Reloading all matches data');
+        
+        // Reload muted matches
+        const { collection, query, where, getDocs } = await import('firebase/firestore');
+        const { db } = await import('../lib/firebaseConfig');
+        
+        const mutedQuery = query(
+          collection(db, 'muted_matches'),
+          where('event_id', '==', eventId),
+          where('muter_session_id', '==', sessionId)
+        );
+        
+        const snapshot = await getDocs(mutedQuery);
+        const mutedSessionIds = snapshot.docs.map(doc => doc.data().muted_session_id);
+        setMutedMatches(new Set(mutedSessionIds));
+        
+        // 🔄 NEW: Refresh latest messages for all matches on pull-to-refresh
+        if (matches.length > 0) {
+          console.log('Pull-to-refresh: Refreshing latest messages for all matches');
+          try {
+            await fetchLatestMessagesForMatches(matches);
+            console.log('✅ Pull-to-refresh: Successfully refreshed latest messages');
+          } catch (error) {
+            console.warn('⚠️ Pull-to-refresh: Failed to refresh latest messages:', error);
+          }
+        }
+        
+        console.log('Pull-to-refresh: Data refreshed successfully');
+      }
+    } catch (error) {
+      console.error('Pull-to-refresh error:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [currentEvent?.id, currentSessionId]);
+
   // Single ref to hold all unsubscribe functions
   const listenersRef = useRef<{
     userProfile?: () => void;
     matches?: () => void;
     likes?: () => void;
-    mutualMatches?: () => void;
+    // mutualMatches removed - handled by GlobalNotificationService
     messages?: () => void;
     periodicCheck?: number;
   }>({});
 
+  // Cache for latest messages to prevent losing data on navigation
+  const latestMessagesCache = useRef<Map<string, any>>(new Map());
+  
+  // Fetch latest messages for all matches when entering the page
+  const fetchLatestMessagesForMatches = useCallback(async (matchProfiles: any[]) => {
+    if (!currentEvent?.id || !currentUserProfile?.id || !matchProfiles.length) return;
+
+    console.log('Fetching latest messages for', matchProfiles.length, 'matches');
+
+    try {
+      const { collection, query, where, getDocs } = await import('firebase/firestore');
+      const { db } = await import('../lib/firebaseConfig');
+
+      // Fetch messages for each match
+      const messagePromises = matchProfiles.map(async (profile) => {
+        try {
+          // Check cache first - if we have recent data, use it immediately
+          const cachedMessage = latestMessagesCache.current.get(profile.session_id);
+          const cacheTime = cachedMessage?.fetchedAt || 0;
+          const isCacheRecent = Date.now() - cacheTime < 30000; // 30 seconds
+          console.log(`Cache status for ${profile.first_name}: ${isCacheRecent ? 'recent' : 'stale'}`);  // Use the variable
+
+          // Get all messages for this conversation
+          const messagesFromUserQuery = query(
+            collection(db, 'messages'),
+            where('event_id', '==', currentEvent.id),
+            where('from_profile_id', '==', currentUserProfile.id),
+            where('to_profile_id', '==', profile.id)
+          );
+          
+          const messagesToUserQuery = query(
+            collection(db, 'messages'),
+            where('event_id', '==', currentEvent.id),
+            where('from_profile_id', '==', profile.id),
+            where('to_profile_id', '==', currentUserProfile.id)
+          );
+
+          const [fromUserSnapshot, toUserSnapshot] = await Promise.all([
+            getDocs(messagesFromUserQuery),
+            getDocs(messagesToUserQuery)
+          ]);
+
+          const allMessages = [
+            ...fromUserSnapshot.docs.map(doc => doc.data()),
+            ...toUserSnapshot.docs.map(doc => doc.data())
+          ];
+
+          if (allMessages.length > 0) {
+            allMessages.sort((a, b) => {
+              const aTime = a.created_at?.toMillis?.() || a.created_at || 0;
+              const bTime = b.created_at?.toMillis?.() || b.created_at || 0;
+              return bTime - aTime;
+            });
+
+            const latestMessage = allMessages[0];
+            const messageData = {
+              ...latestMessage,
+              fetchedAt: Date.now() // Add timestamp for cache management
+            };
+
+            // Cache the message
+            latestMessagesCache.current.set(profile.session_id, messageData);
+            
+            console.log(`Updated message cache for ${profile.first_name}:`, {
+              content: latestMessage?.content?.substring(0, 30) || latestMessage?.message?.substring(0, 30),
+              messageCount: allMessages.length
+            });
+
+            return { sessionId: profile.session_id, message: messageData };
+          }
+        } catch (error) {
+          console.warn(`Error fetching messages for ${profile.first_name}:`, error instanceof Error ? error.message : 'Unknown error');
+        }
+        return { sessionId: profile.session_id, message: null };
+      });
+
+      await Promise.all(messagePromises);
+      console.log('Finished fetching latest messages for all matches');
+
+    } catch (error) {
+      console.error('Error in fetchLatestMessagesForMatches:', error);
+    }
+  }, [currentEvent?.id, currentUserProfile?.id]);
+
   useEffect(() => {
+    // Move initializeSession inside useEffect to resolve dependency issue
+    async function initializeSession() {
+      try {
+        const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
+        const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
+        
+        if (!eventId || !sessionId) {
+          // No session data - redirect to home for normal flow
+          router.replace('/home');
+          return;
+        }
+
+        setCurrentSessionId(sessionId);
+        
+        let eventData = null;
+        
+        // Check cache first for event data
+        const cachedEvent = GlobalDataCache.get<any>(CacheKeys.MATCHES_EVENT);
+        if (cachedEvent && cachedEvent.id === eventId) {
+          setCurrentEvent(cachedEvent);
+          eventData = cachedEvent;
+          console.log('Matches: Using cached event data');
+        } else {
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error('Event lookup timeout')), 15000); // 15 seconds
+          });
+          
+          const eventPromise = EventAPI.filter({ id: eventId });
+          const events = await Promise.race([eventPromise, timeoutPromise]);
+          
+          if (events.length > 0) {
+            eventData = events[0];
+            setCurrentEvent(eventData);
+            GlobalDataCache.set(CacheKeys.MATCHES_EVENT, eventData, 10 * 60 * 1000); // Cache for 10 minutes
+            console.log('Matches: Loaded and cached event data');
+          }
+        }
+        
+        if (!eventData) {
+          // Event doesn't exist - clear only after confirmation
+          console.log('Event not found, clearing session data');
+          await AsyncStorageUtils.multiRemove([
+            'currentEventId',
+            'currentSessionId',
+            'currentEventCode'
+          ]);
+          router.replace('/home');
+          return;
+        }
+      } catch (error) {
+        console.error('Failed to initialize session:', error);
+        Sentry.captureException(error);
+        
+        // Don't clear session data or redirect on timeout/network errors
+        if (error instanceof Error && error.message.includes('timeout')) {
+          console.log('Matches initialization timeout - continuing with cached data');
+          // User can still see cached matches
+          return;
+        }
+        
+        // For other errors, still don't clear session immediately
+        console.log('Matches initialization error - staying on matches page with cached data');
+        // User keeps their session and can navigate manually if needed
+        return;
+      }
+    }
+
     initializeSession();
     // Initialize image cache service
     ImageCacheService.initialize();
@@ -148,7 +348,12 @@ export default function Matches() {
       };
       
       reloadData();
-    }, [currentEvent?.id, currentSessionId, currentUserProfile?.id])
+      
+      // Fetch latest messages for all matches when entering the page
+      if (matches.length > 0 && currentUserProfile?.id) {
+        fetchLatestMessagesForMatches(matches);
+      }
+    }, [currentEvent?.id, currentSessionId, currentUserProfile?.id, fetchLatestMessagesForMatches, matches])
   );
 
   // Track app state changes
@@ -165,6 +370,8 @@ export default function Matches() {
   useEffect(() => {
     return () => {
       cleanupAllListeners();
+      // Clear processed matches cache only on complete component unmount
+      processedMatchesRef.current.clear();
     };
   }, []);
 
@@ -284,6 +491,27 @@ export default function Matches() {
               setUnreadMessages(unseenSessionIds);
               setHasUnreadMessages(unseenSessionIds.size > 0);
               
+              // 🔄 NEW: Refresh latest messages for affected matches
+              // This ensures match cards show the most recent message content
+              if (unseenSessionIds.size > 0 && matches.length > 0) {
+                console.log('🔄 Refreshing match cards with new messages');
+                try {
+                  // Find matches that have new messages and update their latest message cache
+                  const affectedMatches = matches.filter(match => 
+                    unseenSessionIds.has(match.session_id)
+                  );
+                  
+                  if (affectedMatches.length > 0) {
+                    // Update latest messages cache for affected matches
+                    await fetchLatestMessagesForMatches(affectedMatches);
+                    
+                    console.log('✅ Refreshed latest messages for', affectedMatches.length, 'matches');
+                  }
+                } catch (error) {
+                  console.warn('⚠️ Failed to refresh match cards:', error);
+                }
+              }
+              
               // Debug: Log current unread state after update
               console.log('🔴 Updated unreadMessages state:', {
                 platform: Platform.OS,
@@ -309,7 +537,160 @@ export default function Matches() {
     };
 
     setupMessageListener();
-  }, [currentEvent?.id, currentUserProfile?.id, matches]);
+  }, [currentEvent?.id, currentUserProfile?.id, matches.length]);
+
+  // Define sortMatchesByLatestMessage before setupMatchesListener uses it
+  const sortMatchesByLatestMessage = useCallback(async (profiles: any[]): Promise<any[]> => {
+    if (!currentEvent?.id || !currentUserProfile?.id) return profiles;
+
+    try {
+      // Get latest message for each match
+      const profilesWithLatestMessage = await Promise.all(
+        profiles.map(async (profile) => {
+          try {
+            // Query messages between current user and this match
+            const { collection, query, where, getDocs } = await import('firebase/firestore');
+            const { db } = await import('../lib/firebaseConfig');
+            
+            // Simplified approach: Get ALL messages for this conversation, then sort locally
+            // This avoids Firestore index requirements
+            const messagesFromUserQuery = query(
+              collection(db, 'messages'),
+              where('event_id', '==', currentEvent.id),
+              where('from_profile_id', '==', currentUserProfile.id),
+              where('to_profile_id', '==', profile.id)
+            );
+            
+            const messagesToUserQuery = query(
+              collection(db, 'messages'),
+              where('event_id', '==', currentEvent.id),
+              where('from_profile_id', '==', profile.id),
+              where('to_profile_id', '==', currentUserProfile.id)
+            );
+            
+            // Execute both queries
+            const [fromUserSnapshot, toUserSnapshot] = await Promise.all([
+              getDocs(messagesFromUserQuery),
+              getDocs(messagesToUserQuery)
+            ]);
+            
+            // Combine all messages and sort locally to find the latest
+            const allMessages = [
+              ...fromUserSnapshot.docs.map(doc => doc.data()),
+              ...toUserSnapshot.docs.map(doc => doc.data())
+            ];
+            
+            // Sort messages by created_at timestamp (newest first)
+            let latestMessage = null;
+            if (allMessages.length > 0) {
+              allMessages.sort((a, b) => {
+                const aTime = a.created_at?.toMillis?.() || a.created_at || 0;
+                const bTime = b.created_at?.toMillis?.() || b.created_at || 0;
+                return bTime - aTime; // Descending order (newest first)
+              });
+              latestMessage = allMessages[0]; // Get the most recent message
+              
+              // Debug logging to understand what we're getting
+              console.log(`Match ${profile.first_name}: Found ${allMessages.length} messages, latest:`, {
+                content: latestMessage?.content?.substring(0, 50),
+                message: latestMessage?.message?.substring(0, 50), // Check both field names
+                from: latestMessage?.from_profile_id === currentUserProfile.id ? 'You' : profile.first_name,
+                timestamp: latestMessage?.created_at,
+                seen: latestMessage?.seen,
+                fields: Object.keys(latestMessage || {})
+              });
+            }
+            
+            // Check if this match has unread messages
+            const hasUnread = unreadMessages.has(profile.session_id);
+            
+            // Cache the latest message for this profile
+            if (latestMessage) {
+              latestMessagesCache.current.set(profile.session_id, latestMessage);
+            }
+            
+            return {
+              ...profile,
+              latestMessageTimestamp: latestMessage?.created_at?.toMillis?.() || latestMessage?.created_at || 0,
+              hasUnreadMessages: hasUnread,
+              latestMessage: latestMessage,
+              matchCreatedAt: profile.matchCreatedAt // Preserve match creation time
+            };
+          } catch (error) {
+            console.warn('Error getting latest message for match:', profile.first_name, error);
+            
+            // Check if this match has unread messages (from the working unread detection)
+            const hasUnread = unreadMessages.has(profile.session_id);
+            
+            // If there are unread messages but we can't fetch latest message due to index issues,
+            // provide a helpful fallback
+            const fallbackPreview = (error as Error)?.message?.includes('requires an index') 
+              ? 'New message - tap to view'
+              : hasUnread 
+                ? 'New message - tap to view'  // If unread exists, there must be messages
+                : null;
+              
+            console.log(`Error fetching messages for ${profile.first_name}:`, error instanceof Error ? error.message : 'Unknown error', { hasUnread });
+            
+            // Try to use cached message as fallback
+            const cachedMessage = latestMessagesCache.current.get(profile.session_id);
+            const finalMessage = cachedMessage || (fallbackPreview ? { content: fallbackPreview, from_profile_id: null } : null);
+            
+            return {
+              ...profile,
+              latestMessageTimestamp: cachedMessage?.created_at?.toMillis?.() || cachedMessage?.created_at || 0,
+              hasUnreadMessages: hasUnread,
+              latestMessage: finalMessage,
+              matchCreatedAt: profile.matchCreatedAt // Preserve match creation time
+            };
+          }
+        })
+      );
+
+      // Sort matches: 
+      // 1. First priority: matches with unread messages (by latest message timestamp desc)
+      // 2. Second priority: matches with messages (by latest message timestamp desc)  
+      // 3. Third priority: matches without messages (by match creation time desc, fallback to alphabetical)
+      const sortedProfiles = profilesWithLatestMessage.sort((a, b) => {
+        // If one has unread messages and the other doesn't, prioritize unread
+        if (a.hasUnreadMessages && !b.hasUnreadMessages) return -1;
+        if (!a.hasUnreadMessages && b.hasUnreadMessages) return 1;
+        
+        // If both have unread messages or both don't have unread messages,
+        // sort by latest message timestamp (most recent first)
+        if (a.latestMessageTimestamp && b.latestMessageTimestamp) {
+          return b.latestMessageTimestamp - a.latestMessageTimestamp;
+        }
+        
+        // If one has messages and the other doesn't, prioritize the one with messages
+        if (a.latestMessageTimestamp && !b.latestMessageTimestamp) return -1;
+        if (!a.latestMessageTimestamp && b.latestMessageTimestamp) return 1;
+        
+        // If neither has messages, sort by match creation time (most recent first)
+        // If no match creation time available, fall back to alphabetical sorting
+        if (a.matchCreatedAt && b.matchCreatedAt) {
+          const aTime = a.matchCreatedAt?.toMillis?.() || a.matchCreatedAt || 0;
+          const bTime = b.matchCreatedAt?.toMillis?.() || b.matchCreatedAt || 0;
+          return bTime - aTime; // Most recent match first
+        }
+        if (a.matchCreatedAt && !b.matchCreatedAt) return -1;
+        if (!a.matchCreatedAt && b.matchCreatedAt) return 1;
+        
+        // Fall back to alphabetical if no match creation time available
+        return a.first_name.localeCompare(b.first_name);
+      });
+
+      return sortedProfiles;
+    } catch (error) {
+      console.warn('Error sorting matches by latest message:', error);
+      return profiles; // Return original order if sorting fails
+    }
+  }, [currentEvent?.id, currentUserProfile?.id, unreadMessages]);
+
+  // Persistent processed matches cache to prevent infinite loops
+  const processedMatchesRef = useRef(new Set<string>());
+
+
 
   // Consolidated listener setup with proper cleanup
   useEffect(() => {
@@ -329,6 +710,21 @@ export default function Matches() {
         where('session_id', '==', currentSessionId)
       );
 
+      // Check for cached user profile first
+      const userCacheKey = `${CacheKeys.MATCHES_CURRENT_USER}_${currentSessionId}`;
+      const cachedUserProfile = GlobalDataCache.get<any>(userCacheKey);
+      if (cachedUserProfile) {
+        setCurrentUserProfile(cachedUserProfile);
+        console.log('Matches: Using cached user profile');
+      }
+      
+      // Check for cached matches list to show immediately and prevent reordering
+      const cachedMatches = GlobalDataCache.get<any[]>(CacheKeys.MATCHES_LIST);
+      if (cachedMatches && Array.isArray(cachedMatches)) {
+        setMatches(cachedMatches);
+        console.log('Matches: Using cached matches list for instant display');
+      }
+
       const userProfileUnsubscribe = onSnapshot(userProfileQuery, async (userSnapshot) => {
         try {
           const userProfiles = userSnapshot.docs.map(doc => ({
@@ -338,18 +734,176 @@ export default function Matches() {
           
           const userProfile = userProfiles[0];
           setCurrentUserProfile(userProfile);
+          
+          // Cache the fresh user profile
+          if (userProfile) {
+            GlobalDataCache.set(userCacheKey, userProfile, 5 * 60 * 1000); // Cache for 5 minutes
+          }
 
           if (!userProfile) {
-            // User profile not found - redirect to home but keep session data
-            // Homepage restoration will handle this gracefully
-            console.log('User profile not found in real-time listener - redirecting to home');
-            router.replace('/home');
+            // User profile not found - likely a temporary issue
+            // Don't redirect - user still has their session
+            console.log('User profile not found in real-time listener - continuing with cached data');
+            // User can still see their existing matches
             return;
           }
 
           // If user is not visible, still allow matches to be visible
           // (matches should be accessible even when user is hidden)
-          setupMatchesListener();
+          
+          // Set up matches listener directly to avoid dependency issues
+          if (currentEvent?.id && currentSessionId) {
+            try {
+              const mutualLikesQuery = query(
+                collection(db, 'likes'),
+                where('event_id', '==', currentEvent.id),
+                where('is_mutual', '==', true)
+              );
+
+              const matchesUnsubscribe = onSnapshot(mutualLikesQuery, async (snapshot) => {
+                try {
+                  const mutualLikes = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                  })) as any[];
+
+                  // Filter to only include likes where this user is involved
+                  const userMatches = mutualLikes.filter(like => 
+                    like.liker_session_id === currentSessionId || like.liked_session_id === currentSessionId
+                  );
+
+                  // Get the other person's session ID for each match (remove duplicates)
+                  const sessionIdsMap = userMatches.map(like => 
+                    like.liker_session_id === currentSessionId ? like.liked_session_id : like.liker_session_id
+                  );
+                  const otherSessionIds = Array.from(new Set(sessionIdsMap));
+
+                  // Get profiles for all matched users and attach match creation time
+                  const matchedProfiles: any[] = [];
+                  for (const otherSessionId of otherSessionIds) {
+                    const profiles = await EventProfileAPI.filter({
+                      session_id: otherSessionId,
+                      event_id: currentEvent.id
+                    });
+                    if (profiles.length > 0) {
+                      // Find the corresponding like record for this match to get creation time
+                      const matchLike = userMatches.find(like => 
+                        (like.liker_session_id === currentSessionId && like.liked_session_id === otherSessionId) ||
+                        (like.liker_session_id === otherSessionId && like.liked_session_id === currentSessionId)
+                      );
+                      
+                      const profile = profiles[0];
+                      // Add matchCreatedAt property for sorting
+                      (profile as any).matchCreatedAt = matchLike?.created_at || matchLike?.updated_at || null;
+                      
+                      matchedProfiles.push(profile);
+                    }
+                  }
+
+                  // Sort matches by latest message activity - but avoid infinite loops
+                  const sortedMatches = await sortMatchesByLatestMessage(matchedProfiles);
+                  setMatches(sortedMatches);
+                  
+                  // Cache the sorted matches to prevent visual reordering on next load
+                  GlobalDataCache.set(CacheKeys.MATCHES_LIST, sortedMatches, 5 * 60 * 1000);
+                  
+                  // Fetch latest messages for caching when matches are loaded
+                  if (sortedMatches.length > 0 && userProfile?.id) {
+                    fetchLatestMessagesForMatches(sortedMatches);
+                  }
+                  
+                  // Cache match profile images
+                  if (currentEvent?.id && matchedProfiles.length > 0) {
+                    const cacheMatchImages = async () => {
+                      const newCachedUris = new Map<string, string>();
+                      
+                      for (const match of matchedProfiles) {
+                        if (match.profile_photo_url) {
+                          try {
+                            const cachedUri = await ImageCacheService.getCachedImageUri(
+                              match.profile_photo_url,
+                              currentEvent.id,
+                              match.session_id
+                            );
+                            newCachedUris.set(match.session_id, cachedUri);
+                          } catch (error) {
+                            console.warn('Failed to cache image for match:', match.session_id, error);
+                            // Fallback to original URI
+                            newCachedUris.set(match.session_id, match.profile_photo_url);
+                          }
+                        }
+                      }
+                      
+                      setCachedImageUris(newCachedUris);
+                    };
+                    
+                    cacheMatchImages();
+                  }
+                  
+                  // Only clear unread messages indicator on initial load or when transitioning from having matches to no matches
+                  if (matchedProfiles.length === 0 && matches.length > 0) {
+                    console.log('Matches cleared - clearing unread messages indicator');
+                    setUnreadMessages(new Set());
+                    setHasUnreadMessages(false);
+                  } else if (matchedProfiles.length === 0) {
+                    // Initial state - don't spam logs
+                    console.log('Initial load: No matches found');
+                  }
+                } catch {
+                    // Error in matches listener
+                  }
+                      }, (error) => {
+                  // Handle Firestore listener errors gracefully
+                  if (error.code === 'permission-denied') {
+                    // Permission denied for matches listener
+                  } else if (error.code === 'unavailable') {
+                    // Firestore temporarily unavailable
+                  } else {
+                    // Error in matches listener
+                  }
+                });
+
+              listenersRef.current.matches = matchesUnsubscribe;
+
+              // Add likes listener to track which profiles the user has liked
+              const likesQuery = query(
+                collection(db, 'likes'),
+                where('event_id', '==', currentEvent.id),
+                where('liker_session_id', '==', currentSessionId)
+              );
+
+              const likesUnsubscribe = onSnapshot(likesQuery, (snapshot) => {
+                try {
+                  const likes = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                  })) as any[];
+                  
+                  setLikedProfiles(new Set(likes.map(like => like.liked_session_id)));
+                          } catch {
+                    // Error in likes listener
+                  }
+              }, (error) => {
+                // Handle Firestore listener errors gracefully
+                if (error.code === 'permission-denied') {
+                  // Permission denied for likes listener
+                } else if (error.code === 'unavailable') {
+                  // Firestore temporarily unavailable
+                } else {
+                  // Error in likes listener
+                }
+              });
+
+              listenersRef.current.likes = likesUnsubscribe;
+
+              // NOTE: Match notifications are now handled globally by GlobalNotificationService
+              // Removed duplicate listener to prevent multiple notifications for the same match
+              console.log('Matches screen: Match notifications handled by GlobalNotificationService');
+
+            } catch {
+              // Error setting up matches listener
+            }
+          }
           
           // Check for unseen messages after user profile is loaded
           const checkUnseenMessages = async () => {
@@ -401,6 +955,43 @@ export default function Matches() {
     };
   }, [currentEvent?.id, currentSessionId]);
 
+  // Use ref to track previous unread messages to avoid circular dependency
+  const prevUnreadMessagesRef = useRef<Set<string>>(new Set());
+
+  // Re-sort matches when unread messages change (separate concern from matches loading)
+  useEffect(() => {
+    // Check if unread messages actually changed
+    const currentUnreadSet = new Set(unreadMessages);
+    const prevUnreadSet = prevUnreadMessagesRef.current;
+    
+    const hasUnreadChanged = 
+      currentUnreadSet.size !== prevUnreadSet.size ||
+      [...currentUnreadSet].some(id => !prevUnreadSet.has(id)) ||
+      [...prevUnreadSet].some(id => !currentUnreadSet.has(id));
+
+    if (hasUnreadChanged && matches.length > 0 && currentEvent?.id && currentUserProfile?.id) {
+      const resortMatches = async () => {
+        try {
+          const sortedMatches = await sortMatchesByLatestMessage(matches);
+          // Only update if the order actually changed to avoid infinite loops
+          const currentOrder = matches.map(m => m.session_id).join(',');
+          const newOrder = sortedMatches.map(m => m.session_id).join(',');
+          if (currentOrder !== newOrder) {
+            setMatches(sortedMatches);
+          }
+        } catch (error) {
+          console.warn('Error re-sorting matches:', error);
+        }
+      };
+      resortMatches();
+      
+      // Update the ref after processing
+      prevUnreadMessagesRef.current = currentUnreadSet;
+    }
+  }, [unreadMessages]); // eslint-disable-line react-hooks/exhaustive-deps
+  // NOTE: We intentionally exclude 'matches' from dependencies to prevent circular dependency
+  // matches -> useEffect -> setMatches -> matches (infinite loop)
+
   // Update activity periodically while app is active
   useEffect(() => {
     if (!currentSessionId) return;
@@ -414,208 +1005,7 @@ export default function Matches() {
     return () => clearInterval(activityInterval);
   }, [currentSessionId, isAppActive]);
 
-  function setupMatchesListener() {
-    if (!currentEvent?.id || !currentSessionId) return;
 
-    try {
-      const mutualLikesQuery = query(
-        collection(db, 'likes'),
-        where('event_id', '==', currentEvent.id),
-        where('is_mutual', '==', true)
-      );
-
-      const matchesUnsubscribe = onSnapshot(mutualLikesQuery, async (snapshot) => {
-        try {
-          const mutualLikes = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          })) as any[];
-
-          // Filter to only include likes where this user is involved
-          const userMatches = mutualLikes.filter(like => 
-            like.liker_session_id === currentSessionId || like.liked_session_id === currentSessionId
-          );
-
-          // Get the other person's session ID for each match (remove duplicates)
-          const sessionIdsMap = userMatches.map(like => 
-            like.liker_session_id === currentSessionId ? like.liked_session_id : like.liker_session_id
-          );
-          const otherSessionIds = Array.from(new Set(sessionIdsMap));
-
-          // Get profiles for all matched users
-          const matchedProfiles: any[] = [];
-          for (const otherSessionId of otherSessionIds) {
-            const profiles = await EventProfileAPI.filter({
-              session_id: otherSessionId,
-              event_id: currentEvent.id
-            });
-            if (profiles.length > 0) {
-              matchedProfiles.push(profiles[0]);
-            }
-          }
-
-          setMatches(matchedProfiles);
-          
-          // Cache match profile images
-          if (currentEvent?.id && matchedProfiles.length > 0) {
-            const cacheMatchImages = async () => {
-              const newCachedUris = new Map<string, string>();
-              
-              for (const match of matchedProfiles) {
-                if (match.profile_photo_url) {
-                  try {
-                    const cachedUri = await ImageCacheService.getCachedImageUri(
-                      match.profile_photo_url,
-                      currentEvent.id,
-                      match.session_id
-                    );
-                    newCachedUris.set(match.session_id, cachedUri);
-                  } catch (error) {
-                    console.warn('Failed to cache image for match:', match.session_id, error);
-                    // Fallback to original URI
-                    newCachedUris.set(match.session_id, match.profile_photo_url);
-                  }
-                }
-              }
-              
-              setCachedImageUris(newCachedUris);
-            };
-            
-            cacheMatchImages();
-          }
-          
-          // If there are no matches, clear unread messages indicator
-          if (matchedProfiles.length === 0) {
-            console.log('No matches found - clearing unread messages indicator');
-            setUnreadMessages(new Set());
-            setHasUnreadMessages(false);
-          }
-        } catch {
-            // Error in matches listener
-          }
-              }, (error) => {
-          // Handle Firestore listener errors gracefully
-          if (error.code === 'permission-denied') {
-            // Permission denied for matches listener
-          } else if (error.code === 'unavailable') {
-            // Firestore temporarily unavailable
-          } else {
-            // Error in matches listener
-          }
-        });
-
-      listenersRef.current.matches = matchesUnsubscribe;
-
-      // Add likes listener to track which profiles the user has liked
-      const likesQuery = query(
-        collection(db, 'likes'),
-        where('event_id', '==', currentEvent.id),
-        where('liker_session_id', '==', currentSessionId)
-      );
-
-      const likesUnsubscribe = onSnapshot(likesQuery, (snapshot) => {
-        try {
-          const likes = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          })) as any[];
-          
-          setLikedProfiles(new Set(likes.map(like => like.liked_session_id)));
-                  } catch {
-            // Error in likes listener
-          }
-      }, (error) => {
-        // Handle Firestore listener errors gracefully
-        if (error.code === 'permission-denied') {
-          // Permission denied for likes listener
-        } else if (error.code === 'unavailable') {
-          // Firestore temporarily unavailable
-        } else {
-          // Error in likes listener
-        }
-      });
-
-      listenersRef.current.likes = likesUnsubscribe;
-
-      // Add mutual matches listener for real-time match notifications
-      const mutualMatchesQuery = query(
-        collection(db, 'likes'),
-        where('event_id', '==', currentEvent.id),
-        where('is_mutual', '==', true)
-      );
-
-      const mutualMatchesUnsubscribe = onSnapshot(mutualMatchesQuery, async (snapshot) => {
-        try {
-          console.log('Matches screen: Processing mutual matches snapshot changes');
-          
-          // Process document changes for real-time match notifications
-          for (const change of snapshot.docChanges()) {
-            if (change.type === 'added') {
-              const matchData = change.doc.data();
-              console.log('Matches screen: New mutual match detected:', {
-                docId: change.doc.id,
-                likerSessionId: matchData.liker_session_id,
-                recipientSessionId: matchData.recipient_session_id,
-                currentSession: currentSessionId
-              });
-              
-              // Only trigger notification if this user is the recipient (not the creator)
-              if (matchData.recipient_session_id === currentSessionId) {
-                // Get the liker's profile for notification
-                let likerName = 'Someone';
-                try {
-                  const { EventProfileAPI } = await import('../lib/firebaseApi');
-                  const likerProfiles = await EventProfileAPI.filter({
-                    session_id: matchData.liker_session_id,
-                    event_id: currentEvent?.id
-                  });
-                  if (likerProfiles.length > 0) {
-                    likerName = likerProfiles[0].first_name || 'Someone';
-                  }
-                } catch (profileError) {
-                  console.warn('Failed to get liker profile for match notification:', profileError);
-                }
-                
-                // Import and trigger match notification
-                try {
-                  const { NotificationRouter } = await import('../lib/notifications/NotificationRouter');
-                  await NotificationRouter.handleIncoming({
-                    type: 'match',
-                    id: change.doc.id,
-                    createdAt: matchData.created_at?.toDate?.()?.getTime() || Date.now(),
-                    isCreator: false, // This user is the recipient
-                    otherSessionId: matchData.liker_session_id,
-                    otherName: likerName
-                  });
-                } catch (notificationError) {
-                  console.error('Failed to trigger match notification:', notificationError);
-                }
-              }
-            }
-          }
-          
-          // Matches list will be updated automatically by the Firestore listener
-          
-        } catch (error) {
-          console.error('Error in mutual matches listener:', error);
-        }
-      }, (error) => {
-        // Handle Firestore listener errors gracefully
-        if (error.code === 'permission-denied') {
-          // Permission denied for mutual matches listener
-        } else if (error.code === 'unavailable') {
-          // Firestore temporarily unavailable
-        } else {
-          // Error in mutual matches listener
-        }
-      });
-
-      listenersRef.current.mutualMatches = mutualMatchesUnsubscribe;
-
-    } catch {
-      // Error setting up matches listener
-    }
-  }
 
   const cleanupAllListeners = () => {
     try {
@@ -631,10 +1021,7 @@ export default function Matches() {
         listenersRef.current.likes();
         listenersRef.current.likes = undefined;
       }
-      if (listenersRef.current.mutualMatches) {
-        listenersRef.current.mutualMatches();
-        listenersRef.current.mutualMatches = undefined;
-      }
+      // mutualMatches listener removed - handled by GlobalNotificationService
       if (listenersRef.current.messages) {
         listenersRef.current.messages();
         listenersRef.current.messages = undefined;
@@ -643,6 +1030,9 @@ export default function Matches() {
         clearInterval(listenersRef.current.periodicCheck);
         listenersRef.current.periodicCheck = undefined;
       }
+      
+      // Don't clear processed matches cache to prevent reprocessing old matches
+      // The cache will be cleared naturally when the component unmounts completely
     } catch {
       // Handle error silently
     }
@@ -674,7 +1064,7 @@ export default function Matches() {
     }
   }, [currentEvent?.id, currentSessionId]);
 
-  const handleUnmatch = async (matchSessionId: string, matchName: string) => {
+  const handleUnmatch = (matchSessionId: string, matchName: string) => {
     if (!currentEvent?.id || !currentSessionId) return;
 
     // Prevent double-clicking by checking if already unmatching
@@ -683,7 +1073,10 @@ export default function Matches() {
       return;
     }
 
-    // Show confirmation alert first
+    // Immediately mark as unmatching before showing alert to prevent race conditions
+    setUnmatchingUsers(prev => new Set(prev).add(matchSessionId));
+
+    // Show confirmation alert
     Alert.alert(
       'Unmatch',
       `Are you sure you want to unmatch ${matchName}?`,
@@ -691,13 +1084,19 @@ export default function Matches() {
         {
           text: 'Cancel',
           style: 'cancel',
+          onPress: () => {
+            // Clear the unmatching state if user cancels
+            setUnmatchingUsers(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(matchSessionId);
+              return newSet;
+            });
+          },
         },
         {
           text: 'Unmatch',
           style: 'destructive',
           onPress: async () => {
-            // Mark user as being unmatched to prevent double operations
-            setUnmatchingUsers(prev => new Set(prev).add(matchSessionId));
             try {
               // Find and delete ALL like records between these two users
               // Need to check both profile IDs since session IDs might not match profile references
@@ -982,124 +1381,6 @@ export default function Matches() {
     }
   };
 
-  async function initializeSession() {
-    try {
-      setIsLoading(true);
-      const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
-      const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
-      
-      if (!eventId || !sessionId) {
-        // No session data - redirect to home for normal flow
-        router.replace('/home');
-        return;
-      }
-
-      setCurrentSessionId(sessionId);
-      
-      // Reduce timeout and add retry logic
-      const fetchEventWithRetry = async (retries = 2) => {
-        for (let i = 0; i < retries; i++) {
-          try {
-            const timeoutPromise = new Promise<never>((_, reject) => {
-              setTimeout(() => reject(new Error('Event lookup timeout')), 8000); // Reduced to 8 seconds
-            });
-            
-            const eventPromise = EventAPI.filter({ id: eventId });
-            return await Promise.race([eventPromise, timeoutPromise]);
-          } catch (error) {
-            if (i === retries - 1) throw error; // Last attempt failed
-            console.log(`Event fetch attempt ${i + 1} failed, retrying...`);
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
-          }
-        }
-      };
-      
-      const events = await fetchEventWithRetry();
-      
-      if (events.length > 0) {
-        setCurrentEvent(events[0]);
-      } else {
-        // Event doesn't exist - clear only after confirmation
-        console.log('Event not found, clearing session data');
-        await AsyncStorageUtils.multiRemove([
-          'currentEventId',
-          'currentSessionId',
-          'currentEventCode',
-          'currentProfileColor',
-          'currentProfilePhotoUrl'
-        ]);
-        router.replace('/home');
-        return;
-      }
-
-      // Verify that the user's profile actually exists in the database
-      const profileTimeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Profile lookup timeout')), 15000); // 15 seconds
-      });
-      
-      const profilePromise = EventProfileAPI.filter({
-        event_id: eventId,
-        session_id: sessionId
-      });
-      
-      const userProfiles = await Promise.race([profilePromise, profileTimeoutPromise]);
-
-      if (userProfiles.length === 0) {
-        // Profile doesn't exist in database (user left event and deleted profile)
-        console.log('User profile not found, clearing session data');
-        await AsyncStorageUtils.multiRemove([
-          'currentEventId',
-          'currentSessionId',
-          'currentEventCode',
-          'currentProfileColor',
-          'currentProfilePhotoUrl'
-        ]);
-        router.replace('/home');
-        return;
-      }
-
-      // Load muted matches
-      await loadMutedMatches();
-
-      // Matches are now handled by real-time listener
-    } catch (error) {
-      console.error('Error initializing matches session:', error);
-      
-      // Don't clear session data on network/timeout errors
-      // Show user-friendly error with retry option
-      if (error instanceof Error) {
-        if (error.message.includes('timeout')) {
-          // Network timeout - show retry option
-          setIsLoading(false);
-          Alert.alert(
-            'Connection Issue',
-            'Unable to load matches. Please check your connection and try again.',
-            [
-              {
-                text: 'Go Back',
-                onPress: () => router.back(),
-                style: 'cancel'
-              },
-              {
-                text: 'Retry',
-                onPress: () => initializeSession()
-              }
-            ]
-          );
-          return; // Don't auto-redirect, let user choose
-        } else {
-          // Other errors - still show option but default to going back
-          console.log('Initialization error:', error.message);
-        }
-      }
-      
-      // For non-timeout errors, go back to previous page
-      setIsLoading(false);
-      router.back(); // Use back() instead of replace() to return to previous page
-    } finally {
-      // Loading state already handled above for better control
-    }
-  }
 
   // Remove the old loadMatches function since we're using real-time listeners now
 
@@ -1254,81 +1535,86 @@ export default function Matches() {
     matchCard: {
       flexDirection: 'row',
       backgroundColor: isDark ? '#1e293b' : '#ffffff',
-      borderRadius: 16,
-      padding: 16,
+      borderRadius: 12,
+      paddingVertical: 8, // Restored to original height
+      paddingHorizontal: 12,
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: isDark ? 0.3 : 0.1,
-      shadowRadius: 4,
-      elevation: 3,
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: isDark ? 0.2 : 0.05,
+      shadowRadius: 2,
+      elevation: 2,
       borderWidth: 1,
       borderColor: isDark ? '#374151' : '#e5e7eb',
+      alignItems: 'center',
+      minHeight: 56,
+      position: 'relative', // Enable absolute positioning for children
     },
     matchImageContainer: {
-      marginRight: 16,
+      marginRight: 12,
     },
     matchImage: {
-      width: 80,
-      height: 80,
-      borderRadius: 40,
+      width: 40,
+      height: 40,
+      borderRadius: 20,
     },
     matchImageFallback: {
-      width: 80,
-      height: 80,
-      borderRadius: 40,
+      width: 40,
+      height: 40,
+      borderRadius: 20,
       alignItems: 'center',
       justifyContent: 'center',
     },
     matchImageFallbackText: {
-      fontSize: 24,
+      fontSize: 16,
       fontWeight: 'bold',
       color: 'white',
     },
     fallbackAvatar: {
-      width: 80,
-      height: 80,
-      borderRadius: 40,
+      width: 40,
+      height: 40,
+      borderRadius: 20,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: isDark ? '#404040' : '#cccccc',
     },
     fallbackText: {
-      fontSize: 24,
+      fontSize: 16,
       fontWeight: 'bold',
       color: 'white',
     },
     matchInfo: {
       flex: 1,
-      justifyContent: 'center',
+      justifyContent: 'flex-start', // Move content slightly toward the top
+      alignItems: 'flex-start', // Align content to the left
+      paddingLeft: 8, // Reduced padding to move text closer to thumbnail
+      paddingBottom: 4, // Add bottom padding to push content up
     },
-    matchName: {
-      fontSize: 18,
-      fontWeight: '600',
-      color: isDark ? '#ffffff' : '#1f2937',
-      marginBottom: 4,
-    },
-    matchAge: {
-      fontSize: 14,
-      color: isDark ? '#9ca3af' : '#6b7280',
-      marginBottom: 12,
-    },
-    matchActions: {
-      flexDirection: 'row',
-      gap: 8,
-    },
-    actionButton: {
+    matchHeader: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: isDark ? '#404040' : '#f3f4f6',
-      borderRadius: 20,
-      paddingVertical: 8,
-      paddingHorizontal: 12,
-      gap: 6,
+      justifyContent: 'space-between', // Name on left, dropdown on right
+      width: '100%',
+      marginBottom: 4, // Small spacing between name and message preview
     },
-    actionText: {
+    matchNameContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flex: 1, // Take available space, pushing dropdown to right
+      paddingRight: 5, // Add padding to prevent text overlap with menu button
+    },
+    matchName: {
+      fontSize: 16,
+      fontWeight: 'bold',
+      color: isDark ? '#ffffff' : '#1f2937', // White in dark mode, dark gray in light mode
+      textAlign: 'left', // Left align as requested
+    },
+    messagePreview: {
       fontSize: 14,
       color: isDark ? '#9ca3af' : '#6b7280',
-      fontWeight: '500',
+      lineHeight: 16, // Reduced line height to minimize vertical space
+      textAlign: 'left', // Left align as requested
+      paddingRight: 25, // Reduced padding to allow 3 more characters to show
+      marginTop: 0, // Reset margin for proper spacing
     },
     emptyState: {
       alignItems: 'center',
@@ -1533,15 +1819,6 @@ export default function Matches() {
     },
   });
 
-  if (isLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#8b5cf6" />
-        <Text style={styles.loadingText}>Loading your matches...</Text>
-      </View>
-    );
-  }
-
   // Show hidden state notice if user is not visible, but still allow access to matches
   const isProfileHidden = currentUserProfile && !currentUserProfile.is_visible;
 
@@ -1551,11 +1828,19 @@ export default function Matches() {
       <View style={styles.header}>
         <View style={styles.headerText}>
           <Text style={styles.title}>
-            Your Matches
+            {matches.length} Mutual Connection{matches.length !== 1 ? 's' : ''}
           </Text>
-          <Text style={styles.subtitle}>
-            {matches.length} mutual connection{matches.length !== 1 ? 's' : ''}
-          </Text>
+          {currentEvent?.expires_at ? (
+            <CountdownTimer
+              expiresAt={currentEvent.expires_at}
+              prefix="Matches Expire in "
+              style={styles.subtitle}
+            />
+          ) : (
+            <Text style={styles.subtitle}>
+              Your Matches
+            </Text>
+          )}
         </View>
         <View style={styles.headerIcon}>
           <Heart size={24} color="#ec4899" fill="#ec4899" />
@@ -1584,24 +1869,28 @@ export default function Matches() {
       )}
 
       {/* Matches List */}
-      <ScrollView style={styles.matchesContainer}>
+      <ScrollView 
+        style={styles.matchesContainer}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            colors={['#FF6B6B']} // Android
+            tintColor="#FF6B6B" // iOS
+          />
+        }
+      >
         {matches.length > 0 ? (
           <View style={styles.matchesList}>
             {matches.map((match) => {
               const hasUnreadMessage = unreadMessages.has(match.session_id);
               
-              // Debug logging for unread message detection
-              if (hasUnreadMessage) {
-                console.log(`🔴 Match ${match.first_name} (${match.session_id}) has unread messages - Platform: ${Platform.OS}`);
-              }
-              
               // Build styles step by step for better Android compatibility
               let cardStyles: any[] = [styles.matchCard];
               
               if (hasUnreadMessage) {
-                console.log(`🔴 Applying highlight styles for ${match.first_name} on ${Platform.OS}`);
                 const highlightStyle = {
-                  borderWidth: 3,
+                  borderWidth: 2,
                   borderColor: '#8b5cf6',
                   backgroundColor: isDark ? '#2d1b3d' : '#f3f0ff',
                 };
@@ -1609,20 +1898,19 @@ export default function Matches() {
                 if (Platform.OS === 'ios') {
                   Object.assign(highlightStyle, {
                     shadowColor: '#8b5cf6',
-                    shadowOffset: { width: 0, height: 6 },
-                    shadowOpacity: 0.8,
-                    shadowRadius: 16,
-                    transform: [{ scale: 1.02 }],
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.4,
+                    shadowRadius: 8,
+                    transform: [{ scale: 1.01 }],
                   });
                 } else {
                   // Android specific styles
                   Object.assign(highlightStyle, {
-                    elevation: 12,
+                    elevation: 8,
                     shadowColor: '#8b5cf6',
                   });
                 }
                 
-                console.log(`🔴 Final highlight style for ${match.first_name}:`, highlightStyle);
                 cardStyles.push(highlightStyle);
               }
               
@@ -1670,15 +1958,15 @@ export default function Matches() {
                     {mutedMatches.has(match.session_id) && (
                       <View style={{
                         position: 'absolute',
-                        bottom: -4,
-                        right: -4,
+                        bottom: -2,
+                        right: -2,
                         backgroundColor: isDark ? '#374151' : '#6b7280',
-                        borderRadius: 12,
-                        width: 24,
-                        height: 24,
+                        borderRadius: 8,
+                        width: 16,
+                        height: 16,
                         justifyContent: 'center',
                         alignItems: 'center',
-                        borderWidth: 2,
+                        borderWidth: 1.5,
                         borderColor: isDark ? '#1a1a1a' : '#ffffff',
                         ...(Platform.OS === 'ios' ? {
                           shadowColor: '#000',
@@ -1689,43 +1977,25 @@ export default function Matches() {
                           elevation: 3,
                         })
                       }}>
-                        <VolumeX size={12} color="#ffffff" />
+                        <VolumeX size={8} color="#ffffff" />
                       </View>
                     )}
                   </TouchableOpacity>
                 
                 <View style={styles.matchInfo}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                    <Text style={[styles.matchName, mutedMatches.has(match.session_id) && { opacity: 0.7 }]}>
-                      {match.first_name}
-                    </Text>
-                    {mutedMatches.has(match.session_id) && (
-                      <VolumeX size={14} color={isDark ? '#9ca3af' : '#6b7280'} style={{ marginLeft: 6 }} />
-                    )}
-                  </View>
-                  <Text style={[styles.matchAge, mutedMatches.has(match.session_id) && { opacity: 0.7 }]}>
-                    {match.age} years old{mutedMatches.has(match.session_id) ? ' • Muted' : ''}
-                  </Text>
-                  <View style={styles.matchActions}>
-                    <TouchableOpacity 
-                      style={styles.actionButton}
-                      onPress={() => router.push({
-                        pathname: '/chat',
-                        params: { 
-                          matchId: match.session_id,
-                          matchName: match.first_name
-                        }
-                      })}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Message ${match.first_name}`}
-                      accessibilityHint={`Open chat with ${match.first_name}`}
-                    >
-                      <MessageCircle size={16} color="#6b7280" />
-                      <Text style={styles.actionText}>Message</Text>
-                    </TouchableOpacity>
+                  <View style={styles.matchHeader}>
+                    <View style={styles.matchNameContainer}>
+                      <Text style={[styles.matchName, mutedMatches.has(match.session_id) && { opacity: 0.7 }]}>
+                        {match.first_name?.split(' ')[0] || match.first_name}
+                      </Text>
+                      {mutedMatches.has(match.session_id) && (
+                        <VolumeX size={14} color={isDark ? '#9ca3af' : '#6b7280'} style={{ marginLeft: 6 }} />
+                      )}
+                    </View>
                     
-                    <DropdownMenu
-                      items={[
+                    <View style={{ position: 'absolute', right: -4, top: '50%', transform: [{ translateY: -8 }] }}>
+                      <DropdownMenu
+                        items={[
                         {
                           id: 'mute',
                           label: mutedMatches.has(match.session_id) ? 'Unmute' : 'Mute',
@@ -1745,9 +2015,35 @@ export default function Matches() {
                           onPress: () => handleReportMatch(match),
                           destructive: true,
                         },
-                      ]}
-                    />
+                        ]}
+                      />
+                    </View>
                   </View>
+                  
+                  {/* Message preview */}
+                  <Text 
+                    style={[
+                      styles.messagePreview, 
+                      mutedMatches.has(match.session_id) && { opacity: 0.7 },
+                      hasUnreadMessage && { fontWeight: 'bold' }
+                    ]}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
+                    {(() => {
+                      // First try cached message, then match.latestMessage
+                      const cachedMessage = latestMessagesCache.current.get(match.session_id);
+                      const messageToShow = cachedMessage || match.latestMessage;
+                      const messageContent = messageToShow?.content || messageToShow?.message;
+                      
+                      if (messageContent) {
+                        return messageToShow.from_profile_id === currentUserProfile?.id 
+                          ? `You: ${messageContent}` 
+                          : messageContent;
+                      }
+                      return 'Tap to start chatting!';
+                    })()}
+                  </Text>
                 </View>
               </TouchableOpacity>
             )
@@ -1775,17 +2071,6 @@ export default function Matches() {
 
       {/* Bottom Navigation */}
       <View style={styles.bottomNavigation}>
-        <TouchableOpacity
-          style={styles.navButton}
-          onPress={() => router.push('/profile')}
-          accessibilityRole="button"
-          accessibilityLabel="Profile"
-          accessibilityHint="Navigate to your profile page"
-        >
-          <User size={24} color="#9ca3af" />
-          <Text style={styles.navButtonText}>Profile</Text>
-        </TouchableOpacity>
-        
         <TouchableOpacity
           style={styles.navButton}
           onPress={() => router.push('/discovery')}
@@ -1829,6 +2114,17 @@ export default function Matches() {
             )}
           </View>
           <Text style={[styles.navButtonText, styles.navButtonTextActive]}>Matches</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={styles.navButton}
+          onPress={() => router.push('/profile')}
+          accessibilityRole="button"
+          accessibilityLabel="Profile"
+          accessibilityHint="Navigate to your profile page"
+        >
+          <User size={24} color="#9ca3af" />
+          <Text style={styles.navButtonText}>Profile</Text>
         </TouchableOpacity>
       </View>
 

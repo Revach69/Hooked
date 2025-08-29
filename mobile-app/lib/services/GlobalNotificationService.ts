@@ -92,13 +92,29 @@ class GlobalNotificationServiceClass {
         where('liked_session_id', '==', this.currentSessionId)
       );
       
+      // Track processed matches to prevent duplicates
+      const processedMatches = new Set<string>();
+      
       // Handler function for both queries
       const handleMatchSnapshot = async (snapshot: any) => {
         try {
           // Process new matches
           for (const change of snapshot.docChanges()) {
-            if (change.type === 'added') {
+            if (change.type === 'added' || change.type === 'modified') {
               const matchData = change.doc.data();
+              
+              // Create unique match key to prevent duplicate processing
+              const matchKey = `${matchData.liker_session_id}_${matchData.liked_session_id}`;
+              const reverseKey = `${matchData.liked_session_id}_${matchData.liker_session_id}`;
+              
+              // Check if we've already processed this match
+              if (processedMatches.has(matchKey) || processedMatches.has(reverseKey)) {
+                console.log('GlobalNotificationService: Skipping duplicate match notification:', {
+                  matchId: change.doc.id,
+                  matchKey
+                });
+                continue;
+              }
               
               // Apply the same time filtering as _layout.tsx to prevent old match notifications
               const matchTime = matchData.created_at?.toDate?.() || new Date(matchData.created_at?.seconds * 1000 || Date.now());
@@ -111,8 +127,11 @@ class GlobalNotificationServiceClass {
                   matchTime: matchTime.toISOString(),
                   threshold: thirtySecondsAgo.toISOString()
                 });
-                return; // Skip old matches
+                continue; // Skip old matches
               }
+              
+              // Mark this match as processed
+              processedMatches.add(matchKey);
               
               console.log('GlobalNotificationService: New match detected:', {
                 docId: change.doc.id,
@@ -122,7 +141,22 @@ class GlobalNotificationServiceClass {
               
               // Determine if I'm the creator or recipient
               const isCreator = matchData.liker_session_id === this.currentSessionId;
-              const otherSessionId = isCreator ? matchData.liked_session_id : matchData.liker_session_id;
+              const isRecipient = matchData.liked_session_id === this.currentSessionId;
+              
+              // BUSINESS RULE: Only the recipient (first liker) gets notifications
+              // The creator (second liker) should not receive match notifications
+              if (!isRecipient) {
+                console.log('GlobalNotificationService: Skipping notification - this user is the creator, not recipient:', {
+                  currentSessionId: this.currentSessionId,
+                  likerSessionId: matchData.liker_session_id,
+                  likedSessionId: matchData.liked_session_id,
+                  isCreator,
+                  isRecipient
+                });
+                continue;
+              }
+              
+              const otherSessionId = matchData.liker_session_id; // The one who initiated the match
               
               // Get the other user's profile for their name
               let otherName = 'Someone';
@@ -139,12 +173,19 @@ class GlobalNotificationServiceClass {
                 console.warn('Failed to get other user profile for match notification:', profileError);
               }
               
-              // Trigger match notification
+              console.log('GlobalNotificationService: Triggering match notification for recipient:', {
+                currentSessionId: this.currentSessionId,
+                otherSessionId,
+                otherName,
+                matchId: change.doc.id
+              });
+              
+              // Trigger match notification - recipient gets push notification
               await NotificationRouter.handleIncoming({
                 type: 'match',
                 id: change.doc.id,
                 createdAt: matchTime.getTime(),
-                isCreator: isCreator,
+                isCreator: false, // Recipient is never the creator
                 otherSessionId: otherSessionId,
                 otherName: otherName
               });

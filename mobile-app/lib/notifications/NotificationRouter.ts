@@ -19,11 +19,16 @@ const MEMORY_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour TTL for memory cache
 function dedupeKey(ev: AnyEvent) {
   if (ev.type === 'match') {
     // For matches, create a consistent key based on both users, regardless of who's creator
-    // This ensures only one notification per match pair
     const sessions = [ev.otherSessionId, getCurrentSessionId()].sort();
     return `${ev.type}:${sessions[0]}:${sessions[1]}`;
   }
-  return `${ev.type}:${ev.id}`;
+  if (ev.type === 'message') {
+    // Content-based key for messages: sender + recipient + content hash
+    const contentHash = ev.preview ? btoa(ev.preview).slice(0, 8) : 'no-content';
+    const sessions = [ev.senderSessionId, getCurrentSessionId()].sort();
+    return `${ev.type}:${sessions[0]}:${sessions[1]}:${contentHash}`;
+  }
+  return `${(ev as any).type}:${(ev as any).id}`;
 }
 
 // Cleanup old entries from memory cache periodically
@@ -190,8 +195,25 @@ export const NotificationRouter = {
       senderName: ev.type === 'message' ? ev.senderName : undefined,
       isReady: this.isReady(),
       hasSessionId: !!sessionId,
-      currentSessionId: sessionId
+      currentSessionId: sessionId,
+      timestamp: new Date().toISOString()
     });
+    
+    // Additional safety check: Ensure this event is relevant to current session
+    if (ev.type === 'match' && sessionId) {
+      const isRelevantMatch = ev.otherSessionId && (
+        ev.otherSessionId === sessionId || 
+        getCurrentSessionId() === sessionId
+      );
+      if (!isRelevantMatch) {
+        console.log('NotificationRouter: Match event not relevant to current session, skipping:', {
+          eventOtherSessionId: ev.otherSessionId,
+          currentSessionId: sessionId,
+          eventId: ev.id
+        });
+        return;
+      }
+    }
 
     Sentry.addBreadcrumb({
       message: 'NotificationRouter.handleIncoming called',
@@ -268,7 +290,6 @@ export const NotificationRouter = {
       const sessions = [ev.otherSessionId, getCurrentSessionId()].sort();
       const persistentKey = `match_notification_${sessions[0]}_${sessions[1]}`;
       let shouldSkipNotification = false;
-      let storageWorking = true;
       
       // First, try persistent storage
       try {
@@ -293,7 +314,7 @@ export const NotificationRouter = {
         }
       } catch (error) {
         console.warn('AsyncStorage failed, using memory fallback cache:', error);
-        storageWorking = false;
+        // Storage not working, using memory fallback
         
         // Log to Sentry for monitoring
         Sentry.captureException(error, {
@@ -323,18 +344,36 @@ export const NotificationRouter = {
         return;
       }
       
-      // Also use memory-based deduplication as backup - use a single key for the entire match
+      // Enhanced memory-based deduplication with better race condition handling
       const singleMatchKey = `match_${matchKey}`;
       const lastShown = seen.get(singleMatchKey);
       
-      if (lastShown && now - lastShown < 30000) { // 30 seconds memory cooldown
+      // Use shorter cooldown for memory deduplication to handle rapid-fire events
+      if (lastShown && now - lastShown < 10000) { // 10 seconds memory cooldown
         console.log(`Already processed this match recently in memory, skipping`);
+        Sentry.addBreadcrumb({
+          message: 'NotificationRouter: Duplicate match notification blocked by memory cache',
+          level: 'info',
+          category: 'notification_deduplication',
+          data: { 
+            matchKey: singleMatchKey, 
+            timeSinceLastShown: now - lastShown,
+            sessions: sessions
+          }
+        });
         return;
       }
       
+      // Set memory marker immediately to prevent race conditions
       seen.set(singleMatchKey, now);
+      
+      // Additional protection: Add a small random delay to prevent simultaneous processing
+      // This helps when multiple listeners trigger at exactly the same time
+      const randomDelay = Math.random() * 100; // 0-100ms
+      await new Promise(resolve => setTimeout(resolve, randomDelay));
 
       if (ev.isCreator) {
+        // BUSINESS RULE: Second liker (creator) - always in foreground → single alert
         // Creator is always in-app (must be to create match), show Alert
         console.log('Showing alert for match creator');
         
@@ -344,16 +383,34 @@ export const NotificationRouter = {
           category: 'notification'
         });
         Alert.alert(
-          "You got Hooked!",
-          'See matches or continue browsing',
+          "You got Hooked!", // NO emoji for client fallback identification
+          `Start chatting with ${ev.otherName || 'your match'}!`,
           [
             { text: 'Dismiss', style: 'cancel' },
-            { text: 'See Match', onPress: () => gotoMatches?.() },
+            { 
+              text: 'Start Chat', 
+              onPress: () => {
+                try {
+                  const { router } = require('expo-router');
+                  router.push({
+                    pathname: '/chat',
+                    params: {
+                      matchId: ev.otherSessionId,
+                      matchName: ev.otherName || 'Someone'
+                    }
+                  });
+                } catch (navError) {
+                  console.warn('Failed to navigate to chat from alert, falling back to matches:', navError);
+                  gotoMatches?.();
+                }
+              }
+            },
           ],
           { cancelable: true }
         );
         return;
       } else {
+        // BUSINESS RULE: First liker (counterpart/non-creator) - foreground → toast; background → push  
         // First liker (recipient) - check if in foreground for client-side notification
         const isForeground = getFg?.() ?? false;
         Sentry.addBreadcrumb({
@@ -381,7 +438,7 @@ export const NotificationRouter = {
             const otherName = ev.otherName || 'Someone';
             Toast.show({ 
               type: 'matchSuccess', 
-              text1: `You got Hooked with ${otherName}!`, 
+              text1: `You got Hooked with ${otherName}!`, // NO emoji for client fallback identification
               text2: 'Tap to start chatting',
               position: 'top',
               visibilityTime: 3500,
@@ -418,6 +475,14 @@ export const NotificationRouter = {
           }
         } else {
           console.log('Match recipient not in foreground - server will handle push notification');
+          
+          // Schedule local notification fallback in case push fails
+          try {
+            const { LocalNotificationFallback } = await import('./LocalNotificationFallback');
+            await LocalNotificationFallback.scheduleLocalFallback(ev);
+          } catch (error) {
+            console.warn('NotificationRouter: Failed to schedule local fallback for match:', error);
+          }
         }
         return;
       }
@@ -463,6 +528,32 @@ export const NotificationRouter = {
         }
       } else {
         console.log('NotificationRouter: no senderSessionId available, cannot check mute status');
+      }
+
+      // Content-based message deduplication - only block if exact same message content
+      if (ev.senderSessionId && ev.preview) {
+        const messageKey = `message_${ev.senderSessionId}_${getCurrentSessionId()}_${ev.preview}`;
+        const lastMessageTime = seen.get(messageKey);
+        const now = Date.now();
+        
+        // Only prevent notifications if exact same message content within 30 seconds
+        // This handles server-side duplicate processing, not legitimate consecutive messages
+        if (lastMessageTime && now - lastMessageTime < 30000) {
+          console.log('NotificationRouter: Exact same message content detected, skipping duplicate');
+          Sentry.addBreadcrumb({
+            message: 'NotificationRouter: Duplicate message content blocked',
+            level: 'info',
+            category: 'notification_deduplication',
+            data: { 
+              senderSessionId: ev.senderSessionId,
+              messagePreview: ev.preview?.substring(0, 20),
+              timeSinceLastMessage: now - lastMessageTime
+            }
+          });
+          return;
+        }
+        
+        seen.set(messageKey, now);
       }
 
       const isForeground = getFg?.() ?? false;
@@ -570,6 +661,14 @@ export const NotificationRouter = {
         }, 100); // 100ms delay to allow app state to stabilize
       } else {
         console.log('Message recipient not in foreground - server will handle push notification');
+        
+        // Schedule local notification fallback in case push fails
+        try {
+          const { LocalNotificationFallback } = await import('./LocalNotificationFallback');
+          await LocalNotificationFallback.scheduleLocalFallback(ev);
+        } catch (error) {
+          console.warn('NotificationRouter: Failed to schedule local fallback for message:', error);
+        }
       }
       return;
     }

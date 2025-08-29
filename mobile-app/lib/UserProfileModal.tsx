@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   StyleSheet,
   useColorScheme,
   Dimensions,
+  PanResponder,
+  Animated,
 } from 'react-native';
 import { X, MapPin, Heart } from 'lucide-react-native';
 
@@ -18,8 +20,8 @@ interface UserProfileModalProps {
   visible: boolean;
   profile: any;
   onClose: () => void;
-  onLike?: (_profile: any) => void;
-  onSkip?: (_profile: any) => void;
+  onLike?: (profile: any) => void;
+  onSkip?: (profile: any) => void;
   isLiked?: boolean;
   isSkipped?: boolean;
 }
@@ -27,21 +29,91 @@ interface UserProfileModalProps {
 export default function UserProfileModal({ visible, profile, onClose, onLike, onSkip, isLiked = false, isSkipped = false }: UserProfileModalProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  
+  // Animation values for swipe gesture
+  const translateY = useRef(new Animated.Value(0)).current;
+  const scale = translateY.interpolate({
+    inputRange: [-100, 0, 100],
+    outputRange: [0.95, 1, 0.95],
+    extrapolate: 'clamp',
+  });
+  const backgroundOpacity = translateY.interpolate({
+    inputRange: [-100, -20, 0, 20, 100],
+    outputRange: [0.4, 0.8, 0.8, 0.8, 0.4],
+    extrapolate: 'clamp',
+  });
+  
+  // PanResponder for swipe to dismiss (only active on image area)
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        // Only respond to clear vertical swipes with significant movement
+        // This prevents conflicts with taps and accidental gestures
+        const isVerticalSwipe = Math.abs(gestureState.dy) > Math.abs(gestureState.dx);
+        const hasMovedEnough = Math.abs(gestureState.dy) > 15; // Increased threshold
+        return isVerticalSwipe && hasMovedEnough;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        translateY.setValue(gestureState.dy);
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        const { dy, vy } = gestureState;
+        const shouldDismiss = Math.abs(dy) > 80 || Math.abs(vy) > 0.8;
+        
+        if (shouldDismiss) {
+          // Animate out before closing with velocity-based duration
+          const dismissDirection = dy > 0 ? height : -height;
+          const duration = Math.max(150, 300 - Math.abs(vy) * 100);
+          
+          Animated.timing(translateY, {
+            toValue: dismissDirection,
+            duration: duration,
+            useNativeDriver: true,
+          }).start(() => {
+            translateY.setValue(0); // Reset for next time
+            onClose();
+          });
+        } else {
+          // Snap back to original position with smoother spring
+          Animated.spring(translateY, {
+            toValue: 0,
+            useNativeDriver: true,
+            tension: 150,
+            friction: 8,
+          }).start();
+        }
+      },
+    })
+  ).current;
 
   if (!profile) return null;
 
   const styles = StyleSheet.create({
     modalOverlay: {
       flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.8)',
       justifyContent: 'center',
       alignItems: 'center',
+    },
+    backgroundOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    },
+    touchableOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
     },
     modalContent: {
       backgroundColor: isDark ? '#1a1a1a' : 'white',
       borderRadius: 20,
       width: width * 0.9,
-      maxHeight: height * 0.85,
       overflow: 'hidden',
     },
     closeButton: {
@@ -58,7 +130,7 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
     },
     imageContainer: {
       width: '100%',
-      height: width * 0.9,
+      height: 280,
       backgroundColor: isDark ? '#2d2d2d' : '#f3f4f6',
       alignItems: 'center',
       justifyContent: 'center',
@@ -66,7 +138,7 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
     profileImage: {
       width: '100%',
       height: '100%',
-      resizeMode: 'cover',
+      resizeMode: 'contain',
     },
     fallbackAvatar: {
       width: width * 0.4,
@@ -81,8 +153,13 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
       fontWeight: 'bold',
       color: 'white',
     },
-    contentContainer: {
+    basicInfoContainer: {
       padding: 20,
+    },
+    additionalInfoContainer: {
+      maxHeight: 200,
+      paddingHorizontal: 20,
+      paddingBottom: 20,
     },
     headerSection: {
       marginBottom: 20,
@@ -127,7 +204,7 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      opacity: isSkipped ? 0.5 : 1,
+      opacity: (isSkipped || isLiked) ? 0.5 : 1, // Disable if skipped OR liked
     },
     likeButton: {
       flex: 1,
@@ -138,7 +215,7 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      opacity: isLiked ? 0.5 : 1,
+      opacity: (isLiked || isSkipped) ? 0.5 : 1, // Disable if liked OR skipped
     },
     buttonText: {
       color: 'white',
@@ -190,12 +267,20 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
   const handleLikePress = () => {
     if (onLike) {
       onLike(profile);
+      // Auto close modal after like action
+      setTimeout(() => {
+        onClose();
+      }, 500);
     }
   };
 
   const handleSkipPress = () => {
     if (onSkip) {
       onSkip(profile);
+      // Auto close modal after skip action
+      setTimeout(() => {
+        onClose();
+      }, 500);
     }
   };
 
@@ -207,27 +292,34 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
       onRequestClose={onClose}
       accessibilityViewIsModal={true}
     >
-      <TouchableOpacity 
-        style={styles.modalOverlay}
-        activeOpacity={1}
-        onPress={onClose}
-      >
+      <View style={styles.modalOverlay}>
+        <Animated.View 
+          style={[styles.backgroundOverlay, { opacity: backgroundOpacity }]}
+        />
         <TouchableOpacity 
-          style={styles.modalContent}
+          style={styles.touchableOverlay}
           activeOpacity={1}
-          onPress={(e) => e.stopPropagation()}
+          onPress={onClose}
+        />
+        <Animated.View 
+          style={[
+            styles.modalContent,
+            {
+              transform: [{ translateY: translateY }, { scale: scale }],
+            },
+          ]}
         >
           {/* Close Button */}
           <TouchableOpacity style={styles.closeButton} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close profile" accessibilityHint="Close the profile modal">
             <X size={24} color="white" />
           </TouchableOpacity>
 
-          {/* Profile Image */}
-          <View style={styles.imageContainer}>
+          {/* Profile Image - Swipeable */}
+          <View style={styles.imageContainer} {...panResponder.panHandlers}>
             {profile.profile_photo_url ? (
               <Image
                 source={{ uri: profile.profile_photo_url }}
-        onError={() => {}}
+                onError={() => {}}
                 style={styles.profileImage}
               />
             ) : (
@@ -237,9 +329,8 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
             )}
           </View>
 
-          {/* Profile Content */}
-          <ScrollView style={styles.contentContainer} showsVerticalScrollIndicator={false}>
-            {/* Header Section */}
+          {/* Basic Info - Always Visible */}
+          <View style={styles.basicInfoContainer}>
             <View style={styles.headerSection}>
               <View style={styles.nameAgeRow}>
                 <Text style={styles.name}>{profile.first_name}</Text>
@@ -260,11 +351,11 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
                     <TouchableOpacity 
                       style={styles.skipButton} 
                       onPress={handleSkipPress}
-                      disabled={isSkipped}
+                      disabled={isSkipped || isLiked}
                       accessibilityRole="button"
-                      accessibilityLabel={isSkipped ? 'Already skipped' : `Skip ${profile.first_name}`}
-                      accessibilityHint={isSkipped ? 'You have already skipped this person' : 'Skip this profile'}
-                      accessibilityState={{ disabled: isSkipped }}
+                      accessibilityLabel={isSkipped ? 'Already skipped' : isLiked ? 'Cannot skip liked profile' : `Skip ${profile.first_name}`}
+                      accessibilityHint={isSkipped ? 'You have already skipped this person' : isLiked ? 'You cannot skip a profile you have liked' : 'Skip this profile'}
+                      accessibilityState={{ disabled: isSkipped || isLiked }}
                     >
                       <X 
                         size={20} 
@@ -280,11 +371,11 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
                     <TouchableOpacity 
                       style={styles.likeButton} 
                       onPress={handleLikePress}
-                      disabled={isLiked}
+                      disabled={isLiked || isSkipped}
                       accessibilityRole="button"
-                      accessibilityLabel={isLiked ? 'Already liked' : `Like ${profile.first_name}`}
-                      accessibilityHint={isLiked ? 'You have already liked this person' : 'Add like to this person'}
-                      accessibilityState={{ disabled: isLiked }}
+                      accessibilityLabel={isLiked ? 'Already liked' : isSkipped ? 'Cannot like skipped profile' : `Like ${profile.first_name}`}
+                      accessibilityHint={isLiked ? 'You have already liked this person' : isSkipped ? 'You cannot like a profile you have skipped' : 'Add like to this person'}
+                      accessibilityState={{ disabled: isLiked || isSkipped }}
                     >
                       <Heart 
                         size={20} 
@@ -299,41 +390,51 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
                 </View>
               )}
             </View>
+          </View>
 
-            {/* About Me Section - Only if present */}
-            {profile.about_me && profile.about_me.trim().length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>About Me</Text>
-                <Text style={styles.aboutMeText}>{profile.about_me}</Text>
-              </View>
-            )}
-
-            {/* Interests Section - Only if present */}
-            {Array.isArray(profile.interests) && profile.interests.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Interests</Text>
-                <View style={styles.interestsContainer}>
-                  {profile.interests.map((interest: string, index: number) => (
-                    <View key={index} style={styles.interestTag}>
-                      <Text style={styles.interestText}>
-                        {interest.charAt(0).toUpperCase() + interest.slice(1)}
-                      </Text>
-                    </View>
-                  ))}
+          {/* Additional Info - Scrollable if present */}
+          {((profile.about_me && profile.about_me.trim().length > 0) || 
+            (Array.isArray(profile.interests) && profile.interests.length > 0) || 
+            profile.height_cm) && (
+            <ScrollView 
+              style={styles.additionalInfoContainer} 
+              showsVerticalScrollIndicator={false}
+            >
+              {/* About Me Section - Only if present */}
+              {profile.about_me && profile.about_me.trim().length > 0 && (
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>About Me</Text>
+                  <Text style={styles.aboutMeText}>{profile.about_me}</Text>
                 </View>
-              </View>
-            )}
+              )}
 
-            {/* Height Section - Only if present */}
-            {profile.height_cm && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Height</Text>
-                <Text style={styles.heightText}>{profile.height_cm} cm</Text>
-              </View>
-            )}
-          </ScrollView>
-        </TouchableOpacity>
-      </TouchableOpacity>
+              {/* Interests Section - Only if present */}
+              {Array.isArray(profile.interests) && profile.interests.length > 0 && (
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Interests</Text>
+                  <View style={styles.interestsContainer}>
+                    {profile.interests.map((interest: string, index: number) => (
+                      <View key={index} style={styles.interestTag}>
+                        <Text style={styles.interestText}>
+                          {interest.charAt(0).toUpperCase() + interest.slice(1)}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Height Section - Only if present */}
+              {profile.height_cm && (
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Height</Text>
+                  <Text style={styles.heightText}>{profile.height_cm} cm</Text>
+                </View>
+              )}
+            </ScrollView>
+          )}
+        </Animated.View>
+      </View>
     </Modal>
   );
 } 

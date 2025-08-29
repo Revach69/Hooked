@@ -92,7 +92,7 @@ export default function JoinPage() {
       }
 
       // Use seconds comparison for expires_at to ensure consistency across platforms
-      if (nowTimestamp.seconds >= foundEvent.expires_at.seconds) {
+      if (nowTimestamp.seconds >= foundEvent.expires_at.seconds || foundEvent.expired) {
         setError("This event has ended.");
         setIsLoading(false);
         return;

@@ -20,8 +20,7 @@ import {
 import * as QRCode from 'qrcode';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
-import { formatDateWithTimezone } from '@/lib/utils';
-import { toDate } from '@/lib/timezoneUtils';
+import { formatDateWithTimezone, toDate } from '@/lib/timezoneUtils';
 
 // Dynamic imports to avoid SSR issues
 const AnalyticsModal = dynamic(() => import('@/components/AnalyticsModal'), { ssr: false });
@@ -140,15 +139,14 @@ export default function EventsPage() {
     setSaveError(null);
     try {
       if (editingEvent) {
+        // UPDATE: Use the eventData directly (contains properly converted Timestamps)
         await EventAPI.update(editingEvent.id, eventData);
       } else {
-        // Ensure all required fields are present for new events
+        // CREATE: Use the eventData directly to preserve timezone-converted Timestamps
+        // The EventForm already handles all timezone conversions and required field validation
         const newEventData = {
           name: eventData.name || '',
           event_code: eventData.event_code || '',
-          starts_at: eventData.starts_at || '',
-          start_date: eventData.start_date || eventData.starts_at || '',
-          expires_at: eventData.expires_at || '',
           location: eventData.location || '',
           description: eventData.description || '',
           event_type: eventData.event_type || '',
@@ -156,6 +154,13 @@ export default function EventsPage() {
           is_private: eventData.is_private || false,
           is_active: eventData.is_active !== undefined ? eventData.is_active : true,
           organizer_email: eventData.organizer_email || '',
+          // IMPORTANT: Use timezone-converted Timestamps directly from EventForm
+          starts_at: eventData.starts_at!,  // Already converted to UTC Timestamp
+          start_date: eventData.start_date,  // Already converted to UTC Timestamp  
+          expires_at: eventData.expires_at!,  // Already converted to UTC Timestamp
+          country: eventData.country,
+          timezone: eventData.timezone,
+          region: eventData.region,
           // Only include image_url if it is a string or null
           ...(typeof eventData.image_url === 'string' || eventData.image_url === null ? { image_url: eventData.image_url } : {}),
         };
@@ -242,9 +247,9 @@ export default function EventsPage() {
       const messages = await Message.filter({ event_id: eventId });
 
       // Convert to CSV
-      const profilesCsv = convertToCSV(profiles as unknown as Record<string, unknown>[], 'profiles');
-      const likesCsv = convertToCSV(likes as unknown as Record<string, unknown>[], 'likes');
-      const messagesCsv = convertToCSV(messages as unknown as Record<string, unknown>[], 'messages');
+      const profilesCsv = convertToCSV(profiles as unknown as Record<string, unknown>[]);
+      const likesCsv = convertToCSV(likes as unknown as Record<string, unknown>[]);
+      const messagesCsv = convertToCSV(messages as unknown as Record<string, unknown>[]);
 
       // Download files
       downloadCSV(profilesCsv, `${event.name}-profiles.csv`);
@@ -294,7 +299,29 @@ export default function EventsPage() {
   };
 
   const getEventStatus = (event: Event): { status: string; color: string; bgColor: string } => {
+    const eventTimezone = event.timezone || 'UTC';
+    
+    // Get current time in the event's local timezone
     const now = new Date();
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: eventTimezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+    
+    const parts = formatter.formatToParts(now);
+    const values: Record<string, string> = {};
+    parts.forEach(part => { if (part.type !== 'literal') values[part.type] = part.value; });
+    
+    // Create Date object representing current time in event timezone
+    const nowInEventTimezone = new Date(`${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}:${values.second}`);
+    
+    // Convert event dates to event timezone for comparison
     const eventDate = toDate(event.starts_at);
     const eventEndDate = toDate(event.expires_at);
 
@@ -302,9 +329,13 @@ export default function EventsPage() {
       return { status: 'Unknown', color: 'text-gray-600', bgColor: 'bg-gray-100' };
     }
 
-    if (now < eventDate) {
+    // Convert UTC event times to local event time for comparison
+    const eventStartLocal = new Date(eventDate.toLocaleString('sv-SE', { timeZone: eventTimezone }));
+    const eventEndLocal = new Date(eventEndDate.toLocaleString('sv-SE', { timeZone: eventTimezone }));
+
+    if (nowInEventTimezone < eventStartLocal) {
       return { status: 'Upcoming', color: 'text-blue-600', bgColor: 'bg-blue-100' };
-    } else if (now >= eventDate && now <= eventEndDate) {
+    } else if (nowInEventTimezone >= eventStartLocal && nowInEventTimezone <= eventEndLocal) {
       return { status: 'Live', color: 'text-green-600', bgColor: 'bg-green-100' };
     } else {
       return { status: 'Past', color: 'text-gray-600', bgColor: 'bg-gray-100' };
@@ -312,23 +343,16 @@ export default function EventsPage() {
   };
 
   const categorizeEvents = () => {
-    const now = new Date();
     const active: Event[] = [];
     const future: Event[] = [];
     const past: Event[] = [];
 
     events.forEach(event => {
-      const eventDate = toDate(event.starts_at);
-      const eventEndDate = toDate(event.expires_at);
-
-      if (!eventDate || !eventEndDate) {
-        past.push(event); // Put events with invalid dates in past category
-        return;
-      }
-
-      if (now >= eventDate && now <= eventEndDate) {
+      const status = getEventStatus(event);
+      
+      if (status.status === 'Live') {
         active.push(event);
-      } else if (now < eventDate) {
+      } else if (status.status === 'Upcoming') {
         future.push(event);
       } else {
         past.push(event);
@@ -341,7 +365,14 @@ export default function EventsPage() {
   const formatDate = (dateInput: string | Date | { toDate?: () => Date; seconds?: number }, timezone?: string) => {
     const date = toDate(dateInput);
     if (!date) return 'Invalid Date';
-    return formatDateWithTimezone(date.toISOString(), timezone);
+    
+    console.log('FORMAT DATE CALLED:', {
+      dateInput: typeof dateInput === 'object' && 'seconds' in dateInput ? `Timestamp(${dateInput.seconds})` : dateInput,
+      dateISO: date.toISOString(),
+      timezone
+    });
+    
+    return formatDateWithTimezone(date.toISOString(), timezone || 'UTC');
   };
 
   const renderEventCard = (event: Event) => {
@@ -473,6 +504,29 @@ export default function EventsPage() {
                     </p>
                   </div>
                 )}
+
+                {/* Organizer Password */}
+                <div className="mt-4">
+                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Organizer Password</h4>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={event.organizer_password || 'Not set'}
+                      readOnly
+                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm font-mono"
+                    />
+                    <button
+                      onClick={() => navigator.clipboard.writeText(event.organizer_password || '')}
+                      className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                      title="Copy to clipboard"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                    Use this password to access event stats at: <code className="bg-gray-100 dark:bg-gray-600 px-1 py-0.5 rounded text-xs">hooked-app.com/event-stats/{event.event_code}</code>
+                  </p>
+                </div>
               </div>
 
               {/* Right Side - Actions */}
@@ -554,7 +608,7 @@ export default function EventsPage() {
     );
   };
 
-  const convertToCSV = (data: Record<string, unknown>[], _type: string): string => {
+  const convertToCSV = (data: Record<string, unknown>[]): string => {
     if (data.length === 0) return '';
 
     const headers = Object.keys(data[0]);

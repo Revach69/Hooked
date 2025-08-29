@@ -26,6 +26,7 @@ import { EventProfileAPI, MessageAPI, ReportAPI, MutedMatchAPI, LikeAPI } from '
 import UserProfileModal from '../lib/UserProfileModal';
 import DropdownMenu from '../components/DropdownMenu';
 import { formatTime } from '../lib/utils';
+import CountdownTimer from '../lib/components/CountdownTimer';
 import { setCurrentChatSession } from '../lib/messageNotificationHelper';
 
 interface ChatMessage {
@@ -51,6 +52,7 @@ export default function Chat() {
   const [currentEventId, setCurrentEventId] = useState<string | null>(null);
   const [currentUserProfileId, setCurrentUserProfileId] = useState<string | null>(null);
   const [matchProfile, setMatchProfile] = useState<any>(null);
+  const [currentEvent, setCurrentEvent] = useState<any>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [processedMessageIds, setProcessedMessageIds] = useState<Set<string>>(new Set());
   const [showReportModal, setShowReportModal] = useState(false);
@@ -100,6 +102,17 @@ export default function Chat() {
 
       setCurrentSessionId(sessionId);
       setCurrentEventId(eventId);
+
+      // Load current event for countdown timer
+      try {
+        const { EventAPI } = await import('../lib/firebaseApi');
+        const events = await EventAPI.filter({ id: eventId });
+        if (events.length > 0) {
+          setCurrentEvent(events[0]);
+        }
+      } catch (error) {
+        console.warn('Error loading current event:', error);
+      }
 
       // Verify that the current user's profile exists
       const currentUserTimeoutPromise = new Promise<never>((_, reject) => {
@@ -590,7 +603,8 @@ export default function Chat() {
   }, [currentEventId, currentSessionId, matchId]);
 
   const sendMessage = async () => {
-    if (!newMessage.trim() || !currentEventId || !currentSessionId || !matchId) return;
+    // Allow messages that contain meaningful content (including emojis)
+    if (!newMessage || newMessage.replace(/\s/g, '') === '' || !currentEventId || !currentSessionId || !matchId) return;
 
     setIsSending(true);
     try {
@@ -788,10 +802,16 @@ export default function Chat() {
           styles.messageBubble,
           isMyMessage ? styles.myMessageBubble : styles.theirMessageBubble
         ]}>
-          <Text style={[
-            styles.messageText,
-            isMyMessage ? styles.myMessageText : styles.theirMessageText
-          ]}>
+          <Text 
+            style={[
+              styles.messageText,
+              isMyMessage ? styles.myMessageText : styles.theirMessageText
+            ]}
+            selectable={true}
+            accessible={true}
+            accessibilityRole="text"
+            accessibilityLabel={`Message: ${item.content}`}
+          >
             {item.content}
           </Text>
           <Text style={[
@@ -838,6 +858,7 @@ export default function Chat() {
     headerUserInfo: {
       flexDirection: 'row',
       alignItems: 'center',
+      flex: 1, // Take full width
     },
     headerAvatarContainer: {
       marginRight: 12,
@@ -861,11 +882,30 @@ export default function Chat() {
     },
     headerTextInfo: {
       flex: 1,
+      flexDirection: 'row', // Change to row layout
+      alignItems: 'center',
+      justifyContent: 'space-between', // Spread content
     },
     headerName: {
       fontSize: 18,
       fontWeight: 'bold',
       color: isDark ? '#ffffff' : '#1f2937',
+      flex: 0, // Don't expand
+      textAlign: 'left', // Align to left
+      maxWidth: '50%', // Prevent text from taking too much space
+    },
+    timerContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    expiresInText: {
+      fontSize: 14,
+      color: isDark ? '#9ca3af' : '#6b7280',
+    },
+    headerTimer: {
+      fontSize: 14,
+      color: isDark ? '#9ca3af' : '#6b7280',
     },
     headerSubtitle: {
       fontSize: 14,
@@ -1107,12 +1147,19 @@ export default function Chat() {
                   )}
                 </View>
                 <View style={styles.headerTextInfo}>
-                  <Text style={styles.headerName}>
+                  <Text style={styles.headerName} numberOfLines={1} ellipsizeMode="tail">
                     {matchProfile?.first_name || matchName || 'Match'}
                   </Text>
-                  <Text style={styles.headerSubtitle}>
-                    {matchProfile?.age ? `${matchProfile.age} years old` : 'Online'}
-                  </Text>
+                  {currentEvent?.expires_at && (
+                    <View style={styles.timerContainer}>
+                      <Text style={styles.expiresInText}>Expires in </Text>
+                      <CountdownTimer
+                        expiresAt={currentEvent.expires_at}
+                        format="time-only"
+                        style={styles.headerTimer}
+                      />
+                    </View>
+                  )}
                 </View>
               </View>
             </TouchableOpacity>
@@ -1186,14 +1233,14 @@ export default function Chat() {
             <TouchableOpacity
               style={[
                 styles.sendButton,
-                { opacity: newMessage.trim() ? 1 : 0.5 }
+                { opacity: (newMessage && newMessage.replace(/\s/g, '') !== '') ? 1 : 0.5 }
               ]}
               onPress={sendMessage}
-              disabled={!newMessage.trim() || isSending}
+              disabled={!newMessage || newMessage.replace(/\s/g, '') === '' || isSending}
               accessibilityRole="button"
               accessibilityLabel="Send message"
               accessibilityHint="Send the typed message to your match"
-              accessibilityState={{ disabled: !newMessage.trim() || isSending }}
+              accessibilityState={{ disabled: !newMessage || newMessage.replace(/\s/g, '') === '' || isSending }}
             >
               {isSending ? (
                 <ActivityIndicator size="small" color="white" />

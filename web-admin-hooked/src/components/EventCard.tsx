@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Event } from '@/lib/firebaseApi';
 import { toDate } from '@/lib/timezoneUtils';
 import { 
@@ -65,7 +65,7 @@ export default function EventCard({
   onEdit,
   onDelete,
   onDownloadData,
-  onDownloadQR,
+  onDownloadQR: _,
   onDownloadQRSign,
   onReports,
   isCollapsible = false,
@@ -78,7 +78,7 @@ export default function EventCard({
   const joinLink = `https://hooked-app.com/join-instant?code=${event.event_code}`;
   const eventStatus = getEventStatus(event);
 
-  const generateQRCode = async () => {
+  const generateQRCode = useCallback(async () => {
     if (qrCodeUrl) return qrCodeUrl;
     
     setIsLoadingQR(true);
@@ -98,7 +98,7 @@ export default function EventCard({
     } finally {
       setIsLoadingQR(false);
     }
-  };
+  }, [qrCodeUrl, joinLink]);
 
   const copyToClipboard = async () => {
     try {
@@ -127,7 +127,7 @@ export default function EventCard({
   // Generate QR code on component mount
   useEffect(() => {
     generateQRCode();
-  }, []);
+  }, [generateQRCode]);
 
   const formatDate = (dateInput: string | Date | { toDate?: () => Date; seconds?: number }, timezone?: string) => {
     const date = toDate(dateInput);

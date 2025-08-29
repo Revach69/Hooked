@@ -36,7 +36,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 // Your simulator user profile ID
-const SIMULATOR_USER_PROFILE_ID = 'Cr7osjxWwuRnUtD6CJdL';
+const SIMULATOR_USER_PROFILE_ID = '1UcaHDY9fig5Ru6EIMuD';
 
 // Profile colors palette
 const PROFILE_COLORS = [
@@ -58,14 +58,14 @@ const INTERESTS = [
   'skiing', 'surfing', 'cycling', 'podcasts', 'comedy'
 ];
 
-// Sample messages for conversation
+// Sample messages for conversation - only receiving messages
 const SAMPLE_MESSAGES = [
-  "Hey! I noticed we matched - love your profile! 😊",
-  "Thanks! Your interests in hiking and photography caught my eye too! Do you have a favorite hiking spot?",
-  "Actually yes! I love going to the trails near the lake. The sunrise views are incredible for photos. Have you been there?",
-  "Not yet, but that sounds amazing! I'd love to check it out sometime. Maybe we could go together?",
-  "That would be great! I usually go early morning for the best light. Are you an early riser? ☀️",
-  "I can be when there's good coffee involved! ☕ Know any good spots for breakfast after a hike?"
+  "Hey there! Just saw we matched and I love your profile! 😊 How's your evening going?",
+  "I noticed we have so much in common! Do you really enjoy traveling or is that just for the photos? 😄",
+  "That sunset photo on your profile is absolutely gorgeous! Where was that taken?",
+  "I'm actually planning a weekend trip soon, any recommendations for good spots around here? 🌄",
+  "Hope you're having a great day! What's been keeping you busy lately?",
+  "Quick question - are you more of a morning person or night owl? Just curious! 🌅"
 ];
 
 // Helper functions
@@ -234,14 +234,13 @@ async function createSampleMessages(simulatorUser, matchProfile) {
   
   try {
     const messagePromises = SAMPLE_MESSAGES.map(async (messageText, index) => {
-      // Alternate between match and simulator user sending messages
-      const isFromMatch = index % 2 === 0;
-      const fromProfile = isFromMatch ? matchProfile : simulatorUser;
-      const toProfile = isFromMatch ? simulatorUser : matchProfile;
+      // All messages are FROM match TO simulator user (only receiving messages)
+      const fromProfile = matchProfile;
+      const toProfile = simulatorUser;
       
-      // Add some time delay between messages (minutes)
+      // Add some time delay between messages (10 minutes apart, newest first)
       const messageTime = new Date();
-      messageTime.setMinutes(messageTime.getMinutes() - (SAMPLE_MESSAGES.length - index) * 5);
+      messageTime.setMinutes(messageTime.getMinutes() - (SAMPLE_MESSAGES.length - index) * 10);
       
       return addDoc(collection(db, 'messages'), {
         event_id: simulatorUser.event_id,
@@ -249,9 +248,9 @@ async function createSampleMessages(simulatorUser, matchProfile) {
         to_profile_id: toProfile.id,
         from_session_id: fromProfile.session_id,
         to_session_id: toProfile.session_id,
-        message: messageText,
+        content: messageText, // Changed from 'message' to 'content' to match schema
         message_type: 'text',
-        is_read: index < 3, // Mark first 3 messages as read
+        seen: false, // All messages are unread (new messages)
         created_at: serverTimestamp()
       });
     });
@@ -267,28 +266,6 @@ async function createSampleMessages(simulatorUser, matchProfile) {
 }
 
 // Create contact share (optional - simulate that they exchanged contact info)
-async function createContactShare(simulatorUser, matchProfile) {
-  console.log('\n📱 Creating contact share...');
-  
-  try {
-    const contactShare = await addDoc(collection(db, 'contact_shares'), {
-      event_id: simulatorUser.event_id,
-      from_profile_id: matchProfile.id,
-      to_profile_id: simulatorUser.id,
-      from_session_id: matchProfile.session_id,
-      to_session_id: simulatorUser.session_id,
-      contact_type: 'phone', // Could be 'phone', 'instagram', 'snapchat', etc.
-      created_at: serverTimestamp()
-    });
-    
-    console.log(`✅ ${matchProfile.first_name} shared contact with ${simulatorUser.first_name}`);
-    
-    return contactShare.id;
-  } catch (error) {
-    console.error('❌ Failed to create contact share:', error.message);
-    throw error;
-  }
-}
 
 // Main function to generate complete mock match
 async function generateMockMatch() {
@@ -308,8 +285,6 @@ async function generateMockMatch() {
     // 4. Create sample conversation
     const messageIds = await createSampleMessages(simulatorUser, matchProfile);
     
-    // 5. Create contact share
-    const contactShareId = await createContactShare(simulatorUser, matchProfile);
     
     // Summary
     console.log('\n' + '='.repeat(60));
@@ -322,13 +297,11 @@ async function generateMockMatch() {
     console.log(`  🏷️  Match Profile: 1`);
     console.log(`  💕 Mutual Likes: 2`);
     console.log(`  💬 Messages: ${messageIds.length}`);
-    console.log(`  📱 Contact Share: 1`);
     
     console.log(`\n🔍 To find in Firebase Console:`);
     console.log(`  Collection: event_profiles -> Document: ${matchProfile.id}`);
     console.log(`  Collection: likes -> Filter by event_id: ${simulatorUser.event_id}`);
     console.log(`  Collection: messages -> Filter by event_id: ${simulatorUser.event_id}`);
-    console.log(`  Collection: contact_shares -> Filter by event_id: ${simulatorUser.event_id}`);
     
     console.log('\n✨ Your simulator should now show this as a match with conversation history!');
     
