@@ -11,7 +11,7 @@ import { MapClientAPI } from '@/lib/firestore/mapClients';
 import { LocationInput } from './LocationInput';
 import { SubscriptionManager } from './SubscriptionManager';
 import { MapPin, DollarSign, Calendar, Upload, X, Image, Clock, Home, QrCode } from 'lucide-react';
-import { getTimezoneFromCountry, generateQRCodeId } from '@/lib/timezone';
+import { getPrimaryTimezoneForCountry, getAvailableCountries } from '@/lib/timezoneUtils';
 import type { MapClient } from '@/types/admin';
 
 interface MapClientFormSheetProps {
@@ -328,7 +328,7 @@ export function MapClientFormSheet({
   };
 
   const handleCountryChange = (country: string) => {
-    const timezone = getTimezoneFromCountry(country);
+    const timezone = getPrimaryTimezoneForCountry(country);
     
     setFormData(prev => ({
       ...prev,
@@ -338,6 +338,12 @@ export function MapClientFormSheet({
         timezone
       }
     }));
+  };
+
+  const generateQRCodeId = (venueId: string, eventName: string): string => {
+    const timestamp = Date.now();
+    const cleanEventName = eventName.toLowerCase().replace(/[^a-z0-9]/g, '');
+    return `venue_${venueId}_${cleanEventName}_${timestamp}`;
   };
 
   const handleEventHubEnable = (enabled: boolean) => {
@@ -827,16 +833,11 @@ export function MapClientFormSheet({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Israel">Israel</SelectItem>
-                        <SelectItem value="United States">United States</SelectItem>
-                        <SelectItem value="United Kingdom">United Kingdom</SelectItem>
-                        <SelectItem value="Canada">Canada</SelectItem>
-                        <SelectItem value="Australia">Australia</SelectItem>
-                        <SelectItem value="Germany">Germany</SelectItem>
-                        <SelectItem value="France">France</SelectItem>
-                        <SelectItem value="Spain">Spain</SelectItem>
-                        <SelectItem value="Italy">Italy</SelectItem>
-                        <SelectItem value="Netherlands">Netherlands</SelectItem>
+                        {getAvailableCountries().map((country) => (
+                          <SelectItem key={country} value={country}>
+                            {country}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-gray-500 mt-1">Used for timezone calculation</p>
