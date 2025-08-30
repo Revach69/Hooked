@@ -35,10 +35,12 @@ import VenueModal from '../components/VenueModal';
 import QRCodeScanner, { QRScanResult } from '../lib/components/QRCodeScanner';
 import { isVenueHookedHoursActive, getVenueActiveStatus } from '../lib/utils/venueHoursUtils';
 
-// Set Mapbox access token from environment variable
+// Set Mapbox access token from environment variable (only if Mapbox is available)
 const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN;
-if (mapboxToken && mapboxToken.startsWith('pk.') && !mapboxToken.includes('placeholder')) {
+if (Mapbox && mapboxToken && mapboxToken.startsWith('pk.') && !mapboxToken.includes('placeholder')) {
   Mapbox.setAccessToken(mapboxToken);
+} else if (!Mapbox) {
+  console.warn('Mapbox not available - running in Expo Go mode');
 } else {
   console.warn('Mapbox access token not configured or is placeholder');
 }
@@ -295,15 +297,13 @@ export default function MapScreen() {
 
   const initializeMapScreen = useCallback(async () => {
     try {
-      // Check if Mapbox token is available and valid
+      // Check if Mapbox token is available and valid, and library is loaded
       const token = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN;
-      const tokenAvailable = !!(token && token.startsWith('pk.') && !token.includes('placeholder'));
+      const tokenAvailable = !!(Mapbox && token && token.startsWith('pk.') && !token.includes('placeholder'));
       setMapboxTokenAvailable(tokenAvailable);
       
-      // Request location permission if Mapbox is available
-      if (tokenAvailable) {
-        await requestLocationPermission();
-      }
+      // Request location permission regardless (needed for venue events)
+      await requestLocationPermission();
       
       // For venue discovery, we don't need event/session validation
       // Users can browse venues without being in an event
@@ -758,7 +758,7 @@ export default function MapScreen() {
             <MapView
               style={styles.mapView}
               onDidFinishLoadingMap={handleMapReady}
-              styleURL={isDark ? Mapbox.StyleURL.Dark : Mapbox.StyleURL.Light}
+              styleURL={isDark ? Mapbox?.StyleURL?.Dark : Mapbox?.StyleURL?.Light}
               compassEnabled={false}
               scaleBarEnabled={false}
               logoEnabled={true}
