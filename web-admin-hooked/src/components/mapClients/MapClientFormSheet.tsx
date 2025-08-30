@@ -305,11 +305,11 @@ export function MapClientFormSheet({
     setFormData(prev => ({
       ...prev,
       eventHubSettings: {
-        ...prev.eventHubSettings,
+        ...(prev.eventHubSettings || {}),
         schedule: {
-          ...prev.eventHubSettings.schedule,
+          ...(prev.eventHubSettings?.schedule || {}),
           [day]: {
-            ...prev.eventHubSettings.schedule[day as keyof typeof prev.eventHubSettings.schedule],
+            ...(prev.eventHubSettings?.schedule?.[day as keyof typeof prev.eventHubSettings.schedule] || {}),
             [field]: value
           }
         }
@@ -321,7 +321,7 @@ export function MapClientFormSheet({
     setFormData(prev => ({
       ...prev,
       eventHubSettings: {
-        ...prev.eventHubSettings,
+        ...(prev.eventHubSettings || {}),
         [field]: value
       }
     }));
@@ -334,7 +334,7 @@ export function MapClientFormSheet({
       ...prev,
       country,
       eventHubSettings: {
-        ...prev.eventHubSettings,
+        ...(prev.eventHubSettings || {}),
         timezone
       }
     }));
@@ -351,16 +351,16 @@ export function MapClientFormSheet({
       const newData = {
         ...prev,
         eventHubSettings: {
-          ...prev.eventHubSettings,
+          ...(prev.eventHubSettings || {}),
           enabled
         }
       };
 
       // Auto-generate QR code ID when enabling event hub
-      if (enabled && !prev.eventHubSettings.qrCodeId) {
+      if (enabled && !prev.eventHubSettings?.qrCodeId) {
         newData.eventHubSettings.qrCodeId = generateQRCodeId(
           mapClient?.id || 'new',
-          prev.eventHubSettings.eventName || 'event'
+          prev.eventHubSettings?.eventName || 'event'
         );
       }
 
@@ -755,7 +755,7 @@ export function MapClientFormSheet({
                 <input
                   type="checkbox"
                   id="eventHubEnabled"
-                  checked={formData.eventHubSettings.enabled}
+                  checked={formData.eventHubSettings?.enabled || false}
                   onChange={(e) => handleEventHubEnable(e.target.checked)}
                   disabled={isLoading}
                   className="rounded border-gray-300"
@@ -765,7 +765,7 @@ export function MapClientFormSheet({
                 </Label>
               </div>
 
-              {formData.eventHubSettings.enabled && (
+              {formData.eventHubSettings?.enabled && (
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
