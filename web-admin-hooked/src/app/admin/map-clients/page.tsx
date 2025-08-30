@@ -10,6 +10,7 @@ import { SubscriptionDashboard } from '@/components/mapClients/SubscriptionDashb
 import { BulkImportModal } from '@/components/mapClients/BulkImportModal';
 import { MapPreviewModal } from '@/components/mapClients/MapPreviewModal';
 import { ExportButton } from '@/components/mapClients/ExportButton';
+import { QRCodeGenerator } from '@/components/mapClients/QRCodeGenerator';
 import { MapClientAPI } from '@/lib/firestore/mapClients';
 import { Plus, MapPin, BarChart3, Table, Upload, Eye } from 'lucide-react';
 import type { MapClient } from '@/types/admin';
@@ -28,7 +29,9 @@ export default function MapClientsPage() {
   const [showClientForm, setShowClientForm] = useState(false);
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [showMapPreview, setShowMapPreview] = useState(false);
+  const [showQRGenerator, setShowQRGenerator] = useState(false);
   const [editingClient, setEditingClient] = useState<MapClient | null>(null);
+  const [selectedClientForQR, setSelectedClientForQR] = useState<MapClient | null>(null);
 
   useEffect(() => {
     loadMapClients();
@@ -101,6 +104,16 @@ export default function MapClientsPage() {
     } catch (error) {
       console.error('Failed to handle subscription action:', error);
     }
+  };
+
+  const handleEventSettings = (client: MapClient) => {
+    setEditingClient(client);
+    setShowClientForm(true);
+  };
+
+  const handleQRCodeGenerate = (client: MapClient) => {
+    setSelectedClientForQR(client);
+    setShowQRGenerator(true);
   };
 
   // Calculate filtered clients for export
@@ -258,6 +271,8 @@ export default function MapClientsPage() {
             onEdit={handleEditClient}
             onDelete={handleDeleteClient}
             onUpdate={handleUpdateClient}
+            onEventSettings={handleEventSettings}
+            onQRCodeGenerate={handleQRCodeGenerate}
             searchQuery={searchQuery}
             statusFilter={statusFilter}
             typeFilter={typeFilter}
@@ -297,6 +312,19 @@ export default function MapClientsPage() {
         onOpenChange={setShowMapPreview}
         mapClients={mapClients}
       />
+
+      {selectedClientForQR && (
+        <QRCodeGenerator
+          open={showQRGenerator}
+          onOpenChange={(open) => {
+            if (!open) {
+              setShowQRGenerator(false);
+              setSelectedClientForQR(null);
+            }
+          }}
+          mapClient={selectedClientForQR}
+        />
+      )}
     </div>
   );
 }

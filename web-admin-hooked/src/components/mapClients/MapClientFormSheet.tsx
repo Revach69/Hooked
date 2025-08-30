@@ -11,6 +11,7 @@ import { MapClientAPI } from '@/lib/firestore/mapClients';
 import { LocationInput } from './LocationInput';
 import { SubscriptionManager } from './SubscriptionManager';
 import { MapPin, DollarSign, Calendar, Upload, X, Image, Clock, Home, QrCode } from 'lucide-react';
+import { getTimezoneFromCountry, generateQRCodeId } from '@/lib/timezone';
 import type { MapClient } from '@/types/admin';
 
 interface MapClientFormSheetProps {
@@ -199,6 +200,7 @@ export function MapClientFormSheet({
           saturday: { open: '18:00', close: '24:00', closed: false },
           sunday: { open: '18:00', close: '21:00', closed: false },
         },
+        country: (mapClient as any).country || 'Israel',
       });
     }
   }, [mapClient]);
@@ -297,6 +299,67 @@ export function MapClientFormSheet({
         }
       }
     }));
+  };
+
+  const updateEventSchedule = (day: string, field: string, value: any) => {
+    setFormData(prev => ({
+      ...prev,
+      eventHubSettings: {
+        ...prev.eventHubSettings,
+        schedule: {
+          ...prev.eventHubSettings.schedule,
+          [day]: {
+            ...prev.eventHubSettings.schedule[day as keyof typeof prev.eventHubSettings.schedule],
+            [field]: value
+          }
+        }
+      }
+    }));
+  };
+
+  const updateEventHubSettings = (field: string, value: any) => {
+    setFormData(prev => ({
+      ...prev,
+      eventHubSettings: {
+        ...prev.eventHubSettings,
+        [field]: value
+      }
+    }));
+  };
+
+  const handleCountryChange = (country: string) => {
+    const timezone = getTimezoneFromCountry(country);
+    
+    setFormData(prev => ({
+      ...prev,
+      country,
+      eventHubSettings: {
+        ...prev.eventHubSettings,
+        timezone
+      }
+    }));
+  };
+
+  const handleEventHubEnable = (enabled: boolean) => {
+    setFormData(prev => {
+      const newData = {
+        ...prev,
+        eventHubSettings: {
+          ...prev.eventHubSettings,
+          enabled
+        }
+      };
+
+      // Auto-generate QR code ID when enabling event hub
+      if (enabled && !prev.eventHubSettings.qrCodeId) {
+        newData.eventHubSettings.qrCodeId = generateQRCodeId(
+          mapClient?.id || 'new',
+          prev.eventHubSettings.eventName || 'event'
+        );
+      }
+
+      return newData;
+    });
   };
 
   return (
@@ -668,6 +731,188 @@ export function MapClientFormSheet({
                   placeholder="@username"
                 />
               </div>
+            </div>
+          </div>
+
+          {/* Event Hub Settings */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <Home className="h-4 w-4" />
+              Event Rooms Settings
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Configure recurring venue events with QR + GPS authentication
+            </p>
+            
+            <div className="grid grid-cols-1 gap-4">
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="eventHubEnabled"
+                  checked={formData.eventHubSettings.enabled}
+                  onChange={(e) => handleEventHubEnable(e.target.checked)}
+                  disabled={isLoading}
+                  className="rounded border-gray-300"
+                />
+                <Label htmlFor="eventHubEnabled" className="text-sm font-medium">
+                  Enable Event Rooms for this venue
+                </Label>
+              </div>
+
+              {formData.eventHubSettings.enabled && (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="eventName">Event Name *</Label>
+                      <Input
+                        id="eventName"
+                        value={formData.eventHubSettings.eventName}
+                        onChange={(e) => updateEventHubSettings('eventName', e.target.value)}
+                        placeholder="e.g., Hooked Hours"
+                        disabled={isLoading}
+                        required
+                      />
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="qrCodeId">QR Code ID</Label>
+                      <Input
+                        id="qrCodeId"
+                        value={formData.eventHubSettings.qrCodeId}
+                        onChange={(e) => updateEventHubSettings('qrCodeId', e.target.value)}
+                        placeholder="Auto-generated if empty"
+                        disabled={isLoading}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="locationRadius">Location Radius (meters)</Label>
+                      <Input
+                        id="locationRadius"
+                        type="number"
+                        min="20"
+                        max="200"
+                        value={formData.eventHubSettings.locationRadius}
+                        onChange={(e) => updateEventHubSettings('locationRadius', parseInt(e.target.value) || 50)}
+                        disabled={isLoading}
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Default: 50m</p>
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="kFactor">K-Factor (Radius Multiplier)</Label>
+                      <Input
+                        id="kFactor"
+                        type="number"
+                        min="1.0"
+                        max="3.0"
+                        step="0.1"
+                        value={formData.eventHubSettings.kFactor}
+                        onChange={(e) => updateEventHubSettings('kFactor', parseFloat(e.target.value) || 1.2)}
+                        disabled={isLoading}
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Range: 1.0-3.0 (indoor venues need higher values)</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="country">Country *</Label>
+                    <Select 
+                      value={formData.country} 
+                      onValueChange={handleCountryChange}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Israel">Israel</SelectItem>
+                        <SelectItem value="United States">United States</SelectItem>
+                        <SelectItem value="United Kingdom">United Kingdom</SelectItem>
+                        <SelectItem value="Canada">Canada</SelectItem>
+                        <SelectItem value="Australia">Australia</SelectItem>
+                        <SelectItem value="Germany">Germany</SelectItem>
+                        <SelectItem value="France">France</SelectItem>
+                        <SelectItem value="Spain">Spain</SelectItem>
+                        <SelectItem value="Italy">Italy</SelectItem>
+                        <SelectItem value="Netherlands">Netherlands</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-gray-500 mt-1">Used for timezone calculation</p>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="venueRules">Venue Rules & Instructions</Label>
+                    <Textarea
+                      id="venueRules"
+                      value={formData.eventHubSettings.venueRules}
+                      onChange={(e) => updateEventHubSettings('venueRules', e.target.value)}
+                      placeholder="QR code is located at the main bar. Please scan upon entry."
+                      disabled={isLoading}
+                      rows={3}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Displayed in venue modal to help users join successfully</p>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="locationTips">Location Tips (for failed attempts)</Label>
+                    <Textarea
+                      id="locationTips"
+                      value={formData.eventHubSettings.locationTips}
+                      onChange={(e) => updateEventHubSettings('locationTips', e.target.value)}
+                      placeholder="Try scanning near the entrance if having issues."
+                      disabled={isLoading}
+                      rows={2}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Shown when location verification fails</p>
+                  </div>
+
+                  {/* Event Schedule */}
+                  <div className="space-y-3">
+                    <h4 className="text-md font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                      <QrCode className="h-4 w-4" />
+                      Event Schedule
+                    </h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">When the event is active each day</p>
+                    
+                    {Object.entries(formData.eventHubSettings.schedule).map(([day, schedule]) => (
+                      <div key={day} className="flex items-center gap-3">
+                        <div className="w-20 text-sm capitalize font-medium">
+                          {day.slice(0, 3)}
+                        </div>
+                        <div className="flex items-center gap-2 flex-1">
+                          <Input
+                            type="time"
+                            value={schedule.startTime}
+                            onChange={(e) => updateEventSchedule(day, 'startTime', e.target.value)}
+                            disabled={!schedule.enabled || isLoading}
+                            className="w-24"
+                          />
+                          <span className="text-gray-400">to</span>
+                          <Input
+                            type="time"
+                            value={schedule.endTime}
+                            onChange={(e) => updateEventSchedule(day, 'endTime', e.target.value)}
+                            disabled={!schedule.enabled || isLoading}
+                            className="w-24"
+                          />
+                          <Label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={schedule.enabled}
+                              onChange={(e) => updateEventSchedule(day, 'enabled', e.target.checked)}
+                              disabled={isLoading}
+                              className="rounded border-gray-300"
+                            />
+                            <span className="text-sm text-gray-600">Active</span>
+                          </Label>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           </div>
 

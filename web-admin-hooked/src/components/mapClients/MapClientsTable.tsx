@@ -13,7 +13,9 @@ import {
   Mail, 
   DollarSign,
   Eye,
-  Calendar
+  Calendar,
+  Settings,
+  QrCode
 } from 'lucide-react';
 import type { MapClient } from '@/types/admin';
 
@@ -22,6 +24,8 @@ interface MapClientsTableProps {
   onEdit: (mapClient: MapClient) => void;
   onDelete: (mapClientId: string) => void;
   onUpdate: (mapClientId: string, field: string, value: any) => void;
+  onEventSettings?: (mapClient: MapClient) => void;
+  onQRCodeGenerate?: (mapClient: MapClient) => void;
   searchQuery: string;
   statusFilter: string;
   typeFilter: string;
@@ -34,6 +38,8 @@ export function MapClientsTable({
   onEdit,
   onDelete,
   onUpdate,
+  onEventSettings,
+  onQRCodeGenerate,
   searchQuery,
   statusFilter,
   typeFilter,
@@ -121,6 +127,7 @@ export function MapClientsTable({
               <th className="text-left p-4 font-medium text-gray-900 dark:text-white">Location</th>
               <th className="text-left p-4 font-medium text-gray-900 dark:text-white">Status</th>
               <th className="text-left p-4 font-medium text-gray-900 dark:text-white">Subscription</th>
+              <th className="text-left p-4 font-medium text-gray-900 dark:text-white">Event Settings</th>
               <th className="text-left p-4 font-medium text-gray-900 dark:text-white">Actions</th>
             </tr>
           </thead>
@@ -218,6 +225,57 @@ export function MapClientsTable({
                         {client.subscriptionEndDate && (
                           <span>- {formatDate(client.subscriptionEndDate)}</span>
                         )}
+                      </div>
+                    )}
+                  </div>
+                </td>
+                <td className="p-4">
+                  <div className="space-y-2">
+                    {client.eventHubSettings?.enabled ? (
+                      <>
+                        <div className="flex items-center gap-1">
+                          <Badge className="bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400">
+                            Active
+                          </Badge>
+                        </div>
+                        <div className="text-xs text-gray-600 dark:text-gray-400">
+                          {client.eventHubSettings.eventName}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onEventSettings?.(client)}
+                            className="h-6 text-xs px-2 py-1"
+                          >
+                            <Settings className="h-3 w-3 mr-1" />
+                            Settings
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onQRCodeGenerate?.(client)}
+                            className="h-6 text-xs px-2 py-1"
+                          >
+                            <QrCode className="h-3 w-3 mr-1" />
+                            QR
+                          </Button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="space-y-1">
+                        <Badge variant="secondary" className="text-xs">
+                          Disabled
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onEventSettings?.(client)}
+                          className="h-6 text-xs px-2 py-1 text-gray-500"
+                        >
+                          <Settings className="h-3 w-3 mr-1" />
+                          Configure
+                        </Button>
                       </div>
                     )}
                   </div>

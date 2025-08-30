@@ -95,6 +95,43 @@ export type MapClient = {
     mapIconStyle?: string;
     promotionalMessage?: string;
   } | null;
+
+  // Event Hub Settings (for venue event rooms)
+  eventHubSettings?: {
+    enabled: boolean;
+    eventName: string; // e.g., "Hooked Hours"
+    qrCodeId: string; // Unique identifier for QR codes
+    locationRadius: number; // Default 60m, configurable
+    kFactor: number; // 1.5-2.5 radius multiplier for geofence tuning
+    
+    // Timezone & Scheduling (critical for multi-region operations)
+    timezone: string; // e.g., "America/Los_Angeles" - venue's local timezone
+    
+    schedule: {
+      [day: string]: {
+        enabled: boolean;
+        startTime: string; // "19:00" in venue's local time
+        endTime: string;   // "23:00" in venue's local time
+      };
+    };
+    
+    // Venue-specific guidance and rules (displayed in venue modal on map)
+    venueRules: string; // "QR code is located at the main bar. Please scan upon entry."
+    locationTips: string; // "Try scanning near the entrance if having issues."
+    
+    // Event Templates for chain venues - reduce setup errors
+    templateId?: string; // Reference to event template
+    inheritFromTemplate?: boolean;
+    
+    clearingStrategy?: 'daily-clear-data'; // Clear at venue's actual closing time
+    autoGeneration?: {
+      enabled: boolean;
+      daysAhead: number; // How many days to generate in advance
+    };
+  } | null;
+
+  // Country for timezone handling
+  country?: string;
   
   // system fields
   createdAt: unknown;              // Firestore Timestamp
