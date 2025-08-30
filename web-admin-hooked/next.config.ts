@@ -57,7 +57,7 @@ const nextConfig: NextConfig = {
             key: 'Content-Security-Policy',
             value: isDev 
               ? "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https: data:; style-src 'self' 'unsafe-inline' https:; font-src 'self' https: data:; img-src 'self' data: https: blob:; connect-src 'self' https: data:; frame-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self';"
-              : "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.google.com https://*.googleapis.com https://*.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https://*.google.com https://*.googleapis.com https://*.firebasestorage.app https://api.mapbox.com; frame-src 'self' https://*.google.com https://api.mapbox.com; object-src 'none'; base-uri 'self'; form-action 'self';"
+              : "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.google.com https://*.googleapis.com https://*.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https://*.google.com https://*.googleapis.com https://*.firebasestorage.app https://api.mapbox.com https://*.mapbox.com; frame-src 'self' https://*.google.com https://api.mapbox.com; object-src 'none'; base-uri 'self'; form-action 'self';"
           }
         ]
       }

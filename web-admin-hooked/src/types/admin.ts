@@ -86,7 +86,7 @@ export type MapClient = {
   socialMedia?: {              // Social media handles
     instagram?: string;
     facebook?: string;
-    twitter?: string;
+    whatsapp?: string;
   } | null;
   
   // Integration settings

@@ -48,7 +48,7 @@ export function MapClientFormSheet({
     socialMedia: {
       instagram: '',
       facebook: '',
-      twitter: '',
+      whatsapp: '',
     },
     integrationSettings: {
       showOnMap: true,
@@ -112,7 +112,7 @@ export function MapClientFormSheet({
         monthlyFee: mapClient.monthlyFee?.toString() || '',
         description: mapClient.description || '',
         website: mapClient.website || '',
-        socialMedia: mapClient.socialMedia || { instagram: '', facebook: '', twitter: '' },
+        socialMedia: mapClient.socialMedia || { instagram: '', facebook: '', whatsapp: '' },
         integrationSettings: mapClient.integrationSettings || {
           showOnMap: true,
           mapIconStyle: 'default',
@@ -174,7 +174,7 @@ export function MapClientFormSheet({
         monthlyFee: '',
         description: '',
         website: '',
-        socialMedia: { instagram: '', facebook: '', twitter: '' },
+        socialMedia: { instagram: '', facebook: '', whatsapp: '' },
         integrationSettings: {
           showOnMap: true,
           mapIconStyle: 'default',
@@ -729,12 +729,12 @@ export function MapClientFormSheet({
                 />
               </div>
               <div>
-                <Label htmlFor="twitter">Twitter</Label>
+                <Label htmlFor="whatsapp">WhatsApp</Label>
                 <Input
-                  id="twitter"
-                  value={formData.socialMedia.twitter}
-                  onChange={(e) => updateNestedField('socialMedia', 'twitter', e.target.value)}
-                  placeholder="@username"
+                  id="whatsapp"
+                  value={formData.socialMedia.whatsapp}
+                  onChange={(e) => updateNestedField('socialMedia', 'whatsapp', e.target.value)}
+                  placeholder="+1234567890"
                 />
               </div>
             </div>
@@ -877,7 +877,7 @@ export function MapClientFormSheet({
                     </h4>
                     <p className="text-sm text-gray-600 dark:text-gray-400">When the event is active each day</p>
                     
-                    {Object.entries(formData.eventHubSettings.schedule).map(([day, schedule]) => (
+                    {Object.entries(formData.eventHubSettings?.schedule || {}).map(([day, schedule]) => (
                       <div key={day} className="flex items-center gap-3">
                         <div className="w-20 text-sm capitalize font-medium">
                           {day.slice(0, 3)}
@@ -885,23 +885,23 @@ export function MapClientFormSheet({
                         <div className="flex items-center gap-2 flex-1">
                           <Input
                             type="time"
-                            value={schedule.startTime}
+                            value={schedule?.startTime || '19:00'}
                             onChange={(e) => updateEventSchedule(day, 'startTime', e.target.value)}
-                            disabled={!schedule.enabled || isLoading}
+                            disabled={!schedule?.enabled || isLoading}
                             className="w-24"
                           />
                           <span className="text-gray-400">to</span>
                           <Input
                             type="time"
-                            value={schedule.endTime}
+                            value={schedule?.endTime || '22:00'}
                             onChange={(e) => updateEventSchedule(day, 'endTime', e.target.value)}
-                            disabled={!schedule.enabled || isLoading}
+                            disabled={!schedule?.enabled || isLoading}
                             className="w-24"
                           />
                           <Label className="flex items-center gap-2 cursor-pointer">
                             <input
                               type="checkbox"
-                              checked={schedule.enabled}
+                              checked={schedule?.enabled || false}
                               onChange={(e) => updateEventSchedule(day, 'enabled', e.target.checked)}
                               disabled={isLoading}
                               className="rounded border-gray-300"
