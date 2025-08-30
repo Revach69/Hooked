@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { MapClientAPI } from '@/lib/firestore/mapClients';
 import { LocationInput } from './LocationInput';
 import { SubscriptionManager } from './SubscriptionManager';
-import { MapPin, DollarSign, Calendar, Upload, X, Image, Clock } from 'lucide-react';
+import { MapPin, DollarSign, Calendar, Upload, X, Image, Clock, Home, QrCode } from 'lucide-react';
 import type { MapClient } from '@/types/admin';
 
 interface MapClientFormSheetProps {
@@ -74,6 +74,25 @@ export function MapClientFormSheet({
       saturday: { open: '18:00', close: '24:00', closed: false },
       sunday: { open: '18:00', close: '21:00', closed: false },
     },
+    eventHubSettings: {
+      enabled: false,
+      eventName: '',
+      qrCodeId: '',
+      locationRadius: 50,
+      kFactor: 1.2,
+      timezone: 'Asia/Jerusalem',
+      schedule: {
+        monday: { enabled: false, startTime: '19:00', endTime: '22:00' },
+        tuesday: { enabled: false, startTime: '19:00', endTime: '22:00' },
+        wednesday: { enabled: false, startTime: '19:00', endTime: '22:00' },
+        thursday: { enabled: false, startTime: '19:00', endTime: '23:00' },
+        friday: { enabled: true, startTime: '19:00', endTime: '24:00' },
+        saturday: { enabled: true, startTime: '18:00', endTime: '24:00' },
+        sunday: { enabled: false, startTime: '18:00', endTime: '21:00' },
+      },
+      venueRules: '',
+      locationTips: '',
+    },
   });
 
   useEffect(() => {
@@ -117,6 +136,25 @@ export function MapClientFormSheet({
           friday: { open: '19:00', close: '24:00', closed: false },
           saturday: { open: '18:00', close: '24:00', closed: false },
           sunday: { open: '18:00', close: '21:00', closed: false },
+        },
+        eventHubSettings: (mapClient as any).eventHubSettings || {
+          enabled: false,
+          eventName: '',
+          qrCodeId: '',
+          locationRadius: 50,
+          kFactor: 1.2,
+          timezone: 'Asia/Jerusalem',
+          schedule: {
+            monday: { enabled: false, startTime: '19:00', endTime: '22:00' },
+            tuesday: { enabled: false, startTime: '19:00', endTime: '22:00' },
+            wednesday: { enabled: false, startTime: '19:00', endTime: '22:00' },
+            thursday: { enabled: false, startTime: '19:00', endTime: '23:00' },
+            friday: { enabled: true, startTime: '19:00', endTime: '24:00' },
+            saturday: { enabled: true, startTime: '18:00', endTime: '24:00' },
+            sunday: { enabled: false, startTime: '18:00', endTime: '21:00' },
+          },
+          venueRules: '',
+          locationTips: '',
         },
       });
     } else {
