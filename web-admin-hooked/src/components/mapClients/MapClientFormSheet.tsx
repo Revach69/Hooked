@@ -71,8 +71,8 @@ export function MapClientFormSheet({
       tuesday: { open: '19:00', close: '22:00', closed: false },
       wednesday: { open: '19:00', close: '22:00', closed: false },
       thursday: { open: '19:00', close: '23:00', closed: false },
-      friday: { open: '19:00', close: '24:00', closed: false },
-      saturday: { open: '18:00', close: '24:00', closed: false },
+      friday: { open: '19:00', close: '23:59', closed: false },
+      saturday: { open: '18:00', close: '23:59', closed: false },
       sunday: { open: '18:00', close: '21:00', closed: false },
     },
     eventHubSettings: {
@@ -87,8 +87,8 @@ export function MapClientFormSheet({
         tuesday: { enabled: false, startTime: '19:00', endTime: '22:00' },
         wednesday: { enabled: false, startTime: '19:00', endTime: '22:00' },
         thursday: { enabled: false, startTime: '19:00', endTime: '23:00' },
-        friday: { enabled: true, startTime: '19:00', endTime: '24:00' },
-        saturday: { enabled: true, startTime: '18:00', endTime: '24:00' },
+        friday: { enabled: true, startTime: '19:00', endTime: '23:59' },
+        saturday: { enabled: true, startTime: '18:00', endTime: '23:59' },
         sunday: { enabled: false, startTime: '18:00', endTime: '21:00' },
       },
       venueRules: '',
@@ -134,12 +134,12 @@ export function MapClientFormSheet({
           tuesday: { open: '19:00', close: '22:00', closed: false },
           wednesday: { open: '19:00', close: '22:00', closed: false },
           thursday: { open: '19:00', close: '23:00', closed: false },
-          friday: { open: '19:00', close: '24:00', closed: false },
-          saturday: { open: '18:00', close: '24:00', closed: false },
+          friday: { open: '19:00', close: '23:59', closed: false },
+          saturday: { open: '18:00', close: '23:59', closed: false },
           sunday: { open: '18:00', close: '21:00', closed: false },
         },
         eventHubSettings: mapClient?.eventHubSettings || {
-          enabled: false,
+          enabled: true,
           eventName: '',
           qrCodeId: '',
           locationRadius: 50,
@@ -150,8 +150,8 @@ export function MapClientFormSheet({
             tuesday: { enabled: false, startTime: '19:00', endTime: '22:00' },
             wednesday: { enabled: false, startTime: '19:00', endTime: '22:00' },
             thursday: { enabled: false, startTime: '19:00', endTime: '23:00' },
-            friday: { enabled: true, startTime: '19:00', endTime: '24:00' },
-            saturday: { enabled: true, startTime: '18:00', endTime: '24:00' },
+            friday: { enabled: true, startTime: '19:00', endTime: '23:59' },
+            saturday: { enabled: true, startTime: '18:00', endTime: '23:59' },
             sunday: { enabled: false, startTime: '18:00', endTime: '21:00' },
           },
           venueRules: '',
@@ -196,8 +196,8 @@ export function MapClientFormSheet({
           tuesday: { open: '19:00', close: '22:00', closed: false },
           wednesday: { open: '19:00', close: '22:00', closed: false },
           thursday: { open: '19:00', close: '23:00', closed: false },
-          friday: { open: '19:00', close: '24:00', closed: false },
-          saturday: { open: '18:00', close: '24:00', closed: false },
+          friday: { open: '19:00', close: '23:59', closed: false },
+          saturday: { open: '18:00', close: '23:59', closed: false },
           sunday: { open: '18:00', close: '21:00', closed: false },
         },
         country: mapClient?.country || 'Israel',
@@ -539,6 +539,29 @@ export function MapClientFormSheet({
             disabled={isLoading}
           />
 
+          {/* Country Selection */}
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="country">Country *</Label>
+              <Select 
+                value={formData.country} 
+                onValueChange={handleCountryChange}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select country" />
+                </SelectTrigger>
+                <SelectContent>
+                  {getAvailableCountries().map((country) => (
+                    <SelectItem key={country} value={country}>
+                      {country}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-500 mt-1">Used for timezone calculation and regional settings</p>
+            </div>
+          </div>
+
           {/* Hours Information */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold flex items-center gap-2">
@@ -751,21 +774,14 @@ export function MapClientFormSheet({
             </p>
             
             <div className="grid grid-cols-1 gap-4">
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="eventHubEnabled"
-                  checked={formData.eventHubSettings?.enabled || false}
-                  onChange={(e) => handleEventHubEnable(e.target.checked)}
-                  disabled={isLoading}
-                  className="rounded border-gray-300"
-                />
-                <Label htmlFor="eventHubEnabled" className="text-sm font-medium">
-                  Enable Event Rooms for this venue
-                </Label>
+              {/* Event Hub is always enabled for map clients */}
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                <p className="text-sm text-green-700">
+                  ✅ Event Rooms are automatically enabled for all venue listings
+                </p>
               </div>
 
-              {formData.eventHubSettings?.enabled && (
+              {true && (
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -823,25 +839,6 @@ export function MapClientFormSheet({
                     </div>
                   </div>
 
-                  <div>
-                    <Label htmlFor="country">Country *</Label>
-                    <Select 
-                      value={formData.country} 
-                      onValueChange={handleCountryChange}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {getAvailableCountries().map((country) => (
-                          <SelectItem key={country} value={country}>
-                            {country}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-gray-500 mt-1">Used for timezone calculation</p>
-                  </div>
 
                   <div>
                     <Label htmlFor="venueRules">Venue Rules & Instructions</Label>
@@ -893,7 +890,7 @@ export function MapClientFormSheet({
                           <span className="text-gray-400">to</span>
                           <Input
                             type="time"
-                            value={schedule?.endTime || '22:00'}
+                            value={schedule?.endTime || '23:59'}
                             onChange={(e) => updateEventSchedule(day, 'endTime', e.target.value)}
                             disabled={!schedule?.enabled || isLoading}
                             className="w-24"
