@@ -9,28 +9,30 @@ import {
   useColorScheme,
   StatusBar,
   Platform,
+  ScrollView,
+  Modal,
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MapPin, User, Users, MessageCircle, ArrowLeft, Navigation, Layers, Plus, Minus, Grid3X3 } from 'lucide-react-native';
+import { MapPin, ArrowLeft, Navigation } from 'lucide-react-native';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import Mapbox, { 
   MapView, 
   Camera, 
   UserLocation, 
-  PointAnnotation, 
-  Callout,
-  ShapeSource,
-  SymbolLayer,
-  CircleLayer
+  PointAnnotation
 } from '@rnmapbox/maps';
+import { Image } from 'react-native';
 import * as Location from 'expo-location';
+import VenueModal from '../components/VenueModal';
+import QRCodeScanner from '../lib/components/QRCodeScanner';
 
 // Set Mapbox access token from environment variable
-if (process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN) {
-  Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN);
+const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN;
+if (mapboxToken && mapboxToken.startsWith('pk.') && !mapboxToken.includes('placeholder')) {
+  Mapbox.setAccessToken(mapboxToken);
 } else {
-  console.warn('Mapbox access token not found in environment variables');
+  console.warn('Mapbox access token not configured or is placeholder');
 }
 
 // Generate more mock venue data for clustering testing
@@ -56,6 +58,23 @@ const generateMockVenues = () => {
     const lat = 37.7749 + (Math.random() - 0.5) * 0.1; // SF lat ± 0.05
     const lon = -122.4194 + (Math.random() - 0.5) * 0.1; // SF lon ± 0.05
     
+    // Add mock social media links for some venues for testing
+    const mockSocialMedia = i < 10 ? {
+      phone: i % 4 === 0 ? `+1-555-${String(Math.floor(Math.random() * 900) + 100)}-${String(Math.floor(Math.random() * 9000) + 1000)}` : null,
+      website: i % 3 === 0 ? `https://www.${baseVenue.name.toLowerCase().replace(/\s+/g, '')}.com` : null,
+      socialMedia: {
+        instagram: i % 5 === 0 ? `@${baseVenue.name.toLowerCase().replace(/\s+/g, '')}` : null,
+        facebook: i % 6 === 0 ? `https://facebook.com/${baseVenue.name.toLowerCase().replace(/\s+/g, '')}` : null,
+      },
+    } : {
+      phone: null,
+      website: null,
+      socialMedia: {
+        instagram: null,
+        facebook: null,
+      },
+    };
+    
     venues.push({
       id: `venue-${i + 1}`,
       name: `${baseVenue.name} ${i > 9 ? Math.floor(i / 10) : ''}`.trim(),
@@ -64,7 +83,8 @@ const generateMockVenues = () => {
       address: `${100 + i} Street Name, San Francisco, CA`,
       activeUsers: Math.floor(Math.random() * 30) + 1,
       description: baseVenue.desc,
-      image: null,
+      image: null, // Use default MapPin icon instead of failing placeholder images
+      ...mockSocialMedia,
     });
   }
   
@@ -90,24 +110,44 @@ export default function MapScreen() {
   const [selectedVenue, setSelectedVenue] = useState<any>(null);
   const [mapStyle, setMapStyle] = useState<'street' | 'satellite'>('street');
   const [currentZoom, setCurrentZoom] = useState(12);
-  const [enableClustering, setEnableClustering] = useState(true);
+  const [selectedFilter, setSelectedFilter] = useState('all');
+  const [isVenueModalVisible, setIsVenueModalVisible] = useState(false);
+  const [cameraCenter, setCameraCenter] = useState<[number, number] | null>(null);
+  const [isQRScannerVisible, setIsQRScannerVisible] = useState(false);
   
-  // Convert venues to GeoJSON for clustering
-  const venuesGeoJSON = useMemo(() => ({
-    type: 'FeatureCollection',
-    features: venues.map(venue => ({
-      type: 'Feature',
-      id: venue.id,
-      properties: {
-        ...venue,
-        cluster: false,
-      },
-      geometry: {
-        type: 'Point',
-        coordinates: venue.coordinates,
-      },
-    })),
-  }), [venues]);
+  // Filter options matching admin dashboard business types
+  const filterOptions = [
+    { id: 'all', label: 'All' },
+    { id: 'restaurant', label: 'Restaurant' },
+    { id: 'bar', label: 'Bar' },
+    { id: 'club', label: 'Club' },
+    { id: 'cafe', label: 'Cafe' },
+    { id: 'venue', label: 'Venue' },
+  ];
+  
+  // Filter venues based on selected filter
+  const filteredVenues = useMemo(() => {
+    if (selectedFilter === 'all') {
+      return venues;
+    }
+    return venues.filter(venue => {
+      // Simple mapping from venue types to filter categories
+      const venueTypeMap = {
+        'Restaurant': 'restaurant',
+        'Bar & Lounge': 'bar', 
+        'Coffee & Light Bites': 'cafe',
+        'Nightclub': 'club',
+        'Co-working & Bar': 'venue',
+        'Coffee Shop': 'cafe',
+        'Pub': 'bar',
+        'Seafood Restaurant': 'restaurant',
+        'Craft Beer Bar': 'bar',
+      };
+      const mappedType = venueTypeMap[venue.type as keyof typeof venueTypeMap] || 'venue';
+      return mappedType === selectedFilter;
+    });
+  }, [venues, selectedFilter]);
+
 
   useEffect(() => {
     initializeMapScreen();
@@ -162,8 +202,9 @@ export default function MapScreen() {
 
   const initializeMapScreen = useCallback(async () => {
     try {
-      // Check if Mapbox token is available
-      const tokenAvailable = !!process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN;
+      // Check if Mapbox token is available and valid
+      const token = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN;
+      const tokenAvailable = !!(token && token.startsWith('pk.') && !token.includes('placeholder'));
       setMapboxTokenAvailable(tokenAvailable);
       
       // Request location permission if Mapbox is available
@@ -219,24 +260,22 @@ export default function MapScreen() {
 
   const handleVenuePress = useCallback((venue: any) => {
     setSelectedVenue(venue);
-  }, []);
+    
+    // If modal is already visible, just update the venue
+    if (!isVenueModalVisible) {
+      setIsVenueModalVisible(true);
+    }
+    
+    // Center map on selected venue, but offset for top 50% positioning
+    // Calculate offset to place venue in center of visible top area (accounting for buttons)
+    const [venueLon, venueLat] = venue.coordinates;
+    // Smaller offset to keep venue visible in top 50% but below buttons
+    const offsetLat = venueLat - 0.001; // Small offset to position in visible top area
+    setCameraCenter([venueLon, offsetLat]);
+    setFollowUserLocation(false);
+    setCurrentZoom(16); // Zoom in closer when venue is selected
+  }, [isVenueModalVisible]);
 
-  const handleVenueCalloutPress = useCallback((venue: any) => {
-    Alert.alert(
-      venue.name,
-      `${venue.description}\n\n📍 ${venue.address}\n👥 ${venue.activeUsers} active users\n\nWould you like to check in to this venue?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Check In', 
-          onPress: () => {
-            // Future: Integration with backend API
-            Alert.alert('Coming Soon', 'Check-in functionality will be available once backend integration is complete.');
-          }
-        }
-      ]
-    );
-  }, []);
 
   const toggleMapStyle = useCallback(() => {
     setMapStyle(prev => prev === 'street' ? 'satellite' : 'street');
@@ -250,20 +289,20 @@ export default function MapScreen() {
     setCurrentZoom(prev => Math.max(prev - 1, 1));
   }, []);
 
-  const handleClusterPress = useCallback((feature: any) => {
-    const clusterId = feature.properties.cluster_id;
-    const pointCount = feature.properties.point_count;
-    
-    Alert.alert(
-      'Venue Cluster',
-      `${pointCount} venues in this area. Zoom in to see individual venues.`,
-      [{ text: 'OK' }]
-    );
+  const handleQRScanPress = useCallback(() => {
+    setIsQRScannerVisible(true);
   }, []);
 
-  const toggleClustering = useCallback(() => {
-    setEnableClustering(prev => !prev);
+  const handleQRScan = useCallback((data: string) => {
+    setIsQRScannerVisible(false);
+    // Navigate to join page with the scanned code (same as homepage)
+    router.push(`/join?code=${data.toUpperCase()}`);
   }, []);
+
+  const handleQRScanClose = useCallback(() => {
+    setIsQRScannerVisible(false);
+  }, []);
+
   
   const styles = StyleSheet.create({
     container: {
@@ -315,10 +354,7 @@ export default function MapScreen() {
     },
     mapContainer: {
       flex: 1,
-      backgroundColor: isDark ? '#1f2937' : '#f3f4f6',
-      margin: 16,
-      borderRadius: 12,
-      overflow: 'hidden',
+      backgroundColor: isDark ? '#000' : '#fff',
     },
     mapView: {
       flex: 1,
@@ -340,14 +376,28 @@ export default function MapScreen() {
       alignItems: 'center',
       zIndex: 10,
     },
+    backButtonOverlay: {
+      position: 'absolute',
+      top: 60,
+      left: 20,
+      height: 36,
+      paddingHorizontal: 16,
+      borderRadius: 20,
+      backgroundColor: isDark ? 'rgba(0, 0, 0, 0.6)' : 'rgba(255, 255, 255, 0.9)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      zIndex: 1000,
+      borderWidth: 2,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)',
+    },
     locationButton: {
       position: 'absolute',
-      top: 150,
+      bottom: 100,
       right: 20,
       width: 44,
       height: 44,
       borderRadius: 22,
-      backgroundColor: isDark ? '#2d2d2d' : '#ffffff',
+      backgroundColor: 'rgba(0, 0, 0, 0.6)',
       justifyContent: 'center',
       alignItems: 'center',
       shadowColor: '#000',
@@ -405,78 +455,25 @@ export default function MapScreen() {
       borderBottomRightRadius: 22,
     },
     venueMarker: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: '#8b5cf6',
-      justifyContent: 'center',
-      alignItems: 'center',
-      borderWidth: 3,
-      borderColor: '#ffffff',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.3,
-      shadowRadius: 4,
-      elevation: 5,
-    },
-    venueMarkerActive: {
-      backgroundColor: '#7c3aed',
-      borderColor: '#fbbf24',
-      transform: [{ scale: 1.2 }],
-    },
-    venueCallout: {
-      backgroundColor: isDark ? '#2d2d2d' : '#ffffff',
-      borderRadius: 8,
-      padding: 12,
-      minWidth: 200,
-      maxWidth: 250,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.25,
-      shadowRadius: 8,
-      elevation: 5,
-    },
-    calloutTitle: {
-      fontSize: 16,
-      fontWeight: 'bold',
-      color: isDark ? '#ffffff' : '#1f2937',
-      marginBottom: 4,
-    },
-    calloutType: {
-      fontSize: 12,
-      color: '#8b5cf6',
-      fontWeight: '600',
-      marginBottom: 6,
-    },
-    calloutDescription: {
-      fontSize: 14,
-      color: isDark ? '#d1d5db' : '#6b7280',
-      marginBottom: 8,
-    },
-    calloutUsers: {
-      fontSize: 12,
-      color: isDark ? '#9ca3af' : '#6b7280',
-      fontWeight: '500',
-    },
-    clusterMarker: {
       width: 50,
       height: 50,
-      borderRadius: 25,
+      borderRadius: 12,
+      backgroundColor: '#8b5cf6',
+      borderWidth: 3,
+      borderColor: '#ffffff',
+      overflow: 'hidden',
+    },
+    venueImage: {
+      width: '100%',
+      height: '100%',
+      borderRadius: 9, // Slightly smaller than container to account for border
+    },
+    venueImagePlaceholder: {
+      width: '100%',
+      height: '100%',
       backgroundColor: '#8b5cf6',
       justifyContent: 'center',
       alignItems: 'center',
-      borderWidth: 4,
-      borderColor: '#ffffff',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 3 },
-      shadowOpacity: 0.4,
-      shadowRadius: 6,
-      elevation: 8,
-    },
-    clusterText: {
-      color: '#ffffff',
-      fontSize: 16,
-      fontWeight: 'bold',
     },
     placeholderText: {
       fontSize: 18,
@@ -520,6 +517,42 @@ export default function MapScreen() {
       fontWeight: '600',
       color: isDark ? '#ffffff' : '#1f2937',
     },
+    filterContainer: {
+      position: 'absolute',
+      top: 60,
+      left: 76,
+      right: 20,
+      zIndex: 1000,
+    },
+    filterScrollContent: {
+      paddingHorizontal: 0,
+    },
+    filterButton: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      height: 36,
+      paddingHorizontal: 16,
+      marginHorizontal: 4,
+      backgroundColor: isDark ? 'rgba(0, 0, 0, 0.6)' : 'rgba(255, 255, 255, 0.9)',
+      borderRadius: 20,
+      borderWidth: 2,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)',
+    },
+    filterButtonActive: {
+      backgroundColor: isDark ? 'rgba(0, 0, 0, 0.6)' : 'rgba(255, 255, 255, 0.9)',
+      borderColor: '#8b5cf6',
+      borderWidth: 2,
+    },
+    filterLabel: {
+      color: isDark ? '#ffffff' : '#1f2937',
+      fontSize: 13,
+      fontWeight: '500',
+      fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
+    },
+    filterLabelActive: {
+      fontWeight: '600',
+      color: isDark ? '#ffffff' : '#1f2937',
+    },
   });
   
   if (isLoading) {
@@ -532,27 +565,48 @@ export default function MapScreen() {
   }
   
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
+    <View style={styles.container}>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor="transparent" translucent />
       
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={handleGoBack}
-          accessibilityRole="button"
-          accessibilityLabel="Go Back"
-          accessibilityHint="Navigate back to previous screen"
+      {/* Back button overlay */}
+      <TouchableOpacity
+        style={styles.backButtonOverlay}
+        onPress={handleGoBack}
+        accessibilityRole="button"
+        accessibilityLabel="Go Back"
+        accessibilityHint="Navigate back to previous screen"
+      >
+        <ArrowLeft size={20} color={isDark ? "#ffffff" : "#1f2937"} />
+      </TouchableOpacity>
+      
+      {/* Filter buttons overlay */}
+      <View style={styles.filterContainer}>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterScrollContent}
         >
-          <ArrowLeft size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
-        </TouchableOpacity>
-        <View style={styles.headerText}>
-          <Text style={styles.title}>Find Venues</Text>
-          <Text style={styles.subtitle}>Discover Hooked-integrated locations</Text>
-        </View>
+          {filterOptions.map((filter) => (
+            <TouchableOpacity
+              key={filter.id}
+              style={[
+                styles.filterButton,
+                selectedFilter === filter.id && styles.filterButtonActive
+              ]}
+              onPress={() => setSelectedFilter(filter.id)}
+            >
+              <Text style={[
+                styles.filterLabel,
+                selectedFilter === filter.id && styles.filterLabelActive
+              ]}>
+                {filter.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
       
-      {/* Map Container */}
+      {/* Map Container - Full Screen */}
       <View style={styles.mapContainer}>
         {mapboxTokenAvailable ? (
           <>
@@ -565,21 +619,17 @@ export default function MapScreen() {
             <MapView
               style={styles.mapView}
               onDidFinishLoadingMap={handleMapReady}
-              styleURL={
-                mapStyle === 'satellite' 
-                  ? Mapbox.StyleURL.Satellite
-                  : (isDark ? Mapbox.StyleURL.Dark : Mapbox.StyleURL.Street)
-              }
-              compassEnabled={true}
-              compassPosition={{ top: 100, right: 20 }}
+              styleURL={isDark ? Mapbox.StyleURL.Dark : Mapbox.StyleURL.Light}
+              compassEnabled={false}
               scaleBarEnabled={false}
               logoEnabled={true}
               attributionEnabled={true}
               attributionPosition={{ bottom: 8, right: 8 }}
             >
               <Camera
-                zoomLevel={userLocation && followUserLocation ? 15 : currentZoom}
+                zoomLevel={currentZoom}
                 centerCoordinate={
+                  cameraCenter ? cameraCenter :
                   userLocation && followUserLocation 
                     ? [userLocation.longitude, userLocation.latitude]
                     : [-122.4194, 37.7749] // San Francisco as default
@@ -589,90 +639,41 @@ export default function MapScreen() {
                 onUserLocationUpdate={() => setFollowUserLocation(false)}
               />
               
-              {showUserLocation && (
+              {showUserLocation && locationPermissionGranted && (
                 <UserLocation
                   visible={true}
-                  showsUserHeadingIndicator={true}
+                  showsUserHeadingIndicator={false}
                   minDisplacement={10}
+                  renderMode="native"
                 />
               )}
 
-              {/* Clustered Venue Markers */}
-              {enableClustering && (
-                <ShapeSource
-                  id="venues"
-                  shape={venuesGeoJSON}
-                  cluster={true}
-                  clusterRadius={50}
-                  clusterMaxZoomLevel={14}
-                  onPress={(feature) => {
-                    if (feature.properties?.cluster) {
-                      handleClusterPress(feature);
-                    } else {
-                      const venue = venues.find(v => v.id === feature.properties?.id);
-                      if (venue) handleVenuePress(venue);
-                    }
-                  }}
+              {/* Individual Venue Markers */}
+              {filteredVenues.map((venue) => (
+                <PointAnnotation
+                  key={venue.id}
+                  id={venue.id}
+                  coordinate={venue.coordinates}
+                  onSelected={() => handleVenuePress(venue)}
                 >
-                  {/* Cluster circles */}
-                  <CircleLayer
-                    id="clusters"
-                    filter={['has', 'point_count']}
-                    style={{
-                      circleColor: '#8b5cf6',
-                      circleRadius: [
-                        'step',
-                        ['get', 'point_count'],
-                        20, // radius for point count < 10
-                        10, 25, // radius for point count 10-99
-                        100, 30, // radius for point count >= 100
-                      ],
-                      circleOpacity: 0.8,
-                      circleStrokeWidth: 3,
-                      circleStrokeColor: '#ffffff',
-                    }}
-                  />
-                  
-                  {/* Cluster count text */}
-                  <SymbolLayer
-                    id="cluster-count"
-                    filter={['has', 'point_count']}
-                    style={{
-                      textField: ['get', 'point_count_abbreviated'],
-                      textFont: ['Arial Unicode MS Bold'],
-                      textSize: 14,
-                      textColor: '#ffffff',
-                      textIgnorePlacement: true,
-                      textAllowOverlap: true,
-                    }}
-                  />
-                  
-                  {/* Individual venue points */}
-                  <CircleLayer
-                    id="unclustered-point"
-                    filter={['!', ['has', 'point_count']]}
-                    style={{
-                      circleColor: '#8b5cf6',
-                      circleRadius: 15,
-                      circleStrokeWidth: 3,
-                      circleStrokeColor: '#ffffff',
-                    }}
-                  />
-                  
-                  {/* Individual venue icons */}
-                  <SymbolLayer
-                    id="unclustered-point-icon"
-                    filter={['!', ['has', 'point_count']]}
-                    style={{
-                      iconImage: 'marker-15', // Built-in Mapbox icon
-                      iconSize: 1.5,
-                      iconColor: '#ffffff',
-                      iconAllowOverlap: true,
-                      iconIgnorePlacement: true,
-                    }}
-                  />
-                </ShapeSource>
-              )}
+                  <View style={styles.venueMarker}>
+                    {venue.image ? (
+                      <Image
+                        source={{ uri: venue.image }}
+                        style={styles.venueImage}
+                        onError={() => {
+                          // Fallback to default marker if image fails to load
+                          console.log('Failed to load venue image:', venue.image);
+                        }}
+                      />
+                    ) : (
+                      <View style={styles.venueImagePlaceholder}>
+                        <MapPin size={20} color="#ffffff" />
+                      </View>
+                    )}
+                  </View>
+                </PointAnnotation>
+              ))}
             </MapView>
             
             {/* Location Button */}
@@ -685,61 +686,9 @@ export default function MapScreen() {
             >
               <Navigation 
                 size={20} 
-                color={followUserLocation ? '#8b5cf6' : (isDark ? '#9ca3af' : '#6b7280')} 
+                color={followUserLocation ? '#8b5cf6' : '#ffffff'} 
               />
             </TouchableOpacity>
-
-            {/* Map Controls */}
-            <View style={styles.controlsContainer}>
-              <TouchableOpacity
-                style={styles.mapControlButton}
-                onPress={toggleMapStyle}
-                accessibilityRole="button"
-                accessibilityLabel={`Switch to ${mapStyle === 'street' ? 'satellite' : 'street'} view`}
-                accessibilityHint="Changes the map style between street and satellite view"
-              >
-                <Layers 
-                  size={20} 
-                  color={isDark ? '#9ca3af' : '#6b7280'} 
-                />
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.mapControlButton}
-                onPress={toggleClustering}
-                accessibilityRole="button"
-                accessibilityLabel={`${enableClustering ? 'Disable' : 'Enable'} marker clustering`}
-                accessibilityHint="Toggles clustering of nearby venue markers"
-              >
-                <Grid3X3 
-                  size={20} 
-                  color={enableClustering ? '#8b5cf6' : (isDark ? '#9ca3af' : '#6b7280')} 
-                />
-              </TouchableOpacity>
-            </View>
-
-            {/* Zoom Controls */}
-            <View style={styles.zoomControls}>
-              <TouchableOpacity
-                style={[styles.zoomButton, styles.zoomButtonTop]}
-                onPress={handleZoomIn}
-                accessibilityRole="button"
-                accessibilityLabel="Zoom in"
-                accessibilityHint="Zooms into the map"
-              >
-                <Plus size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.zoomButton, styles.zoomButtonBottom]}
-                onPress={handleZoomOut}
-                accessibilityRole="button"
-                accessibilityLabel="Zoom out"
-                accessibilityHint="Zooms out of the map"
-              >
-                <Minus size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
-              </TouchableOpacity>
-            </View>
           </>
         ) : (
           <View style={styles.placeholderContainer}>
@@ -751,76 +700,34 @@ export default function MapScreen() {
           </View>
         )}
       </View>
-      
-      {/* Bottom Navigation */}
-      <View style={styles.bottomNavigation}>
-        <TouchableOpacity
-          style={styles.navButton}
-          onPress={() => router.push('/profile')}
-          accessibilityRole="button"
-          accessibilityLabel="Profile"
-          accessibilityHint="Navigate to your profile page"
-        >
-          <User size={24} color="#9ca3af" />
-          <Text style={styles.navButtonText}>Profile</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={styles.navButton}
-          onPress={() => router.push('/discovery')}
-          accessibilityRole="button"
-          accessibilityLabel="Discover"
-          accessibilityHint="Navigate to discovery page"
-        >
-          <Users size={24} color="#9ca3af" />
-          <Text style={styles.navButtonText}>Discover</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.navButton, styles.navButtonActive]}
-          onPress={() => {}} // Already on map page
-          accessibilityRole="button"
-          accessibilityLabel="Map"
-          accessibilityHint="Currently on map page"
-          accessibilityState={{ selected: true }}
-        >
-          <MapPin size={24} color="#8b5cf6" />
-          <Text style={[styles.navButtonText, styles.navButtonTextActive]}>Map</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={styles.navButton}
-          onPress={() => router.push('/matches')}
-          accessibilityRole="button"
-          accessibilityLabel="Matches"
-          accessibilityHint="Navigate to your matches page"
-        >
-          <View style={{ position: 'relative' }}>
-            <MessageCircle size={24} color="#9ca3af" />
-            {hasUnreadMessages && (
-              <View style={{
-                position: 'absolute',
-                top: -2,
-                right: -2,
-                backgroundColor: '#ef4444',
-                borderRadius: 6,
-                width: 12,
-                height: 12,
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}>
-                <View style={{
-                  width: 6,
-                  height: 6,
-                  backgroundColor: '#ffffff',
-                  borderRadius: 3,
-                }} />
-              </View>
-            )}
-          </View>
-          <Text style={styles.navButtonText}>Matches</Text>
-        </TouchableOpacity>
-      </View>
-    </SafeAreaView>
+
+      {/* Venue Modal as positioned overlay instead of Modal */}
+      {isVenueModalVisible && (
+        <VenueModal
+          visible={isVenueModalVisible}
+          venue={selectedVenue}
+          userLocation={userLocation}
+          onClose={() => {
+            setIsVenueModalVisible(false);
+            setCameraCenter(null);
+            setCurrentZoom(12); // Reset zoom when modal closes
+          }}
+          onQrScan={handleQRScanPress}
+        />
+      )}
+
+      {/* QR Code Scanner Modal */}
+      <Modal
+        visible={isQRScannerVisible}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={handleQRScanClose}
+      >
+        <QRCodeScanner
+          onScan={handleQRScan}
+          onClose={handleQRScanClose}
+        />
+      </Modal>
+    </View>
   );
 }

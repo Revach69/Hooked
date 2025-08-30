@@ -2,7 +2,6 @@ import React, { useRef, useEffect, useState } from 'react';
 import {
   View,
   Text,
-  Modal,
   TouchableOpacity,
   ScrollView,
   StyleSheet,
@@ -20,6 +19,7 @@ import {
   Instagram,
   Facebook,
   Globe,
+  QrCode,
 } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
 
@@ -40,9 +40,10 @@ interface VenueModalProps {
   venue: any;
   userLocation?: { latitude: number; longitude: number } | null;
   onClose: () => void;
+  onQrScan?: () => void; // Callback for QR scanning
 }
 
-export default function VenueModal({ visible, venue, userLocation, onClose }: VenueModalProps) {
+export default function VenueModal({ visible, venue, userLocation, onClose, onQrScan }: VenueModalProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   
@@ -90,9 +91,9 @@ export default function VenueModal({ visible, venue, userLocation, onClose }: Ve
   // Pan responder for swipe gestures
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: (evt) => {
-        // Only respond to touches on the header area (drag handle and header)
-        return evt.nativeEvent.pageY < screenHeight * 0.5 + 100; // Approximate header height
+      onStartShouldSetPanResponder: () => {
+        // Always respond to touches on the modal header area
+        return true;
       },
       onMoveShouldSetPanResponder: (_, gestureState) => {
         return Math.abs(gestureState.dy) > 10;
@@ -271,18 +272,13 @@ export default function VenueModal({ visible, venue, userLocation, onClose }: Ve
 
   const styles = StyleSheet.create({
     overlay: {
-      flex: 1,
-      backgroundColor: 'transparent',
-      justifyContent: 'flex-end',
-    },
-    overlayTop: {
       position: 'absolute',
       top: 0,
       left: 0,
       right: 0,
-      height: screenHeight * 0.5,
-      backgroundColor: modalHeight === 'full' ? 'rgba(0, 0, 0, 0.3)' : 'transparent',
-      pointerEvents: modalHeight === 'full' ? 'auto' : 'none',
+      bottom: 0,
+      backgroundColor: 'transparent',
+      justifyContent: 'flex-end',
     },
     modalContainer: {
       backgroundColor: isDark ? '#1f1f1f' : '#ffffff',
@@ -301,6 +297,7 @@ export default function VenueModal({ visible, venue, userLocation, onClose }: Ve
     },
     headerArea: {
       // Area for pan gestures - includes drag handle and header
+      backgroundColor: isDark ? '#1f1f1f' : '#ffffff',
     },
     dragHandle: {
       width: 40,
@@ -325,6 +322,25 @@ export default function VenueModal({ visible, venue, userLocation, onClose }: Ve
       color: isDark ? '#fff' : '#1f2937',
       flex: 1,
       marginRight: 16,
+    },
+    headerActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    qrButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      backgroundColor: '#8b5cf6',
+      borderRadius: 20,
+      gap: 6,
+    },
+    qrButtonText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: '#ffffff',
     },
     closeButton: {
       width: 36,
@@ -442,38 +458,38 @@ export default function VenueModal({ visible, venue, userLocation, onClose }: Ve
   });
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="none"
-      onRequestClose={onClose}
-    >
-      <View style={styles.overlay}>
-        {/* Top overlay - blocks interaction when modal is full screen */}
-        <View style={styles.overlayTop} />
-        
-        <Animated.View 
-          style={[
-            styles.modalContainer,
-            {
-              transform: [{ translateY }],
-            },
-          ]}
-        >
-          <View {...panResponder.panHandlers} style={styles.headerArea}>
+    <View style={styles.overlay} pointerEvents="box-none">
+      <Animated.View 
+        style={[
+          styles.modalContainer,
+          {
+            transform: [{ translateY }],
+          },
+        ]}
+        pointerEvents="auto"
+      >
+          <View {...panResponder.panHandlers} style={styles.headerArea} pointerEvents="auto">
             <View style={styles.dragHandle} />
           
             {/* Header */}
             <View style={styles.header}>
               <Text style={styles.venueName}>{venue.name}</Text>
-              <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-                <X size={20} color={isDark ? '#fff' : '#374151'} />
-              </TouchableOpacity>
+              <View style={styles.headerActions}>
+                {onQrScan && (
+                  <TouchableOpacity style={styles.qrButton} onPress={onQrScan}>
+                    <QrCode size={18} color={isDark ? '#fff' : '#374151'} />
+                    <Text style={styles.qrButtonText}>I'm Here</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+                  <X size={20} color={isDark ? '#fff' : '#374151'} />
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
 
           {/* Content */}
-          <View style={styles.content}>
+          <View style={styles.content} pointerEvents="auto">
             <ScrollView 
               ref={scrollViewRef}
               style={styles.scrollContent} 
@@ -619,6 +635,5 @@ export default function VenueModal({ visible, venue, userLocation, onClose }: Ve
           </View>
         </Animated.View>
       </View>
-    </Modal>
   );
 }
