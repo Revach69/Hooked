@@ -23,7 +23,7 @@ interface MapClientsTableProps {
   mapClients: MapClient[];
   onEdit: (mapClient: MapClient) => void;
   onDelete: (mapClientId: string) => void;
-  onUpdate: (mapClientId: string, field: string, value: any) => void;
+  onUpdate: (mapClientId: string, field: string, value: string | number | boolean) => void;
   onEventSettings?: (mapClient: MapClient) => void;
   onQRCodeGenerate?: (mapClient: MapClient) => void;
   searchQuery: string;

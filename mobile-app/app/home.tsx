@@ -17,7 +17,7 @@ import { router } from 'expo-router';
 import { QrCode, X, MapPin } from 'lucide-react-native';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 
-import QRCodeScanner from '../lib/components/QRCodeScanner';
+import QRCodeScanner, { QRScanResult } from '../lib/components/QRCodeScanner';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import MobileOfflineStatusBar from '../lib/components/MobileOfflineStatusBar';
@@ -193,9 +193,23 @@ export default function Home() {
     setActiveModal('qrScanner');
   };
 
-  const handleQRScan = (data: string) => {
+  const handleQRScan = (result: QRScanResult) => {
     closeModal();
-    handleEventAccess(data);
+    
+    if (result.type === 'regular' && result.code) {
+      handleEventAccess(result.code);
+    } else if (result.type === 'venue_event' && result.venueData) {
+      // Navigate to venue event join flow
+      router.push(`/join-venue?venueId=${result.venueData.venueId}&qrCodeId=${result.venueData.qrCodeId}&eventName=${encodeURIComponent(result.venueData.eventName)}&venueName=${encodeURIComponent(result.venueData.venueName)}`);
+    } else {
+      console.warn('Invalid QR scan result:', result);
+      // Show error without Alert import
+      Toast.show({
+        type: 'error',
+        text1: 'Invalid QR Code',
+        text2: 'The scanned QR code is not a valid event or venue code.',
+      });
+    }
   };
 
   const handleEventAccess = (eventCode: string) => {

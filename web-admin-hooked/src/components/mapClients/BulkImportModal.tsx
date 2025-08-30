@@ -4,7 +4,6 @@ import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -17,7 +16,6 @@ import {
   XCircle,
   Loader2,
   MapPin,
-  Eye,
   RefreshCw
 } from 'lucide-react';
 import { MapClientAPI } from '@/lib/firestore/mapClients';
@@ -68,7 +66,7 @@ export function BulkImportModal({ open, onOpenChange, onSuccess }: BulkImportMod
     }
   };
 
-  const validateRow = (data: any, rowNumber: number): ImportRow => {
+  const validateRow = (data: Record<string, unknown>, rowNumber: number): ImportRow => {
     const errors: string[] = [];
     
     // Check required fields
@@ -126,7 +124,7 @@ export function BulkImportModal({ open, onOpenChange, onSuccess }: BulkImportMod
 
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split(',').map(v => v.replace(/"/g, '').trim());
-      const data: any = {};
+      const data: Record<string, string> = {};
       
       headers.forEach((header, index) => {
         if (values[index] !== undefined) {

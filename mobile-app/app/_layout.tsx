@@ -44,6 +44,7 @@ import { AppStateSyncService } from '../lib/services/AppStateSyncService';
 import * as Linking from 'expo-linking';
 import * as Updates from 'expo-updates';
 import { AppState } from 'react-native';
+import { useVenueMonitoring } from '../lib/hooks/useVenueMonitoring';
 
 import { getSessionAndInstallationIds } from '../lib/session/sessionId';
 
@@ -104,6 +105,9 @@ export default function RootLayout() {
 
   // 1) Provide getIsForeground to the router
   const getIsForeground = useIsForegroundGetter();
+  
+  // Initialize venue monitoring for lifecycle management
+  const venueMonitoring = useVenueMonitoring();
 
   // 2) Initialize NotificationRouter and Android channels when app is ready
   useEffect(() => {

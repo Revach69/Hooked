@@ -25,7 +25,8 @@ import Mapbox, {
 import { Image } from 'react-native';
 import * as Location from 'expo-location';
 import VenueModal from '../components/VenueModal';
-import QRCodeScanner from '../lib/components/QRCodeScanner';
+import QRCodeScanner, { QRScanResult } from '../lib/components/QRCodeScanner';
+import { isVenueHookedHoursActive, getVenueActiveStatus } from '../lib/utils/venueHoursUtils';
 
 // Set Mapbox access token from environment variable
 const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN;
@@ -75,6 +76,79 @@ const generateMockVenues = () => {
       },
     };
     
+    // Generate mock Hooked Hours for some venues (every 3rd venue has Hooked Hours)
+    const hasHookedHours = i % 3 === 0;
+    let hookedHours = null;
+    let openingHours = null;
+    
+    if (hasHookedHours) {
+      // Create realistic Hooked Hours based on venue type
+      const isNightlife = baseVenue.type.includes('Bar') || baseVenue.type.includes('Club');
+      const isCafe = baseVenue.type.includes('Coffee') || baseVenue.type.includes('Café');
+      
+      if (isNightlife) {
+        // Nightlife venues: evening hours
+        hookedHours = {
+          monday: { open: '19:00', close: '23:00', closed: false },
+          tuesday: { open: '19:00', close: '23:00', closed: false },
+          wednesday: { open: '19:00', close: '24:00', closed: false },
+          thursday: { open: '19:00', close: '24:00', closed: false },
+          friday: { open: '18:00', close: '24:00', closed: false },
+          saturday: { open: '18:00', close: '24:00', closed: false },
+          sunday: { open: '18:00', close: '22:00', closed: false },
+        };
+        openingHours = {
+          monday: { open: '16:00', close: '02:00', closed: false },
+          tuesday: { open: '16:00', close: '02:00', closed: false },
+          wednesday: { open: '16:00', close: '02:00', closed: false },
+          thursday: { open: '16:00', close: '02:00', closed: false },
+          friday: { open: '16:00', close: '03:00', closed: false },
+          saturday: { open: '14:00', close: '03:00', closed: false },
+          sunday: { open: '14:00', close: '24:00', closed: false },
+        };
+      } else if (isCafe) {
+        // Cafe venues: morning/afternoon hours
+        hookedHours = {
+          monday: { open: '08:00', close: '11:00', closed: false },
+          tuesday: { open: '08:00', close: '11:00', closed: false },
+          wednesday: { open: '08:00', close: '11:00', closed: false },
+          thursday: { open: '08:00', close: '11:00', closed: false },
+          friday: { open: '08:00', close: '12:00', closed: false },
+          saturday: { open: '09:00', close: '13:00', closed: false },
+          sunday: { open: '09:00', close: '12:00', closed: false },
+        };
+        openingHours = {
+          monday: { open: '07:00', close: '19:00', closed: false },
+          tuesday: { open: '07:00', close: '19:00', closed: false },
+          wednesday: { open: '07:00', close: '19:00', closed: false },
+          thursday: { open: '07:00', close: '19:00', closed: false },
+          friday: { open: '07:00', close: '20:00', closed: false },
+          saturday: { open: '08:00', close: '20:00', closed: false },
+          sunday: { open: '08:00', close: '18:00', closed: false },
+        };
+      } else {
+        // Restaurant/general venues: evening hours
+        hookedHours = {
+          monday: { open: '17:00', close: '21:00', closed: false },
+          tuesday: { open: '17:00', close: '21:00', closed: false },
+          wednesday: { open: '17:00', close: '22:00', closed: false },
+          thursday: { open: '17:00', close: '22:00', closed: false },
+          friday: { open: '17:00', close: '23:00', closed: false },
+          saturday: { open: '16:00', close: '23:00', closed: false },
+          sunday: { open: '16:00', close: '21:00', closed: false },
+        };
+        openingHours = {
+          monday: { open: '11:00', close: '23:00', closed: false },
+          tuesday: { open: '11:00', close: '23:00', closed: false },
+          wednesday: { open: '11:00', close: '24:00', closed: false },
+          thursday: { open: '11:00', close: '24:00', closed: false },
+          friday: { open: '11:00', close: '24:00', closed: false },
+          saturday: { open: '10:00', close: '24:00', closed: false },
+          sunday: { open: '10:00', close: '23:00', closed: false },
+        };
+      }
+    }
+    
     venues.push({
       id: `venue-${i + 1}`,
       name: `${baseVenue.name} ${i > 9 ? Math.floor(i / 10) : ''}`.trim(),
@@ -84,6 +158,8 @@ const generateMockVenues = () => {
       activeUsers: Math.floor(Math.random() * 30) + 1,
       description: baseVenue.desc,
       image: null, // Use default MapPin icon instead of failing placeholder images
+      hookedHours,
+      openingHours,
       ...mockSocialMedia,
     });
   }
@@ -114,6 +190,7 @@ export default function MapScreen() {
   const [isVenueModalVisible, setIsVenueModalVisible] = useState(false);
   const [cameraCenter, setCameraCenter] = useState<[number, number] | null>(null);
   const [isQRScannerVisible, setIsQRScannerVisible] = useState(false);
+  const [lastStatusUpdate, setLastStatusUpdate] = useState<Date>(new Date());
   
   // Filter options matching admin dashboard business types
   const filterOptions = [
@@ -151,6 +228,15 @@ export default function MapScreen() {
 
   useEffect(() => {
     initializeMapScreen();
+  }, []);
+  
+  // Update venue status every minute to reflect real-time Hooked Hours
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setLastStatusUpdate(new Date());
+    }, 60000); // Update every minute
+    
+    return () => clearInterval(interval);
   }, []);
   
   const requestLocationPermission = useCallback(async () => {
@@ -293,10 +379,18 @@ export default function MapScreen() {
     setIsQRScannerVisible(true);
   }, []);
 
-  const handleQRScan = useCallback((data: string) => {
+  const handleQRScan = useCallback((result: QRScanResult) => {
     setIsQRScannerVisible(false);
-    // Navigate to join page with the scanned code (same as homepage)
-    router.push(`/join?code=${data.toUpperCase()}`);
+    
+    if (result.type === 'regular' && result.code) {
+      // Navigate to join page with regular event code
+      router.push(`/join?code=${result.code}`);
+    } else if (result.type === 'venue_event' && result.venueData) {
+      // Navigate to venue event join flow
+      router.push(`/join-venue?venueId=${result.venueData.venueId}&qrCodeId=${result.venueData.qrCodeId}&eventName=${encodeURIComponent(result.venueData.eventName)}&venueName=${encodeURIComponent(result.venueData.venueName)}`);
+    } else {
+      Alert.alert('Invalid QR Code', 'The scanned QR code is not a valid event or venue code.');
+    }
   }, []);
 
   const handleQRScanClose = useCallback(() => {
@@ -462,6 +556,44 @@ export default function MapScreen() {
       borderWidth: 3,
       borderColor: '#ffffff',
       overflow: 'hidden',
+    },
+    venueMarkerActive: {
+      width: 50,
+      height: 50,
+      borderRadius: 12,
+      backgroundColor: '#8b5cf6',
+      borderWidth: 3,
+      borderColor: '#22c55e', // Green border for active venues
+      overflow: 'hidden',
+      // Glow effect using shadow
+      shadowColor: '#22c55e',
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.8,
+      shadowRadius: 8,
+      elevation: 10, // Android shadow
+    },
+    venueMarkerGlow: {
+      position: 'absolute',
+      top: -8,
+      left: -8,
+      width: 66, // 50 + 16 for glow padding
+      height: 66,
+      borderRadius: 20,
+      backgroundColor: 'transparent',
+      borderWidth: 2,
+      borderColor: 'rgba(34, 197, 94, 0.6)', // Semi-transparent green glow
+    },
+    activeVenueIndicator: {
+      position: 'absolute',
+      top: -4,
+      right: -4,
+      width: 16,
+      height: 16,
+      borderRadius: 8,
+      backgroundColor: '#22c55e',
+      borderWidth: 2,
+      borderColor: '#ffffff',
+      zIndex: 10,
     },
     venueImage: {
       width: '100%',
@@ -649,31 +781,46 @@ export default function MapScreen() {
               )}
 
               {/* Individual Venue Markers */}
-              {filteredVenues.map((venue) => (
-                <PointAnnotation
-                  key={venue.id}
-                  id={venue.id}
-                  coordinate={venue.coordinates}
-                  onSelected={() => handleVenuePress(venue)}
-                >
-                  <View style={styles.venueMarker}>
-                    {venue.image ? (
-                      <Image
-                        source={{ uri: venue.image }}
-                        style={styles.venueImage}
-                        onError={() => {
-                          // Fallback to default marker if image fails to load
-                          console.log('Failed to load venue image:', venue.image);
-                        }}
-                      />
-                    ) : (
-                      <View style={styles.venueImagePlaceholder}>
-                        <MapPin size={20} color="#ffffff" />
+              {filteredVenues.map((venue) => {
+                // Re-evaluate status based on current time (triggered by lastStatusUpdate)
+                const venueStatus = getVenueActiveStatus(venue);
+                const isActive = venueStatus.shouldGlow;
+                
+                return (
+                  <PointAnnotation
+                    key={venue.id}
+                    id={venue.id}
+                    coordinate={venue.coordinates}
+                    onSelected={() => handleVenuePress(venue)}
+                  >
+                    <View style={{ position: 'relative' }}>
+                      {/* Glow effect for active venues */}
+                      {isActive && <View style={styles.venueMarkerGlow} />}
+                      
+                      {/* Main venue marker */}
+                      <View style={isActive ? styles.venueMarkerActive : styles.venueMarker}>
+                        {venue.image ? (
+                          <Image
+                            source={{ uri: venue.image }}
+                            style={styles.venueImage}
+                            onError={() => {
+                              // Fallback to default marker if image fails to load
+                              console.log('Failed to load venue image:', venue.image);
+                            }}
+                          />
+                        ) : (
+                          <View style={styles.venueImagePlaceholder}>
+                            <MapPin size={20} color="#ffffff" />
+                          </View>
+                        )}
                       </View>
-                    )}
-                  </View>
-                </PointAnnotation>
-              ))}
+                      
+                      {/* Active indicator dot */}
+                      {isActive && <View style={styles.activeVenueIndicator} />}
+                    </View>
+                  </PointAnnotation>
+                );
+              })}
             </MapView>
             
             {/* Location Button */}

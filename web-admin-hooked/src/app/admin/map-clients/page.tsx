@@ -65,7 +65,7 @@ export default function MapClientsPage() {
     }
   };
 
-  const handleUpdateClient = async (clientId: string, field: string, value: any) => {
+  const handleUpdateClient = async (clientId: string, field: string, value: string | number | boolean) => {
     try {
       const client = mapClients.find(c => c.id === clientId);
       if (!client) return;

@@ -23,7 +23,7 @@ import type { MapClient } from '@/types/admin';
 
 interface SubscriptionManagerProps {
   mapClient: MapClient;
-  onUpdate: (field: string, value: any) => void;
+  onUpdate: (field: string, value: string | number | Date | null) => void;
   onSubscriptionAction: (action: 'activate' | 'pause' | 'cancel' | 'renew', clientId: string) => void;
   disabled?: boolean;
 }

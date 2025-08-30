@@ -2926,3 +2926,241 @@ export const setMuteBackup = onCall({
     throw new HttpsError('internal', 'Failed to update mute status');
   }
 });
+
+// ===== VENUE EVENT SYSTEM ENDPOINTS =====
+// Import and re-export venue event functions from separate module
+
+// Request Event Nonce - Step 1 of venue entry
+export const venueRequestEventNonce = onCall({
+  region: FUNCTION_REGION,
+  cors: true,
+}, async (request) => {
+  try {
+    const { data } = request;
+    const { staticQRData, location, sessionId } = data;
+
+    // Basic validation
+    if (!staticQRData || !location || !sessionId) {
+      throw new HttpsError('invalid-argument', 'Missing required parameters: staticQRData, location, sessionId');
+    }
+
+    // Parse static QR data
+    let qrData;
+    try {
+      qrData = JSON.parse(staticQRData);
+    } catch (error) {
+      throw new HttpsError('invalid-argument', 'Invalid staticQRData format');
+    }
+
+    // Validate QR data structure
+    if (qrData.type !== 'venue_event' || !qrData.venueId || !qrData.qrCodeId) {
+      throw new HttpsError('invalid-argument', 'Invalid venue event QR format');
+    }
+
+    // Generate nonce and validate venue access
+    const nonce = generateSecureNonce();
+    const currentTime = admin.firestore.Timestamp.now();
+    const expiresAt = new admin.firestore.Timestamp(currentTime.seconds + 600, 0); // 10 minutes
+
+    // Store tokenized QR auth
+    await db.collection('venue_tokens').doc(nonce).set({
+      venueId: qrData.venueId,
+      qrCodeId: qrData.qrCodeId,
+      nonce,
+      sessionId,
+      userId: request.auth?.uid || null,
+      issuedAt: currentTime,
+      expiresAt,
+      consumed: false,
+      location: {
+        lat: location.lat,
+        lng: location.lng,
+        accuracy: location.accuracy,
+        timestamp: currentTime
+      }
+    });
+
+    return {
+      success: true,
+      nonce,
+      expiresAt: expiresAt.toDate().toISOString(),
+      message: 'Venue access token generated successfully'
+    };
+
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    console.error('Error requesting event nonce:', error);
+    throw new HttpsError('internal', 'Internal server error');
+  }
+});
+
+// Verify Tokenized Entry - Step 2 of venue entry
+export const venueVerifyTokenizedEntry = onCall({
+  region: FUNCTION_REGION,
+  cors: true,
+}, async (request) => {
+  try {
+    const { data } = request;
+    const { nonce, location } = data;
+
+    // Validate parameters
+    if (!nonce || !location) {
+      throw new HttpsError('invalid-argument', 'Missing required parameters: nonce, location');
+    }
+
+    // Retrieve and validate token
+    const tokenDoc = await db.collection('venue_tokens').doc(nonce).get();
+    
+    if (!tokenDoc.exists) {
+      throw new HttpsError('not-found', 'Invalid or expired nonce');
+    }
+
+    const tokenData = tokenDoc.data();
+    if (!tokenData || tokenData.consumed) {
+      throw new HttpsError('failed-precondition', 'Token already consumed');
+    }
+
+    // Check expiration
+    const now = admin.firestore.Timestamp.now();
+    if (tokenData.expiresAt.seconds < now.seconds) {
+      throw new HttpsError('failed-precondition', 'Token expired');
+    }
+
+    // Mark token as consumed
+    await db.collection('venue_tokens').doc(nonce).update({
+      consumed: true,
+      consumedAt: now,
+      finalLocation: {
+        lat: location.lat,
+        lng: location.lng,
+        accuracy: location.accuracy,
+        timestamp: now
+      }
+    });
+
+    // Create event for venue (simplified for now)
+    const eventId = `venue_${tokenData.venueId}_${Date.now()}`;
+    await db.collection('events').doc(eventId).set({
+      id: eventId,
+      name: `Venue Event - ${tokenData.venueId}`,
+      venue_id: tokenData.venueId,
+      event_type: 'venue_based',
+      event_code: tokenData.qrCodeId,
+      starts_at: now,
+      expires_at: new admin.firestore.Timestamp(now.seconds + 14400, 0), // 4 hours
+      created_at: now,
+      updated_at: now,
+      is_active: true,
+      expired: false,
+      location_settings: {
+        venue_id: tokenData.venueId,
+        qr_code_id: tokenData.qrCodeId,
+        location_radius: 100, // Default 100m radius
+        k_factor: 1.2,
+        requires_precise_location: true
+      }
+    });
+
+    return {
+      success: true,
+      eventId,
+      sessionNonce: nonce,
+      message: 'Successfully joined venue event'
+    };
+
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    console.error('Error verifying tokenized entry:', error);
+    throw new HttpsError('internal', 'Internal server error');
+  }
+});
+
+// Venue Ping - Location verification for active users  
+export const venueLocationPing = onCall({
+  region: FUNCTION_REGION,
+  cors: true,
+}, async (request) => {
+  try {
+    const { data } = request;
+    const { venues, batteryLevel, movementSpeed, sessionId } = data;
+
+    // Validate parameters
+    if (!venues || !Array.isArray(venues) || venues.length === 0) {
+      throw new HttpsError('invalid-argument', 'Invalid venues array');
+    }
+
+    // Limit batch size
+    if (venues.length > 5) {
+      throw new HttpsError('invalid-argument', 'Too many venues in single ping');
+    }
+
+    const results = [];
+    const userId = request.auth?.uid || sessionId || 'anonymous';
+
+    for (const venue of venues) {
+      if (!venue.venueId || !venue.location) {
+        results.push({
+          venueId: venue.venueId || 'unknown',
+          success: false,
+          message: 'Invalid venue data'
+        });
+        continue;
+      }
+
+      // Simple location verification (in production, this would use the full state machine)
+      const isWithinRadius = true; // Placeholder logic
+      const nextPingInterval = calculatePingInterval(batteryLevel || 100, movementSpeed || 0);
+
+      results.push({
+        venueId: venue.venueId,
+        success: true,
+        currentState: isWithinRadius ? 'active' : 'paused',
+        stateChanged: false,
+        profileVisible: isWithinRadius,
+        nextPingInterval,
+        userMessage: isWithinRadius ? 'You are at the venue' : 'You are away from the venue'
+      });
+    }
+
+    return {
+      success: true,
+      results
+    };
+
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    console.error('Error processing venue ping:', error);
+    throw new HttpsError('internal', 'Internal server error');
+  }
+});
+
+// Helper functions for venue events
+function generateSecureNonce(): string {
+  // Generate a 64-character secure nonce
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < 64; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+function calculatePingInterval(batteryLevel: number, movementSpeed: number): number {
+  let baseInterval = 60; // seconds
+  
+  // Low battery = less frequent pings
+  if (batteryLevel < 20) baseInterval *= 2;
+  else if (batteryLevel < 50) baseInterval *= 1.3;
+  
+  // Stationary users need less frequent checks
+  if (movementSpeed < 1) baseInterval *= 1.3;
+  
+  // Cap between 30s - 5min
+  return Math.max(30, Math.min(300, Math.round(baseInterval)));
+}

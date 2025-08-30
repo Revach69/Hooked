@@ -119,8 +119,8 @@ export function MapClientFormSheet({
           promotionalMessage: '',
         },
         venueImage: null,
-        venueImageUrl: (mapClient as any).venueImageUrl || '',
-        openingHours: (mapClient as any).openingHours || {
+        venueImageUrl: mapClient?.venueImageUrl || '',
+        openingHours: mapClient?.openingHours || {
           monday: { open: '09:00', close: '22:00', closed: false },
           tuesday: { open: '09:00', close: '22:00', closed: false },
           wednesday: { open: '09:00', close: '22:00', closed: false },
@@ -129,7 +129,7 @@ export function MapClientFormSheet({
           saturday: { open: '10:00', close: '23:00', closed: false },
           sunday: { open: '10:00', close: '21:00', closed: false },
         },
-        hookedHours: (mapClient as any).hookedHours || {
+        hookedHours: mapClient?.hookedHours || {
           monday: { open: '19:00', close: '22:00', closed: false },
           tuesday: { open: '19:00', close: '22:00', closed: false },
           wednesday: { open: '19:00', close: '22:00', closed: false },
@@ -138,7 +138,7 @@ export function MapClientFormSheet({
           saturday: { open: '18:00', close: '24:00', closed: false },
           sunday: { open: '18:00', close: '21:00', closed: false },
         },
-        eventHubSettings: (mapClient as any).eventHubSettings || {
+        eventHubSettings: mapClient?.eventHubSettings || {
           enabled: false,
           eventName: '',
           qrCodeId: '',
@@ -200,7 +200,7 @@ export function MapClientFormSheet({
           saturday: { open: '18:00', close: '24:00', closed: false },
           sunday: { open: '18:00', close: '21:00', closed: false },
         },
-        country: (mapClient as any).country || 'Israel',
+        country: mapClient?.country || 'Israel',
       });
     }
   }, [mapClient]);
@@ -237,15 +237,15 @@ export function MapClientFormSheet({
     }
   };
 
-  const updateField = (field: string, value: any) => {
+  const updateField = (field: string, value: string | number | boolean | null) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const updateNestedField = (parent: string, field: string, value: any) => {
+  const updateNestedField = (parent: string, field: string, value: string | number | boolean | null) => {
     setFormData(prev => ({
       ...prev,
       [parent]: {
-        ...prev[parent as keyof typeof prev],
+        ...(prev[parent as keyof typeof prev] as object),
         [field]: value,
       },
     }));
@@ -288,7 +288,7 @@ export function MapClientFormSheet({
     }));
   };
 
-  const updateHours = (type: 'openingHours' | 'hookedHours', day: string, field: string, value: any) => {
+  const updateHours = (type: 'openingHours' | 'hookedHours', day: string, field: string, value: string | boolean) => {
     setFormData(prev => ({
       ...prev,
       [type]: {
@@ -301,7 +301,7 @@ export function MapClientFormSheet({
     }));
   };
 
-  const updateEventSchedule = (day: string, field: string, value: any) => {
+  const updateEventSchedule = (day: string, field: string, value: string | boolean) => {
     setFormData(prev => ({
       ...prev,
       eventHubSettings: {
@@ -317,7 +317,7 @@ export function MapClientFormSheet({
     }));
   };
 
-  const updateEventHubSettings = (field: string, value: any) => {
+  const updateEventHubSettings = (field: string, value: string | number | boolean) => {
     setFormData(prev => ({
       ...prev,
       eventHubSettings: {
@@ -464,7 +464,7 @@ export function MapClientFormSheet({
                     </div>
                   ) : (
                     <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
-                      <Image className="mx-auto h-12 w-12 text-gray-400 mb-2" />
+                      <Image className="mx-auto h-12 w-12 text-gray-400 mb-2" alt="Upload placeholder" />
                       <div className="text-sm text-gray-600 mb-2">
                         Upload venue image for mobile map display
                       </div>

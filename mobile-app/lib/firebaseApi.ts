@@ -114,6 +114,25 @@ export interface Event {
   expired?: boolean; // New field to track if event has expired and been processed
   analytics_id?: string; // Reference to analytics data for expired events
   organizer_password?: string; // Password for event organizer stats access
+  
+  // Venue Events Integration - New fields for venue-based events
+  venue_id?: string;                    // Link to map client venue
+  venue_event_type?: 'regular' | 'venue_based'; // Distinguish event types
+  
+  // For venue-based events only:
+  locationSettings?: {
+    venueId: string;
+    qrCodeId: string;
+    locationRadius: number;           // Base radius in meters
+    kFactor: number;                  // Radius multiplier (1.0-3.0)
+    venueRules: string;               // "QR code is located at the main bar"
+    locationTips: string;             // "Try scanning near the entrance"
+    requiresPreciseLocation: boolean; // Whether to request high accuracy GPS
+    venueCoordinates?: {              // Cached venue coordinates for offline
+      lat: number;
+      lng: number;
+    };
+  };
 }
 
 export interface EventAnalytics {
@@ -160,6 +179,20 @@ export interface EventProfile {
   about_me?: string;
   height_cm?: number;
   interests?: string[];
+  
+  // Venue Events Integration - Additional fields for venue events only
+  venueEventData?: {
+    venueId: string;
+    joinedAt: string;                     // ISO timestamp when joined venue event
+    currentLocationState: 'active' | 'paused' | 'inactive';
+    lastLocationCheck: string;            // ISO timestamp of last location ping
+    profileVisibleInVenue: boolean;       // Auto-managed by location state
+    totalTimeInVenue: number;             // seconds spent in venue
+    lastKnownDistance?: number;           // meters from venue center (for UX display)
+    consecutiveOutsidePings?: number;     // Server state tracking
+    pausedAt?: string;                    // ISO timestamp when paused
+    venueSessionNonce?: string;           // Current session nonce (if active)
+  };
 }
 
 export interface Like {
