@@ -13,9 +13,10 @@ declare global {
 // Analytics helper function
 const trackCTAButton = (buttonName: string, location: string) => {
   if (typeof window !== 'undefined' && typeof window.gtag === 'function') {
-    window.gtag('event', 'click', {
-      event_category: 'cta_button',
-      event_label: `${buttonName}_${location}`,
+    window.gtag('event', 'cta_button_click', {
+      button_name: buttonName,
+      button_location: location,
+      event_category: 'engagement',
     });
   }
 };

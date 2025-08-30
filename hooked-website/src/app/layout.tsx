@@ -146,7 +146,7 @@ export default function RootLayout({
             
             gtag('config', 'G-6YHKXLN806', {
               send_page_view: true,
-              debug_mode: false
+              debug_mode: true
             });
             
             console.log('🚀 GA4 configured with measurement ID: G-6YHKXLN806');

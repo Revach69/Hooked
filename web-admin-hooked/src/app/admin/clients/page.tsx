@@ -8,7 +8,6 @@ import { ClientsTable } from '@/components/clients/ClientsTable';
 import { ClientFormSheet } from '@/components/clients/ClientFormSheet';
 import { FormViewerModal } from '@/components/FormViewerModal';
 import { EventViewerModal } from '@/components/EventViewerModal';
-import { ClientTypeComparison } from '@/components/ClientTypeComparison';
 import { AdminClientAPI } from '@/lib/firestore/clients';
 import { EventFormAPI } from '@/lib/firestore/eventForms';
 import { EventAPI } from '@/lib/firebaseApi';
@@ -165,8 +164,6 @@ export default function ClientsPage() {
         </div>
       </div>
 
-      {/* Client Type Comparison */}
-      <ClientTypeComparison currentType="event" />
 
       {/* Filters */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">

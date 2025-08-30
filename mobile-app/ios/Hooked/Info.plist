@@ -63,6 +63,10 @@
     </array>
     <key>NSUserNotificationUsageDescription</key>
     <string>Hooked needs notification access to send you alerts about new matches and messages at events.</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>Hooked needs location access to show your position on the map and help you find nearby venues.</string>
+    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+    <string>Hooked needs location access to show your position on the map and help you find nearby venues.</string>
     <key>UIBackgroundModes</key>
     <array>
       <string>remote-notification</string>

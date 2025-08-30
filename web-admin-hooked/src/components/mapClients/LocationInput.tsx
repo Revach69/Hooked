@@ -33,6 +33,8 @@ export function LocationInput({
     lat: coordinates?.lat || 0,
     lng: coordinates?.lng || 0,
   });
+  const [suggestions, setSuggestions] = useState<Array<{ id: string; place_name: string; center: [number, number] }>>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   useEffect(() => {
     setManualCoordinates({
@@ -40,6 +42,53 @@ export function LocationInput({
       lng: coordinates?.lng || 0,
     });
   }, [coordinates]);
+
+  // Debounced address suggestions
+  useEffect(() => {
+    const timeoutId = setTimeout(async () => {
+      if (address.length > 2) {
+        await fetchAddressSuggestions(address);
+      } else {
+        setSuggestions([]);
+        setShowSuggestions(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [address]);
+
+  const fetchAddressSuggestions = async (query: string) => {
+    try {
+      const mapboxToken = 'pk.eyJ1Ijoicm9paG9va2VkIiwiYSI6ImNtZXF5NjBwMzAwc3oybHM5OTlhNmxncTMifQ.KQHIczPZmFH2Q14kc_7LJw';
+      const encodedQuery = encodeURIComponent(query);
+      
+      const response = await fetch(
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodedQuery}.json?access_token=${mapboxToken}&limit=5&country=IL,US,GB,CA,AU&types=address,poi`
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        setSuggestions(data.features || []);
+        setShowSuggestions(data.features?.length > 0);
+      }
+    } catch (error) {
+      console.error('Failed to fetch address suggestions:', error);
+    }
+  };
+
+  const handleSuggestionSelect = (suggestion: typeof suggestions[0]) => {
+    onAddressChange(suggestion.place_name);
+    const [lng, lat] = suggestion.center;
+    const newCoordinates = {
+      lat: Math.round(lat * 1000000) / 1000000,
+      lng: Math.round(lng * 1000000) / 1000000,
+    };
+    onCoordinatesChange(newCoordinates);
+    setManualCoordinates(newCoordinates);
+    setSuggestions([]);
+    setShowSuggestions(false);
+    setGeocodeError(null);
+  };
 
   const handleGeocodeAddress = async () => {
     if (!address.trim()) {
@@ -51,29 +100,44 @@ export function LocationInput({
     setGeocodeError(null);
 
     try {
-      // TODO: Replace with actual Mapbox Geocoding API when keys are available
-      // For now, simulate geocoding with a placeholder implementation
+      // Use Mapbox Geocoding API
+      const mapboxToken = 'pk.eyJ1Ijoicm9paG9va2VkIiwiYSI6ImNtZXF5NjBwMzAwc3oybHM5OTlhNmxncTMifQ.KQHIczPZmFH2Q14kc_7LJw';
+      const encodedAddress = encodeURIComponent(address.trim());
       
-      // Simulated delay to mimic API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const response = await fetch(
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodedAddress}.json?access_token=${mapboxToken}&limit=1&country=IL,US,GB,CA,AU`
+      );
       
-      // Placeholder: Generate mock coordinates based on address hash
-      // In production, this would use Mapbox Geocoding API
-      const mockLat = 32.0853 + (Math.random() - 0.5) * 0.1; // Tel Aviv area
-      const mockLng = 34.7818 + (Math.random() - 0.5) * 0.1;
+      if (!response.ok) {
+        throw new Error(`Geocoding API error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (!data.features || data.features.length === 0) {
+        throw new Error('No location found for this address');
+      }
+      
+      const feature = data.features[0];
+      const [lng, lat] = feature.center;
       
       const newCoordinates = {
-        lat: Math.round(mockLat * 1000000) / 1000000,
-        lng: Math.round(mockLng * 1000000) / 1000000,
+        lat: Math.round(lat * 1000000) / 1000000,
+        lng: Math.round(lng * 1000000) / 1000000,
       };
       
       setManualCoordinates(newCoordinates);
       onCoordinatesChange(newCoordinates);
       
+      // Update the address with the standardized address from Mapbox
+      if (feature.place_name) {
+        onAddressChange(feature.place_name);
+      }
+      
       setGeocodeError(null);
     } catch (error) {
       console.error('Geocoding failed:', error);
-      setGeocodeError('Failed to find coordinates for this address. Please try entering them manually.');
+      setGeocodeError('Failed to find coordinates for this address. Please verify the address and try again.');
     } finally {
       setIsGeocoding(false);
     }
@@ -137,17 +201,53 @@ export function LocationInput({
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Address Input */}
-        <div>
+        <div className="relative">
           <Label htmlFor="address">Business Address *</Label>
           <div className="flex gap-2 mt-1">
-            <Input
-              id="address"
-              value={address}
-              onChange={(e) => onAddressChange(e.target.value)}
-              placeholder="Enter full business address..."
-              disabled={disabled}
-              className="flex-1"
-            />
+            <div className="relative flex-1">
+              <Input
+                id="address"
+                value={address}
+                onChange={(e) => {
+                  onAddressChange(e.target.value);
+                  if (e.target.value.length > 2) {
+                    setShowSuggestions(true);
+                  }
+                }}
+                onBlur={() => {
+                  // Delay hiding to allow clicking on suggestions
+                  setTimeout(() => setShowSuggestions(false), 200);
+                }}
+                onFocus={() => {
+                  if (suggestions.length > 0) {
+                    setShowSuggestions(true);
+                  }
+                }}
+                placeholder="Enter full business address..."
+                disabled={disabled}
+              />
+              
+              {/* Address Suggestions Dropdown */}
+              {showSuggestions && suggestions.length > 0 && (
+                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
+                  {suggestions.map((suggestion, index) => (
+                    <button
+                      key={suggestion.id || index}
+                      type="button"
+                      className="w-full px-4 py-2 text-left hover:bg-gray-100 focus:bg-gray-100 focus:outline-none border-b border-gray-100 last:border-b-0"
+                      onClick={() => handleSuggestionSelect(suggestion)}
+                    >
+                      <div className="flex items-start gap-2">
+                        <MapPin className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
+                        <div className="text-sm text-gray-900 truncate">
+                          {suggestion.place_name}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <Button
               type="button"
               variant="outline"

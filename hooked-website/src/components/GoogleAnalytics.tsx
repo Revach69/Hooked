@@ -12,55 +12,88 @@ declare global {
 // This component only provides tracking functions now
 
 // Analytics tracking functions
-export const trackEvent = (action: string, category: string, label?: string, value?: number) => {
+export const trackEvent = (eventName: string, parameters: Record<string, unknown> = {}) => {
   if (typeof window !== 'undefined' && window.gtag) {
-    window.gtag('event', action, {
-      event_category: category,
-      event_label: label,
-      value: value,
-    });
+    window.gtag('event', eventName, parameters);
   }
 };
 
 // Specific tracking functions
 export const trackPageView = (page: string) => {
-  trackEvent('page_view', 'navigation', page);
+  trackEvent('page_view', {
+    page_path: page,
+    page_category: 'navigation'
+  });
 };
 
 export const trackContactPage = () => {
-  trackEvent('page_view', 'contact', 'contact_page');
+  trackEvent('contact_page_view', {
+    page_path: '/contact',
+    page_category: 'contact'
+  });
 };
 
 export const trackCTAButton = (buttonName: string, location: string) => {
-  trackEvent('click', 'cta_button', `${buttonName}_${location}`);
+  trackEvent('cta_button_click', {
+    button_name: buttonName,
+    button_location: location,
+    event_category: 'engagement'
+  });
 };
 
 export const trackEventCardClick = (eventName: string, eventId: string) => {
-  trackEvent('click', 'event_card', `${eventName}_${eventId}`);
+  trackEvent('event_card_click', {
+    event_name: eventName,
+    event_id: eventId,
+    event_category: 'event_interaction'
+  });
 };
 
 export const trackJoinEvent = (eventName: string, eventId: string) => {
-  trackEvent('click', 'join_event', `${eventName}_${eventId}`);
+  trackEvent('join_event_click', {
+    event_name: eventName,
+    event_id: eventId,
+    event_category: 'conversion',
+    value: 1
+  });
 };
 
 export const trackSocialClick = (platform: string) => {
-  trackEvent('click', 'social_link', platform);
+  trackEvent('social_link_click', {
+    platform: platform,
+    event_category: 'social_engagement'
+  });
 };
 
 export const trackFilterUsage = (filterType: string, filterValue: string) => {
-  trackEvent('click', 'filter', `${filterType}_${filterValue}`);
+  trackEvent('filter_usage', {
+    filter_type: filterType,
+    filter_value: filterValue,
+    event_category: 'user_interaction'
+  });
 };
 
 export const trackModalOpen = (eventName: string, eventId: string) => {
-  trackEvent('click', 'modal_open', `${eventName}_${eventId}`);
+  trackEvent('event_modal_open', {
+    event_name: eventName,
+    event_id: eventId,
+    event_category: 'event_interaction'
+  });
 };
 
 export const trackTimeSpent = (pageName: string, timeSeconds: number) => {
-  trackEvent('timing_complete', 'page_timing', pageName, timeSeconds);
+  trackEvent('page_timing', {
+    page_name: pageName,
+    time_seconds: timeSeconds,
+    event_category: 'engagement'
+  });
 };
 
 export const trackScrollDepth = (depth: number) => {
-  trackEvent('scroll', 'engagement', 'scroll_depth', depth);
+  trackEvent('scroll_depth', {
+    scroll_percentage: depth,
+    event_category: 'engagement'
+  });
 };
 
 // Page tracking is now handled by RouteTracker component

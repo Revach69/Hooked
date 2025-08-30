@@ -172,87 +172,28 @@ export function MapPreviewModal({ open, onOpenChange, mapClients }: MapPreviewMo
                 </CardHeader>
                 <CardContent>
                   {viewMode === 'map' ? (
-                    /* Simulated Map View */
-                    <div className="relative bg-gray-100 dark:bg-gray-800 rounded-lg h-96 overflow-hidden">
-                      {/* Map Background Pattern */}
-                      <div className="absolute inset-0 opacity-20">
-                        <div className="w-full h-full" style={{
-                          backgroundImage: `
-                            linear-gradient(90deg, #e5e7eb 1px, transparent 1px),
-                            linear-gradient(#e5e7eb 1px, transparent 1px)
-                          `,
-                          backgroundSize: '20px 20px'
-                        }} />
+                    /* Real Mapbox Map */
+                    <div className="relative rounded-lg h-96 overflow-hidden">
+                      <div id="map-preview" className="w-full h-full">
+                        {/* Mapbox map will be initialized here */}
+                        <iframe
+                          src={`https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/${
+                            activeVenues.map(venue => 
+                              venue.coordinates 
+                                ? `pin-s-marker+8b5cf6(${venue.coordinates.lng},${venue.coordinates.lat})`
+                                : ''
+                            ).filter(Boolean).join(',')
+                          }/auto/800x400@2x?access_token=pk.eyJ1Ijoicm9paG9va2VkIiwiYSI6ImNtZXF5NjBwMzAwc3oybHM5OTlhNmxncTMifQ.KQHIczPZmFH2Q14kc_7LJw`}
+                          className="w-full h-full rounded-lg"
+                          title="Map Preview"
+                          style={{ border: 'none' }}
+                        />
                       </div>
 
-                      {/* Map Controls (simulated) */}
-                      <div className="absolute top-4 right-4 flex flex-col gap-2">
-                        <Button size="sm" variant="secondary" className="w-8 h-8 p-0">
-                          <ZoomIn className="h-3 w-3" />
-                        </Button>
-                        <Button size="sm" variant="secondary" className="w-8 h-8 p-0">
-                          <Filter className="h-3 w-3" />
-                        </Button>
-                      </div>
-
-                      {/* Venue Markers */}
-                      <div className="absolute inset-0 p-4">
-                        {activeVenues.map((venue, index) => (
-                          <div
-                            key={venue.id}
-                            className="absolute cursor-pointer transform -translate-x-1/2 -translate-y-1/2 hover:scale-110 transition-transform"
-                            style={{
-                              left: `${20 + (index % 8) * 12}%`,
-                              top: `${20 + Math.floor(index / 8) * 15}%`,
-                            }}
-                            onClick={() => handleMarkerClick(venue)}
-                          >
-                            <div className={`${getMarkerColor(venue.businessType)} w-8 h-8 rounded-full flex items-center justify-center shadow-lg border-2 border-white`}>
-                              <span className="text-xs">{getMarkerIcon(venue.businessType)}</span>
-                            </div>
-                            {selectedMarker?.id === venue.id && (
-                              <div className="absolute top-10 left-1/2 transform -translate-x-1/2 bg-white dark:bg-gray-800 rounded-lg shadow-xl p-3 min-w-48 z-10 border">
-                                <div className="font-medium text-sm">{venue.businessName}</div>
-                                <div className="text-xs text-gray-600 dark:text-gray-400 capitalize">{venue.businessType}</div>
-                                {venue.description && (
-                                  <div className="text-xs text-gray-500 mt-1 line-clamp-2">{venue.description}</div>
-                                )}
-                                <div className="flex items-center gap-2 mt-2">
-                                  {venue.phone && (
-                                    <Button size="sm" variant="outline" className="h-6 px-2 text-xs">
-                                      <Phone className="h-2 w-2 mr-1" />
-                                      Call
-                                    </Button>
-                                  )}
-                                  {venue.website && (
-                                    <Button size="sm" variant="outline" className="h-6 px-2 text-xs">
-                                      <Globe className="h-2 w-2 mr-1" />
-                                      Web
-                                    </Button>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Map Legend */}
-                      <div className="absolute bottom-4 left-4 bg-white dark:bg-gray-800 rounded-lg p-2 shadow-lg text-xs">
-                        <div className="font-medium mb-2">Legend</div>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                            <span>Restaurant</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
-                            <span>Bar</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 bg-pink-500 rounded-full"></div>
-                            <span>Club</span>
-                          </div>
+                      {/* Venue Count Overlay */}
+                      <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-2 rounded-lg shadow-md">
+                        <div className="text-sm font-medium text-gray-900">
+                          {activeVenues.length} venues
                         </div>
                       </div>
                     </div>

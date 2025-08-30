@@ -10,7 +10,6 @@ import { SubscriptionDashboard } from '@/components/mapClients/SubscriptionDashb
 import { BulkImportModal } from '@/components/mapClients/BulkImportModal';
 import { MapPreviewModal } from '@/components/mapClients/MapPreviewModal';
 import { ExportButton } from '@/components/mapClients/ExportButton';
-import { ClientTypeComparison } from '@/components/ClientTypeComparison';
 import { MapClientAPI } from '@/lib/firestore/mapClients';
 import { Plus, MapPin, BarChart3, Table, Upload, Eye } from 'lucide-react';
 import type { MapClient } from '@/types/admin';
@@ -200,9 +199,6 @@ export default function MapClientsPage() {
           </div>
         </div>
       </div>
-
-      {/* Client Type Comparison */}
-      <ClientTypeComparison currentType="map" />
 
       {/* View-specific Content */}
       {activeView === 'table' ? (

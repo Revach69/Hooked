@@ -6,11 +6,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { MapClientAPI } from '@/lib/firestore/mapClients';
 import { LocationInput } from './LocationInput';
 import { SubscriptionManager } from './SubscriptionManager';
-import { MapPin, DollarSign, Calendar } from 'lucide-react';
+import { MapPin, DollarSign, Calendar, Upload, X, Image, Clock } from 'lucide-react';
 import type { MapClient } from '@/types/admin';
 
 interface MapClientFormSheetProps {
@@ -54,6 +54,26 @@ export function MapClientFormSheet({
       mapIconStyle: 'default',
       promotionalMessage: '',
     },
+    venueImage: null as File | null,
+    venueImageUrl: '',
+    openingHours: {
+      monday: { open: '09:00', close: '22:00', closed: false },
+      tuesday: { open: '09:00', close: '22:00', closed: false },
+      wednesday: { open: '09:00', close: '22:00', closed: false },
+      thursday: { open: '09:00', close: '22:00', closed: false },
+      friday: { open: '09:00', close: '23:00', closed: false },
+      saturday: { open: '10:00', close: '23:00', closed: false },
+      sunday: { open: '10:00', close: '21:00', closed: false },
+    },
+    hookedHours: {
+      monday: { open: '19:00', close: '22:00', closed: false },
+      tuesday: { open: '19:00', close: '22:00', closed: false },
+      wednesday: { open: '19:00', close: '22:00', closed: false },
+      thursday: { open: '19:00', close: '23:00', closed: false },
+      friday: { open: '19:00', close: '24:00', closed: false },
+      saturday: { open: '18:00', close: '24:00', closed: false },
+      sunday: { open: '18:00', close: '21:00', closed: false },
+    },
   });
 
   useEffect(() => {
@@ -78,6 +98,26 @@ export function MapClientFormSheet({
           mapIconStyle: 'default',
           promotionalMessage: '',
         },
+        venueImage: null,
+        venueImageUrl: (mapClient as any).venueImageUrl || '',
+        openingHours: (mapClient as any).openingHours || {
+          monday: { open: '09:00', close: '22:00', closed: false },
+          tuesday: { open: '09:00', close: '22:00', closed: false },
+          wednesday: { open: '09:00', close: '22:00', closed: false },
+          thursday: { open: '09:00', close: '22:00', closed: false },
+          friday: { open: '09:00', close: '23:00', closed: false },
+          saturday: { open: '10:00', close: '23:00', closed: false },
+          sunday: { open: '10:00', close: '21:00', closed: false },
+        },
+        hookedHours: (mapClient as any).hookedHours || {
+          monday: { open: '19:00', close: '22:00', closed: false },
+          tuesday: { open: '19:00', close: '22:00', closed: false },
+          wednesday: { open: '19:00', close: '22:00', closed: false },
+          thursday: { open: '19:00', close: '23:00', closed: false },
+          friday: { open: '19:00', close: '24:00', closed: false },
+          saturday: { open: '18:00', close: '24:00', closed: false },
+          sunday: { open: '18:00', close: '21:00', closed: false },
+        },
       });
     } else {
       // Reset form for new client
@@ -100,6 +140,26 @@ export function MapClientFormSheet({
           showOnMap: true,
           mapIconStyle: 'default',
           promotionalMessage: '',
+        },
+        venueImage: null,
+        venueImageUrl: '',
+        openingHours: {
+          monday: { open: '09:00', close: '22:00', closed: false },
+          tuesday: { open: '09:00', close: '22:00', closed: false },
+          wednesday: { open: '09:00', close: '22:00', closed: false },
+          thursday: { open: '09:00', close: '22:00', closed: false },
+          friday: { open: '09:00', close: '23:00', closed: false },
+          saturday: { open: '10:00', close: '23:00', closed: false },
+          sunday: { open: '10:00', close: '21:00', closed: false },
+        },
+        hookedHours: {
+          monday: { open: '19:00', close: '22:00', closed: false },
+          tuesday: { open: '19:00', close: '22:00', closed: false },
+          wednesday: { open: '19:00', close: '22:00', closed: false },
+          thursday: { open: '19:00', close: '23:00', closed: false },
+          friday: { open: '19:00', close: '24:00', closed: false },
+          saturday: { open: '18:00', close: '24:00', closed: false },
+          sunday: { open: '18:00', close: '21:00', closed: false },
         },
       });
     }
@@ -151,23 +211,74 @@ export function MapClientFormSheet({
     }));
   };
 
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // Validate file type
+      const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      if (!validTypes.includes(file.type)) {
+        alert('Please select a valid image file (JPG, PNG, or WebP)');
+        return;
+      }
+
+      // Validate file size (max 5MB)
+      const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+      if (file.size > maxSize) {
+        alert('Image size must be less than 5MB');
+        return;
+      }
+
+      setFormData(prev => ({ ...prev, venueImage: file }));
+      
+      // Create preview URL
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const url = e.target?.result as string;
+        setFormData(prev => ({ ...prev, venueImageUrl: url }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeImage = () => {
+    setFormData(prev => ({ 
+      ...prev, 
+      venueImage: null, 
+      venueImageUrl: '' 
+    }));
+  };
+
+  const updateHours = (type: 'openingHours' | 'hookedHours', day: string, field: string, value: any) => {
+    setFormData(prev => ({
+      ...prev,
+      [type]: {
+        ...prev[type],
+        [day]: {
+          ...prev[type][day as keyof typeof prev[type]],
+          [field]: value
+        }
+      }
+    }));
+  };
+
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
             <MapPin className="h-5 w-5" />
             {mapClient ? 'Edit Map Client' : 'Add New Map Client'}
-          </SheetTitle>
-          <SheetDescription>
+          </DialogTitle>
+          <DialogDescription>
             {mapClient 
               ? 'Update the map client information and subscription details.'
               : 'Add a new business venue to appear on the mobile map with continuous subscription.'
             }
-          </SheetDescription>
-        </SheetHeader>
+          </DialogDescription>
+        </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6 mt-6">
+        <div className="overflow-y-auto">
+          <form onSubmit={handleSubmit} className="space-y-6 mt-6">
           {/* Business Information */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Business Information</h3>
@@ -223,6 +334,55 @@ export function MapClientFormSheet({
                   placeholder="https://example.com"
                 />
               </div>
+              
+              <div>
+                <Label>Venue Image</Label>
+                <div className="mt-2">
+                  {formData.venueImageUrl ? (
+                    <div className="relative inline-block">
+                      <img
+                        src={formData.venueImageUrl}
+                        alt="Venue preview"
+                        className="w-32 h-32 object-cover rounded-lg border-2 border-gray-200"
+                      />
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        className="absolute -top-2 -right-2 w-6 h-6 p-0 rounded-full"
+                        onClick={removeImage}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
+                      <Image className="mx-auto h-12 w-12 text-gray-400 mb-2" />
+                      <div className="text-sm text-gray-600 mb-2">
+                        Upload venue image for mobile map display
+                      </div>
+                      <Label htmlFor="venue-image" className="cursor-pointer">
+                        <Button type="button" variant="outline" size="sm" asChild>
+                          <span>
+                            <Upload className="h-4 w-4 mr-2" />
+                            Choose Image
+                          </span>
+                        </Button>
+                      </Label>
+                      <input
+                        id="venue-image"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                      />
+                      <div className="text-xs text-gray-500 mt-2">
+                        JPG, PNG or WebP (max 5MB)
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -271,6 +431,95 @@ export function MapClientFormSheet({
             onCoordinatesChange={(coordinates) => updateField('coordinates', coordinates)}
             disabled={isLoading}
           />
+
+          {/* Hours Information */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <Clock className="h-4 w-4" />
+              Operating Hours
+            </h3>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Opening Hours */}
+              <div className="space-y-3">
+                <h4 className="text-md font-medium text-gray-700 dark:text-gray-300">Opening Hours</h4>
+                {Object.entries(formData.openingHours).map(([day, hours]) => (
+                  <div key={day} className="flex items-center gap-3">
+                    <div className="w-20 text-sm capitalize font-medium">
+                      {day.slice(0, 3)}
+                    </div>
+                    <div className="flex items-center gap-2 flex-1">
+                      <Input
+                        type="time"
+                        value={hours.open}
+                        onChange={(e) => updateHours('openingHours', day, 'open', e.target.value)}
+                        disabled={hours.closed || isLoading}
+                        className="w-24"
+                      />
+                      <span className="text-gray-400">to</span>
+                      <Input
+                        type="time"
+                        value={hours.close}
+                        onChange={(e) => updateHours('openingHours', day, 'close', e.target.value)}
+                        disabled={hours.closed || isLoading}
+                        className="w-24"
+                      />
+                      <Label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={hours.closed}
+                          onChange={(e) => updateHours('openingHours', day, 'closed', e.target.checked)}
+                          disabled={isLoading}
+                          className="rounded border-gray-300"
+                        />
+                        <span className="text-sm text-gray-600">Closed</span>
+                      </Label>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Hooked Hours */}
+              <div className="space-y-3">
+                <h4 className="text-md font-medium text-gray-700 dark:text-gray-300">Hooked Hours</h4>
+                <p className="text-xs text-gray-500 mb-3">Special hours when venue is featured on Hooked</p>
+                {Object.entries(formData.hookedHours).map(([day, hours]) => (
+                  <div key={day} className="flex items-center gap-3">
+                    <div className="w-20 text-sm capitalize font-medium">
+                      {day.slice(0, 3)}
+                    </div>
+                    <div className="flex items-center gap-2 flex-1">
+                      <Input
+                        type="time"
+                        value={hours.open}
+                        onChange={(e) => updateHours('hookedHours', day, 'open', e.target.value)}
+                        disabled={hours.closed || isLoading}
+                        className="w-24"
+                      />
+                      <span className="text-gray-400">to</span>
+                      <Input
+                        type="time"
+                        value={hours.close}
+                        onChange={(e) => updateHours('hookedHours', day, 'close', e.target.value)}
+                        disabled={hours.closed || isLoading}
+                        className="w-24"
+                      />
+                      <Label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={hours.closed}
+                          onChange={(e) => updateHours('hookedHours', day, 'closed', e.target.checked)}
+                          disabled={isLoading}
+                          className="rounded border-gray-300"
+                        />
+                        <span className="text-sm text-gray-600">Closed</span>
+                      </Label>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
 
           {/* Subscription Management */}
           {mapClient && (
@@ -398,7 +647,8 @@ export function MapClientFormSheet({
             </Button>
           </div>
         </form>
-      </SheetContent>
-    </Sheet>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
