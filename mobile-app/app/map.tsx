@@ -16,13 +16,20 @@ import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MapPin, ArrowLeft, Navigation } from 'lucide-react-native';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
-import Mapbox, { 
-  MapView, 
-  Camera, 
-  UserLocation, 
-  PointAnnotation
-} from '@rnmapbox/maps';
 import { Image } from 'react-native';
+
+// Conditional Mapbox import for Expo Go compatibility
+let Mapbox: any, MapView: any, Camera: any, UserLocation: any, PointAnnotation: any;
+try {
+  const mapboxComponents = require('@rnmapbox/maps');
+  Mapbox = mapboxComponents.default;
+  MapView = mapboxComponents.MapView;
+  Camera = mapboxComponents.Camera;
+  UserLocation = mapboxComponents.UserLocation;
+  PointAnnotation = mapboxComponents.PointAnnotation;
+} catch (error) {
+  console.warn('Mapbox not available, using fallback UI');
+}
 import * as Location from 'expo-location';
 import VenueModal from '../components/VenueModal';
 import QRCodeScanner, { QRScanResult } from '../lib/components/QRCodeScanner';
@@ -740,7 +747,7 @@ export default function MapScreen() {
       
       {/* Map Container - Full Screen */}
       <View style={styles.mapContainer}>
-        {mapboxTokenAvailable ? (
+        {mapboxTokenAvailable && MapView ? (
           <>
             {!isMapReady && (
               <View style={styles.mapLoadingOverlay}>
@@ -842,7 +849,10 @@ export default function MapScreen() {
             <MapPin size={64} color={isDark ? '#9ca3af' : '#6b7280'} />
             <Text style={styles.placeholderText}>Map Unavailable</Text>
             <Text style={styles.placeholderSubtext}>
-              Mapbox access token is not configured. Please contact support to enable the map feature.
+              {!MapView 
+                ? "Map requires development build. Use 'npx expo run:ios' or test on physical device with development build."
+                : "Mapbox access token is not configured. Please contact support to enable the map feature."
+              }
             </Text>
           </View>
         )}
@@ -878,3 +888,5 @@ export default function MapScreen() {
     </View>
   );
 }
+
+export default MapScreen;
