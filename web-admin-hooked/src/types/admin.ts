@@ -97,7 +97,8 @@ export type MapClient = {
   } | null;
 
   // Venue image
-  venueImageUrl?: string | null;
+  venueImageUrl?: string | null;        // Full resolution image
+  venueImageThumbnail?: string | null;  // Compressed thumbnail for mobile icons
 
   // Operating hours
   openingHours?: {

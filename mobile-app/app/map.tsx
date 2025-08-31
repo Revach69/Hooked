@@ -166,7 +166,7 @@ const generateMockVenues = () => {
       address: `${100 + i} Street Name, San Francisco, CA`,
       activeUsers: Math.floor(Math.random() * 30) + 1,
       description: baseVenue.desc,
-      image: null, // Use default MapPin icon instead of failing placeholder images
+      image: null, // Will be populated with venueImageThumbnail from Firebase Storage
       hookedHours,
       openingHours,
       ...mockSocialMedia,

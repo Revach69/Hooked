@@ -228,15 +228,62 @@ export function MapClientFormSheet({
     }
   }, [mapClient]);
 
-  const uploadVenueImage = async (file: File, clientId: string): Promise<string> => {
+  const compressImageForMobile = (file: File): Promise<File> => {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d')!;
+      const img = new Image();
+      
+      img.onload = () => {
+        // Set canvas size for 150x150 square thumbnail
+        canvas.width = 150;
+        canvas.height = 150;
+        
+        // Calculate crop dimensions to maintain aspect ratio
+        const size = Math.min(img.width, img.height);
+        const offsetX = (img.width - size) / 2;
+        const offsetY = (img.height - size) / 2;
+        
+        // Draw cropped and resized image
+        ctx.drawImage(img, offsetX, offsetY, size, size, 0, 0, 150, 150);
+        
+        // Convert to blob with compression
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const compressedFile = new File([blob], `thumb_${file.name}`, {
+              type: 'image/jpeg',
+              lastModified: Date.now(),
+            });
+            resolve(compressedFile);
+          }
+        }, 'image/jpeg', 0.8); // 80% quality
+      };
+      
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
+  const uploadVenueImage = async (file: File, clientId: string): Promise<{fullUrl: string, thumbnailUrl: string}> => {
     const timestamp = Date.now();
-    const fileName = `${clientId}_${timestamp}.${file.name.split('.').pop()}`;
-    const storageRef = ref(storage, `venue-images/${fileName}`);
+    const fileExt = file.name.split('.').pop();
     
-    const snapshot = await uploadBytes(storageRef, file);
-    const downloadURL = await getDownloadURL(snapshot.ref);
+    // Upload full resolution image
+    const fullFileName = `${clientId}_${timestamp}_full.${fileExt}`;
+    const fullStorageRef = ref(storage, `venue-images/${fullFileName}`);
+    const fullSnapshot = await uploadBytes(fullStorageRef, file);
+    const fullDownloadURL = await getDownloadURL(fullSnapshot.ref);
     
-    return downloadURL;
+    // Create and upload compressed thumbnail
+    const thumbnailFile = await compressImageForMobile(file);
+    const thumbFileName = `${clientId}_${timestamp}_thumb.jpg`;
+    const thumbStorageRef = ref(storage, `venue-images/thumbnails/${thumbFileName}`);
+    const thumbSnapshot = await uploadBytes(thumbStorageRef, thumbnailFile);
+    const thumbnailDownloadURL = await getDownloadURL(thumbSnapshot.ref);
+    
+    return {
+      fullUrl: fullDownloadURL,
+      thumbnailUrl: thumbnailDownloadURL
+    };
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -247,13 +294,16 @@ export function MapClientFormSheet({
       const { venueImage, venueImageUrl, ...dataToSubmit } = formData;
       
       let finalImageUrl = null;
+      let finalThumbnailUrl = null;
       
       // If there's a new image to upload
       if (venueImage instanceof File) {
         try {
           // Generate a temporary ID for new clients
           const clientId = mapClient?.id || `temp_${Date.now()}`;
-          finalImageUrl = await uploadVenueImage(venueImage, clientId);
+          const uploadResult = await uploadVenueImage(venueImage, clientId);
+          finalImageUrl = uploadResult.fullUrl;
+          finalThumbnailUrl = uploadResult.thumbnailUrl;
         } catch (imageError) {
           console.error('Failed to upload venue image:', imageError);
           alert('Failed to upload venue image. Please try again.');
@@ -261,8 +311,9 @@ export function MapClientFormSheet({
           return;
         }
       } else if (venueImageUrl && !venueImageUrl.startsWith('blob:')) {
-        // Keep existing image URL if it's not a blob URL
+        // Keep existing image URLs if they're not blob URLs
         finalImageUrl = venueImageUrl;
+        finalThumbnailUrl = mapClient?.venueImageThumbnail || null;
       }
       
       const submitData = {
@@ -276,6 +327,7 @@ export function MapClientFormSheet({
         subscriptionStartDate: formData.subscriptionStartDate || null,
         subscriptionEndDate: formData.subscriptionEndDate || null,
         venueImageUrl: finalImageUrl,
+        venueImageThumbnail: finalThumbnailUrl,
       };
 
       if (mapClient) {
