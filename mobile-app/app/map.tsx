@@ -304,6 +304,9 @@ export default function MapScreen() {
       const tokenAvailable = !!(Mapbox && token && token.startsWith('pk.') && !token.includes('placeholder'));
       setMapboxTokenAvailable(tokenAvailable);
       
+      // Pre-cache venue images for faster loading
+      await preloadVenueImages();
+      
       // Request location permission regardless (needed for venue events)
       await requestLocationPermission();
       
@@ -374,6 +377,42 @@ export default function MapScreen() {
       );
     }
   }, [locationPermissionGranted, requestLocationPermission]);
+
+  // Preload venue images for caching
+  const preloadVenueImages = useCallback(async () => {
+    try {
+      const cachedVenues = await AsyncStorageUtils.getItem<string[]>('cached_venue_images') || [];
+      const newImagesToCache: string[] = [];
+      
+      venues.forEach(venue => {
+        if (venue.image && !cachedVenues.includes(venue.image)) {
+          newImagesToCache.push(venue.image);
+        }
+      });
+      
+      if (newImagesToCache.length > 0) {
+        // Preload images by creating Image objects
+        const imagePromises = newImagesToCache.map(imageUri => {
+          return new Promise<void>((resolve) => {
+            const img = new Image();
+            img.onload = () => resolve();
+            img.onerror = () => resolve(); // Don't fail on individual image errors
+            img.src = imageUri;
+          });
+        });
+        
+        await Promise.allSettled(imagePromises);
+        
+        // Update cached venues list
+        const updatedCache = [...cachedVenues, ...newImagesToCache];
+        await AsyncStorageUtils.setItem('cached_venue_images', updatedCache);
+        
+        console.log(`Preloaded ${newImagesToCache.length} venue images`);
+      }
+    } catch (error) {
+      console.warn('Failed to preload venue images:', error);
+    }
+  }, [venues]);
 
   const handleVenuePress = useCallback((venue: any) => {
     setSelectedVenue(venue);
@@ -790,8 +829,16 @@ export default function MapScreen() {
                       <View style={styles.venueMarker}>
                         {venue.image ? (
                           <Image
-                            source={{ uri: venue.image }}
+                            source={{ 
+                              uri: venue.image,
+                              // Add cache and quality settings for mobile optimization
+                              cache: 'force-cache',
+                              headers: {
+                                'Cache-Control': 'max-age=604800' // Cache for 1 week
+                              }
+                            }}
                             style={styles.venueImage}
+                            resizeMode="cover"
                             onError={() => {
                               // Fallback to default marker if image fails to load
                               console.log('Failed to load venue image:', venue.image);
