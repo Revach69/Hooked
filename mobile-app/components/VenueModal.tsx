@@ -21,7 +21,6 @@ import {
   Globe,
   QrCode,
   Clock,
-  Zap,
 } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
 import { getVenueActiveStatus, getNextHookedHoursChange, formatTimeUntilChange } from '../lib/utils/venueHoursUtils';
@@ -71,23 +70,14 @@ export default function VenueModal({ visible, venue, userLocation, onClose, onQr
     }
   }, [visible]);
   
-  // Restore scroll position when modal height changes
-  useEffect(() => {
-    if (visible && scrollViewRef.current && scrollOffset > 0) {
-      const timer = setTimeout(() => {
-        scrollViewRef.current?.scrollTo({ y: scrollOffset, animated: false });
-      }, 150);
-      return () => clearTimeout(timer);
-    }
-  }, [modalHeight, visible]);
+  // Only maintain scroll position, don't restore it automatically
+  // This prevents jumping when transitioning between half and full modal
   
   // Reset scroll when venue changes
   useEffect(() => {
     if (venue && visible) {
       setScrollOffset(0);
-      if (scrollViewRef.current) {
-        scrollViewRef.current.scrollTo({ y: 0, animated: false });
-      }
+      // Let ScrollView naturally reset to top when content changes
     }
   }, [venue?.id, visible]);
   
@@ -458,46 +448,6 @@ export default function VenueModal({ visible, venue, userLocation, onClose, onQr
       backgroundColor: isDark ? '#1f1f1f' : '#ffffff',
       borderColor: '#8b5cf6',
     },
-    statusContainer: {
-      alignItems: 'flex-start',
-    },
-    statusBadge: {
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 16,
-      alignItems: 'center',
-    },
-    statusBadgeActive: {
-      backgroundColor: 'rgba(34, 197, 94, 0.1)',
-      borderWidth: 1,
-      borderColor: '#22c55e',
-    },
-    statusBadgeInactive: {
-      backgroundColor: isDark ? 'rgba(107, 114, 128, 0.1)' : 'rgba(156, 163, 175, 0.1)',
-      borderWidth: 1,
-      borderColor: isDark ? '#4b5563' : '#9ca3af',
-    },
-    statusText: {
-      fontSize: 14,
-      fontWeight: '600',
-    },
-    statusTextActive: {
-      color: '#22c55e',
-    },
-    statusTextInactive: {
-      color: isDark ? '#9ca3af' : '#6b7280',
-    },
-    nextChangeContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginTop: 8,
-      gap: 6,
-    },
-    nextChangeText: {
-      fontSize: 13,
-      color: isDark ? '#9ca3af' : '#6b7280',
-      fontStyle: 'italic',
-    },
   });
 
   return (
@@ -546,12 +496,7 @@ export default function VenueModal({ visible, venue, userLocation, onClose, onQr
                 setScrollOffset(currentOffset);
               }}
               onContentSizeChange={(contentWidth, contentHeight) => {
-                // Restore scroll position after content size changes
-                if (visible && scrollViewRef.current && scrollOffset > 0 && contentHeight > 0) {
-                  setTimeout(() => {
-                    scrollViewRef.current?.scrollTo({ y: scrollOffset, animated: false });
-                  }, 50);
-                }
+                // Don't restore scroll position - let ScrollView handle it naturally
               }}
             >
               {/* Hours Section */}
@@ -607,44 +552,6 @@ export default function VenueModal({ visible, venue, userLocation, onClose, onQr
                 </View>
               </View>
 
-              {/* Hooked Hours Status Section */}
-              {venue.hookedHours && (
-                <View style={styles.section}>
-                  <View style={styles.sectionTitleContainer}>
-                    <Zap size={20} color={getVenueActiveStatus(venue).shouldGlow ? '#22c55e' : '#6b7280'} style={styles.sectionIcon} />
-                    <Text style={styles.sectionTitle}>Hooked Hours Status</Text>
-                  </View>
-                  
-                  <View style={styles.statusContainer}>
-                    <View style={[
-                      styles.statusBadge, 
-                      getVenueActiveStatus(venue).shouldGlow ? styles.statusBadgeActive : styles.statusBadgeInactive
-                    ]}>
-                      <Text style={[
-                        styles.statusText,
-                        getVenueActiveStatus(venue).shouldGlow ? styles.statusTextActive : styles.statusTextInactive
-                      ]}>
-                        {getVenueActiveStatus(venue).statusText}
-                      </Text>
-                    </View>
-                  </View>
-                  
-                  {(() => {
-                    const nextChange = getNextHookedHoursChange(venue);
-                    if (nextChange.nextChangeTime) {
-                      return (
-                        <View style={styles.nextChangeContainer}>
-                          <Clock size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
-                          <Text style={styles.nextChangeText}>
-                            {nextChange.description} ({formatTimeUntilChange(nextChange.nextChangeTime)})
-                          </Text>
-                        </View>
-                      );
-                    }
-                    return null;
-                  })()}
-                </View>
-              )}
 
               {/* Phone Section */}
               {venue.phone && (

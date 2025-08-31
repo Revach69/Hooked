@@ -14,7 +14,8 @@ import {
   StatusBar,
 } from 'react-native';
 import { router } from 'expo-router';
-import { QrCode, X, MapPin } from 'lucide-react-native';
+import * as Location from 'expo-location';
+import { QrCode, X, MapPin, Keyboard } from 'lucide-react-native';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 
 import QRCodeScanner, { QRScanResult } from '../lib/components/QRCodeScanner';
@@ -247,9 +248,34 @@ export default function Home() {
     }
   };
 
-  const handleMapNavigation = () => {
-    // Navigate to map view for venue discovery
-    router.push('/map');
+  const handleMapNavigation = async () => {
+    try {
+      // Get current location to center map
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+          timeout: 10000,
+        });
+        
+        // Navigate to map centered on user location
+        router.push({
+          pathname: '/map',
+          params: {
+            centerLat: location.coords.latitude.toString(),
+            centerLng: location.coords.longitude.toString(),
+            centerOnUser: 'true'
+          }
+        });
+      } else {
+        // Navigate without location if permission denied
+        router.push('/map');
+      }
+    } catch (error) {
+      console.warn('Could not get location for map navigation:', error);
+      // Navigate to map anyway
+      router.push('/map');
+    }
   };
 
   const styles = StyleSheet.create({
@@ -552,6 +578,7 @@ export default function Home() {
               accessibilityLabel="Enter Code Manually"
               accessibilityHint="Opens modal to manually enter event code"
             >
+              <Keyboard size={20} color="#ffffff" style={{ marginRight: 8 }} />
               <Text style={styles.buttonText}>Enter Code Manually</Text>
             </TouchableOpacity>
 

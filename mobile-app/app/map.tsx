@@ -12,7 +12,7 @@ import {
   ScrollView,
   Modal,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MapPin, ArrowLeft, Navigation } from 'lucide-react-native';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
@@ -181,6 +181,7 @@ const MOCK_VENUES = generateMockVenues();
 export default function MapScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { centerLat, centerLng, centerOnUser } = useLocalSearchParams();
   
   const [isLoading, setIsLoading] = useState(true);
   const [currentEvent, setCurrentEvent] = useState<any>(null);
@@ -200,6 +201,7 @@ export default function MapScreen() {
   const [cameraCenter, setCameraCenter] = useState<[number, number] | null>(null);
   const [isQRScannerVisible, setIsQRScannerVisible] = useState(false);
   const [lastStatusUpdate, setLastStatusUpdate] = useState<Date>(new Date());
+  const mapViewRef = useRef<any>(null);
   
   // Filter options matching admin dashboard business types
   const filterOptions = [
@@ -305,6 +307,17 @@ export default function MapScreen() {
       // Request location permission regardless (needed for venue events)
       await requestLocationPermission();
       
+      // Handle centering from navigation params
+      if (centerOnUser === 'true' && centerLat && centerLng) {
+        const lat = parseFloat(centerLat as string);
+        const lng = parseFloat(centerLng as string);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          setUserLocation({ longitude: lng, latitude: lat });
+          setCameraCenter([lng, lat]);
+          setFollowUserLocation(true);
+        }
+      }
+      
       // For venue discovery, we don't need event/session validation
       // Users can browse venues without being in an event
       setCurrentEvent({ name: 'Venue Discovery' });
@@ -313,7 +326,7 @@ export default function MapScreen() {
       console.error('Error initializing map screen:', error);
       setIsLoading(false);
     }
-  }, [requestLocationPermission]);
+  }, [requestLocationPermission, centerOnUser, centerLat, centerLng]);
   
   const handleGoBack = () => {
     router.back();
@@ -330,18 +343,29 @@ export default function MapScreen() {
       if (!granted) return;
     }
     
-    setFollowUserLocation(true);
-    
     try {
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
         timeout: 10000,
       });
       
-      setUserLocation({
+      const userCoords = {
         longitude: location.coords.longitude,
         latitude: location.coords.latitude,
-      });
+      };
+      
+      setUserLocation(userCoords);
+      setFollowUserLocation(true);
+      
+      // Center the map camera on user location
+      if (mapViewRef.current) {
+        mapViewRef.current.setCamera({
+          centerCoordinate: [userCoords.longitude, userCoords.latitude],
+          zoomLevel: 14,
+          animationDuration: 1000,
+        });
+      }
+      
     } catch (error) {
       console.warn('Could not get current location for centering:', error);
       Alert.alert(
@@ -560,47 +584,7 @@ export default function MapScreen() {
       height: 50,
       borderRadius: 12,
       backgroundColor: '#8b5cf6',
-      borderWidth: 3,
-      borderColor: '#ffffff',
       overflow: 'hidden',
-    },
-    venueMarkerActive: {
-      width: 50,
-      height: 50,
-      borderRadius: 12,
-      backgroundColor: '#8b5cf6',
-      borderWidth: 3,
-      borderColor: '#22c55e', // Green border for active venues
-      overflow: 'hidden',
-      // Glow effect using shadow
-      shadowColor: '#22c55e',
-      shadowOffset: { width: 0, height: 0 },
-      shadowOpacity: 0.8,
-      shadowRadius: 8,
-      elevation: 10, // Android shadow
-    },
-    venueMarkerGlow: {
-      position: 'absolute',
-      top: -8,
-      left: -8,
-      width: 66, // 50 + 16 for glow padding
-      height: 66,
-      borderRadius: 20,
-      backgroundColor: 'transparent',
-      borderWidth: 2,
-      borderColor: 'rgba(34, 197, 94, 0.6)', // Semi-transparent green glow
-    },
-    activeVenueIndicator: {
-      position: 'absolute',
-      top: -4,
-      right: -4,
-      width: 16,
-      height: 16,
-      borderRadius: 8,
-      backgroundColor: '#22c55e',
-      borderWidth: 2,
-      borderColor: '#ffffff',
-      zIndex: 10,
     },
     venueImage: {
       width: '100%',
@@ -756,6 +740,7 @@ export default function MapScreen() {
               </View>
             )}
             <MapView
+              ref={mapViewRef}
               style={styles.mapView}
               onDidFinishLoadingMap={handleMapReady}
               styleURL={isDark ? Mapbox?.StyleURL?.Dark : Mapbox?.StyleURL?.Light}
@@ -801,11 +786,8 @@ export default function MapScreen() {
                     onSelected={() => handleVenuePress(venue)}
                   >
                     <View style={{ position: 'relative' }}>
-                      {/* Glow effect for active venues */}
-                      {isActive && <View style={styles.venueMarkerGlow} />}
-                      
                       {/* Main venue marker */}
-                      <View style={isActive ? styles.venueMarkerActive : styles.venueMarker}>
+                      <View style={styles.venueMarker}>
                         {venue.image ? (
                           <Image
                             source={{ uri: venue.image }}
@@ -821,9 +803,6 @@ export default function MapScreen() {
                           </View>
                         )}
                       </View>
-                      
-                      {/* Active indicator dot */}
-                      {isActive && <View style={styles.activeVenueIndicator} />}
                     </View>
                   </PointAnnotation>
                 );
