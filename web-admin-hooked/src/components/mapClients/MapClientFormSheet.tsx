@@ -231,7 +231,7 @@ export function MapClientFormSheet({
     setIsLoading(true);
 
     try {
-      const { venueImage, ...dataToSubmit } = formData;
+      const { venueImage, venueImageUrl, ...dataToSubmit } = formData;
       
       const submitData = {
         ...dataToSubmit,
@@ -243,6 +243,8 @@ export function MapClientFormSheet({
         website: formData.website || null,
         subscriptionStartDate: formData.subscriptionStartDate || null,
         subscriptionEndDate: formData.subscriptionEndDate || null,
+        // Only include venueImageUrl if it's not a blob URL
+        ...(venueImageUrl && !venueImageUrl.startsWith('blob:') ? { venueImageUrl } : {}),
       };
 
       if (mapClient) {
@@ -303,12 +305,7 @@ export function MapClientFormSheet({
         return;
       }
 
-      // Validate file size (max 5MB)
-      const maxSize = 5 * 1024 * 1024; // 5MB in bytes
-      if (file.size > maxSize) {
-        alert('Image size must be less than 5MB');
-        return;
-      }
+      // No size restriction for full-resolution uploads
 
       setFormData(prev => ({ ...prev, venueImage: file }));
       
@@ -543,7 +540,7 @@ export function MapClientFormSheet({
                         className="hidden"
                       />
                       <div className="text-xs text-gray-500 mt-2">
-                        JPG, PNG or WebP (max 5MB)
+                        JPG, PNG or WebP (any size)
                       </div>
                     </div>
                   )}
