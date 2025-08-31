@@ -12,6 +12,8 @@ import { LocationInput } from './LocationInput';
 import { SubscriptionManager } from './SubscriptionManager';
 import { MapPin, DollarSign, Calendar, Upload, X, Image, Clock, Home, QrCode } from 'lucide-react';
 import { getPrimaryTimezoneForCountry, getAvailableCountries } from '@/lib/timezoneUtils';
+import { storage } from '@/lib/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import type { MapClient } from '@/types/admin';
 
 interface MapClientFormSheetProps {
@@ -226,12 +228,42 @@ export function MapClientFormSheet({
     }
   }, [mapClient]);
 
+  const uploadVenueImage = async (file: File, clientId: string): Promise<string> => {
+    const timestamp = Date.now();
+    const fileName = `${clientId}_${timestamp}.${file.name.split('.').pop()}`;
+    const storageRef = ref(storage, `venue-images/${fileName}`);
+    
+    const snapshot = await uploadBytes(storageRef, file);
+    const downloadURL = await getDownloadURL(snapshot.ref);
+    
+    return downloadURL;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
       const { venueImage, venueImageUrl, ...dataToSubmit } = formData;
+      
+      let finalImageUrl = null;
+      
+      // If there's a new image to upload
+      if (venueImage instanceof File) {
+        try {
+          // Generate a temporary ID for new clients
+          const clientId = mapClient?.id || `temp_${Date.now()}`;
+          finalImageUrl = await uploadVenueImage(venueImage, clientId);
+        } catch (imageError) {
+          console.error('Failed to upload venue image:', imageError);
+          alert('Failed to upload venue image. Please try again.');
+          setIsLoading(false);
+          return;
+        }
+      } else if (venueImageUrl && !venueImageUrl.startsWith('blob:')) {
+        // Keep existing image URL if it's not a blob URL
+        finalImageUrl = venueImageUrl;
+      }
       
       const submitData = {
         ...dataToSubmit,
@@ -243,8 +275,7 @@ export function MapClientFormSheet({
         website: formData.website || null,
         subscriptionStartDate: formData.subscriptionStartDate || null,
         subscriptionEndDate: formData.subscriptionEndDate || null,
-        // Only include venueImageUrl if it's not a blob URL
-        ...(venueImageUrl && !venueImageUrl.startsWith('blob:') ? { venueImageUrl } : {}),
+        venueImageUrl: finalImageUrl,
       };
 
       if (mapClient) {
@@ -256,7 +287,7 @@ export function MapClientFormSheet({
       onSuccess();
     } catch (error) {
       console.error('Failed to save map client:', error);
-      // TODO: Add proper error handling/toast notification
+      alert('Failed to save map client. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -305,17 +336,12 @@ export function MapClientFormSheet({
         return;
       }
 
-      // No size restriction for full-resolution uploads
-
+      // Store file for upload and create preview
       setFormData(prev => ({ ...prev, venueImage: file }));
       
-      // Create preview URL
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const url = e.target?.result as string;
-        setFormData(prev => ({ ...prev, venueImageUrl: url }));
-      };
-      reader.readAsDataURL(file);
+      // Create blob URL for preview only
+      const previewUrl = URL.createObjectURL(file);
+      setFormData(prev => ({ ...prev, venueImageUrl: previewUrl }));
     }
   };
 
@@ -540,7 +566,7 @@ export function MapClientFormSheet({
                         className="hidden"
                       />
                       <div className="text-xs text-gray-500 mt-2">
-                        JPG, PNG or WebP (any size)
+                        JPG, PNG or WebP - stored at full resolution
                       </div>
                     </div>
                   )}
