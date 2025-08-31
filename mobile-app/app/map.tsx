@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MapPin, ArrowLeft, Navigation } from 'lucide-react-native';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { Image } from 'react-native';
+import { venueApi } from '../lib/api/venueApi';
+import { MapClient } from '../types/venue';
 
 // Conditional Mapbox import for Expo Go compatibility
 let Mapbox: any, MapView: any, Camera: any, UserLocation: any, PointAnnotation: any;
@@ -45,140 +47,58 @@ if (Mapbox && mapboxToken && mapboxToken.startsWith('pk.') && !mapboxToken.inclu
   console.warn('Mapbox access token not configured or is placeholder');
 }
 
-// Generate more mock venue data for clustering testing
-const generateMockVenues = () => {
+// Fallback mock venues for development when API is unavailable
+const generateFallbackVenues = () => {
   const baseVenues = [
-    { name: 'The Rooftop Lounge', type: 'Bar & Lounge', desc: 'Trendy rooftop bar with city views' },
-    { name: 'Downtown Social', type: 'Restaurant & Bar', desc: 'Modern social dining experience' },
-    { name: 'Sunset Café', type: 'Coffee & Light Bites', desc: 'Cozy coffee shop perfect for meetings' },
-    { name: 'Marina Club', type: 'Nightclub', desc: 'Premier nightlife destination' },
-    { name: 'Golden Gate Bistro', type: 'Restaurant', desc: 'Fine dining with bay views' },
-    { name: 'Tech Hub Lounge', type: 'Co-working & Bar', desc: 'Where startups meet and network' },
-    { name: 'Artisan Coffee Co.', type: 'Coffee Shop', desc: 'Locally roasted specialty coffee' },
-    { name: 'Nob Hill Tavern', type: 'Pub', desc: 'Classic neighborhood pub atmosphere' },
-    { name: 'Waterfront Grill', type: 'Seafood Restaurant', desc: 'Fresh seafood by the bay' },
-    { name: 'Mission Taphouse', type: 'Craft Beer Bar', desc: 'Local brews and live music' },
+    { name: 'The Rooftop Lounge', type: 'bar', desc: 'Trendy rooftop bar with city views' },
+    { name: 'Downtown Social', type: 'restaurant', desc: 'Modern social dining experience' },
+    { name: 'Sunset Café', type: 'cafe', desc: 'Cozy coffee shop perfect for meetings' },
+    { name: 'Marina Club', type: 'club', desc: 'Premier nightlife destination' },
+    { name: 'Golden Gate Bistro', type: 'restaurant', desc: 'Fine dining with bay views' },
   ];
 
-  const venues = [];
-  
-  // Generate 60 venues spread across San Francisco
-  for (let i = 0; i < 60; i++) {
-    const baseVenue = baseVenues[i % baseVenues.length];
-    const lat = 37.7749 + (Math.random() - 0.5) * 0.1; // SF lat ± 0.05
-    const lon = -122.4194 + (Math.random() - 0.5) * 0.1; // SF lon ± 0.05
-    
-    // Add mock social media links for some venues for testing
-    const mockSocialMedia = i < 10 ? {
-      phone: i % 4 === 0 ? `+1-555-${String(Math.floor(Math.random() * 900) + 100)}-${String(Math.floor(Math.random() * 9000) + 1000)}` : null,
-      website: i % 3 === 0 ? `https://www.${baseVenue.name.toLowerCase().replace(/\s+/g, '')}.com` : null,
-      socialMedia: {
-        instagram: i % 5 === 0 ? `@${baseVenue.name.toLowerCase().replace(/\s+/g, '')}` : null,
-        facebook: i % 6 === 0 ? `https://facebook.com/${baseVenue.name.toLowerCase().replace(/\s+/g, '')}` : null,
-      },
-    } : {
-      phone: null,
-      website: null,
-      socialMedia: {
-        instagram: null,
-        facebook: null,
-      },
-    };
-    
-    // Generate mock Hooked Hours for some venues (every 3rd venue has Hooked Hours)
-    const hasHookedHours = i % 3 === 0;
-    let hookedHours = null;
-    let openingHours = null;
-    
-    if (hasHookedHours) {
-      // Create realistic Hooked Hours based on venue type
-      const isNightlife = baseVenue.type.includes('Bar') || baseVenue.type.includes('Club');
-      const isCafe = baseVenue.type.includes('Coffee') || baseVenue.type.includes('Café');
-      
-      if (isNightlife) {
-        // Nightlife venues: evening hours
-        hookedHours = {
-          monday: { open: '19:00', close: '23:00', closed: false },
-          tuesday: { open: '19:00', close: '23:00', closed: false },
-          wednesday: { open: '19:00', close: '24:00', closed: false },
-          thursday: { open: '19:00', close: '24:00', closed: false },
-          friday: { open: '18:00', close: '24:00', closed: false },
-          saturday: { open: '18:00', close: '24:00', closed: false },
-          sunday: { open: '18:00', close: '22:00', closed: false },
-        };
-        openingHours = {
-          monday: { open: '16:00', close: '02:00', closed: false },
-          tuesday: { open: '16:00', close: '02:00', closed: false },
-          wednesday: { open: '16:00', close: '02:00', closed: false },
-          thursday: { open: '16:00', close: '02:00', closed: false },
-          friday: { open: '16:00', close: '03:00', closed: false },
-          saturday: { open: '14:00', close: '03:00', closed: false },
-          sunday: { open: '14:00', close: '24:00', closed: false },
-        };
-      } else if (isCafe) {
-        // Cafe venues: morning/afternoon hours
-        hookedHours = {
-          monday: { open: '08:00', close: '11:00', closed: false },
-          tuesday: { open: '08:00', close: '11:00', closed: false },
-          wednesday: { open: '08:00', close: '11:00', closed: false },
-          thursday: { open: '08:00', close: '11:00', closed: false },
-          friday: { open: '08:00', close: '12:00', closed: false },
-          saturday: { open: '09:00', close: '13:00', closed: false },
-          sunday: { open: '09:00', close: '12:00', closed: false },
-        };
-        openingHours = {
-          monday: { open: '07:00', close: '19:00', closed: false },
-          tuesday: { open: '07:00', close: '19:00', closed: false },
-          wednesday: { open: '07:00', close: '19:00', closed: false },
-          thursday: { open: '07:00', close: '19:00', closed: false },
-          friday: { open: '07:00', close: '20:00', closed: false },
-          saturday: { open: '08:00', close: '20:00', closed: false },
-          sunday: { open: '08:00', close: '18:00', closed: false },
-        };
-      } else {
-        // Restaurant/general venues: evening hours
-        hookedHours = {
-          monday: { open: '17:00', close: '21:00', closed: false },
-          tuesday: { open: '17:00', close: '21:00', closed: false },
-          wednesday: { open: '17:00', close: '22:00', closed: false },
-          thursday: { open: '17:00', close: '22:00', closed: false },
-          friday: { open: '17:00', close: '23:00', closed: false },
-          saturday: { open: '16:00', close: '23:00', closed: false },
-          sunday: { open: '16:00', close: '21:00', closed: false },
-        };
-        openingHours = {
-          monday: { open: '11:00', close: '23:00', closed: false },
-          tuesday: { open: '11:00', close: '23:00', closed: false },
-          wednesday: { open: '11:00', close: '24:00', closed: false },
-          thursday: { open: '11:00', close: '24:00', closed: false },
-          friday: { open: '11:00', close: '24:00', closed: false },
-          saturday: { open: '10:00', close: '24:00', closed: false },
-          sunday: { open: '10:00', close: '23:00', closed: false },
-        };
-      }
-    }
-    
-    venues.push({
-      id: `venue-${i + 1}`,
-      name: `${baseVenue.name} ${i > 9 ? Math.floor(i / 10) : ''}`.trim(),
-      type: baseVenue.type,
-      coordinates: [lon, lat],
-      address: `${100 + i} Street Name, San Francisco, CA`,
-      activeUsers: Math.floor(Math.random() * 30) + 1,
-      description: baseVenue.desc,
-      image: null, // Will be populated with venueImageThumbnail from Firebase Storage
-      hookedHours,
-      openingHours,
-      ...mockSocialMedia,
-    });
-  }
-  
-  return venues;
+  return baseVenues.map((baseVenue, i) => ({
+    id: `fallback-venue-${i + 1}`,
+    name: baseVenue.name,
+    type: baseVenue.type,
+    coordinates: [
+      -122.4194 + (Math.random() - 0.5) * 0.05,
+      37.7749 + (Math.random() - 0.5) * 0.05
+    ] as [number, number],
+    address: `${100 + i} Street Name, San Francisco, CA`,
+    activeUsers: Math.floor(Math.random() * 30) + 1,
+    description: baseVenue.desc,
+    image: null,
+    phone: i % 3 === 0 ? `+1-555-${String(Math.floor(Math.random() * 900) + 100)}-${String(Math.floor(Math.random() * 9000) + 1000)}` : null,
+    website: i % 2 === 0 ? `https://www.${baseVenue.name.toLowerCase().replace(/\s+/g, '')}.com` : null,
+    socialMedia: {
+      instagram: i % 4 === 0 ? `@${baseVenue.name.toLowerCase().replace(/\s+/g, '')}` : null,
+      facebook: i % 5 === 0 ? `https://facebook.com/${baseVenue.name.toLowerCase().replace(/\s+/g, '')}` : null,
+    },
+    hookedHours: {
+      monday: { open: '19:00', close: '22:00', closed: false },
+      tuesday: { open: '19:00', close: '22:00', closed: false },
+      wednesday: { open: '19:00', close: '22:00', closed: false },
+      thursday: { open: '19:00', close: '23:00', closed: false },
+      friday: { open: '19:00', close: '24:00', closed: false },
+      saturday: { open: '18:00', close: '24:00', closed: false },
+      sunday: { open: '18:00', close: '21:00', closed: false },
+    },
+    openingHours: {
+      monday: { open: '11:00', close: '23:00', closed: false },
+      tuesday: { open: '11:00', close: '23:00', closed: false },
+      wednesday: { open: '11:00', close: '24:00', closed: false },
+      thursday: { open: '11:00', close: '24:00', closed: false },
+      friday: { open: '11:00', close: '24:00', closed: false },
+      saturday: { open: '10:00', close: '24:00', closed: false },
+      sunday: { open: '10:00', close: '23:00', closed: false },
+    },
+  }));
 };
 
-const MOCK_VENUES = generateMockVenues();
+const FALLBACK_VENUES = generateFallbackVenues();
 
-export default function MapScreen() {
+function MapScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const { centerLat, centerLng, centerOnUser } = useLocalSearchParams();
@@ -192,7 +112,9 @@ export default function MapScreen() {
   const [userLocation, setUserLocation] = useState<{longitude: number, latitude: number} | null>(null);
   const [showUserLocation, setShowUserLocation] = useState(false);
   const [followUserLocation, setFollowUserLocation] = useState(false);
-  const [venues, setVenues] = useState(MOCK_VENUES);
+  const [venues, setVenues] = useState<MapClient[]>(FALLBACK_VENUES);
+  const [isLoadingVenues, setIsLoadingVenues] = useState(false);
+  const [venuesError, setVenuesError] = useState<string | null>(null);
   const [selectedVenue, setSelectedVenue] = useState<any>(null);
   const [mapStyle, setMapStyle] = useState<'street' | 'satellite'>('street');
   const [currentZoom, setCurrentZoom] = useState(12);
@@ -218,22 +140,7 @@ export default function MapScreen() {
     if (selectedFilter === 'all') {
       return venues;
     }
-    return venues.filter(venue => {
-      // Simple mapping from venue types to filter categories
-      const venueTypeMap = {
-        'Restaurant': 'restaurant',
-        'Bar & Lounge': 'bar', 
-        'Coffee & Light Bites': 'cafe',
-        'Nightclub': 'club',
-        'Co-working & Bar': 'venue',
-        'Coffee Shop': 'cafe',
-        'Pub': 'bar',
-        'Seafood Restaurant': 'restaurant',
-        'Craft Beer Bar': 'bar',
-      };
-      const mappedType = venueTypeMap[venue.type as keyof typeof venueTypeMap] || 'venue';
-      return mappedType === selectedFilter;
-    });
+    return venues.filter(venue => venue.type === selectedFilter);
   }, [venues, selectedFilter]);
 
 
@@ -261,7 +168,6 @@ export default function MapScreen() {
         try {
           const location = await Location.getCurrentPositionAsync({
             accuracy: Location.Accuracy.High,
-            timeout: 10000,
           });
           
           setUserLocation({
@@ -297,6 +203,30 @@ export default function MapScreen() {
     }
   }, []);
 
+  const fetchVenuesFromAPI = useCallback(async () => {
+    setIsLoadingVenues(true);
+    setVenuesError(null);
+    
+    try {
+      const response = await venueApi.fetchVenues();
+      
+      if (response.success && response.venues.length > 0) {
+        setVenues(response.venues);
+        console.log(`Loaded ${response.venues.length} venues from API`);
+      } else {
+        console.warn('No venues returned from API, using fallback venues');
+        setVenues(FALLBACK_VENUES);
+        setVenuesError(response.error || 'No venues available');
+      }
+    } catch (error) {
+      console.error('Failed to fetch venues from API:', error);
+      setVenues(FALLBACK_VENUES);
+      setVenuesError('Failed to connect to server, using offline venues');
+    } finally {
+      setIsLoadingVenues(false);
+    }
+  }, []);
+
   const initializeMapScreen = useCallback(async () => {
     try {
       // Check if Mapbox token is available and valid, and library is loaded
@@ -304,8 +234,8 @@ export default function MapScreen() {
       const tokenAvailable = !!(Mapbox && token && token.startsWith('pk.') && !token.includes('placeholder'));
       setMapboxTokenAvailable(tokenAvailable);
       
-      // Pre-cache venue images for faster loading
-      await preloadVenueImages();
+      // Fetch real venues from API
+      await fetchVenuesFromAPI();
       
       // Request location permission regardless (needed for venue events)
       await requestLocationPermission();
@@ -329,7 +259,7 @@ export default function MapScreen() {
       console.error('Error initializing map screen:', error);
       setIsLoading(false);
     }
-  }, [requestLocationPermission, centerOnUser, centerLat, centerLng]);
+  }, [requestLocationPermission, centerOnUser, centerLat, centerLng, fetchVenuesFromAPI]);
   
   const handleGoBack = () => {
     router.back();
@@ -349,7 +279,6 @@ export default function MapScreen() {
     try {
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
-        timeout: 10000,
       });
       
       const userCoords = {
@@ -391,13 +320,12 @@ export default function MapScreen() {
       });
       
       if (newImagesToCache.length > 0) {
-        // Preload images by creating Image objects
+        // Preload images by creating Image objects (using React Native Image)
         const imagePromises = newImagesToCache.map(imageUri => {
           return new Promise<void>((resolve) => {
-            const img = new Image();
-            img.onload = () => resolve();
-            img.onerror = () => resolve(); // Don't fail on individual image errors
-            img.src = imageUri;
+            Image.prefetch(imageUri)
+              .then(() => resolve())
+              .catch(() => resolve()); // Don't fail on individual image errors
           });
         });
         
@@ -413,6 +341,11 @@ export default function MapScreen() {
       console.warn('Failed to preload venue images:', error);
     }
   }, [venues]);
+
+  // Preload images when venues update
+  useEffect(() => {
+    preloadVenueImages();
+  }, [venues, preloadVenueImages]);
 
   const handleVenuePress = useCallback((venue: any) => {
     setSelectedVenue(venue);
@@ -813,8 +746,17 @@ export default function MapScreen() {
 
               {/* Individual Venue Markers */}
               {filteredVenues.map((venue) => {
+                // Convert MapClient to Venue type for utils
+                const venueForUtils = {
+                  id: venue.id,
+                  name: venue.name,
+                  coordinates: venue.coordinates,
+                  hookedHours: venue.hookedHours || undefined,
+                  openingHours: venue.openingHours || undefined,
+                };
+                
                 // Re-evaluate status based on current time (triggered by lastStatusUpdate)
-                const venueStatus = getVenueActiveStatus(venue);
+                const venueStatus = getVenueActiveStatus(venueForUtils);
                 const isActive = venueStatus.shouldGlow;
                 
                 return (

@@ -12,7 +12,7 @@ import { LocationInput } from './LocationInput';
 import { SubscriptionManager } from './SubscriptionManager';
 import { MapPin, DollarSign, Calendar, Upload, X, Image, Clock, Home, QrCode } from 'lucide-react';
 import { getPrimaryTimezoneForCountry, getAvailableCountries } from '@/lib/timezoneUtils';
-import { storage } from '@/lib/firebase';
+import { storage } from '@/lib/firebaseConfig';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import type { MapClient } from '@/types/admin';
 

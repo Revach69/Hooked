@@ -115,7 +115,7 @@ export default function VenueModal({ visible, venue, userLocation, onClose, onQr
         translateY.setValue(newTranslateY);
       },
       onPanResponderRelease: () => {
-        const currentY = translateY._value;
+        const currentY = (translateY as any)._value;
         const velocity = lastGestureDy.current;
         
         // Determine target position based on current position and velocity
@@ -505,14 +505,14 @@ export default function VenueModal({ visible, venue, userLocation, onClose, onQr
                   {/* Opening Hours */}
                   <View style={styles.hoursColumn}>
                     <Text style={styles.hoursTitle}>Opening Hours</Text>
-                    {Object.entries(openingHours).map(([day, hours]) => (
+                    {Object.entries(openingHours).map(([day, hours]: [string, any]) => (
                       <View key={day} style={styles.hoursRow}>
                         <Text style={styles.dayName}>{formatDayName(day, true)}</Text>
-                        {hours.closed ? (
+                        {hours?.closed ? (
                           <Text style={styles.closedText}>Closed</Text>
                         ) : (
                           <Text style={styles.hours}>
-                            {formatTime(hours.open)} - {formatTime(hours.close)}
+                            {formatTime(hours?.open || '09:00')} - {formatTime(hours?.close || '22:00')}
                           </Text>
                         )}
                       </View>
@@ -522,14 +522,14 @@ export default function VenueModal({ visible, venue, userLocation, onClose, onQr
                   {/* Hooked Hours */}
                   <View style={styles.hoursColumn}>
                     <Text style={styles.hoursTitle}>Hooked Hours</Text>
-                    {Object.entries(hookedHours).map(([day, hours]) => (
+                    {Object.entries(hookedHours).map(([day, hours]: [string, any]) => (
                       <View key={day} style={styles.hoursRow}>
                         <Text style={styles.dayName}>{formatDayName(day, true)}</Text>
-                        {hours.closed ? (
+                        {hours?.closed ? (
                           <Text style={styles.closedText}>Closed</Text>
                         ) : (
                           <Text style={styles.hours}>
-                            {formatTime(hours.open)} - {formatTime(hours.close)}
+                            {formatTime(hours?.open || '19:00')} - {formatTime(hours?.close || '22:00')}
                           </Text>
                         )}
                       </View>
