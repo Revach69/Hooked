@@ -122,7 +122,7 @@ export type MapClient = {
   eventHubSettings?: {
     enabled: boolean;
     eventName: string; // e.g., "Hooked Hours"
-    qrCodeId: string; // Unique identifier for QR codes
+    venueEventCode: string; // Unique code like "V_STARBUCKS_DOWNTOWN" for QR codes
     locationRadius: number; // Default 60m, configurable
     kFactor: number; // 1.5-2.5 radius multiplier for geofence tuning
     

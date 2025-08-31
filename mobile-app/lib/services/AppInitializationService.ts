@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
+import * as Location from 'expo-location';
 import * as Sentry from '@sentry/react-native';
 import { AsyncStorageUtils } from '../asyncStorageUtils';
 import { initializeAppCheck } from '../firebaseAppCheck';
@@ -21,6 +22,7 @@ interface HealthCheck {
   firebaseAuth: boolean;
   firestoreConnection: boolean;
   notificationPermissions: boolean;
+  locationPermissions: boolean;
   notificationRouter: boolean;
   globalListeners: boolean;
   sessionData: boolean;
@@ -44,6 +46,7 @@ class AppInitializationServiceClass {
         firebaseAuth: false,
         firestoreConnection: false,
         notificationPermissions: false,
+        locationPermissions: false,
         notificationRouter: false,
         globalListeners: false,
         sessionData: false
@@ -173,6 +176,26 @@ class AppInitializationServiceClass {
         }
       }
       this.diagnostics.healthCheck.notificationPermissions = true;
+    });
+
+    // Step 8.5: Request location permissions (for venue events and map features)
+    await this.executeStep('location_permissions', async () => {
+      try {
+        const { status: existingStatus } = await Location.getForegroundPermissionsAsync();
+        if (existingStatus.status !== 'granted') {
+          console.log('AppInitializationService: Requesting location permissions for venue events and map features');
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          this.diagnostics.healthCheck.locationPermissions = (status === 'granted');
+        } else {
+          this.diagnostics.healthCheck.locationPermissions = true;
+        }
+        
+        console.log('AppInitializationService: Location permission status:', existingStatus.status);
+      } catch (permError) {
+        console.warn('Failed to request location permissions:', permError);
+        // Don't fail initialization for permission issues
+        this.diagnostics.healthCheck.locationPermissions = false;
+      }
     });
 
     // Step 9: Load and set session data

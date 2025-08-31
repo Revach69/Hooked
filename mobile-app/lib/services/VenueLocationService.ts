@@ -37,6 +37,15 @@ export class VenueLocationService {
   private isMonitoring = false;
   private currentEventId: string | null = null;
   private currentVenueId: string | null = null;
+  
+  // 20s caching for jitter smoothing
+  private lastLocationCache: {
+    location: LocationCoordinates;
+    timestamp: number;
+  } | null = null;
+  
+  // Track last 3 distance calculations for median filtering
+  private recentDistances: { distance: number; timestamp: number }[] = [];
 
   static getInstance(): VenueLocationService {
     if (!VenueLocationService.instance) {
@@ -143,31 +152,39 @@ export class VenueLocationService {
     kFactor: number = 1.2
   ): Promise<VenueLocationVerification> {
     try {
+      // Use cached location if available and recent (within 20 seconds)
+      const smoothedLocation = this.getSmoothLocationWithCache(userLocation);
+      
       const distance = this.calculateDistance(
-        userLocation.lat,
-        userLocation.lng,
+        smoothedLocation.lat,
+        smoothedLocation.lng,
         venueCoordinates.lat,
         venueCoordinates.lng
       );
 
+      // Add to recent distances and get median-filtered distance
+      const medianDistance = this.addDistanceAndGetMedian(distance);
+      
       const effectiveRadius = radiusMeters * kFactor;
-      const withinRadius = distance <= effectiveRadius;
-      const needsRefix = userLocation.accuracy > 150; // Poor accuracy threshold
+      const withinRadius = medianDistance <= effectiveRadius;
+      const needsRefix = smoothedLocation.accuracy > 150; // Poor accuracy threshold
 
       const result: VenueLocationVerification = {
         withinRadius: needsRefix ? false : withinRadius, // Don't allow poor accuracy locations
-        distance,
-        accuracy: userLocation.accuracy,
+        distance: medianDistance, // Use median-filtered distance
+        accuracy: smoothedLocation.accuracy,
         needsRefix
       };
 
       // Log verification for debugging
-      console.log('Venue location verification:', {
-        distance: Math.round(distance),
+      console.log('Venue location verification (smoothed):', {
+        rawDistance: Math.round(distance),
+        medianDistance: Math.round(medianDistance),
         effectiveRadius: Math.round(effectiveRadius),
-        accuracy: Math.round(userLocation.accuracy),
+        accuracy: Math.round(smoothedLocation.accuracy),
         withinRadius: result.withinRadius,
-        needsRefix
+        needsRefix,
+        usedCache: smoothedLocation !== userLocation
       });
 
       return result;
@@ -444,11 +461,82 @@ export class VenueLocationService {
   }
 
   /**
+   * Get smooth location using 20-second cache to reduce GPS jitter
+   */
+  private getSmoothLocationWithCache(currentLocation: LocationCoordinates): LocationCoordinates {
+    const now = Date.now();
+    const CACHE_DURATION_MS = 20 * 1000; // 20 seconds
+    
+    // Check if we have a recent cached location with similar accuracy
+    if (this.lastLocationCache && 
+        (now - this.lastLocationCache.timestamp) < CACHE_DURATION_MS &&
+        Math.abs(this.lastLocationCache.location.accuracy - currentLocation.accuracy) < 50) {
+      
+      // Use cached location if it's recent and accuracy is similar
+      console.log('Using cached location for jitter smoothing');
+      return this.lastLocationCache.location;
+    }
+    
+    // Update cache with current location
+    this.lastLocationCache = {
+      location: currentLocation,
+      timestamp: now
+    };
+    
+    return currentLocation;
+  }
+
+  /**
+   * Add distance to recent distances and return median of last 3 distances
+   */
+  private addDistanceAndGetMedian(distance: number): number {
+    const now = Date.now();
+    const DISTANCE_HISTORY_DURATION_MS = 5 * 60 * 1000; // 5 minutes
+    
+    // Add new distance to history
+    this.recentDistances.push({ distance, timestamp: now });
+    
+    // Remove old distances (older than 5 minutes)
+    this.recentDistances = this.recentDistances.filter(
+      entry => (now - entry.timestamp) < DISTANCE_HISTORY_DURATION_MS
+    );
+    
+    // Get last 3 distances for median calculation
+    const lastDistances = this.recentDistances
+      .slice(-3)
+      .map(entry => entry.distance)
+      .sort((a, b) => a - b); // Sort for median calculation
+    
+    // Return median distance
+    if (lastDistances.length === 0) {
+      return distance;
+    } else if (lastDistances.length === 1) {
+      return lastDistances[0];
+    } else if (lastDistances.length === 2) {
+      return (lastDistances[0] + lastDistances[1]) / 2;
+    } else {
+      // Return middle value for 3 or more distances
+      return lastDistances[Math.floor(lastDistances.length / 2)];
+    }
+  }
+
+  /**
+   * Clear location caches (for privacy compliance)
+   */
+  private clearLocationCaches(): void {
+    this.lastLocationCache = null;
+    this.recentDistances = [];
+  }
+
+  /**
    * Clean up location service resources
    */
   async cleanup(): Promise<void> {
     try {
       await this.stopVenueLocationMonitoring();
+      
+      // Clear location caches
+      this.clearLocationCaches();
       
       // Remove any stored location data
       await AsyncStorageUtils.removeItem(VENUE_MONITORING_ACTIVE_KEY);

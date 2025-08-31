@@ -5,15 +5,8 @@ import { X, MapPin } from 'lucide-react-native';
 import { VenueLocationService } from '../services/VenueLocationService';
 
 export interface QRScanResult {
-  type: 'regular' | 'venue_event';
-  code?: string; // For regular events
-  venueData?: {
-    venueId: string;
-    qrCodeId: string;
-    eventName: string;
-    venueName: string;
-    coordinates?: { lat: number; lng: number };
-  }; // For venue events
+  type: 'event'; // Now unified
+  code: string; // Event code (regular or venue)
 }
 
 interface QRCodeScannerProps {
@@ -38,16 +31,9 @@ export default function QRCodeScanner({ onScan, onClose }: QRCodeScannerProps) {
     setScanned(true);
     
     try {
-      // First, try to parse as venue event QR code
-      const venueResult = await parseVenueEventQR(data);
-      if (venueResult) {
-        onScan(venueResult);
-        return;
-      }
-      
-      // Fallback to regular event code parsing
-      const regularResult = parseRegularEventQR(data);
-      onScan(regularResult);
+      // Parse event code from QR data (both regular and venue events use same URL format)
+      const result = parseEventQR(data);
+      onScan(result);
       
     } catch (error) {
       console.error('QR scan error:', error);
@@ -56,36 +42,7 @@ export default function QRCodeScanner({ onScan, onClose }: QRCodeScannerProps) {
     }
   };
   
-  const parseVenueEventQR = async (data: string): Promise<QRScanResult | null> => {
-    try {
-      // Try parsing as JSON first (venue event format)
-      const parsed = JSON.parse(data);
-      
-      if (parsed.type === 'venue_event' && parsed.venueId && parsed.qrCodeId) {
-        // Validate required fields for venue events
-        if (!parsed.eventName || !parsed.venueName) {
-          throw new Error('Invalid venue event QR format');
-        }
-        
-        return {
-          type: 'venue_event',
-          venueData: {
-            venueId: parsed.venueId,
-            qrCodeId: parsed.qrCodeId,
-            eventName: parsed.eventName,
-            venueName: parsed.venueName,
-            coordinates: parsed.coordinates
-          }
-        };
-      }
-    } catch {
-      // Not a JSON venue event QR code, continue to regular parsing
-    }
-    
-    return null;
-  };
-  
-  const parseRegularEventQR = (data: string): QRScanResult => {
+  const parseEventQR = (data: string): QRScanResult => {
     let eventCode = '';
     
     try {
@@ -99,14 +56,14 @@ export default function QRCodeScanner({ onScan, onClose }: QRCodeScannerProps) {
       }
       
       return {
-        type: 'regular',
-        code: eventCode ? eventCode.toUpperCase() : data
+        type: 'event',
+        code: eventCode ? eventCode.toUpperCase() : data.toUpperCase()
       };
     } catch {
       // If URL parsing fails, treat as plain text
       return {
-        type: 'regular',
-        code: data
+        type: 'event',
+        code: data.toUpperCase()
       };
     }
   };
@@ -153,17 +110,8 @@ export default function QRCodeScanner({ onScan, onClose }: QRCodeScannerProps) {
         <View style={styles.scanArea}>
           <View style={styles.scanFrame} />
           <Text style={styles.instructionText}>
-            Scan event QR code or venue event code
+            Scan event QR code
           </Text>
-          <View style={styles.scanTypeIndicators}>
-            <View style={styles.scanTypeIndicator}>
-              <Text style={styles.scanTypeText}>Regular Event</Text>
-            </View>
-            <View style={styles.scanTypeIndicator}>
-              <MapPin size={16} color="rgba(255,255,255,0.7)" />
-              <Text style={styles.scanTypeText}>Venue Event</Text>
-            </View>
-          </View>
         </View>
         
         {/* Bottom section */}

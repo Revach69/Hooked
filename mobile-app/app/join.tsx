@@ -15,6 +15,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMobileAsyncOperation } from '../lib/hooks/useMobileErrorHandling';
 import MobileOfflineStatusBar from '../lib/components/MobileOfflineStatusBar';
 import { Timestamp } from 'firebase/firestore';
+import { EventContextService } from '../lib/services/EventContextService';
+import { ConditionalLocationService } from '../lib/services/ConditionalLocationService';
 
 export default function JoinPage() {
   const { code } = useLocalSearchParams<{ code: string }>();
@@ -38,6 +40,9 @@ export default function JoinPage() {
         router.replace('/adminLogin');
         return;
       }
+
+      // Note: Venue event codes (starting with V_) will be handled differently server-side
+      // They will trigger location verification and venue event room creation
 
       // Use enhanced error handling for event validation
       const result = await executeOperationWithOfflineFallback(
@@ -122,6 +127,23 @@ export default function JoinPage() {
       await AsyncStorageUtils.setItem('currentSessionId', sessionId);
       await AsyncStorageUtils.setItem('currentEventCode', event.event_code);
 
+      // Determine event type and set context
+      const isVenueEvent = event.event_code?.startsWith('V_');
+      
+      await EventContextService.setEventContext({
+        eventId: event.id,
+        eventType: isVenueEvent ? 'venue' : 'regular',
+        eventName: event.name,
+        venueId: isVenueEvent ? event.venueId : undefined,
+        venueName: isVenueEvent ? event.venueName : undefined,
+        venueCode: isVenueEvent ? event.event_code : undefined,
+        locationRadius: isVenueEvent ? (event.locationRadius || 50) : undefined,
+        requiresLocationVerification: isVenueEvent
+      });
+
+      // Start conditional location monitoring
+      await ConditionalLocationService.startLocationMonitoringIfNeeded();
+
       // Update NotificationRouter with new session ID
       try {
         const { setCurrentSessionIdForDedup } = await import('../lib/notifications/NotificationRouter');
@@ -132,10 +154,16 @@ export default function JoinPage() {
         // Don't fail the join process for this
       }
 
+      console.log('Event joined:', {
+        type: isVenueEvent ? 'venue' : 'regular',
+        code: event.event_code,
+        requiresLocation: isVenueEvent
+      });
+
       // Navigate to consent page
       router.replace('/consent');
-    } catch {
-      // Failed to create event profile
+    } catch (error) {
+      console.error('Failed to create event profile:', error);
       setError("Failed to set up your event session. Please try again.");
       setIsLoading(false);
     }

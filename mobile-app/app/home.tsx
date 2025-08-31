@@ -197,18 +197,16 @@ export default function Home() {
   const handleQRScan = (result: QRScanResult) => {
     closeModal();
     
-    if (result.type === 'regular' && result.code) {
+    if (result.type === 'event' && result.code) {
+      // Use unified event access - server will determine if it's regular or venue event
       handleEventAccess(result.code);
-    } else if (result.type === 'venue_event' && result.venueData) {
-      // Navigate to venue event join flow
-      router.push(`/join-venue?venueId=${result.venueData.venueId}&qrCodeId=${result.venueData.qrCodeId}&eventName=${encodeURIComponent(result.venueData.eventName)}&venueName=${encodeURIComponent(result.venueData.venueName)}`);
     } else {
       console.warn('Invalid QR scan result:', result);
       // Show error without Alert import
       Toast.show({
         type: 'error',
         text1: 'Invalid QR Code',
-        text2: 'The scanned QR code is not a valid event or venue code.',
+        text2: 'The scanned QR code is not a valid event code.',
       });
     }
   };

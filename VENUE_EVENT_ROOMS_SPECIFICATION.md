@@ -227,7 +227,6 @@ interface EventEntryResult {
 - **Rate Limiting**: Prevent QR spam attempts
 
 **Recommendations:**
-- **Token Lifetime**: 10 minutes for outdoor venues, 15 minutes for complex indoor venues
 - **Security Logging**: Track failed attempts, mock location usage, token replay attempts
 
 ### 2.2 Location Verification Logic
@@ -595,7 +594,7 @@ class AdaptivePollingService {
 
 **Recommendations:**
 - **WiFi Assistance**: Use WiFi BSSID scanning for indoor location when GPS poor
-- **Predictive Pausing**: Learn patterns (user always leaves at 10:30pm) to optimize polling
+- **Predictive Pausing**: Learn patterns (user always leaves at 10:30pm) to suggest optimization polling
 - **Crowd Intelligence**: Use other users' location data to validate boundary accuracy
 
 ### 5.3 Location Accuracy Optimization
@@ -606,7 +605,6 @@ class AdaptivePollingService {
 
 **Recommendations:**
 - **Multi-Source Fusion**: Combine GPS, WiFi, and cell tower data for better indoor accuracy
-- **Historical Analysis**: Use user's historical location patterns to validate unusual readings
 - **Crowd-Sourced Accuracy**: Use other users' location data (anonymously) to improve venue boundary detection
 - **Machine Learning**: Implement ML models to predict GPS accuracy based on environmental factors
 

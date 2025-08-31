@@ -338,6 +338,12 @@ export const EventAPI = {
   async filter(filters: Partial<Event> = {}): Promise<Event[]> {
     return firebaseRetry(async () => {
       return trace('filter_events', async () => {
+        // Check if this is a venue event code
+        if (filters.event_code?.startsWith('V_')) {
+          return await this.validateVenueEvent(filters.event_code);
+        }
+        
+        // Regular event lookup
         let q: any = collection(db, 'events');
         
         if (filters.event_code) {
@@ -354,6 +360,41 @@ export const EventAPI = {
         })) as Event[];
       });
     }, { operation: 'Filter events' });
+  },
+
+  async validateVenueEvent(venueCode: string): Promise<Event[]> {
+    return firebaseRetry(async () => {
+      return trace('validate_venue_event', async () => {
+        // Get user location for venue verification
+        let userLocation = null;
+        try {
+          const { VenueLocationService } = await import('./services/VenueLocationService');
+          const locationService = VenueLocationService.getInstance();
+          const location = await locationService.getCurrentLocation(false);
+          if (location) {
+            userLocation = { lat: location.lat, lng: location.lng };
+          }
+        } catch (error) {
+          console.warn('Could not get location for venue verification:', error);
+        }
+
+        // Call server function to validate venue code
+        const { getFunctions, httpsCallable } = await import('firebase/functions');
+        const functions = getFunctions();
+        const validateVenueEventCode = httpsCallable(functions, 'validateVenueEventCode');
+        
+        const result = await validateVenueEventCode({
+          venueCode,
+          userLocation
+        });
+        
+        if (result.data.success) {
+          return [result.data.event];
+        } else {
+          throw new Error('Venue event validation failed');
+        }
+      });
+    }, { operation: 'Validate venue event' });
   },
 
   async get(id: string): Promise<Event | null> {

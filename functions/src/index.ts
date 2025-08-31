@@ -1131,6 +1131,120 @@ export const getVenuesInViewport = onCall({
   }
 });
 
+// Cloud Function to validate venue event codes and create venue events
+export const validateVenueEventCode = onCall({
+  region: FUNCTION_REGION,
+}, async (request) => {
+  const { venueCode, userLocation } = request.data;
+  
+  if (!venueCode || typeof venueCode !== 'string') {
+    throw new HttpsError('invalid-argument', 'venueCode is required and must be a string');
+  }
+  
+  if (!venueCode.startsWith('V_')) {
+    throw new HttpsError('invalid-argument', 'Invalid venue code format');
+  }
+  
+  try {
+    console.log('validateVenueEventCode: Looking up venue code:', venueCode);
+    
+    // Find the map client with this venue code
+    const mapClientQuery = await db.collection('mapClients')
+      .where('eventHubSettings.venueEventCode', '==', venueCode)
+      .where('eventHubSettings.enabled', '==', true)
+      .where('subscriptionStatus', '==', 'active')
+      .limit(1)
+      .get();
+    
+    if (mapClientQuery.empty) {
+      throw new HttpsError('not-found', 'Venue event code not found or venue not active');
+    }
+    
+    const mapClient = mapClientQuery.docs[0];
+    const venueData = mapClient.data();
+    
+    console.log('validateVenueEventCode: Found venue:', venueData.businessName);
+    
+    // Verify location if user location is provided
+    if (userLocation && userLocation.lat && userLocation.lng) {
+      const venueCoords = venueData.coordinates;
+      const locationRadius = venueData.eventHubSettings?.locationRadius || 50;
+      
+      if (venueCoords?.lat && venueCoords?.lng) {
+        const distance = calculateDistance(
+          userLocation.lat,
+          userLocation.lng,
+          venueCoords.lat,
+          venueCoords.lng
+        );
+        
+        console.log('validateVenueEventCode: Location check:', {
+          distance: Math.round(distance),
+          radius: locationRadius,
+          withinRange: distance <= locationRadius
+        });
+        
+        if (distance > locationRadius) {
+          throw new HttpsError('permission-denied', 
+            `You must be within ${locationRadius}m of ${venueData.businessName} to join this event. You are ${Math.round(distance)}m away.`
+          );
+        }
+      }
+    }
+    
+    // Create a venue event object similar to regular events
+    const venueEvent = {
+      id: `venue_${mapClient.id}_${Date.now()}`,
+      name: venueData.eventHubSettings.eventName,
+      event_code: venueCode,
+      venue_type: 'venue_event',
+      venueId: mapClient.id,
+      venueName: venueData.businessName,
+      locationRadius: venueData.eventHubSettings?.locationRadius || 50,
+      // Set times to be always active for venue events
+      starts_at: admin.firestore.Timestamp.fromDate(new Date('2020-01-01')),
+      expires_at: admin.firestore.Timestamp.fromDate(new Date('2030-01-01')),
+      expired: false,
+      // Add venue-specific settings
+      eventHubSettings: venueData.eventHubSettings,
+      coordinates: venueData.coordinates,
+      timezone: venueData.eventHubSettings?.timezone || 'UTC'
+    };
+    
+    console.log('validateVenueEventCode: Venue event validated successfully');
+    
+    return {
+      success: true,
+      event: venueEvent,
+      requiresLocationVerification: true
+    };
+    
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    
+    console.error('validateVenueEventCode: Error:', error);
+    throw new HttpsError('internal', 'Failed to validate venue event code');
+  }
+});
+
+// Helper function to calculate distance between two points
+function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371e3; // Earth's radius in meters
+  const φ1 = lat1 * Math.PI/180;
+  const φ2 = lat2 * Math.PI/180;
+  const Δφ = (lat2-lat1) * Math.PI/180;
+  const Δλ = (lng2-lng1) * Math.PI/180;
+
+  const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+          Math.cos(φ1) * Math.cos(φ2) *
+          Math.sin(Δλ/2) * Math.sin(Δλ/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+  return R * c; // Distance in meters
+}
+
 // Cloud Function to get detailed venue information
 export const getVenueDetails = onCall({
   region: FUNCTION_REGION,

@@ -11,6 +11,7 @@ import { BulkImportModal } from '@/components/mapClients/BulkImportModal';
 import { MapPreviewModal } from '@/components/mapClients/MapPreviewModal';
 import { ExportButton } from '@/components/mapClients/ExportButton';
 import { QRCodeGenerator } from '@/components/mapClients/QRCodeGenerator';
+import VenueAnalyticsModal from '@/components/mapClients/VenueAnalyticsModal';
 import { MapClientAPI } from '@/lib/firestore/mapClients';
 import { Plus, MapPin, BarChart3, Table, Upload, Eye } from 'lucide-react';
 import type { MapClient } from '@/types/admin';
@@ -30,8 +31,10 @@ export default function MapClientsPage() {
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [showMapPreview, setShowMapPreview] = useState(false);
   const [showQRGenerator, setShowQRGenerator] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
   const [editingClient, setEditingClient] = useState<MapClient | null>(null);
   const [selectedClientForQR, setSelectedClientForQR] = useState<MapClient | null>(null);
+  const [selectedClientForAnalytics, setSelectedClientForAnalytics] = useState<MapClient | null>(null);
 
   useEffect(() => {
     loadMapClients();
@@ -114,6 +117,11 @@ export default function MapClientsPage() {
   const handleQRCodeGenerate = (client: MapClient) => {
     setSelectedClientForQR(client);
     setShowQRGenerator(true);
+  };
+
+  const handleAnalytics = (client: MapClient) => {
+    setSelectedClientForAnalytics(client);
+    setShowAnalytics(true);
   };
 
   // Calculate filtered clients for export
@@ -273,6 +281,7 @@ export default function MapClientsPage() {
             onUpdate={handleUpdateClient}
             onEventSettings={handleEventSettings}
             onQRCodeGenerate={handleQRCodeGenerate}
+            onAnalytics={handleAnalytics}
             searchQuery={searchQuery}
             statusFilter={statusFilter}
             typeFilter={typeFilter}
@@ -313,18 +322,27 @@ export default function MapClientsPage() {
         mapClients={mapClients}
       />
 
-      {selectedClientForQR && (
-        <QRCodeGenerator
-          open={showQRGenerator}
-          onOpenChange={(open) => {
-            if (!open) {
-              setShowQRGenerator(false);
-              setSelectedClientForQR(null);
-            }
-          }}
-          mapClient={selectedClientForQR}
-        />
-      )}
+      <QRCodeGenerator
+        open={showQRGenerator && !!selectedClientForQR}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowQRGenerator(false);
+            setSelectedClientForQR(null);
+          }
+        }}
+        mapClient={selectedClientForQR!}
+      />
+
+      <VenueAnalyticsModal
+        open={showAnalytics && !!selectedClientForAnalytics}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowAnalytics(false);
+            setSelectedClientForAnalytics(null);
+          }
+        }}
+        mapClient={selectedClientForAnalytics!}
+      />
     </div>
   );
 }

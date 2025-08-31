@@ -15,7 +15,8 @@ import {
   Eye,
   Calendar,
   Settings,
-  QrCode
+  QrCode,
+  BarChart3
 } from 'lucide-react';
 import type { MapClient } from '@/types/admin';
 
@@ -26,6 +27,7 @@ interface MapClientsTableProps {
   onUpdate: (mapClientId: string, field: string, value: string | number | boolean) => void;
   onEventSettings?: (mapClient: MapClient) => void;
   onQRCodeGenerate?: (mapClient: MapClient) => void;
+  onAnalytics?: (mapClient: MapClient) => void;
   searchQuery: string;
   statusFilter: string;
   typeFilter: string;
@@ -40,6 +42,7 @@ export function MapClientsTable({
   onUpdate,
   onEventSettings,
   onQRCodeGenerate,
+  onAnalytics,
   searchQuery,
   statusFilter,
   typeFilter,
@@ -234,14 +237,14 @@ export function MapClientsTable({
                     {client.eventHubSettings?.enabled ? (
                       <>
                         <div className="flex items-center gap-1">
-                          <Badge className="bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400">
-                            Active
+                          <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400">
+                            Event Live
                           </Badge>
                         </div>
                         <div className="text-xs text-gray-600 dark:text-gray-400">
                           {client.eventHubSettings.eventName}
                         </div>
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1 flex-wrap">
                           <Button
                             variant="ghost"
                             size="sm"
@@ -260,12 +263,21 @@ export function MapClientsTable({
                             <QrCode className="h-3 w-3 mr-1" />
                             QR
                           </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onAnalytics?.(client)}
+                            className="h-6 text-xs px-2 py-1"
+                          >
+                            <BarChart3 className="h-3 w-3 mr-1" />
+                            Analytics
+                          </Button>
                         </div>
                       </>
                     ) : (
                       <div className="space-y-1">
                         <Badge variant="secondary" className="text-xs">
-                          Disabled
+                          Event Off
                         </Badge>
                         <Button
                           variant="ghost"
