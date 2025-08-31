@@ -231,8 +231,10 @@ export function MapClientFormSheet({
     setIsLoading(true);
 
     try {
+      const { venueImage, ...dataToSubmit } = formData;
+      
       const submitData = {
-        ...formData,
+        ...dataToSubmit,
         monthlyFee: formData.monthlyFee ? parseFloat(formData.monthlyFee) : null,
         coordinates: formData.coordinates.lat && formData.coordinates.lng ? formData.coordinates : null,
         email: formData.email || null,
@@ -241,8 +243,6 @@ export function MapClientFormSheet({
         website: formData.website || null,
         subscriptionStartDate: formData.subscriptionStartDate || null,
         subscriptionEndDate: formData.subscriptionEndDate || null,
-        // Remove venueImage from submission - only keep venueImageUrl
-        venueImage: undefined,
       };
 
       if (mapClient) {
