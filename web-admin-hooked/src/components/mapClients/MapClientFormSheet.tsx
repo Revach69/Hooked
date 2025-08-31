@@ -241,6 +241,8 @@ export function MapClientFormSheet({
         website: formData.website || null,
         subscriptionStartDate: formData.subscriptionStartDate || null,
         subscriptionEndDate: formData.subscriptionEndDate || null,
+        // Remove venueImage from submission - only keep venueImageUrl
+        venueImage: undefined,
       };
 
       if (mapClient) {
@@ -268,6 +270,13 @@ export function MapClientFormSheet({
           ...prev.eventHubSettings,
           eventName: `Singles at ${value}`
         };
+      }
+      
+      // Auto-prepend https:// to website if missing
+      if (field === 'website' && value && typeof value === 'string') {
+        if (value.trim() && !value.startsWith('http://') && !value.startsWith('https://')) {
+          newData.website = `https://${value}`;
+        }
       }
       
       return newData;
@@ -479,9 +488,17 @@ export function MapClientFormSheet({
                 <Input
                   id="whatsapp"
                   value={formData.socialMedia.whatsapp}
-                  onChange={(e) => updateNestedField('socialMedia', 'whatsapp', e.target.value)}
+                  onChange={(e) => {
+                    let phoneNumber = e.target.value;
+                    // Remove any existing wa.me prefix if user pastes full URL
+                    phoneNumber = phoneNumber.replace(/^(https?:\/\/)?(wa\.me\/)?/, '');
+                    // Clean up phone number (remove spaces, dashes, etc.)
+                    phoneNumber = phoneNumber.replace(/[^\d+]/g, '');
+                    updateNestedField('socialMedia', 'whatsapp', phoneNumber);
+                  }}
                   placeholder="+1234567890"
                 />
+                <p className="text-xs text-gray-500 mt-1">Phone number only - will auto-generate WhatsApp link</p>
               </div>
               
               <div>

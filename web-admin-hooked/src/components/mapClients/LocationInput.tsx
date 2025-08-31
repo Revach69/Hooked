@@ -160,33 +160,6 @@ export function LocationInput({
     }
   };
 
-  const getCurrentLocation = () => {
-    if (!navigator.geolocation) {
-      setGeocodeError('Geolocation is not supported by this browser');
-      return;
-    }
-
-    setIsGeocoding(true);
-    setGeocodeError(null);
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const newCoordinates = {
-          lat: Math.round(position.coords.latitude * 1000000) / 1000000,
-          lng: Math.round(position.coords.longitude * 1000000) / 1000000,
-        };
-        
-        setManualCoordinates(newCoordinates);
-        onCoordinatesChange(newCoordinates);
-        setIsGeocoding(false);
-      },
-      (error) => {
-        console.error('Geolocation failed:', error);
-        setGeocodeError('Failed to get current location. Please check your browser permissions.');
-        setIsGeocoding(false);
-      }
-    );
-  };
 
   return (
     <Card className="w-full">
@@ -302,17 +275,6 @@ export function LocationInput({
           </div>
           
           <div className="flex gap-2 mt-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={getCurrentLocation}
-              disabled={disabled || isGeocoding}
-              className="flex items-center gap-2"
-            >
-              <Navigation className="h-3 w-3" />
-              Use Current Location
-            </Button>
             
             {coordinates && coordinates.lat !== 0 && coordinates.lng !== 0 && (
               <div className="text-sm text-green-600 dark:text-green-400 flex items-center gap-1 px-2">
@@ -333,8 +295,12 @@ export function LocationInput({
             <div className="text-gray-600 dark:text-gray-400">
               Longitude: {coordinates.lng.toFixed(6)}
             </div>
-            <div className="text-xs text-gray-500 dark:text-gray-500 mt-2">
-              Note: Mapbox integration pending API key configuration
+            <div className="w-full h-32 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center mt-2">
+              <div className="text-center">
+                <MapPin className="h-6 w-6 text-gray-400 mx-auto mb-2" />
+                <p className="text-sm text-gray-500">Map Preview</p>
+                <p className="text-xs text-gray-400">Coordinates: {coordinates.lat.toFixed(4)}, {coordinates.lng.toFixed(4)}</p>
+              </div>
             </div>
           </div>
         )}
