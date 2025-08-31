@@ -47,56 +47,12 @@ if (Mapbox && mapboxToken && mapboxToken.startsWith('pk.') && !mapboxToken.inclu
   console.warn('Mapbox access token not configured or is placeholder');
 }
 
-// Fallback mock venues for development when API is unavailable
-const generateFallbackVenues = () => {
-  const baseVenues = [
-    { name: 'The Rooftop Lounge', type: 'bar', desc: 'Trendy rooftop bar with city views' },
-    { name: 'Downtown Social', type: 'restaurant', desc: 'Modern social dining experience' },
-    { name: 'Sunset Café', type: 'cafe', desc: 'Cozy coffee shop perfect for meetings' },
-    { name: 'Marina Club', type: 'club', desc: 'Premier nightlife destination' },
-    { name: 'Golden Gate Bistro', type: 'restaurant', desc: 'Fine dining with bay views' },
-  ];
-
-  return baseVenues.map((baseVenue, i) => ({
-    id: `fallback-venue-${i + 1}`,
-    name: baseVenue.name,
-    type: baseVenue.type,
-    coordinates: [
-      -122.4194 + (Math.random() - 0.5) * 0.05,
-      37.7749 + (Math.random() - 0.5) * 0.05
-    ] as [number, number],
-    address: `${100 + i} Street Name, San Francisco, CA`,
-    activeUsers: Math.floor(Math.random() * 30) + 1,
-    description: baseVenue.desc,
-    image: null,
-    phone: i % 3 === 0 ? `+1-555-${String(Math.floor(Math.random() * 900) + 100)}-${String(Math.floor(Math.random() * 9000) + 1000)}` : null,
-    website: i % 2 === 0 ? `https://www.${baseVenue.name.toLowerCase().replace(/\s+/g, '')}.com` : null,
-    socialMedia: {
-      instagram: i % 4 === 0 ? `@${baseVenue.name.toLowerCase().replace(/\s+/g, '')}` : null,
-      facebook: i % 5 === 0 ? `https://facebook.com/${baseVenue.name.toLowerCase().replace(/\s+/g, '')}` : null,
-    },
-    hookedHours: {
-      monday: { open: '19:00', close: '22:00', closed: false },
-      tuesday: { open: '19:00', close: '22:00', closed: false },
-      wednesday: { open: '19:00', close: '22:00', closed: false },
-      thursday: { open: '19:00', close: '23:00', closed: false },
-      friday: { open: '19:00', close: '24:00', closed: false },
-      saturday: { open: '18:00', close: '24:00', closed: false },
-      sunday: { open: '18:00', close: '21:00', closed: false },
-    },
-    openingHours: {
-      monday: { open: '11:00', close: '23:00', closed: false },
-      tuesday: { open: '11:00', close: '23:00', closed: false },
-      wednesday: { open: '11:00', close: '24:00', closed: false },
-      thursday: { open: '11:00', close: '24:00', closed: false },
-      friday: { open: '11:00', close: '24:00', closed: false },
-      saturday: { open: '10:00', close: '24:00', closed: false },
-      sunday: { open: '10:00', close: '23:00', closed: false },
-    },
-  }));
+// Tel Aviv default location (Ruppin 23) for simulator testing
+const TEL_AVIV_DEFAULT_LOCATION = {
+  longitude: 34.770515,
+  latitude: 32.082885,
+  address: 'Ruppin 23, Tel Aviv',
 };
-
-const FALLBACK_VENUES = generateFallbackVenues();
 
 function MapScreen() {
   const colorScheme = useColorScheme();
@@ -112,7 +68,7 @@ function MapScreen() {
   const [userLocation, setUserLocation] = useState<{longitude: number, latitude: number} | null>(null);
   const [showUserLocation, setShowUserLocation] = useState(false);
   const [followUserLocation, setFollowUserLocation] = useState(false);
-  const [venues, setVenues] = useState<MapClient[]>(FALLBACK_VENUES);
+  const [venues, setVenues] = useState<MapClient[]>([]);
   const [isLoadingVenues, setIsLoadingVenues] = useState(false);
   const [venuesError, setVenuesError] = useState<string | null>(null);
   const [selectedVenue, setSelectedVenue] = useState<any>(null);
@@ -170,19 +126,38 @@ function MapScreen() {
             accuracy: Location.Accuracy.High,
           });
           
-          setUserLocation({
+          const userCoords = {
             longitude: location.coords.longitude,
             latitude: location.coords.latitude,
-          });
+          };
+          
+          setUserLocation(userCoords);
+          
+          // If no camera center is set yet, use user location
+          if (!cameraCenter) {
+            setCameraCenter([userCoords.longitude, userCoords.latitude]);
+            setFollowUserLocation(true);
+          }
         } catch (locationError) {
-          console.warn('Could not get current location:', locationError);
-          // Still allow showing user location dot without centering
+          console.warn('Could not get current location, using Tel Aviv default:', locationError);
+          // Use Tel Aviv default location for simulator
+          setUserLocation(TEL_AVIV_DEFAULT_LOCATION);
+          
+          // If no camera center is set yet, use Tel Aviv default
+          if (!cameraCenter) {
+            setCameraCenter([TEL_AVIV_DEFAULT_LOCATION.longitude, TEL_AVIV_DEFAULT_LOCATION.latitude]);
+          }
         }
         
         return true;
       } else {
         setLocationPermissionGranted(false);
         setShowUserLocation(false);
+        
+        // Set default Tel Aviv location if no permission
+        if (!cameraCenter) {
+          setCameraCenter([TEL_AVIV_DEFAULT_LOCATION.longitude, TEL_AVIV_DEFAULT_LOCATION.latitude]);
+        }
         
         Alert.alert(
           'Location Access',
@@ -199,9 +174,15 @@ function MapScreen() {
       console.error('Location permission error:', error);
       setLocationPermissionGranted(false);
       setShowUserLocation(false);
+      
+      // Set default Tel Aviv location on error
+      if (!cameraCenter) {
+        setCameraCenter([TEL_AVIV_DEFAULT_LOCATION.longitude, TEL_AVIV_DEFAULT_LOCATION.latitude]);
+      }
+      
       return false;
     }
-  }, []);
+  }, [cameraCenter]);
 
   const fetchVenuesFromAPI = useCallback(async () => {
     setIsLoadingVenues(true);
@@ -214,14 +195,14 @@ function MapScreen() {
         setVenues(response.venues);
         console.log(`Loaded ${response.venues.length} venues from API`);
       } else {
-        console.warn('No venues returned from API, using fallback venues');
-        setVenues(FALLBACK_VENUES);
+        console.warn('No venues returned from API');
+        setVenues([]);
         setVenuesError(response.error || 'No venues available');
       }
     } catch (error) {
       console.error('Failed to fetch venues from API:', error);
-      setVenues(FALLBACK_VENUES);
-      setVenuesError('Failed to connect to server, using offline venues');
+      setVenues([]);
+      setVenuesError('Failed to connect to server');
     } finally {
       setIsLoadingVenues(false);
     }
@@ -238,7 +219,7 @@ function MapScreen() {
       await fetchVenuesFromAPI();
       
       // Request location permission regardless (needed for venue events)
-      await requestLocationPermission();
+      const locationGranted = await requestLocationPermission();
       
       // Handle centering from navigation params
       if (centerOnUser === 'true' && centerLat && centerLng) {
@@ -250,6 +231,7 @@ function MapScreen() {
           setFollowUserLocation(true);
         }
       }
+      // Note: Camera center is now set in requestLocationPermission based on actual location
       
       // For venue discovery, we don't need event/session validation
       // Users can browse venues without being in an event
@@ -287,9 +269,11 @@ function MapScreen() {
       };
       
       setUserLocation(userCoords);
+      setCameraCenter([userCoords.longitude, userCoords.latitude]);
       setFollowUserLocation(true);
+      setCurrentZoom(14);
       
-      // Center the map camera on user location
+      // Center the map camera on user location with animation
       if (mapViewRef.current) {
         mapViewRef.current.setCamera({
           centerCoordinate: [userCoords.longitude, userCoords.latitude],
@@ -299,11 +283,22 @@ function MapScreen() {
       }
       
     } catch (error) {
-      console.warn('Could not get current location for centering:', error);
-      Alert.alert(
-        'Location Unavailable',
-        'Could not get your current location. Please check that location services are enabled.'
-      );
+      console.warn('Could not get current location for centering, using Tel Aviv default:', error);
+      // Use Tel Aviv default location for simulator
+      const defaultCoords = TEL_AVIV_DEFAULT_LOCATION;
+      setUserLocation(defaultCoords);
+      setCameraCenter([defaultCoords.longitude, defaultCoords.latitude]);
+      setFollowUserLocation(true);
+      setCurrentZoom(14);
+      
+      // Center the map camera on default location with animation
+      if (mapViewRef.current) {
+        mapViewRef.current.setCamera({
+          centerCoordinate: [defaultCoords.longitude, defaultCoords.latitude],
+          zoomLevel: 14,
+          animationDuration: 1000,
+        });
+      }
     }
   }, [locationPermissionGranted, requestLocationPermission]);
 
@@ -385,14 +380,11 @@ function MapScreen() {
   const handleQRScan = useCallback((result: QRScanResult) => {
     setIsQRScannerVisible(false);
     
-    if (result.type === 'regular' && result.code) {
-      // Navigate to join page with regular event code
+    if (result.type === 'event' && result.code) {
+      // Navigate to unified join page - server will determine if it's regular or venue event
       router.push(`/join?code=${result.code}`);
-    } else if (result.type === 'venue_event' && result.venueData) {
-      // Navigate to venue event join flow
-      router.push(`/join-venue?venueId=${result.venueData.venueId}&qrCodeId=${result.venueData.qrCodeId}&eventName=${encodeURIComponent(result.venueData.eventName)}&venueName=${encodeURIComponent(result.venueData.venueName)}`);
     } else {
-      Alert.alert('Invalid QR Code', 'The scanned QR code is not a valid event or venue code.');
+      Alert.alert('Invalid QR Code', 'The scanned QR code is not a valid event code.');
     }
   }, []);
 
@@ -728,7 +720,7 @@ function MapScreen() {
                   cameraCenter ? cameraCenter :
                   userLocation && followUserLocation 
                     ? [userLocation.longitude, userLocation.latitude]
-                    : [-122.4194, 37.7749] // San Francisco as default
+                    : [TEL_AVIV_DEFAULT_LOCATION.longitude, TEL_AVIV_DEFAULT_LOCATION.latitude] // Tel Aviv as default
                 }
                 animationDuration={1000}
                 followUserLocation={followUserLocation}

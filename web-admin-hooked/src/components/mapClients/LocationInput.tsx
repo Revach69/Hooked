@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { MapPin, Search, Navigation } from 'lucide-react';
+import { MapPin, Search } from 'lucide-react';
 
 interface Coordinates {
   lat: number;
@@ -85,8 +85,9 @@ export function LocationInput({
     };
     onCoordinatesChange(newCoordinates);
     setManualCoordinates(newCoordinates);
-    setSuggestions([]);
+    // Immediately hide suggestions after selection
     setShowSuggestions(false);
+    setSuggestions([]);
     setGeocodeError(null);
   };
 
@@ -180,6 +181,8 @@ export function LocationInput({
             <div className="relative flex-1">
               <Input
                 id="address"
+                name="business_address_field"
+                autoComplete="off"
                 value={address}
                 onChange={(e) => {
                   onAddressChange(e.target.value);
@@ -189,7 +192,7 @@ export function LocationInput({
                 }}
                 onBlur={() => {
                   // Delay hiding to allow clicking on suggestions
-                  setTimeout(() => setShowSuggestions(false), 200);
+                  setTimeout(() => setShowSuggestions(false), 150);
                 }}
                 onFocus={() => {
                   if (suggestions.length > 0) {
@@ -208,7 +211,10 @@ export function LocationInput({
                       key={suggestion.id || index}
                       type="button"
                       className="w-full px-4 py-2 text-left hover:bg-gray-100 focus:bg-gray-100 focus:outline-none border-b border-gray-100 last:border-b-0"
-                      onClick={() => handleSuggestionSelect(suggestion)}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handleSuggestionSelect(suggestion);
+                      }}
                     >
                       <div className="flex items-start gap-2">
                         <MapPin className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />

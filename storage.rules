@@ -34,6 +34,36 @@ service firebase.storage {
         request.resource.name.matches('^events/[0-9]+_[a-zA-Z0-9]+\\.[a-zA-Z0-9]+$');
     }
     
+    // ===== VENUE IMAGES =====
+    // Allow public read access to venue images
+    match /venue-images/{fileName} {
+      allow read: if true;
+      
+      // Allow uploads for venue images (web admin dashboard)
+      // This allows session-based uploads without strict Firebase Auth requirement
+      allow write: if 
+        // Allow image files only
+        request.resource.contentType.matches('image/.*') &&
+        // File size limit (5MB for venue images)
+        request.resource.size < 5 * 1024 * 1024 &&
+        // File name must be safe and follow the pattern: venue-images/clientId_timestamp_full.extension
+        request.resource.name.matches('^venue-images/[a-zA-Z0-9_-]+\\.[a-zA-Z0-9]+$');
+    }
+    
+    // Allow public read access to venue image thumbnails
+    match /venue-images/thumbnails/{fileName} {
+      allow read: if true;
+      
+      // Allow uploads for venue image thumbnails (web admin dashboard)
+      allow write: if 
+        // Allow image files only
+        request.resource.contentType.matches('image/.*') &&
+        // File size limit (2MB for thumbnails)
+        request.resource.size < 2 * 1024 * 1024 &&
+        // File name must be safe and follow the pattern: venue-images/thumbnails/clientId_timestamp_thumb.jpg
+        request.resource.name.matches('^venue-images/thumbnails/[a-zA-Z0-9_-]+\\.[a-zA-Z0-9]+$');
+    }
+    
     // ===== ADMIN FILES =====
     // Allow authenticated users (admins) to manage admin files
     match /admin/{fileName} {

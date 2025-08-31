@@ -46,22 +46,27 @@ const getCurrentTimeInMinutes = (): number => {
 
 /**
  * Check if current time is within the given time range
+ * Handles overnight spans (e.g., 18:00 - 02:00 = 6 PM to 2 AM next day)
  */
 const isTimeWithinRange = (openTime: string, closeTime: string): boolean => {
   const currentMinutes = getCurrentTimeInMinutes();
   const openMinutes = parseTimeToMinutes(openTime);
   let closeMinutes = parseTimeToMinutes(closeTime);
   
-  // Handle closing time that goes past midnight (e.g., open until 2:00 AM)
-  if (closeTime === '24:00' || closeMinutes < openMinutes) {
-    closeMinutes += 24 * 60; // Add 24 hours
-    
-    // Check if we're in the next day portion of the range
-    if (currentMinutes < openMinutes) {
-      return currentMinutes + 24 * 60 >= openMinutes && currentMinutes + 24 * 60 <= closeMinutes;
+  // Handle overnight spans (closing time is earlier than opening time in clock terms)
+  if (closeMinutes < openMinutes || closeTime === '24:00') {
+    // This is an overnight span (e.g., 18:00 - 02:00)
+    if (closeTime === '24:00') {
+      closeMinutes = 24 * 60; // Convert 24:00 to end of day
     }
+    
+    // For overnight spans, we're open if:
+    // - Current time is after opening time (same day), OR
+    // - Current time is before closing time (next day)
+    return currentMinutes >= openMinutes || currentMinutes <= closeMinutes;
   }
   
+  // Normal span within same day (e.g., 09:00 - 17:00)
   return currentMinutes >= openMinutes && currentMinutes <= closeMinutes;
 };
 

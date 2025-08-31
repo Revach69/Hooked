@@ -5,65 +5,44 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { QrCode, Download, Copy, Printer, Eye } from 'lucide-react';
+import { QrCode, Download, Copy, Printer } from 'lucide-react';
+import QRCode from 'qrcode';
 import type { MapClient } from '@/types/admin';
 
 interface QRCodeGeneratorProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  mapClient: MapClient;
+  mapClient: MapClient | null;
 }
 
 export function QRCodeGenerator({ open, onOpenChange, mapClient }: QRCodeGeneratorProps) {
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [qrData, setQrData] = useState<string>('');
+  const [joinLink, setJoinLink] = useState<string>('');
 
   useEffect(() => {
-    if (open && mapClient?.eventHubSettings?.enabled) {
-      generateQRCode();
+    if (open && mapClient?.eventHubSettings?.enabled && mapClient.eventHubSettings.venueEventCode) {
+      const link = `https://hooked-app.com/join-instant?code=${mapClient.eventHubSettings.venueEventCode}`;
+      setJoinLink(link);
+      generateQRCode(link);
     }
   }, [open, mapClient]);
 
-  const generateQRCode = async () => {
-    if (!mapClient.eventHubSettings?.enabled) return;
+
+  const generateQRCode = async (link: string) => {
+    if (!link) return;
 
     setIsGenerating(true);
     try {
-      // Create QR data containing venue and event information
-      const qrPayload = {
-        type: 'venue_event',
-        venueId: mapClient.id,
-        qrCodeId: mapClient.eventHubSettings.qrCodeId || `venue_${mapClient.id}_${Date.now()}`,
-        eventName: mapClient.eventHubSettings.eventName,
-        venueName: mapClient.businessName,
-      };
-      
-      const qrDataString = JSON.stringify(qrPayload);
-      setQrData(qrDataString);
-
-      // Generate QR code using a QR library (we'll use qrcode library)
-      // For now, we'll create a placeholder URL - in real implementation, use qrcode library
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      canvas.width = 256;
-      canvas.height = 256;
-      
-      if (ctx) {
-        // Simple placeholder QR code visualization
-        ctx.fillStyle = '#000000';
-        ctx.fillRect(0, 0, 256, 256);
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(10, 10, 236, 236);
-        ctx.fillStyle = '#000000';
-        ctx.font = '12px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('QR CODE', 128, 128);
-        ctx.fillText(mapClient.businessName, 128, 148);
-        ctx.fillText(mapClient.eventHubSettings.eventName || 'Event', 128, 168);
-        
-        setQrCodeDataUrl(canvas.toDataURL());
-      }
+      const qrDataUrl = await QRCode.toDataURL(link, {
+        width: 256,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      });
+      setQrCodeDataUrl(qrDataUrl);
     } catch (error) {
       console.error('Failed to generate QR code:', error);
     } finally {
@@ -82,12 +61,12 @@ export function QRCodeGenerator({ open, onOpenChange, mapClient }: QRCodeGenerat
     document.body.removeChild(link);
   };
 
-  const copyQRData = async () => {
+  const copyJoinLink = async () => {
     try {
-      await navigator.clipboard.writeText(qrData);
+      await navigator.clipboard.writeText(joinLink);
       // Could add a toast notification here
     } catch (error) {
-      console.error('Failed to copy QR data:', error);
+      console.error('Failed to copy join link:', error);
     }
   };
 
@@ -128,7 +107,7 @@ export function QRCodeGenerator({ open, onOpenChange, mapClient }: QRCodeGenerat
     }
   };
 
-  if (!mapClient.eventHubSettings?.enabled) {
+  if (!mapClient || !mapClient.eventHubSettings?.enabled || !mapClient.eventHubSettings?.venueEventCode) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-md">
@@ -138,12 +117,15 @@ export function QRCodeGenerator({ open, onOpenChange, mapClient }: QRCodeGenerat
               QR Code Generator
             </DialogTitle>
             <DialogDescription>
-              Event Rooms must be enabled to generate QR codes
+              Event Rooms must be enabled and have a venue code to generate QR codes
             </DialogDescription>
           </DialogHeader>
           <div className="text-center py-6">
             <p className="text-gray-600 dark:text-gray-400">
-              Please enable Event Rooms for this venue first.
+              {!mapClient?.eventHubSettings?.enabled 
+                ? 'Please enable Event Rooms for this venue first.'
+                : 'Please set a venue code in Event Rooms settings first.'
+              }
             </p>
           </div>
         </DialogContent>
@@ -192,7 +174,7 @@ export function QRCodeGenerator({ open, onOpenChange, mapClient }: QRCodeGenerat
                     <div className="text-lg font-semibold">{mapClient.eventHubSettings.eventName}</div>
                     <div className="text-gray-600">{mapClient.businessName}</div>
                     <Badge variant="secondary">
-                      ID: {mapClient.eventHubSettings.qrCodeId}
+                      Code: {mapClient.eventHubSettings.venueEventCode}
                     </Badge>
                   </div>
                 </>
@@ -216,8 +198,12 @@ export function QRCodeGenerator({ open, onOpenChange, mapClient }: QRCodeGenerat
                   <div className="text-gray-600">{mapClient.eventHubSettings.eventName}</div>
                 </div>
                 <div>
-                  <div className="font-medium text-gray-700">QR Code ID</div>
-                  <div className="text-gray-600">{mapClient.eventHubSettings.qrCodeId}</div>
+                  <div className="font-medium text-gray-700">Venue Code</div>
+                  <div className="text-gray-600 font-mono">{mapClient.eventHubSettings.venueEventCode}</div>
+                </div>
+                <div>
+                  <div className="font-medium text-gray-700">Join Link</div>
+                  <div className="text-gray-600 text-xs break-all">{joinLink}</div>
                 </div>
                 <div>
                   <div className="font-medium text-gray-700">Location Radius</div>
@@ -240,32 +226,6 @@ export function QRCodeGenerator({ open, onOpenChange, mapClient }: QRCodeGenerat
             </CardContent>
           </Card>
 
-          {/* Active Days */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Active Schedule</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 gap-2 text-sm">
-                {Object.entries(mapClient.eventHubSettings.schedule).map(([day, schedule]) => (
-                  <div key={day} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0">
-                    <div className="capitalize font-medium">{day}</div>
-                    <div>
-                      {schedule.enabled ? (
-                        <Badge variant="default" className="text-xs">
-                          {schedule.startTime} - {schedule.endTime}
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary" className="text-xs">
-                          Inactive
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
 
           {/* Actions */}
           <div className="flex flex-wrap gap-3 pt-4 border-t">
@@ -277,20 +237,17 @@ export function QRCodeGenerator({ open, onOpenChange, mapClient }: QRCodeGenerat
               <Printer className="h-4 w-4" />
               Print
             </Button>
-            <Button onClick={copyQRData} disabled={!qrData} variant="outline" className="flex items-center gap-2">
+            <Button onClick={copyJoinLink} disabled={!joinLink} variant="outline" className="flex items-center gap-2">
               <Copy className="h-4 w-4" />
-              Copy Data
-            </Button>
-            <Button onClick={generateQRCode} variant="outline" className="flex items-center gap-2">
-              <QrCode className="h-4 w-4" />
-              Regenerate
+              Copy Link
             </Button>
           </div>
 
           <div className="text-xs text-gray-500 space-y-1">
-            <p>• QR codes are static and work indefinitely - no need to reprint</p>
+            <p>• QR codes are static and work indefinitely - no need to regenerate or reprint</p>
             <p>• Each scan generates a unique secure token for fraud prevention</p>
             <p>• Users must be within {mapClient.eventHubSettings.locationRadius}m to join</p>
+            <p>• Configure venue hours and settings in the Map Client form</p>
             <p>• Print multiple copies and place at strategic locations around the venue</p>
           </div>
         </div>

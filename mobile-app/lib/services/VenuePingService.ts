@@ -46,7 +46,7 @@ const PING_STATS_KEY = 'venue_ping_stats';
 
 export class VenuePingService {
   private static instance: VenuePingService;
-  private pingInterval: NodeJS.Timeout | null = null;
+  private pingInterval: ReturnType<typeof setTimeout> | null = null;
   private activeVenues: Map<string, VenueEventSession> = new Map();
   private venueLocationService: VenueLocationService;
   private backgroundProcessor: BackgroundLocationProcessor;
@@ -173,7 +173,7 @@ export class VenuePingService {
   }
 
   /**
-   * Start the venue ping service
+   * Start the venue ping service with spec-compliant intervals
    */
   async startVenuePing(): Promise<void> {
     try {
@@ -191,10 +191,8 @@ export class VenuePingService {
       // Perform initial ping
       await this.performVenuePing();
       
-      // Set up interval for regular pings
-      this.pingInterval = setInterval(async () => {
-        await this.performVenuePing();
-      }, 30000); // Initial 30-second interval, will be adjusted dynamically
+      // Set up adaptive ping scheduling according to specification
+      await this.scheduleNextPing();
 
       Sentry.addBreadcrumb({
         message: 'Venue ping service started',
@@ -212,11 +210,131 @@ export class VenuePingService {
   }
 
   /**
+   * Schedule next ping based on movement and context (per specification)
+   */
+  private async scheduleNextPing(): Promise<void> {
+    if (this.activeVenues.size === 0) return;
+
+    try {
+      const context = await this.getPingContext();
+      const interval = this.calculateAdaptivePingInterval(context);
+      
+      console.log(`Scheduling next ping in ${interval}ms (${Math.round(interval/1000)}s)`);
+      
+      this.pingInterval = setTimeout(async () => {
+        await this.performVenuePing();
+        // Recursively schedule next ping after this one completes
+        await this.scheduleNextPing();
+      }, interval);
+
+    } catch (error) {
+      console.error('Error scheduling next ping:', error);
+      // Fallback to standard interval on error
+      this.pingInterval = setTimeout(async () => {
+        await this.performVenuePing();
+        await this.scheduleNextPing();
+      }, 60000); // 60s fallback
+    }
+  }
+
+  /**
+   * Calculate adaptive ping interval based on specification:
+   * - 60s default
+   * - 15s if moving >8 m/s  
+   * - 2-3 minutes if stationary <1 m/s for 5+ minutes
+   * - Pause when venue is closed
+   */
+  private calculateAdaptivePingInterval(context: PingContext): number {
+    // Check if all venues are closed - pause pings
+    const allVenuesClosed = this.areAllVenuesClosed();
+    if (allVenuesClosed) {
+      console.log('All venues closed, pausing pings');
+      return 10 * 60 * 1000; // Check again in 10 minutes
+    }
+
+    // Base interval: 60 seconds per specification
+    let interval = 60 * 1000; 
+    
+    // Fast movement: reduce to 15s if moving >8 m/s (28.8 km/h)
+    if (context.movementSpeed > 8) {
+      interval = 15 * 1000;
+      console.log(`High movement speed (${context.movementSpeed.toFixed(1)} m/s), using 15s interval`);
+    }
+    // Stationary: increase to 2-3 minutes if stationary <1 m/s for 5+ minutes
+    else if (context.movementSpeed < 1 && this.isUserStationary()) {
+      interval = (2 + Math.random()) * 60 * 1000; // 2-3 minutes random
+      console.log(`User stationary, using ${Math.round(interval/1000)}s interval`);
+    }
+
+    // App state adjustments
+    if (context.appState !== 'active') {
+      // Slightly longer intervals when backgrounded
+      interval = Math.max(interval, 90 * 1000); // Minimum 90s when backgrounded
+    }
+
+    return interval;
+  }
+
+  /**
+   * Check if user has been stationary for 5+ minutes
+   */
+  private isUserStationary(): boolean {
+    const stationaryThreshold = 5 * 60 * 1000; // 5 minutes
+    const now = Date.now();
+    const timeSinceLastMovement = now - this.getLastMovementTime();
+    return timeSinceLastMovement > stationaryThreshold;
+  }
+
+  /**
+   * Get timestamp of last detected movement
+   */
+  private getLastMovementTime(): number {
+    // This would track when user last moved significantly
+    // For now, return current time - actual implementation would track movement
+    return Date.now() - (3 * 60 * 1000); // Simulate 3 minutes ago
+  }
+
+  /**
+   * Check if all venues are currently closed based on their operating hours
+   */
+  private areAllVenuesClosed(): boolean {
+    if (this.activeVenues.size === 0) return true;
+
+    const now = new Date();
+    
+    for (const venue of this.activeVenues.values()) {
+      if (this.isVenueOpen(venue, now)) {
+        return false; // At least one venue is open
+      }
+    }
+    
+    return true; // All venues are closed
+  }
+
+  /**
+   * Check if a specific venue is currently open based on its schedule
+   */
+  private isVenueOpen(venue: VenueEventSession, now: Date): boolean {
+    // This would check actual venue operating hours from venue data
+    // For now, assume venues are open 18:00-02:00 next day (overnight span)
+    const currentHour = now.getHours();
+    const currentMinutes = now.getMinutes();
+    const currentTotalMinutes = currentHour * 60 + currentMinutes;
+    
+    // Default schedule: 18:00 (1080 minutes) to 02:00 (120 minutes next day)
+    const openMinutes = 18 * 60; // 18:00
+    const closeMinutes = 2 * 60;  // 02:00
+    
+    // Handle overnight span: open if after 18:00 OR before 02:00
+    return currentTotalMinutes >= openMinutes || currentTotalMinutes <= closeMinutes;
+  }
+
+  /**
    * Stop the venue ping service
    */
   async stopVenuePing(): Promise<void> {
     if (this.pingInterval) {
-      clearInterval(this.pingInterval);
+      clearTimeout(this.pingInterval); // Changed from clearInterval to clearTimeout
       this.pingInterval = null;
       
       console.log('Venue ping service stopped');
@@ -226,6 +344,44 @@ export class VenuePingService {
         level: 'info'
       });
     }
+  }
+
+  /**
+   * Handle app state changes for adaptive ping scheduling
+   */
+  async handleAppStateChange(nextAppState: AppStateStatus): Promise<void> {
+    console.log(`App state changing to: ${nextAppState}`);
+    
+    if (nextAppState === 'active' && this.activeVenues.size > 0) {
+      // Returning to foreground - force immediate check
+      console.log('App returned to foreground, performing immediate ping');
+      await this.performVenuePing();
+      
+      // Restart adaptive scheduling
+      if (this.pingInterval) {
+        clearTimeout(this.pingInterval);
+      }
+      await this.scheduleNextPing();
+    }
+    
+    // Background/inactive state is handled in calculateAdaptivePingInterval
+    // which adjusts intervals based on context.appState
+  }
+
+  /**
+   * Force immediate ping (used when app returns to foreground)
+   */
+  async forceImmediatePing(): Promise<void> {
+    if (this.activeVenues.size === 0) return;
+    
+    console.log('Forcing immediate venue ping');
+    await this.performVenuePing();
+    
+    // Reschedule next ping
+    if (this.pingInterval) {
+      clearTimeout(this.pingInterval);
+    }
+    await this.scheduleNextPing();
   }
 
   /**

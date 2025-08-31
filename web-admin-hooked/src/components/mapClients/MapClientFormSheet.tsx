@@ -143,8 +143,8 @@ export function MapClientFormSheet({
         },
         eventHubSettings: mapClient?.eventHubSettings || {
           enabled: true,
-          eventName: mapClient?.businessName ? `Singles at ${mapClient.businessName}` : '',
-          qrCodeId: '',
+          eventName: mapClient?.eventHubSettings?.eventName || mapClient?.businessName || '',
+          venueEventCode: mapClient?.eventHubSettings?.venueEventCode || '',
           locationRadius: 50,
           kFactor: 1.2,
           timezone: 'Asia/Jerusalem',
@@ -207,7 +207,7 @@ export function MapClientFormSheet({
         eventHubSettings: {
           enabled: true,
           eventName: '',
-          qrCodeId: '',
+          venueEventCode: '',
           locationRadius: 50,
           kFactor: 1.2,
           timezone: 'Asia/Jerusalem',
@@ -232,7 +232,7 @@ export function MapClientFormSheet({
     return new Promise((resolve) => {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d')!;
-      const img = new Image();
+      const img = new window.Image();
       
       img.onload = () => {
         // Set canvas size for 150x150 square thumbnail
@@ -345,16 +345,41 @@ export function MapClientFormSheet({
     }
   };
 
+  const generateVenueCode = (businessName: string): string => {
+    // Remove special characters and spaces, convert to uppercase
+    const cleanName = businessName
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '');
+    
+    return `V_${cleanName}`;
+  };
+
   const updateField = (field: string, value: any) => {
     setFormData(prev => {
       const newData = { ...prev, [field]: value };
       
-      // Auto-update event name when business name changes
+      // Auto-update event name and venue code when business name changes
       if (field === 'businessName' && value) {
-        newData.eventHubSettings = {
-          ...prev.eventHubSettings,
-          eventName: `Singles at ${value}`
-        };
+        const currentEventName = prev.eventHubSettings?.eventName || '';
+        const currentVenueCode = prev.eventHubSettings?.venueEventCode || '';
+        
+        // Update event name if empty or matches previous business name
+        if (!currentEventName || currentEventName === prev.businessName) {
+          newData.eventHubSettings = {
+            ...prev.eventHubSettings,
+            eventName: value as string
+          };
+        }
+        
+        // Generate venue code if empty or matches previous generated code
+        if (!currentVenueCode || currentVenueCode === generateVenueCode(prev.businessName)) {
+          newData.eventHubSettings = {
+            ...newData.eventHubSettings || prev.eventHubSettings,
+            venueEventCode: generateVenueCode(value as string)
+          };
+        }
       }
       
       // Auto-prepend https:// to website if missing
@@ -883,21 +908,28 @@ export function MapClientFormSheet({
                         id="eventName"
                         value={formData.eventHubSettings?.eventName || ''}
                         onChange={(e) => updateEventHubSettings('eventName', e.target.value)}
-                        placeholder="e.g., Singles at [Venue Name]"
+                        placeholder={formData.businessName || 'Event Name'}
                         disabled={isLoading}
                         required
                       />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Name shown to users when they join the event
+                      </p>
                     </div>
                     
                     <div>
-                      <Label htmlFor="qrCodeId">QR Code ID</Label>
+                      <Label htmlFor="venueEventCode">Venue Code *</Label>
                       <Input
-                        id="qrCodeId"
-                        value={formData.eventHubSettings?.qrCodeId || ''}
-                        onChange={(e) => updateEventHubSettings('qrCodeId', e.target.value)}
-                        placeholder="Auto-generated if empty"
+                        id="venueEventCode"
+                        value={formData.eventHubSettings?.venueEventCode || ''}
+                        onChange={(e) => updateEventHubSettings('venueEventCode', e.target.value.toUpperCase())}
+                        placeholder="V_BUSINESS_NAME"
                         disabled={isLoading}
+                        required
                       />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Unique code for QR codes. Must start with V_ and be unique across all venues.
+                      </p>
                     </div>
                   </div>
 
