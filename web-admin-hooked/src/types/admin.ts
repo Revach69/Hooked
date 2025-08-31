@@ -96,6 +96,27 @@ export type MapClient = {
     promotionalMessage?: string;
   } | null;
 
+  // Venue image
+  venueImageUrl?: string | null;
+
+  // Operating hours
+  openingHours?: {
+    [day: string]: {
+      open: string;
+      close: string;
+      closed: boolean;
+    };
+  } | null;
+
+  // Hooked Hours (specific hours for dating events)
+  hookedHours?: {
+    [day: string]: {
+      open: string;
+      close: string;
+      closed: boolean;
+    };
+  } | null;
+
   // Event Hub Settings (for venue event rooms)
   eventHubSettings?: {
     enabled: boolean;

@@ -94,6 +94,7 @@ export function MapClientFormSheet({
       venueRules: '',
       locationTips: '',
     },
+    country: 'Israel',
   });
 
   useEffect(() => {
@@ -140,7 +141,7 @@ export function MapClientFormSheet({
         },
         eventHubSettings: mapClient?.eventHubSettings || {
           enabled: true,
-          eventName: '',
+          eventName: mapClient?.businessName ? `Singles at ${mapClient.businessName}` : '',
           qrCodeId: '',
           locationRadius: 50,
           kFactor: 1.2,
@@ -157,6 +158,7 @@ export function MapClientFormSheet({
           venueRules: '',
           locationTips: '',
         },
+        country: mapClient?.country || 'Israel',
       });
     } else {
       // Reset form for new client
@@ -200,7 +202,26 @@ export function MapClientFormSheet({
           saturday: { open: '18:00', close: '23:59', closed: false },
           sunday: { open: '18:00', close: '21:00', closed: false },
         },
-        country: mapClient?.country || 'Israel',
+        eventHubSettings: {
+          enabled: true,
+          eventName: '',
+          qrCodeId: '',
+          locationRadius: 50,
+          kFactor: 1.2,
+          timezone: 'Asia/Jerusalem',
+          schedule: {
+            monday: { enabled: false, startTime: '19:00', endTime: '22:00' },
+            tuesday: { enabled: false, startTime: '19:00', endTime: '22:00' },
+            wednesday: { enabled: false, startTime: '19:00', endTime: '22:00' },
+            thursday: { enabled: false, startTime: '19:00', endTime: '23:00' },
+            friday: { enabled: true, startTime: '19:00', endTime: '23:59' },
+            saturday: { enabled: true, startTime: '18:00', endTime: '23:59' },
+            sunday: { enabled: false, startTime: '18:00', endTime: '21:00' },
+          },
+          venueRules: '',
+          locationTips: '',
+        },
+        country: 'Israel',
       });
     }
   }, [mapClient]);
@@ -237,8 +258,20 @@ export function MapClientFormSheet({
     }
   };
 
-  const updateField = (field: string, value: string | number | boolean | null) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+  const updateField = (field: string, value: any) => {
+    setFormData(prev => {
+      const newData = { ...prev, [field]: value };
+      
+      // Auto-update event name when business name changes
+      if (field === 'businessName' && value) {
+        newData.eventHubSettings = {
+          ...prev.eventHubSettings,
+          eventName: `Singles at ${value}`
+        };
+      }
+      
+      return newData;
+    });
   };
 
   const updateNestedField = (parent: string, field: string, value: string | number | boolean | null) => {
@@ -292,9 +325,9 @@ export function MapClientFormSheet({
     setFormData(prev => ({
       ...prev,
       [type]: {
-        ...prev[type],
+        ...(prev[type] as any),
         [day]: {
-          ...prev[type][day as keyof typeof prev[type]],
+          ...(prev[type] as any)[day],
           [field]: value
         }
       }
@@ -346,27 +379,6 @@ export function MapClientFormSheet({
     return `venue_${venueId}_${cleanEventName}_${timestamp}`;
   };
 
-  const handleEventHubEnable = (enabled: boolean) => {
-    setFormData(prev => {
-      const newData = {
-        ...prev,
-        eventHubSettings: {
-          ...(prev.eventHubSettings || {}),
-          enabled
-        }
-      };
-
-      // Auto-generate QR code ID when enabling event hub
-      if (enabled && !prev.eventHubSettings?.qrCodeId) {
-        newData.eventHubSettings.qrCodeId = generateQRCodeId(
-          mapClient?.id || 'new',
-          prev.eventHubSettings?.eventName || 'event'
-        );
-      }
-
-      return newData;
-    });
-  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -441,6 +453,36 @@ export function MapClientFormSheet({
                   placeholder="https://example.com"
                 />
               </div>
+
+              <div>
+                <Label htmlFor="instagram">Instagram</Label>
+                <Input
+                  id="instagram"
+                  value={formData.socialMedia.instagram}
+                  onChange={(e) => updateNestedField('socialMedia', 'instagram', e.target.value)}
+                  placeholder="@username"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="facebook">Facebook</Label>
+                <Input
+                  id="facebook"
+                  value={formData.socialMedia.facebook}
+                  onChange={(e) => updateNestedField('socialMedia', 'facebook', e.target.value)}
+                  placeholder="facebook.com/page"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="whatsapp">WhatsApp</Label>
+                <Input
+                  id="whatsapp"
+                  value={formData.socialMedia.whatsapp}
+                  onChange={(e) => updateNestedField('socialMedia', 'whatsapp', e.target.value)}
+                  placeholder="+1234567890"
+                />
+              </div>
               
               <div>
                 <Label>Venue Image</Label>
@@ -464,7 +506,7 @@ export function MapClientFormSheet({
                     </div>
                   ) : (
                     <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
-                      <Image className="mx-auto h-12 w-12 text-gray-400 mb-2" alt="Upload placeholder" />
+                      <Image className="mx-auto h-12 w-12 text-gray-400 mb-2" />
                       <div className="text-sm text-gray-600 mb-2">
                         Upload venue image for mobile map display
                       </div>
@@ -531,16 +573,18 @@ export function MapClientFormSheet({
           </div>
 
           {/* Location Information */}
-          <LocationInput
-            address={formData.address}
-            coordinates={formData.coordinates}
-            onAddressChange={(address) => updateField('address', address)}
-            onCoordinatesChange={(coordinates) => updateField('coordinates', coordinates)}
-            disabled={isLoading}
-          />
-
-          {/* Country Selection */}
           <div className="space-y-4">
+            <h3 className="text-lg font-semibold">Location Information</h3>
+            
+            <LocationInput
+              address={formData.address}
+              coordinates={formData.coordinates}
+              onAddressChange={(address) => updateField('address', address)}
+              onCoordinatesChange={(coordinates) => updateField('coordinates', coordinates)}
+              disabled={isLoading}
+            />
+            
+            {/* Country Selection */}
             <div>
               <Label htmlFor="country">Country *</Label>
               <Select 
@@ -561,6 +605,7 @@ export function MapClientFormSheet({
               <p className="text-xs text-gray-500 mt-1">Used for timezone calculation and regional settings</p>
             </div>
           </div>
+
 
           {/* Hours Information */}
           <div className="space-y-4">
@@ -612,7 +657,6 @@ export function MapClientFormSheet({
               {/* Hooked Hours */}
               <div className="space-y-3">
                 <h4 className="text-md font-medium text-gray-700 dark:text-gray-300">Hooked Hours</h4>
-                <p className="text-xs text-gray-500 mb-3">Special hours when venue is featured on Hooked</p>
                 {Object.entries(formData.hookedHours).map(([day, hours]) => (
                   <div key={day} className="flex items-center gap-3">
                     <div className="w-20 text-sm capitalize font-medium">
@@ -728,40 +772,6 @@ export function MapClientFormSheet({
             </div>
           </div>
 
-          {/* Social Media */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Social Media</h3>
-            
-            <div className="grid grid-cols-1 gap-4">
-              <div>
-                <Label htmlFor="instagram">Instagram</Label>
-                <Input
-                  id="instagram"
-                  value={formData.socialMedia.instagram}
-                  onChange={(e) => updateNestedField('socialMedia', 'instagram', e.target.value)}
-                  placeholder="@username"
-                />
-              </div>
-              <div>
-                <Label htmlFor="facebook">Facebook</Label>
-                <Input
-                  id="facebook"
-                  value={formData.socialMedia.facebook}
-                  onChange={(e) => updateNestedField('socialMedia', 'facebook', e.target.value)}
-                  placeholder="facebook.com/page"
-                />
-              </div>
-              <div>
-                <Label htmlFor="whatsapp">WhatsApp</Label>
-                <Input
-                  id="whatsapp"
-                  value={formData.socialMedia.whatsapp}
-                  onChange={(e) => updateNestedField('socialMedia', 'whatsapp', e.target.value)}
-                  placeholder="+1234567890"
-                />
-              </div>
-            </div>
-          </div>
 
           {/* Event Hub Settings */}
           <div className="space-y-4">
@@ -774,23 +784,14 @@ export function MapClientFormSheet({
             </p>
             
             <div className="grid grid-cols-1 gap-4">
-              {/* Event Hub is always enabled for map clients */}
-              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                <p className="text-sm text-green-700">
-                  ✅ Event Rooms are automatically enabled for all venue listings
-                </p>
-              </div>
-
-              {true && (
-                <>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="eventName">Event Name *</Label>
                       <Input
                         id="eventName"
-                        value={formData.eventHubSettings.eventName}
+                        value={formData.eventHubSettings?.eventName || ''}
                         onChange={(e) => updateEventHubSettings('eventName', e.target.value)}
-                        placeholder="e.g., Hooked Hours"
+                        placeholder="e.g., Singles at [Venue Name]"
                         disabled={isLoading}
                         required
                       />
@@ -800,7 +801,7 @@ export function MapClientFormSheet({
                       <Label htmlFor="qrCodeId">QR Code ID</Label>
                       <Input
                         id="qrCodeId"
-                        value={formData.eventHubSettings.qrCodeId}
+                        value={formData.eventHubSettings?.qrCodeId || ''}
                         onChange={(e) => updateEventHubSettings('qrCodeId', e.target.value)}
                         placeholder="Auto-generated if empty"
                         disabled={isLoading}
@@ -816,7 +817,7 @@ export function MapClientFormSheet({
                         type="number"
                         min="20"
                         max="200"
-                        value={formData.eventHubSettings.locationRadius}
+                        value={formData.eventHubSettings?.locationRadius || 50}
                         onChange={(e) => updateEventHubSettings('locationRadius', parseInt(e.target.value) || 50)}
                         disabled={isLoading}
                       />
@@ -831,7 +832,7 @@ export function MapClientFormSheet({
                         min="1.0"
                         max="3.0"
                         step="0.1"
-                        value={formData.eventHubSettings.kFactor}
+                        value={formData.eventHubSettings?.kFactor || 1.2}
                         onChange={(e) => updateEventHubSettings('kFactor', parseFloat(e.target.value) || 1.2)}
                         disabled={isLoading}
                       />
@@ -844,7 +845,7 @@ export function MapClientFormSheet({
                     <Label htmlFor="venueRules">Venue Rules & Instructions</Label>
                     <Textarea
                       id="venueRules"
-                      value={formData.eventHubSettings.venueRules}
+                      value={formData.eventHubSettings?.venueRules || ''}
                       onChange={(e) => updateEventHubSettings('venueRules', e.target.value)}
                       placeholder="QR code is located at the main bar. Please scan upon entry."
                       disabled={isLoading}
@@ -857,7 +858,7 @@ export function MapClientFormSheet({
                     <Label htmlFor="locationTips">Location Tips (for failed attempts)</Label>
                     <Textarea
                       id="locationTips"
-                      value={formData.eventHubSettings.locationTips}
+                      value={formData.eventHubSettings?.locationTips || ''}
                       onChange={(e) => updateEventHubSettings('locationTips', e.target.value)}
                       placeholder="Try scanning near the entrance if having issues."
                       disabled={isLoading}
@@ -865,52 +866,6 @@ export function MapClientFormSheet({
                     />
                     <p className="text-xs text-gray-500 mt-1">Shown when location verification fails</p>
                   </div>
-
-                  {/* Event Schedule */}
-                  <div className="space-y-3">
-                    <h4 className="text-md font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                      <QrCode className="h-4 w-4" />
-                      Event Schedule
-                    </h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">When the event is active each day</p>
-                    
-                    {Object.entries(formData.eventHubSettings?.schedule || {}).map(([day, schedule]) => (
-                      <div key={day} className="flex items-center gap-3">
-                        <div className="w-20 text-sm capitalize font-medium">
-                          {day.slice(0, 3)}
-                        </div>
-                        <div className="flex items-center gap-2 flex-1">
-                          <Input
-                            type="time"
-                            value={schedule?.startTime || '19:00'}
-                            onChange={(e) => updateEventSchedule(day, 'startTime', e.target.value)}
-                            disabled={!schedule?.enabled || isLoading}
-                            className="w-24"
-                          />
-                          <span className="text-gray-400">to</span>
-                          <Input
-                            type="time"
-                            value={schedule?.endTime || '23:59'}
-                            onChange={(e) => updateEventSchedule(day, 'endTime', e.target.value)}
-                            disabled={!schedule?.enabled || isLoading}
-                            className="w-24"
-                          />
-                          <Label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={schedule?.enabled || false}
-                              onChange={(e) => updateEventSchedule(day, 'enabled', e.target.checked)}
-                              disabled={isLoading}
-                              className="rounded border-gray-300"
-                            />
-                            <span className="text-sm text-gray-600">Active</span>
-                          </Label>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
             </div>
           </div>
 
