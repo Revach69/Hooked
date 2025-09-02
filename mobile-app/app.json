@@ -2,7 +2,7 @@
   "expo": {
     "name": "Hooked",
     "slug": "hooked",
-    "version": "1.1.8",
+    "version": "1.1.9",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -17,7 +17,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.hookedapp.app",
-      "buildNumber": "1.1.8",
+      "buildNumber": "1.1.9",
       "splash": {
         "image": "./assets/icon-rounded.png",
         "resizeMode": "contain",
@@ -62,7 +62,7 @@
         }
       },
       "package": "com.hookedapp.app",
-      "versionCode": 8,
+      "versionCode": 9,
       "googleServicesFile": "./android/app/google-services.json",
       "intentFilters": [
         {
