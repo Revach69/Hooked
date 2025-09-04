@@ -1418,10 +1418,15 @@ const mutualLikeHandler = async (event: any) => {
     const pairKey = [likerSession, likedSession].sort().join('|');
     const logKey = `match:${eventId}:${pairKey}`;
     
-    console.log('onMutualLike idempotency check:', { pairKey, logKey });
+    console.log('onMutualLike idempotency check:', { 
+      pairKey, 
+      logKey,
+      likeDocumentId: event.params.likeId,
+      documentDirection: `${likerSession.substring(0, 8)} → ${likedSession.substring(0, 8)}`
+    });
     
     if (!(await onceOnly(logKey, db))) {
-      console.log('onMutualLike: Already processed, returning early');
+      console.log('onMutualLike: Already processed by another document trigger, returning early');
       return;
     }
 
@@ -1481,63 +1486,77 @@ const mutualLikeHandler = async (event: any) => {
     console.log('Match notification: Server always sends, client decides display');
 
     // CRITICAL FIX: Only process notifications from one direction to prevent duplicates
-    // Use lexicographic comparison to ensure consistent processing
-    const shouldProcess = likerSession < likedSession;
+    // We need to determine which like document this is:
+    // - If likerSession < likedSession in the doc, this is the "first → second" like
+    // - If likerSession > likedSession in the doc, this is the "second → first" like
+    // We only process when the DOCUMENT represents first → second (smaller ID first)
     
-    if (!shouldProcess) {
-      console.log('Skipping notification processing - will be handled by the other direction:', {
-        likerSession: likerSession.substring(0, 8) + '...',
-        likedSession: likedSession.substring(0, 8) + '...',
-        comparison: `${likerSession < likedSession ? 'liker < liked' : 'liker >= liked'}`
+    // Create a canonical order to determine which document should process
+    const [firstUser, secondUser] = [likerSession, likedSession].sort();
+    const isCanonicalDocument = (likerSession === firstUser && likedSession === secondUser);
+    
+    if (!isCanonicalDocument) {
+      console.log('Skipping notification - non-canonical document direction:', {
+        documentDirection: `${likerSession.substring(0, 8)} → ${likedSession.substring(0, 8)}`,
+        canonicalDirection: `${firstUser.substring(0, 8)} → ${secondUser.substring(0, 8)}`,
+        willBeHandledBy: 'canonical document'
       });
       return;
     }
     
-    console.log('Processing notifications for mutual match (lexicographically first direction):', {
-      likerSession: likerSession.substring(0, 8) + '...',
-      likedSession: likedSession.substring(0, 8) + '...'
+    console.log('Processing notifications for mutual match (canonical document):', {
+      firstUser: firstUser.substring(0, 8) + '...',
+      secondUser: secondUser.substring(0, 8) + '...',
+      documentDirection: `${likerSession.substring(0, 8)} → ${likedSession.substring(0, 8)}`
     });
 
     // Send notifications to both users - client handles display logic
-    console.log('Enqueuing match notification for recipient (server always sends)');
-      await enqueueNotificationJob({
-        type: 'match',
-        event_id: eventId,
-        subject_session_id: likedSession,
-        actor_session_id: likerSession,
-        payload: {
-          title: `You got Hooked with ${likerName}!`,
-          body: `Start chatting now!`,
-          data: { 
-            type: 'match', 
-            partnerSessionId: likerSession,
-            partnerName: likerName,
-            aggregationKey: `match:${eventId}:${likedSession}`
-          }
-        },
-        aggregationKey: `match:${eventId}:${likedSession}`
-      }, db);
+    // Note: We're now in the canonical document, so we send to both users
+    // firstUser and secondUser are in sorted order
+    
+    // Determine which name belongs to which user
+    const firstUserName = (likerSession === firstUser) ? likerName : likedName;
+    const secondUserName = (likerSession === secondUser) ? likerName : likedName;
+    
+    // Send notification to first user (alphabetically first)
+    console.log('Enqueuing match notification for first user (server always sends)');
+    await enqueueNotificationJob({
+      type: 'match',
+      event_id: eventId,
+      subject_session_id: firstUser,
+      actor_session_id: secondUser,
+      payload: {
+        title: `You got Hooked with ${secondUserName}!`,
+        body: `Start chatting now!`,
+        data: { 
+          type: 'match', 
+          partnerSessionId: secondUser,
+          partnerName: secondUserName,
+          aggregationKey: `match:${eventId}:${firstUser}`
+        }
+      },
+      aggregationKey: `match:${eventId}:${firstUser}`
+    }, db);
 
-    // Send notification to second user (creator) as well - client handles display logic
-    console.log('Enqueuing match notification for creator (server always sends)');
-      
-      await enqueueNotificationJob({
-        type: 'match',
-        event_id: eventId,
-        subject_session_id: likerSession,
-        actor_session_id: likedSession, 
-        payload: {
-          title: `You got Hooked with ${likedName}!`,
-          body: `Start chatting now!`,
-          data: { 
-            type: 'match', 
-            partnerSessionId: likedSession,
-            partnerName: likedName,
-            aggregationKey: `match:${eventId}:${likerSession}`
-          }
-        },
-        aggregationKey: `match:${eventId}:${likerSession}`
-      }, db);
+    // Send notification to second user (alphabetically second)
+    console.log('Enqueuing match notification for second user (server always sends)');
+    await enqueueNotificationJob({
+      type: 'match',
+      event_id: eventId,
+      subject_session_id: secondUser,
+      actor_session_id: firstUser, 
+      payload: {
+        title: `You got Hooked with ${firstUserName}!`,
+        body: `Start chatting now!`,
+        data: { 
+          type: 'match', 
+          partnerSessionId: firstUser,
+          partnerName: firstUserName,
+          aggregationKey: `match:${eventId}:${secondUser}`
+        }
+      },
+      aggregationKey: `match:${eventId}:${secondUser}`
+    }, db);
 };
 
 // Multi-region Firestore triggers for onMutualLike - FIXED VERSION
