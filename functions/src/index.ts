@@ -1547,14 +1547,11 @@ const mutualLikeHandler = async (event: any) => {
     // The likedSession is the user who liked earlier (first liker)
     // Both could be foreground or background - client will handle final display decision
     
-    // Send to BOTH users, client handles foreground suppression
-    console.log('📤 Enqueuing match notification for first liker:', {
-      recipient: likedSession.substring(0, 8) + '...',
-      partner: likerSession.substring(0, 8) + '...',
-      partnerName: likerName,
-      role: 'first_liker'
-    });
-    await enqueueNotificationJob({
+    // CRITICAL FIX: Ensure both notification jobs are created in parallel
+    console.log('📤 Creating notification jobs for BOTH users');
+
+    // Create both job promises
+    const job1Promise = enqueueNotificationJob({
       type: 'match',
       event_id: eventId,
       subject_session_id: likedSession,
@@ -1572,13 +1569,7 @@ const mutualLikeHandler = async (event: any) => {
       aggregationKey: `match:${eventId}:${likedSession}`
     }, db);
 
-    console.log('📤 Enqueuing match notification for second liker:', {
-      recipient: likerSession.substring(0, 8) + '...',
-      partner: likedSession.substring(0, 8) + '...',
-      partnerName: likedName,
-      role: 'second_liker'
-    });
-    await enqueueNotificationJob({
+    const job2Promise = enqueueNotificationJob({
       type: 'match',
       event_id: eventId,
       subject_session_id: likerSession,
@@ -1595,6 +1586,14 @@ const mutualLikeHandler = async (event: any) => {
       },
       aggregationKey: `match:${eventId}:${likerSession}`
     }, db);
+
+    // Wait for both to complete
+    await Promise.all([job1Promise, job2Promise]);
+    console.log('✅ Both notification jobs created successfully:', {
+      firstLiker: likedSession.substring(0, 8) + '...',
+      secondLiker: likerSession.substring(0, 8) + '...',
+      timestamp: new Date().toISOString()
+    });
 };
 
 // Multi-region Firestore triggers for onMutualLike - FIXED VERSION
