@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import * as QRCode from 'qrcode';
 
 interface QRCodeDisplayProps {
@@ -45,9 +46,11 @@ export default function QRCodeDisplay({ joinLink, eventCode }: QRCodeDisplayProp
 
   return (
     <div className="flex flex-col items-center">
-      <img 
+      <Image 
         src={qrCodeUrl} 
         alt={`QR Code for ${eventCode}`}
+        width={200}
+        height={200}
         className="w-full h-auto"
       />
       <div className="mt-2 text-center">

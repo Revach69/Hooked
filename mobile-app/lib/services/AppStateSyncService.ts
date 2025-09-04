@@ -1,37 +1,60 @@
 import { AppState, AppStateStatus } from 'react-native';
-import { app } from '../firebaseConfig';
+import { app, getDbForEvent } from '../firebaseConfig';
 import { getFirestore, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import * as Sentry from '@sentry/react-native';
 import { getInstallationId } from '../session/sessionId';
+import { AsyncStorageUtils } from '../asyncStorageUtils';
 
 class AppStateSyncServiceClass {
   private sessionId: string | null = null;
+  private eventId: string | null = null;
+  private eventCountry: string | null = null;
   private isRunning = false;
   private debounceTimeout: ReturnType<typeof setTimeout> | null = null;
   private appStateListener: ((_status: AppStateStatus) => void) | null = null;
   private foregroundCallbacks: Set<() => void> = new Set();
 
   /**
-   * Start syncing app state changes to Firestore
+   * Start syncing app state changes to Firestore with regional database support
    */
-  startAppStateSync(sessionId: string): void {
+  async startAppStateSync(sessionId: string): Promise<void> {
     if (this.isRunning) {
       console.log('AppStateSyncService: Already running, stopping first');
       this.stopAppStateSync();
     }
 
     this.sessionId = sessionId;
+    
+    // Get current event ID and country for regional database selection
+    try {
+      this.eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
+      if (this.eventId) {
+        // Get event details to determine country/region
+        const { EventAPI } = await import('../firebaseApi');
+        const event = await EventAPI.get(this.eventId);
+        this.eventCountry = (event as any)?.country || null;
+        console.log('AppStateSyncService: Event context loaded:', {
+          eventId: this.eventId,
+          eventCountry: this.eventCountry
+        });
+      }
+    } catch (error) {
+      console.warn('AppStateSyncService: Failed to load event context, using default database:', error);
+      this.eventId = null;
+      this.eventCountry = null;
+    }
+    
     this.isRunning = true;
 
     Sentry.addBreadcrumb({
       message: 'AppStateSyncService: Starting app state sync',
       level: 'info',
       category: 'app_state',
-      data: { sessionId }
+      data: { sessionId, eventId: this.eventId, eventCountry: this.eventCountry }
     });
 
-    // Write initial state immediately - using direct Firestore writes
-    this.writeAppState(AppState.currentState === 'active');
+    // Write initial state immediately - using regional database
+    await this.writeAppState(AppState.currentState === 'active');
 
     // Set up listener for app state changes
     this.appStateListener = (nextAppState: AppStateStatus) => {
@@ -89,6 +112,8 @@ class AppStateSyncServiceClass {
 
     this.isRunning = false;
     this.sessionId = null;
+    this.eventId = null;
+    this.eventCountry = null;
 
     if (__DEV__) console.log('AppStateSyncService: Stopped');
   }
@@ -96,13 +121,13 @@ class AppStateSyncServiceClass {
   /**
    * Write app state to Firestore immediately (for app start/focus)
    */
-  writeAppStateImmediate(isForeground: boolean): void {
+  async writeAppStateImmediate(isForeground: boolean): Promise<void> {
     if (!this.sessionId) {
       console.warn('AppStateSyncService: No session ID, cannot write app state');
       return;
     }
 
-    this.writeAppState(isForeground);
+    await this.writeAppState(isForeground);
   }
 
   /**
@@ -115,13 +140,13 @@ class AppStateSyncServiceClass {
     }
 
     // Set new timeout (300ms debounce)
-    this.debounceTimeout = setTimeout(() => {
-      this.writeAppState(isForeground);
+    this.debounceTimeout = setTimeout(async () => {
+      await this.writeAppState(isForeground);
     }, 300);
   }
 
   /**
-   * Write app state directly to Firestore - bypasses callable function authentication issues
+   * Write app state directly to regional Firestore database
    */
   private async writeAppState(isForeground: boolean): Promise<void> {
     if (!this.sessionId) {
@@ -129,9 +154,15 @@ class AppStateSyncServiceClass {
     }
 
     try {
-      // Write directly to Firestore - no callable function needed
-      const db = getFirestore(app);
+      // Use regional database based on event country, fallback to default
+      const db = this.eventCountry ? getDbForEvent(this.eventCountry) : getFirestore(app);
       const appStateRef = doc(db, 'app_states', this.sessionId);
+      
+      console.log('AppStateSyncService: Using database:', {
+        eventCountry: this.eventCountry,
+        isRegional: !!this.eventCountry,
+        sessionId: this.sessionId.substring(0, 8) + '...'
+      });
       
       // Get installation ID
       const installationId = await getInstallationId();
@@ -142,27 +173,33 @@ class AppStateSyncServiceClass {
         updatedAt: serverTimestamp(),
       });
 
-      console.log('AppStateSyncService: App state written directly to Firestore', {
+      console.log('AppStateSyncService: App state written to regional database', {
         sessionId: this.sessionId.substring(0, 8) + '...',
-        isForeground
+        isForeground,
+        eventCountry: this.eventCountry,
+        isRegional: !!this.eventCountry
       });
 
       Sentry.addBreadcrumb({
-        message: 'AppStateSyncService: App state written directly to Firestore',
+        message: 'AppStateSyncService: App state written to regional database',
         level: 'info',
         category: 'app_state',
         data: { 
           sessionId: this.sessionId,
           isForeground,
-          installationId: installationId.substring(0, 8) + '...'
+          installationId: installationId ? installationId.substring(0, 8) + '...' : null,
+          eventCountry: this.eventCountry,
+          isRegional: !!this.eventCountry
         }
       });
 
     } catch (error: any) {
-      console.error('AppStateSyncService: Error writing app state to Firestore:', {
+      console.error('AppStateSyncService: Error writing app state to regional database:', {
         error: error.message,
         code: error.code,
-        sessionId: this.sessionId.substring(0, 8) + '...'
+        sessionId: this.sessionId.substring(0, 8) + '...',
+        eventCountry: this.eventCountry,
+        isRegional: !!this.eventCountry
       });
       
       Sentry.captureException(error, {
@@ -183,10 +220,13 @@ class AppStateSyncServiceClass {
   /**
    * Get current sync status
    */
-  getStatus(): { isRunning: boolean; sessionId: string | null } {
+  getStatus(): { isRunning: boolean; sessionId: string | null; eventId: string | null; eventCountry: string | null; isRegional: boolean } {
     return {
       isRunning: this.isRunning,
-      sessionId: this.sessionId
+      sessionId: this.sessionId,
+      eventId: this.eventId,
+      eventCountry: this.eventCountry,
+      isRegional: !!this.eventCountry
     };
   }
 

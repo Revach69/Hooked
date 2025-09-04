@@ -7,22 +7,25 @@
     "shell": "npm run build && firebase functions:shell",
     "start": "npm run shell",
     "deploy": "firebase deploy --only functions",
-    "logs": "firebase functions:log",
-    "android": "expo run:android",
-    "ios": "expo run:ios"
+    "deploy:development": "npm run build && firebase deploy --only functions --project hooked-development",
+    "deploy:production": "npm run build && firebase deploy --only functions --project hooked-69",
+    "deploy:staging": "npm run build && firebase deploy --only functions --project hooked-staging",
+    "deploy:all-regions": "npm run deploy:israel && npm run deploy:australia && npm run deploy:us && npm run deploy:eu && npm run deploy:asia",
+    "deploy:israel": "npm run build && FUNCTION_REGION=me-west1 firebase deploy --only functions --project hooked-development --force",
+    "deploy:australia": "npm run build && FUNCTION_REGION=australia-southeast2 firebase deploy --only functions --project hooked-development --force",
+    "deploy:us": "npm run build && FUNCTION_REGION=us-central1 firebase deploy --only functions --project hooked-development --force",
+    "deploy:eu": "npm run build && FUNCTION_REGION=europe-west3 firebase deploy --only functions --project hooked-development --force",
+    "deploy:asia": "npm run build && FUNCTION_REGION=asia-northeast1 firebase deploy --only functions --project hooked-development --force",
+    "logs": "firebase functions:log"
   },
   "engines": {
     "node": "20"
   },
   "main": "lib/index.js",
   "dependencies": {
-    "expo": "~53.0.20",
     "firebase-admin": "^12.7.0",
     "firebase-functions": "^6.4.0",
-    "node-fetch": "^2.7.0",
-    "react": "19.0.0",
-    "react-native": "0.79.5",
-    "react-native-device-info": "^14.0.4"
+    "node-fetch": "^2.7.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

@@ -34,7 +34,9 @@ class SessionCleanupServiceClass {
       // 3. Clear notification router session
       setCurrentSessionIdForDedup(null);
       
-      // 4. Clear all session-related AsyncStorage data
+      // 4. Clear all session-related AsyncStorage data including viewed profiles
+      const currentEventId = await AsyncStorageUtils.getItem<string>('currentEventId');
+      
       const sessionKeys = [
         'currentSessionId',
         'currentEventId',
@@ -42,6 +44,11 @@ class SessionCleanupServiceClass {
         'currentChatSessionId',
         'lastActiveTimestamp'
       ];
+      
+      // Add viewed profiles key for current event if it exists
+      if (currentEventId) {
+        sessionKeys.push(`viewedProfiles_${currentEventId}`);
+      }
       
       const clearPromises = sessionKeys.map(key => 
         AsyncStorageUtils.removeItem(key).catch(error => {
@@ -196,7 +203,8 @@ class SessionCleanupServiceClass {
         key.includes('firebase') ||
         key.includes('chat') ||
         key.includes('image_cache') ||
-        key.includes('cached_image')
+        key.includes('cached_image') ||
+        key.startsWith('viewedProfiles_')
       );
       
       console.log(`SessionCleanupService: Force clearing ${sessionRelatedKeys.length} keys:`, sessionRelatedKeys);

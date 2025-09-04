@@ -7,6 +7,7 @@ import { X } from 'lucide-react';
 interface AnalyticsModalProps {
   eventId: string;
   eventName: string;
+  eventCountry?: string;
   isOpen: boolean;
   onClose: () => void;
 }
@@ -16,7 +17,10 @@ interface AnalyticsData {
   activeUsers: number;
   totalLikes: number;
   mutualMatches: number;
+  uniqueMatchParticipants: number;
   messagesSent: number;
+  activeMessageSenders: number;
+  passiveMessageUsers: number;
   engagementRate: number;
   averageAge: number;
   passiveUsers: number;
@@ -38,6 +42,7 @@ interface AnalyticsData {
 export default function AnalyticsModal({
   eventId,
   eventName,
+  eventCountry,
   isOpen,
   onClose
 }: AnalyticsModalProps) {
@@ -46,7 +51,10 @@ export default function AnalyticsModal({
     activeUsers: 0,
     totalLikes: 0,
     mutualMatches: 0,
+    uniqueMatchParticipants: 0,
     messagesSent: 0,
+    activeMessageSenders: 0,
+    passiveMessageUsers: 0,
     engagementRate: 0,
     averageAge: 0,
     passiveUsers: 0,
@@ -70,11 +78,53 @@ export default function AnalyticsModal({
     setIsLoading(true);
     try {
       // First check if this is an expired event with preserved analytics
+      // Use the cloud function to find the event across all regions since expired events 
+      // might be in different regions than their country suggests
       const event = await EventAPI.get(eventId);
       
       if (event?.expired && event.analytics_id) {
-        // Load preserved analytics data
-        const savedAnalytics = await EventAnalytics.get(event.analytics_id);
+        // Load preserved analytics data from the same regional database as the event
+        let savedAnalytics;
+        try {
+          // The event object from EventAPI.get() contains the actual region information
+          // Use that region to access the analytics data, not the eventCountry parameter
+          const actualRegion = (event as unknown as { _region?: string })._region || eventCountry;
+          console.log(`Getting analytics for expired event from region: ${actualRegion}, eventCountry: ${eventCountry}`);
+          
+          // Get the analytics using direct Firestore access to the correct regional database
+          const { getEventSpecificFirestore } = await import('@/lib/firebaseRegionConfig');
+          
+          // Map the _region field to the correct country for regional database access
+          let regionCountry = eventCountry;
+          if ((event as unknown as { _region?: string })._region) {
+            // Map the _region to appropriate country for database routing
+            const regionMap: Record<string, string> = {
+              'Israel': 'Israel',
+              'Australia': 'Australia', 
+              'Europe': 'United Kingdom',
+              'USA': 'United States',
+              'Asia': 'Japan',
+              'South America': 'Brazil'
+            };
+            regionCountry = regionMap[(event as unknown as { _region?: string })._region || ''] || eventCountry;
+          }
+          
+          const regionalDb = getEventSpecificFirestore(regionCountry);
+          const { doc: firestoreDoc, getDoc: firestoreGetDoc } = await import('firebase/firestore');
+          
+          const analyticsDoc = await firestoreGetDoc(firestoreDoc(regionalDb, 'event_analytics', event.analytics_id));
+          
+          if (analyticsDoc.exists()) {
+            savedAnalytics = analyticsDoc.data();
+            console.log(`✅ Successfully loaded analytics from regional database for region: ${actualRegion}`);
+          } else {
+            console.warn('Analytics not found in regional database, trying fallback');
+            savedAnalytics = await EventAnalytics.get(event.analytics_id);
+          }
+        } catch (error) {
+          console.warn('Failed to get analytics from regional database, trying default:', error);
+          savedAnalytics = await EventAnalytics.get(event.analytics_id);
+        }
         
         if (savedAnalytics) {
           // Calculate engagement rate from preserved metrics
@@ -87,7 +137,10 @@ export default function AnalyticsModal({
             activeUsers: savedAnalytics.engagement_metrics.profiles_with_matches + savedAnalytics.engagement_metrics.profiles_with_messages,
             totalLikes: 0, // Not preserved separately
             mutualMatches: savedAnalytics.total_matches,
+            uniqueMatchParticipants: savedAnalytics.engagement_metrics.profiles_with_matches || 0, // Approximation from preserved data
             messagesSent: savedAnalytics.total_messages,
+            activeMessageSenders: 0, // Not preserved separately
+            passiveMessageUsers: 0, // Not preserved separately
             engagementRate,
             averageAge: savedAnalytics.age_stats.average,
             passiveUsers: 0, // Not preserved separately
@@ -107,14 +160,21 @@ export default function AnalyticsModal({
 
       // For active events or if preserved analytics not found, calculate real-time
       const [profiles, likes, messages] = await Promise.all([
-        EventProfile.filter({ event_id: eventId }),
-        Like.filter({ event_id: eventId }),
-        Message.filter({ event_id: eventId })
+        EventProfile.filter({ event_id: eventId }, eventCountry),
+        Like.filter({ event_id: eventId }, eventCountry),
+        Message.filter({ event_id: eventId }, eventCountry)
       ]);
 
       // Calculate mutual matches (divide by 2 since each match creates 2 mutual like records)
       const mutualLikeRecords = likes.filter((like: Like) => like.is_mutual);
       const uniqueMatches = Math.floor(mutualLikeRecords.length / 2);
+      
+      // Calculate unique match participants (count unique profile IDs involved in any match)
+      const uniqueMatchParticipants = new Set<string>();
+      mutualLikeRecords.forEach((like: Like) => {
+        uniqueMatchParticipants.add(like.from_profile_id);
+        uniqueMatchParticipants.add(like.to_profile_id);
+      });
       
       // Calculate active users (users who SENT likes or messages)
       const activeUsers = profiles.filter((profile: EventProfile) => {
@@ -168,6 +228,16 @@ export default function AnalyticsModal({
         return acc;
       }, { male: 0, female: 0, other: 0 });
 
+      // Calculate messaging metrics
+      const activeMessageSenders = profiles.filter((profile: EventProfile) => {
+        const userSentMessages = messages.filter((msg: Message) => 
+          msg.from_profile_id === profile.id
+        );
+        return userSentMessages.length > 0;
+      }).length;
+      
+      const passiveMessageUsers = profiles.length - activeMessageSenders;
+
       // Calculate age distribution
       const ageDistribution = {
         '18-25': profiles.filter((p: EventProfile) => p.age >= 18 && p.age <= 25).length,
@@ -182,7 +252,10 @@ export default function AnalyticsModal({
         activeUsers,
         totalLikes: likes.length,
         mutualMatches: uniqueMatches,
+        uniqueMatchParticipants: uniqueMatchParticipants.size,
         messagesSent: messages.length,
+        activeMessageSenders,
+        passiveMessageUsers,
         engagementRate,
         averageAge,
         passiveUsers,
@@ -195,7 +268,7 @@ export default function AnalyticsModal({
     } finally {
       setIsLoading(false);
     }
-  }, [eventId]);
+  }, [eventId, eventCountry]);
 
   useEffect(() => {
     if (isOpen && eventId) {
@@ -257,18 +330,36 @@ export default function AnalyticsModal({
                   </div>
                 </div>
 
-                <div className="bg-white dark:bg-gray-700 rounded-xl shadow-sm p-4 text-center">
-                  <div className="text-2xl font-bold text-green-600 dark:text-green-400 mb-1">
-                    {analytics.mutualMatches}
+                <div className="bg-white dark:bg-gray-700 rounded-xl shadow-sm p-4">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-600 dark:text-green-400 mb-1">
+                      {analytics.mutualMatches}
+                    </div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">Matches</div>
                   </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">Matches</div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">Unique Participants:</span>
+                    <span className="text-xs font-semibold text-green-700 dark:text-green-300">{analytics.uniqueMatchParticipants}</span>
+                  </div>
                 </div>
 
-                <div className="bg-white dark:bg-gray-700 rounded-xl shadow-sm p-4 text-center">
-                  <div className="text-2xl font-bold text-purple-600 dark:text-purple-400 mb-1">
-                    {analytics.messagesSent}
+                <div className="bg-white dark:bg-gray-700 rounded-xl shadow-sm p-4">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-purple-600 dark:text-purple-400 mb-1">
+                      {analytics.messagesSent}
+                    </div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">Messages</div>
                   </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">Messages</div>
+                  <div className="border-t border-gray-200 dark:border-gray-600 mt-2 pt-2 space-y-1">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Active Senders:</span>
+                      <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{analytics.activeMessageSenders}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Passive Users:</span>
+                      <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{analytics.passiveMessageUsers}</span>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="bg-white dark:bg-gray-700 rounded-xl shadow-sm p-4 text-center">

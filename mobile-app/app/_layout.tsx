@@ -29,6 +29,9 @@ if (process.env.EXPO_PUBLIC_SENTRY_DSN) {
 // Initialize React Native Firebase - but only after app is ready
 // import '../lib/firebaseNativeConfig';
 
+// Expo notifications handles background processing automatically
+// No manual background handler needed for Expo apps
+
 import React, { useEffect, useState } from 'react';
 import { Stack, useRouter } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -39,7 +42,7 @@ import CustomSplashScreen from '../lib/components/SplashScreen';
 import ErrorBoundary from '../lib/components/ErrorBoundary';
 import { CustomMatchToast } from '../lib/components/CustomMatchToast';
 import * as Notifications from 'expo-notifications';
-import { AppStateSyncService } from '../lib/services/AppStateSyncService';
+// import { AppStateSyncService } from '../lib/services/AppStateSyncService'; // DEPRECATED - Client handles notification display
 import * as Linking from 'expo-linking';
 import * as Updates from 'expo-updates';
 import { AppState } from 'react-native';
@@ -131,42 +134,151 @@ export default function RootLayout() {
     console.log('_layout.tsx: Notification system initialization complete');
   }, [appIsReady, getIsForeground, router]);
 
-  // 2.4) Push notification received handler - cancel local fallbacks when push arrives
+  // 2.4) Push notification received handler - Show in-app when foreground
   useEffect(() => {
+    // Client-side deduplication cache with memory leak prevention
+    const recentNotifications = new Set<string>();
+    const MAX_CACHED_IDS = 100; // Prevent unbounded growth
+    
     const sub = Notifications.addNotificationReceivedListener(async (notification) => {
       try {
         const data = notification.request.content.data as any;
+        const isForeground = getIsForeground();
         
-        // If this is a push notification (not local fallback), cancel any local fallbacks for the same event
+        // Enhanced deduplication check
+        const notifId = data?.notificationId;
+        if (notifId && recentNotifications.has(notifId)) {
+          console.log('_layout.tsx: Duplicate notification blocked:', notifId);
+          return; // Skip duplicate
+        }
+        
+        if (notifId) {
+          // Prevent unbounded growth by removing oldest entries
+          if (recentNotifications.size >= MAX_CACHED_IDS) {
+            const firstId = recentNotifications.values().next().value;
+            if (firstId) {
+              recentNotifications.delete(firstId);
+            }
+            console.log('_layout.tsx: Removed oldest notification ID to prevent memory leak');
+          }
+          
+          recentNotifications.add(notifId);
+          // Clean up after 10 seconds to prevent memory leaks
+          setTimeout(() => recentNotifications.delete(notifId), 10000);
+        }
+        
+        console.log('_layout.tsx: Notification received:', {
+          isForeground,
+          type: data?.type,
+          source: data?.source,
+          notificationId: notifId?.substring(0, 10) + '...'
+        });
+        
+        // CLIENT-SIDE DECISION: Show in-app notification if foreground
+        if (isForeground && data?.source !== 'local_fallback') {
+          // Show in-app toast/alert for foreground notifications
+          if (data?.type === 'match') {
+            Toast.show({
+              type: 'success',
+              text1: notification.request.content.title || 'New Match!',
+              text2: notification.request.content.body || 'You have a new match!',
+              position: 'top',
+              visibilityTime: 4000,
+              onPress: () => {
+                if (data?.partnerSessionId) {
+                  router.push({
+                    pathname: '/chat',
+                    params: {
+                      matchId: data.partnerSessionId,
+                      matchName: data.partnerName || 'Your match'
+                    }
+                  });
+                } else {
+                  router.push('/matches');
+                }
+              }
+            });
+          } else if (data?.type === 'message') {
+            Toast.show({
+              type: 'info',
+              text1: notification.request.content.title || 'New Message',
+              text2: notification.request.content.body || 'You have a new message!',
+              position: 'top',
+              visibilityTime: 4000,
+              onPress: () => {
+                if (data?.conversationId && data?.partnerSessionId) {
+                  router.push({
+                    pathname: '/chat',
+                    params: {
+                      matchId: data.partnerSessionId,
+                      matchName: data.partnerName || 'Your conversation'
+                    }
+                  });
+                } else {
+                  router.push('/matches');
+                }
+              }
+            });
+          }
+        }
+        
+        // Cancel any local fallbacks if this is a real push
         if (data?.source !== 'local_fallback' && data?.id) {
           const { LocalNotificationFallback } = await import('../lib/notifications/LocalNotificationFallback');
           await LocalNotificationFallback.cancelLocalFallback(data.id, data.type);
-          
-          console.log('_layout.tsx: Push notification received, cancelled local fallback for event:', data.id);
         }
       } catch (error) {
-        console.warn('_layout.tsx: Error handling received notification:', error);
+        console.error('_layout.tsx: Error handling received notification:', error);
+        Sentry.captureException(error, {
+          tags: {
+            operation: 'notification_received_handler',
+            source: '_layout.tsx'
+          },
+          extra: {
+            notificationType: notification.request.content.data?.type,
+            notificationId: notification.request.content.data?.notificationId
+          }
+        });
+        // Continue app execution - don't crash
       }
     });
 
     return () => {
       sub.remove();
     };
-  }, []);
+  }, [getIsForeground, router]);
 
-  // 2.5) Push notification tap handler
+  // 2.5) Push notification tap handler with analytics
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       try {
         const data = (response?.notification?.request?.content?.data || {}) as any;
+        
+        // Track notification interaction analytics
+        Sentry.addBreadcrumb({
+          message: 'Notification tapped',
+          level: 'info',
+          category: 'notification_interaction',
+          data: {
+            type: data?.type,
+            source: 'notification_tap',
+            notificationId: data?.notificationId?.substring(0, 10) + '...'
+          }
+        });
+        
+        console.log('_layout.tsx: Notification tapped:', {
+          type: data?.type,
+          notificationId: data?.notificationId?.substring(0, 10) + '...'
+        });
+        
         if (data?.type === 'match') {
           // Route to specific chat with the matched user if we have their session ID
-          if (data?.otherSessionId) {
+          if (data?.partnerSessionId) {
             router.push({
               pathname: '/chat',
               params: {
-                matchId: data.otherSessionId,
-                matchName: data.otherName || 'Your match'
+                matchId: data.partnerSessionId,
+                matchName: data.partnerName || 'Your match'
               }
             });
           } else {
@@ -189,7 +301,24 @@ export default function RootLayout() {
           }
         }
       } catch (e) {
-        Sentry.captureException(e);
+        console.error('_layout.tsx: Error handling notification tap:', e);
+        Sentry.captureException(e, {
+          tags: {
+            operation: 'notification_tap_handler',
+            source: '_layout.tsx'
+          },
+          extra: {
+            notificationType: response?.notification?.request?.content?.data?.type,
+            notificationId: response?.notification?.request?.content?.data?.notificationId
+          }
+        });
+        // Continue app execution - don't crash
+        // Fallback to matches page on error
+        try {
+          router.push('/matches');
+        } catch (navError) {
+          console.error('_layout.tsx: Failed to navigate to fallback:', navError);
+        }
       }
     });
     return () => sub.remove();
@@ -266,16 +395,97 @@ export default function RootLayout() {
           }
           
           // Standard foreground policy: Let toast system handle it
+          // CRITICAL: Suppress ALL system notifications when in foreground
           return {
             shouldPlaySound: false,      // Disable sound - toast will handle
-            shouldSetBadge: true,        // Keep badge on both platforms  
+            shouldSetBadge: false,       // Disable badge in foreground - toast will handle  
             shouldShowBanner: false,     // Disable banner - toast will handle
-            shouldShowList: true,        // Show in notification list
+            shouldShowList: false,       // Disable notification list - toast will handle
           };
         },
       });
     }
   }, [getIsForeground]);
+
+  // 2.6) CRITICAL: Handle notification tap when app was killed
+  useEffect(() => {
+    if (!appIsReady) return;
+    
+    // Check if app was opened by tapping a notification while killed
+    const checkInitialNotification = async () => {
+      try {
+        const lastNotificationResponse = await Notifications.getLastNotificationResponseAsync();
+        
+        if (lastNotificationResponse) {
+          const data = lastNotificationResponse.notification.request.content.data as any;
+          
+          console.log('_layout.tsx: App opened from killed state by notification:', {
+            type: data?.type,
+            notificationId: data?.notificationId?.substring(0, 10) + '...'
+          });
+          
+          Sentry.addBreadcrumb({
+            message: 'App opened from killed state by notification tap',
+            level: 'info',
+            category: 'notification_interaction',
+            data: {
+              type: data?.type,
+              source: 'killed_state',
+              notificationId: data?.notificationId?.substring(0, 10) + '...'
+            }
+          });
+          
+          // CRITICAL: Wait for navigation to be ready before navigating
+          // Navigation might not be initialized immediately from killed state
+          setTimeout(() => {
+            try {
+              if (data?.type === 'match') {
+                if (data?.partnerSessionId) {
+                  router.push({
+                    pathname: '/chat',
+                    params: {
+                      matchId: data.partnerSessionId,
+                      matchName: data.partnerName || 'Your match'
+                    }
+                  });
+                } else {
+                  router.push('/matches');
+                }
+              } else if (data?.type === 'message') {
+                if (data?.partnerSessionId) {
+                  router.push({
+                    pathname: '/chat',
+                    params: {
+                      matchId: data.partnerSessionId,
+                      matchName: data.partnerName || 'Your match'
+                    }
+                  });
+                } else {
+                  router.push('/matches');
+                }
+              }
+            } catch (navError) {
+              console.warn('_layout.tsx: Navigation error from killed state notification:', navError);
+              // Fallback to matches page
+              router.push('/matches');
+            }
+          }, 1500); // Give navigation 1.5 seconds to initialize
+        }
+        
+      } catch (error) {
+        console.error('_layout.tsx: Error checking initial notification:', error);
+        Sentry.captureException(error, {
+          tags: {
+            operation: 'initial_notification_check',
+            source: '_layout.tsx'
+          }
+        });
+        // Continue app initialization - don't crash
+      }
+    };
+    
+    checkInitialNotification();
+  }, [appIsReady, router]);
 
   // 3) App initialization using the robust AppInitializationService
   useEffect(() => {
@@ -355,8 +565,8 @@ export default function RootLayout() {
         // Push token registration is now handled in AppInitializationService
         // to ensure it happens before notification services are initialized
         
-        // Start app state sync
-        AppStateSyncService.startAppStateSync(sessionId);
+        // DEPRECATED: App state sync no longer needed - client handles notification display
+        // await AppStateSyncService.startAppStateSync(sessionId);
         
       } catch (error) {
         Sentry.captureException(error, {
@@ -369,7 +579,7 @@ export default function RootLayout() {
     })();
     return () => { 
       cancelled = true; 
-      AppStateSyncService.stopAppStateSync();
+      // AppStateSyncService.stopAppStateSync(); // DEPRECATED
     };
   }, [appIsReady]);
 

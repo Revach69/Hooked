@@ -49,6 +49,11 @@ export async function checkIfSenderIsMuted(senderSessionId: string): Promise<boo
   try {
     console.log('checkIfSenderIsMuted: checking for senderSessionId:', senderSessionId);
     
+    // Import utilities first
+    const { collection, query, where, getDocs } = await import('firebase/firestore');
+    const { getDbForEvent } = await import('./firebaseConfig');
+    const { AsyncStorageUtils } = await import('./asyncStorageUtils');
+    
     const currentSessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
     const currentEventId = await AsyncStorageUtils.getItem<string>('currentEventId');
     
@@ -59,12 +64,13 @@ export async function checkIfSenderIsMuted(senderSessionId: string): Promise<boo
       return false; // Can't check mute status without session/event
     }
     
-    // Use direct Firestore query to check mute status
-    const { collection, query, where, getDocs } = await import('firebase/firestore');
-    const { db } = await import('./firebaseConfig');
+    // Get event data to determine correct database
+    const event = await AsyncStorageUtils.getItem<any>('currentEvent');
+    const eventCountry = event?.location;
+    const eventDb = getDbForEvent(eventCountry);
     
     const mutedQuery = query(
-      collection(db, 'muted_matches'),
+      collection(eventDb, 'muted_matches'),
       where('event_id', '==', currentEventId),
       where('muter_session_id', '==', currentSessionId),
       where('muted_session_id', '==', senderSessionId)

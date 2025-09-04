@@ -680,6 +680,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 16,
+    textAlign: 'center',
   },
   emptyContainer: {
     flex: 1,

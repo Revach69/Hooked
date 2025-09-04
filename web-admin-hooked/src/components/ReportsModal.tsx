@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import { ReportAPI, EventProfile, KickedUserAPI, type Report } from '@/lib/firebaseApi';
 import { 
   X, 
@@ -17,6 +18,8 @@ interface ReportsModalProps {
   onClose: () => void;
   eventId: string;
   eventName: string;
+  eventCountry?: string;
+  eventDatabaseId?: string;
 }
 
 interface ReportWithProfiles extends Report {
@@ -24,7 +27,7 @@ interface ReportWithProfiles extends Report {
   reportedProfile?: EventProfile;
 }
 
-export default function ReportsModal({ isOpen, onClose, eventId, eventName }: ReportsModalProps) {
+export default function ReportsModal({ isOpen, onClose, eventId, eventName, eventCountry, eventDatabaseId }: ReportsModalProps) {
   const [reports, setReports] = useState<ReportWithProfiles[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [processingReport, setProcessingReport] = useState<string | null>(null);
@@ -41,7 +44,7 @@ export default function ReportsModal({ isOpen, onClose, eventId, eventName }: Re
     try {
       // Loading reports for event
       // Filter reports by event_id
-      const eventReports = await ReportAPI.filter({ event_id: eventId });
+      const eventReports = await ReportAPI.filter({ event_id: eventId }, eventCountry);
       
       // Load profiles for each report
       const reportsWithProfiles = await Promise.all(
@@ -50,11 +53,11 @@ export default function ReportsModal({ isOpen, onClose, eventId, eventName }: Re
             EventProfile.filter({ 
               event_id: report.event_id, 
               session_id: report.reporter_session_id 
-            }),
+            }, eventCountry),
             EventProfile.filter({ 
               event_id: report.event_id, 
               session_id: report.reported_session_id 
-            })
+            }, eventCountry)
           ]);
 
           return {
@@ -71,7 +74,7 @@ export default function ReportsModal({ isOpen, onClose, eventId, eventName }: Re
     } finally {
       setIsLoading(false);
     }
-  }, [eventId]);
+  }, [eventId, eventCountry]);
 
   useEffect(() => {
     if (isOpen) {
@@ -103,28 +106,28 @@ export default function ReportsModal({ isOpen, onClose, eventId, eventName }: Re
       if (pendingAction.type === 'accept') {
       // Delete the reported user's profile
         if (pendingAction.report.reportedProfile) {
-          await EventProfile.delete(pendingAction.report.reportedProfile.id);
+          await EventProfile.deleteFromRegion(pendingAction.report.reportedProfile.id, eventCountry, eventDatabaseId);
         }
         
         // Create kicked user record
-        await KickedUserAPI.create({
+        await KickedUserAPI.createInRegion({
           event_id: pendingAction.report.event_id,
           session_id: pendingAction.report.reported_session_id,
           event_name: eventName,
           admin_notes: adminNotes || 'User removed from event due to report'
-        });
+        }, eventCountry, eventDatabaseId);
       
       // Update report status to resolved
-        await ReportAPI.update(pendingAction.report.id, { 
+        await ReportAPI.updateInRegion(pendingAction.report.id, { 
         status: 'resolved',
           admin_notes: adminNotes || 'User removed from event due to report'
-        });
+        }, eventCountry, eventDatabaseId);
       } else {
         // Update report status to dismissed
-        await ReportAPI.update(pendingAction.report.id, { 
+        await ReportAPI.updateInRegion(pendingAction.report.id, { 
           status: 'dismissed',
           admin_notes: adminNotes || 'Report dismissed - false report or insufficient evidence'
-        });
+        }, eventCountry, eventDatabaseId);
       }
       
       // Reload reports
@@ -305,10 +308,11 @@ export default function ReportsModal({ isOpen, onClose, eventId, eventName }: Re
                               <div className="flex items-center gap-3">
                                 <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
                                   {report.reporterProfile.profile_photo_url ? (
-                                    <img 
+                                    <Image 
                                       src={report.reporterProfile.profile_photo_url} 
                                       alt={report.reporterProfile.first_name}
-                                      className="w-full h-full object-cover"
+                                      fill
+                                      className="object-cover"
                                     />
                                   ) : (
                                     <div 
@@ -345,10 +349,11 @@ export default function ReportsModal({ isOpen, onClose, eventId, eventName }: Re
                               <div className="flex items-center gap-3">
                                 <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
                                   {report.reportedProfile.profile_photo_url ? (
-                                    <img 
+                                    <Image 
                                       src={report.reportedProfile.profile_photo_url} 
                                       alt={report.reportedProfile.first_name}
-                                      className="w-full h-full object-cover"
+                                      fill
+                                      className="object-cover"
                                     />
                                   ) : (
                                     <div 

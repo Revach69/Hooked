@@ -10,7 +10,9 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { AlertCircle } from 'lucide-react-native';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
-import { EventAPI } from '../lib/firebaseApi';
+import { EventAPI, type Event } from '../lib/firebaseApi';
+import { app } from '../lib/firebaseConfig';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMobileAsyncOperation } from '../lib/hooks/useMobileErrorHandling';
 import MobileOfflineStatusBar from '../lib/components/MobileOfflineStatusBar';
@@ -39,13 +41,55 @@ export default function JoinPage() {
         return;
       }
 
-      // Use enhanced error handling for event validation
+      // Use Cloud Function to search for events across all regional databases
       const result = await executeOperationWithOfflineFallback(
         async () => {
-          const events = await EventAPI.filter({ event_code: code.toUpperCase() });
-          return events;
+          console.log(`Searching for event with code: ${code}`);
+          
+          // Get the appropriate regional functions instance
+          // Use automatic region selection for optimal performance
+          const functions = getFunctions(app);
+          const searchEventByCode = httpsCallable(functions, 'searchEventByCode');
+          
+          try {
+            const response = await searchEventByCode({ eventCode: code });
+            const data = response.data as any;
+            
+            if (data.success && data.event) {
+              console.log(`Found event in database: ${data.event._database}`);
+              // Convert Firestore timestamps if needed
+              const event = data.event;
+              if (event.starts_at && typeof event.starts_at === 'object') {
+                event.starts_at = new Timestamp(event.starts_at.seconds || event.starts_at._seconds, event.starts_at.nanoseconds || event.starts_at._nanoseconds || 0);
+              }
+              if (event.expires_at && typeof event.expires_at === 'object') {
+                event.expires_at = new Timestamp(event.expires_at.seconds || event.expires_at._seconds, event.expires_at.nanoseconds || event.expires_at._nanoseconds || 0);
+              }
+              if (event.start_date && typeof event.start_date === 'object') {
+                event.start_date = new Timestamp(event.start_date.seconds || event.start_date._seconds, event.start_date.nanoseconds || event.start_date._nanoseconds || 0);
+              }
+              if (event.created_at && typeof event.created_at === 'object') {
+                event.created_at = new Timestamp(event.created_at.seconds || event.created_at._seconds, event.created_at.nanoseconds || event.created_at._nanoseconds || 0);
+              }
+              if (event.updated_at && typeof event.updated_at === 'object') {
+                event.updated_at = new Timestamp(event.updated_at.seconds || event.updated_at._seconds, event.updated_at.nanoseconds || event.updated_at._nanoseconds || 0);
+              }
+              return [event];
+            } else {
+              console.log('Event not found in any database');
+              return [];
+            }
+          } catch (functionError: any) {
+            console.error('Cloud Function error:', functionError);
+            // If it's a network error, throw it to trigger offline mode
+            if (functionError.code === 'unavailable' || functionError.code === 'deadline-exceeded') {
+              throw functionError;
+            }
+            // Otherwise, event not found
+            return [];
+          }
         },
-        { operation: 'Validate event code' }
+        { operation: 'Search for event code' }
       );
 
       if (result.queued) {
@@ -121,6 +165,22 @@ export default function JoinPage() {
       await AsyncStorageUtils.setItem('currentEventId', event.id);
       await AsyncStorageUtils.setItem('currentSessionId', sessionId);
       await AsyncStorageUtils.setItem('currentEventCode', event.event_code);
+      
+      // Store the event country for regional database access
+      if (event.country) {
+        await AsyncStorageUtils.setItem('currentEventCountry', event.country);
+      }
+      
+      // Store the full event data with properly converted timestamps
+      const eventToStore = {
+        ...event,
+        starts_at: event.starts_at?.toDate ? event.starts_at.toDate() : event.starts_at,
+        expires_at: event.expires_at?.toDate ? event.expires_at.toDate() : event.expires_at,
+        start_date: event.start_date?.toDate ? event.start_date.toDate() : event.start_date,
+        created_at: event.created_at?.toDate ? event.created_at.toDate() : event.created_at,
+        updated_at: event.updated_at?.toDate ? event.updated_at.toDate() : event.updated_at,
+      };
+      await AsyncStorageUtils.setItem('currentEventData', eventToStore);
 
       // Update NotificationRouter with new session ID
       try {
@@ -213,10 +273,12 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 8,
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
     fontWeight: '500',
+    textAlign: 'center',
   },
   loadingContainer: {
     alignItems: 'center',

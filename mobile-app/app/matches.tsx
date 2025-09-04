@@ -23,7 +23,7 @@ import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { ImageCacheService } from '../lib/services/ImageCacheService';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
-import { db } from '../lib/firebaseConfig';
+import { getDbForEvent } from '../lib/firebaseConfig';
 import CountdownTimer from '../lib/components/CountdownTimer';
 import UserProfileModal from '../lib/UserProfileModal';
 import DropdownMenu from '../components/DropdownMenu';
@@ -64,9 +64,14 @@ export default function Matches() {
       if (eventId && sessionId) {
         console.log('Pull-to-refresh: Reloading all matches data');
         
-        // Reload muted matches
+        // Reload muted matches using regional database
         const { collection, query, where, getDocs } = await import('firebase/firestore');
-        const { db } = await import('../lib/firebaseConfig');
+        const { getDbForEvent } = await import('../lib/firebaseConfig');
+        
+        // Get event data to determine correct database
+        const event = await AsyncStorageUtils.getItem<any>('currentEvent') || currentEvent;
+        const eventCountry = event?.location;
+        const db = getDbForEvent(eventCountry);
         
         const mutedQuery = query(
           collection(db, 'muted_matches'),
@@ -119,7 +124,11 @@ export default function Matches() {
 
     try {
       const { collection, query, where, getDocs } = await import('firebase/firestore');
-      const { db } = await import('../lib/firebaseConfig');
+      const { getDbForEvent } = await import('../lib/firebaseConfig');
+
+      // Get event-specific database
+      const eventCountry = currentEvent?.country || currentEvent?.location;
+      const eventDb = getDbForEvent(eventCountry);
 
       // Fetch messages for each match
       const messagePromises = matchProfiles.map(async (profile) => {
@@ -130,16 +139,20 @@ export default function Matches() {
           const isCacheRecent = Date.now() - cacheTime < 30000; // 30 seconds
           console.log(`Cache status for ${profile.first_name}: ${isCacheRecent ? 'recent' : 'stale'}`);  // Use the variable
 
-          // Get all messages for this conversation
+          // Get all messages for this conversation using regional database
+          const { getDbForEvent } = await import('../lib/firebaseConfig');
+          const eventCountry = currentEvent?.location;
+          const eventDb = getDbForEvent(eventCountry);
+          
           const messagesFromUserQuery = query(
-            collection(db, 'messages'),
+            collection(eventDb, 'messages'),
             where('event_id', '==', currentEvent.id),
             where('from_profile_id', '==', currentUserProfile.id),
             where('to_profile_id', '==', profile.id)
           );
           
           const messagesToUserQuery = query(
-            collection(db, 'messages'),
+            collection(eventDb, 'messages'),
             where('event_id', '==', currentEvent.id),
             where('from_profile_id', '==', profile.id),
             where('to_profile_id', '==', currentUserProfile.id)
@@ -283,9 +296,14 @@ export default function Matches() {
           if (eventId && sessionId) {
             console.log('Reloading muted matches and unread messages with:', { eventId, sessionId });
             
-            // Directly query Firestore for muted matches
+            // Directly query Firestore for muted matches using regional database
             const { collection, query, where, getDocs } = await import('firebase/firestore');
-            const { db } = await import('../lib/firebaseConfig');
+            const { getDbForEvent } = await import('../lib/firebaseConfig');
+            
+            // Get event data to determine correct database
+            const event = await AsyncStorageUtils.getItem<any>('currentEvent') || currentEvent;
+            const eventCountry = event?.location;
+            const db = getDbForEvent(eventCountry);
             
             const mutedQuery = query(
               collection(db, 'muted_matches'),
@@ -428,10 +446,14 @@ export default function Matches() {
     const setupMessageListener = async () => {
       try {
         const { onSnapshot, collection, query, where } = await import('firebase/firestore');
-        const { db } = await import('../lib/firebaseConfig');
+        const { getDbForEvent } = await import('../lib/firebaseConfig');
+
+        // Get event-specific database
+        const eventCountry = currentEvent?.location;
+        const eventDb = getDbForEvent(eventCountry);
 
         const messagesQuery = query(
-          collection(db, 'messages'),
+          collection(eventDb, 'messages'),
           where('event_id', '==', currentEvent.id),
           where('to_profile_id', '==', currentUserProfile.id)
         );
@@ -550,19 +572,22 @@ export default function Matches() {
           try {
             // Query messages between current user and this match
             const { collection, query, where, getDocs } = await import('firebase/firestore');
-            const { db } = await import('../lib/firebaseConfig');
+            const { getDbForEvent } = await import('../lib/firebaseConfig');
             
             // Simplified approach: Get ALL messages for this conversation, then sort locally
             // This avoids Firestore index requirements
+            const eventCountry = currentEvent?.location;
+            const eventDb = getDbForEvent(eventCountry);
+            
             const messagesFromUserQuery = query(
-              collection(db, 'messages'),
+              collection(eventDb, 'messages'),
               where('event_id', '==', currentEvent.id),
               where('from_profile_id', '==', currentUserProfile.id),
               where('to_profile_id', '==', profile.id)
             );
             
             const messagesToUserQuery = query(
-              collection(db, 'messages'),
+              collection(eventDb, 'messages'),
               where('event_id', '==', currentEvent.id),
               where('from_profile_id', '==', profile.id),
               where('to_profile_id', '==', currentUserProfile.id)
@@ -703,9 +728,13 @@ export default function Matches() {
     cleanupAllListeners();
 
     try {
+      // Get event-specific database
+      const eventCountry = currentEvent?.country || currentEvent?.location;
+      const eventDb = getDbForEvent(eventCountry);
+      
       // First, get the current user's profile to check visibility
       const userProfileQuery = query(
-        collection(db, 'event_profiles'),
+        collection(eventDb, 'event_profiles'),
         where('event_id', '==', currentEvent.id),
         where('session_id', '==', currentSessionId)
       );
@@ -755,7 +784,7 @@ export default function Matches() {
           if (currentEvent?.id && currentSessionId) {
             try {
               const mutualLikesQuery = query(
-                collection(db, 'likes'),
+                collection(eventDb, 'likes'),
                 where('event_id', '==', currentEvent.id),
                 where('is_mutual', '==', true)
               );
@@ -867,7 +896,7 @@ export default function Matches() {
 
               // Add likes listener to track which profiles the user has liked
               const likesQuery = query(
-                collection(db, 'likes'),
+                collection(eventDb, 'likes'),
                 where('event_id', '==', currentEvent.id),
                 where('liker_session_id', '==', currentSessionId)
               );
@@ -1044,9 +1073,14 @@ export default function Matches() {
     try {
       console.log('Loading muted matches for event:', currentEvent.id, 'session:', currentSessionId);
       
-      // Directly query Firestore for muted matches
+      // Directly query Firestore for muted matches using regional database
       const { collection, query, where, getDocs } = await import('firebase/firestore');
-      const { db } = await import('../lib/firebaseConfig');
+      const { getDbForEvent } = await import('../lib/firebaseConfig');
+      
+      // Get event data to determine correct database
+      const event = await AsyncStorageUtils.getItem<any>('currentEvent') || currentEvent;
+      const eventCountry = event?.location;
+      const db = getDbForEvent(eventCountry);
       
       const mutedQuery = query(
         collection(db, 'muted_matches'),
@@ -1282,7 +1316,11 @@ export default function Matches() {
         console.log('Verifying mute status was saved (after 3 seconds)...');
         try {
           const { collection, query, where, getDocs } = await import('firebase/firestore');
-          const { db } = await import('../lib/firebaseConfig');
+          const { getDbForEvent } = await import('../lib/firebaseConfig');
+          
+          // Get event data to determine correct database
+          const eventCountry = currentEvent?.location;
+          const db = getDbForEvent(eventCountry);
           
           const mutedQuery = query(
             collection(db, 'muted_matches'),
@@ -1437,14 +1475,15 @@ export default function Matches() {
         const theirLikeRecord = theirLikesToMe[0];
 
         // Update both records for mutual match
+        const eventCountry = currentEvent?.location;
         await LikeAPI.update(newLike.id, { 
           is_mutual: true,
           liker_notified_of_match: false // Don't mark as notified yet, let the listener handle it
-        });
+        }, eventCountry);
         await LikeAPI.update(theirLikeRecord.id, { 
           is_mutual: true,
           liked_notified_of_match: false // Don't mark as notified yet, let the listener handle it
-        });
+        }, eventCountry);
         
         // 🎉 CORRECTED LOGIC: 
         // - First liker (User B) gets toast/push notification
@@ -1457,10 +1496,10 @@ export default function Matches() {
         await Promise.all([
           LikeAPI.update(newLike.id, { 
             liker_notified_of_match: true
-          }),
+          }, eventCountry),
           LikeAPI.update(theirLikeRecord.id, { 
             liked_notified_of_match: true
-          })
+          }, eventCountry)
         ]);
       }
           } catch {
@@ -1495,6 +1534,7 @@ export default function Matches() {
       marginTop: 16,
       fontSize: 16,
       color: isDark ? '#9ca3af' : '#6b7280',
+      textAlign: 'center',
     },
     header: {
       flexDirection: 'row',

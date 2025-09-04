@@ -21,7 +21,7 @@ import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { collection, query, where, orderBy, onSnapshot, getDocs, serverTimestamp, Timestamp } from 'firebase/firestore';
-import { db } from '../lib/firebaseConfig';
+import { getDbForEvent } from '../lib/firebaseConfig';
 import { EventProfileAPI, MessageAPI, ReportAPI, MutedMatchAPI, LikeAPI } from '../lib/firebaseApi';
 import UserProfileModal from '../lib/UserProfileModal';
 import DropdownMenu from '../components/DropdownMenu';
@@ -402,16 +402,22 @@ export default function Chat() {
       listenerRef.current = null;
     }
 
-    try {
-      const messagesQuery = query(
-        collection(db, 'messages'),
-        where('event_id', '==', currentEventId),
-        orderBy('created_at', 'asc')
-      );
+    const setupListener = async () => {
+      try {
+        // Get event data to determine correct database
+        const event = await AsyncStorageUtils.getItem<any>('currentEvent');
+        const eventCountry = event?.location;
+        const eventDb = getDbForEvent(eventCountry);
+        
+        const messagesQuery = query(
+          collection(eventDb, 'messages'),
+          where('event_id', '==', currentEventId),
+          orderBy('created_at', 'asc')
+        );
 
-      const unsubscribe = onSnapshot(messagesQuery, async (snapshot) => {
-        try {
-          const allMessages = snapshot.docs.map(doc => ({
+        const unsubscribe = onSnapshot(messagesQuery, async (snapshot) => {
+          try {
+            const allMessages = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
           })) as ChatMessage[];
@@ -523,9 +529,12 @@ export default function Chat() {
 
       listenerRef.current = unsubscribe;
 
-    } catch {
-      // Handle error silently
-    }
+      } catch {
+        // Handle error silently
+      }
+    };
+
+    setupListener();
 
     return () => {
       if (listenerRef.current) {
@@ -545,9 +554,14 @@ export default function Chat() {
       try {
         console.log('Setting up match status listener for chat validation');
         
-        // Query for mutual likes between current user and match
+        // Get event data to determine correct database
+        const event = await AsyncStorageUtils.getItem<any>('currentEvent');
+        const eventCountry = event?.location;
+        const eventDb = getDbForEvent(eventCountry);
+        
+        // Query for mutual likes between current user and match using regional database
         const likesQuery = query(
-          collection(db, 'likes'),
+          collection(eventDb, 'likes'),
           where('event_id', '==', currentEventId),
           where('is_mutual', '==', true)
         );
@@ -609,8 +623,12 @@ export default function Chat() {
     setIsSending(true);
     try {
       // First check if the match still exists before sending message
+      const event = await AsyncStorageUtils.getItem<any>('currentEvent');
+      const eventCountry = event?.location;
+      const eventDb = getDbForEvent(eventCountry);
+      
       const likesSnapshot = await getDocs(query(
-        collection(db, 'likes'),
+        collection(eventDb, 'likes'),
         where('event_id', '==', currentEventId),
         where('is_mutual', '==', true)
       ));

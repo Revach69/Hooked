@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
   },
   output: 'standalone',
   serverExternalPackages: ['firebase'],
+  outputFileTracingRoot: __dirname,
   
   // Redirects configuration
   async redirects() {
@@ -53,7 +54,7 @@ const nextConfig: NextConfig = {
           },
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://firebasestorage.googleapis.com https://*.firebasestorage.app; frame-src 'self' https://www.google.com; object-src 'none'; base-uri 'self'; form-action 'self';"
+            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://firebasestorage.googleapis.com https://*.firebasestorage.app https://*.cloudfunctions.net https://us-central1-hooked-69.cloudfunctions.net https://australia-southeast2-hooked-69.cloudfunctions.net https://europe-west3-hooked-69.cloudfunctions.net https://asia-northeast1-hooked-69.cloudfunctions.net https://southamerica-east1-hooked-69.cloudfunctions.net https://me-west1-hooked-69.cloudfunctions.net; frame-src 'self' https://www.google.com https://hooked-69.firebaseapp.com; object-src 'none'; base-uri 'self'; form-action 'self';"
           }
         ]
       }

@@ -1,5 +1,5 @@
 import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
-import { db } from '../firebaseConfig';
+import { getDbForEvent } from '../firebaseConfig';
 import { AsyncStorageUtils } from '../asyncStorageUtils';
 import { NotificationRouter } from '../notifications/NotificationRouter';
 import * as Sentry from '@sentry/react-native';
@@ -14,6 +14,7 @@ class GlobalNotificationServiceClass {
   private isInitialized = false;
   private currentSessionId: string | null = null;
   private currentEventId: string | null = null;
+  private currentEventCountry: string | null = null;
 
   /**
    * Initialize global notification listeners (non-blocking, event-driven)
@@ -26,6 +27,29 @@ class GlobalNotificationServiceClass {
       // Quick check - NO RETRIES during app startup
       this.currentSessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
       this.currentEventId = await AsyncStorageUtils.getItem<string>('currentEventId');
+      
+      // Get event data for regional database
+      const event = await AsyncStorageUtils.getItem<any>('currentEvent');
+      this.currentEventCountry = event?.location || event?.country;
+      
+      // If cached event doesn't have location, try to fetch it from the API
+      if (this.currentEventId && !this.currentEventCountry) {
+        try {
+          console.log('GlobalNotificationService: Event location not cached, fetching from API');
+          const { EventAPI } = await import('../firebaseApi');
+          const freshEvent = await EventAPI.get(this.currentEventId);
+          this.currentEventCountry = (freshEvent as any)?.location || (freshEvent as any)?.country;
+          console.log('GlobalNotificationService: Fetched event country from API:', this.currentEventCountry);
+          
+          // Update cached event with location info
+          if (this.currentEventCountry && event) {
+            const updatedEvent = { ...event, location: this.currentEventCountry, country: this.currentEventCountry };
+            await AsyncStorageUtils.setItem('currentEvent', updatedEvent);
+          }
+        } catch (eventFetchError) {
+          console.warn('GlobalNotificationService: Failed to fetch event for regional database selection:', eventFetchError);
+        }
+      }
       
       if (!this.currentSessionId || !this.currentEventId) {
         console.log('GlobalNotificationService: No session/event available yet - initialization deferred');
@@ -75,10 +99,13 @@ class GlobalNotificationServiceClass {
       
       console.log('GlobalNotificationService: Setting up match listener');
       
+      // Get regional database
+      const eventDb = getDbForEvent(this.currentEventCountry);
+      
       // Set up TWO queries to match _layout.tsx logic:
       // 1. Matches where I liked someone (I'm the creator)
       const matchQueryILiked = query(
-        collection(db, 'likes'),
+        collection(eventDb, 'likes'),
         where('event_id', '==', this.currentEventId),
         where('is_mutual', '==', true),
         where('liker_session_id', '==', this.currentSessionId)
@@ -86,7 +113,7 @@ class GlobalNotificationServiceClass {
       
       // 2. Matches where someone liked me (I'm the recipient)  
       const matchQueryIWasLiked = query(
-        collection(db, 'likes'),
+        collection(eventDb, 'likes'),
         where('event_id', '==', this.currentEventId),
         where('is_mutual', '==', true),
         where('liked_session_id', '==', this.currentSessionId)
@@ -258,9 +285,12 @@ class GlobalNotificationServiceClass {
       // Track when listener starts to differentiate between initial load and real-time updates  
       const listenerStartTime = Date.now();
       
+      // Get regional database
+      const eventDb = getDbForEvent(this.currentEventCountry);
+      
       // Query for new messages TO this user (removed seen filter to match _layout.tsx)
       const messageQuery = query(
-        collection(db, 'messages'),
+        collection(eventDb, 'messages'),
         where('event_id', '==', this.currentEventId),
         where('to_profile_id', '==', userProfileId),
         orderBy('created_at', 'desc')

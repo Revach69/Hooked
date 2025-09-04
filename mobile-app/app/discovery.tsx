@@ -23,9 +23,11 @@ import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { ImageCacheService } from '../lib/services/ImageCacheService';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
-import { db } from '../lib/firebaseConfig';
+import { getDbForEvent } from '../lib/firebaseConfig';
 import UserProfileModal from '../lib/UserProfileModal';
 import CountdownTimer from '../lib/components/CountdownTimer';
+import { HowItWorksModal } from '../lib/components/HowItWorksModal';
+import { HowItWorksUtils } from '../lib/utils/howItWorksUtils';
 
 import { updateUserActivity } from '../lib/messageNotificationHelper';
 import { usePerformanceMonitoring } from '../lib/hooks/usePerformanceMonitoring';
@@ -208,6 +210,7 @@ export default function Discovery() {
   const [isAppActive, setIsAppActive] = useState(true);
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
   const [cachedImageUris, setCachedImageUris] = useState<Map<string, string>>(new Map());
+  const [showHowItWorksModal, setShowHowItWorksModal] = useState(false);
   
   // Single ref to hold all unsubscribe functions
   const listenersRef = useRef<{
@@ -240,19 +243,44 @@ export default function Discovery() {
         eventData = cachedEvent;
         console.log('Discovery: Using cached event data');
       } else {
-        // Add timeout to prevent hanging indefinitely
-        const eventTimeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('Event loading timeout')), 30000); // 30 second timeout - give more time
-        });
-        
-        const eventPromise = EventAPI.filter({ id: eventId });
-        const events = await Promise.race([eventPromise, eventTimeoutPromise]);
-        
-        if (events.length > 0) {
-          eventData = events[0];
-          setCurrentEvent(eventData);
+        // First try to get stored event data (fastest)
+        const storedEventData = await AsyncStorageUtils.getItem<any>('currentEventData');
+        if (storedEventData && storedEventData.id === eventId) {
+          // Convert date strings back to Date objects
+          const eventWithDates = {
+            ...storedEventData,
+            starts_at: storedEventData.starts_at ? new Date(storedEventData.starts_at) : null,
+            expires_at: storedEventData.expires_at ? new Date(storedEventData.expires_at) : null,
+            start_date: storedEventData.start_date ? new Date(storedEventData.start_date) : null,
+            created_at: storedEventData.created_at ? new Date(storedEventData.created_at) : null,
+            updated_at: storedEventData.updated_at ? new Date(storedEventData.updated_at) : null,
+          };
+          setCurrentEvent(eventWithDates);
+          eventData = eventWithDates;
           GlobalDataCache.set(CacheKeys.DISCOVERY_EVENT, eventData, 10 * 60 * 1000); // Cache for 10 minutes
-          console.log('Discovery: Loaded and cached event data');
+          console.log('Discovery: Using stored event data');
+        } else {
+          // Fallback to database query with regional support
+          // Add timeout to prevent hanging indefinitely
+          const eventTimeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error('Event loading timeout')), 30000); // 30 second timeout - give more time
+          });
+          
+          // Get event country for regional database targeting
+          const eventCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+          const eventPromise = eventCountry 
+            ? EventAPI.get(eventId, eventCountry)
+            : EventAPI.filter({ id: eventId });
+          
+          const result = await Promise.race([eventPromise, eventTimeoutPromise]);
+          const events = Array.isArray(result) ? result : (result ? [result] : []);
+          
+          if (events.length > 0) {
+            eventData = events[0];
+            setCurrentEvent(eventData);
+            GlobalDataCache.set(CacheKeys.DISCOVERY_EVENT, eventData, 10 * 60 * 1000); // Cache for 10 minutes
+            console.log('Discovery: Loaded and cached event data from database');
+          }
         }
       }
       
@@ -269,7 +297,9 @@ export default function Discovery() {
           'currentSessionId',
           'currentEventCode',
           'currentProfileColor',
-          'currentProfilePhotoUrl'
+          'currentProfilePhotoUrl',
+          'currentEventCountry',
+          'currentEventData'
         ]);
         router.replace('/home');
         return;
@@ -287,6 +317,10 @@ export default function Discovery() {
           setTimeout(() => reject(new Error('Profile loading timeout')), 30000); // 30 second timeout - give more time
         });
         
+        // Use the same country info for profile lookup as was used for creation
+        const eventCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+        console.log(`Discovery: Looking for profile in ${eventCountry || 'default'} region for session ${sessionId}`);
+        
         const profilePromise = EventProfileAPI.filter({
           event_id: eventId,
           session_id: sessionId
@@ -301,7 +335,9 @@ export default function Discovery() {
             'currentSessionId',
             'currentEventCode',
             'currentProfileColor',
-            'currentProfilePhotoUrl'
+            'currentProfilePhotoUrl',
+            'currentEventCountry',
+            'currentEventData'
           ]);
           router.replace('/home');
           return;
@@ -343,12 +379,35 @@ export default function Discovery() {
     }
   }, []);
 
+  const checkAndShowHowItWorksModal = useCallback(async () => {
+    try {
+      if (!currentEvent?.id) return;
+      
+      const shouldShow = await HowItWorksUtils.shouldShowHowItWorksModal(currentEvent.id);
+      if (shouldShow) {
+        // Add a small delay to ensure the UI is fully rendered
+        setTimeout(() => {
+          setShowHowItWorksModal(true);
+        }, 1000);
+      }
+    } catch (error) {
+      console.error('Error checking how it works modal:', error);
+    }
+  }, [currentEvent?.id]);
+
   // Use initializeSession in useEffect
   useEffect(() => {
     initializeSession();
     // Initialize image cache service
     ImageCacheService.initialize();
   }, [initializeSession]);
+
+  // Check and show How It Works modal after event and profile are loaded
+  useEffect(() => {
+    if (currentEvent?.id && currentUserProfile?.id) {
+      checkAndShowHowItWorksModal();
+    }
+  }, [currentEvent?.id, currentUserProfile?.id, checkAndShowHowItWorksModal]);
 
   // Cleanup all listeners on unmount
   useEffect(() => {
@@ -410,8 +469,12 @@ export default function Discovery() {
     if (!currentEvent?.id || !currentSessionId || !currentUserProfile?.id) return;
 
     try {
+      // Get event-specific database
+      const eventCountry = currentEvent?.location;
+      const eventDb = getDbForEvent(eventCountry);
+      
       const messagesQuery = query(
-        collection(db, 'messages'),
+        collection(eventDb, 'messages'),
         where('event_id', '==', currentEvent.id),
         where('to_profile_id', '==', currentUserProfile.id)
       );
@@ -443,9 +506,13 @@ export default function Discovery() {
     }
 
     try {
+      // Get event-specific database
+      const eventCountry = currentEvent?.location;
+      const eventDb = getDbForEvent(eventCountry);
+      
       // 2. Other visible profiles listener
       const otherProfilesQuery = query(
-        collection(db, 'event_profiles'),
+        collection(eventDb, 'event_profiles'),
         where('event_id', '==', currentEvent.id),
         where('is_visible', '==', true)
       );
@@ -489,7 +556,7 @@ export default function Discovery() {
 
       // 3. Likes listener
       const likesQuery = query(
-        collection(db, 'likes'),
+        collection(eventDb, 'likes'),
         where('event_id', '==', currentEvent.id),
         where('liker_session_id', '==', currentSessionId)
       );
@@ -513,7 +580,7 @@ export default function Discovery() {
 
       // 4. Mutual matches listener - for real-time match notifications (handled globally in _layout.tsx)
       const mutualMatchesQuery = query(
-        collection(db, 'likes'),
+        collection(eventDb, 'likes'),
         where('event_id', '==', currentEvent.id),
         where('is_mutual', '==', true)
       );
@@ -543,9 +610,13 @@ export default function Discovery() {
     cleanupAllListeners();
 
     try {
+      // Get event-specific database
+      const eventCountry = currentEvent?.location;
+      const eventDb = getDbForEvent(eventCountry);
+      
       // 1. User profile listener
       const userProfileQuery = query(
-        collection(db, 'event_profiles'),
+        collection(eventDb, 'event_profiles'),
         where('event_id', '==', currentEvent.id),
         where('session_id', '==', currentSessionId)
       );
@@ -901,16 +972,17 @@ export default function Discovery() {
         const theirLikeRecord = theirLikesToMe[0];
 
         // Update both records for mutual match
+        const eventCountry = currentEvent?.location;
         await trackAsyncOperation('update_like_mutual', async () => {
           await Promise.all([
             LikeAPI.update(newLike.id, { 
               is_mutual: true,
               liker_notified_of_match: false // Don't mark as notified yet, let the listener handle it
-            }),
+            }, eventCountry),
             LikeAPI.update(theirLikeRecord.id, { 
               is_mutual: true,
               liked_notified_of_match: false // Don't mark as notified yet, let the listener handle it
-            })
+            }, eventCountry)
           ]);
         });
         
@@ -1047,6 +1119,7 @@ export default function Discovery() {
       marginTop: 16,
       fontSize: 16,
       color: isDark ? '#9ca3af' : '#6b7280',
+      textAlign: 'center',
     },
     header: {
       flexDirection: 'row',
@@ -1497,6 +1570,13 @@ export default function Discovery() {
             <Text style={[styles.navButtonText, styles.navButtonTextActive]}>Profile</Text>
           </TouchableOpacity>
         </View>
+
+        {/* How It Works Modal */}
+        <HowItWorksModal
+          visible={showHowItWorksModal}
+          onClose={() => setShowHowItWorksModal(false)}
+          eventId={currentEvent?.id || ''}
+        />
       </SafeAreaView>
     );
   }
@@ -1749,6 +1829,13 @@ export default function Discovery() {
         onSkip={handleSkip}
         isLiked={selectedProfileForDetail ? likedProfiles.has(selectedProfileForDetail.session_id) : false}
         isSkipped={selectedProfileForDetail ? skippedProfiles.has(selectedProfileForDetail.session_id) : false}
+      />
+
+      {/* How It Works Modal */}
+      <HowItWorksModal
+        visible={showHowItWorksModal}
+        onClose={() => setShowHowItWorksModal(false)}
+        eventId={currentEvent?.id || ''}
       />
 
     </SafeAreaView>

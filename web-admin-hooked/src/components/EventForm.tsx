@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { Event } from '@/lib/firebaseApi';
 import { X, Save, Plus, Upload, Edit3 } from 'lucide-react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -340,7 +341,7 @@ export default function EventForm({
             // No blob data, trying to fetch blob URL
             try {
               // Create a temporary image element to get the blob data
-              const img = new Image();
+              const img = new globalThis.Image();
               img.crossOrigin = 'anonymous';
               
               const canvas = document.createElement('canvas');
@@ -398,9 +399,9 @@ export default function EventForm({
       // Convert form datetime inputs (event's timezone) to UTC Date objects for Firestore
       const eventData: Partial<Event> = {
         ...formData,
-        starts_at: localEventTimeStringToUTCTimestamp(formData.starts_at, formData.timezone),
-        start_date: localEventTimeStringToUTCTimestamp(formData.start_date, formData.timezone),
-        expires_at: localEventTimeStringToUTCTimestamp(formData.expires_at, formData.timezone),
+        starts_at: localEventTimeStringToUTCTimestamp(formData.starts_at, formData.timezone).toDate(),
+        start_date: localEventTimeStringToUTCTimestamp(formData.start_date, formData.timezone).toDate(),
+        expires_at: localEventTimeStringToUTCTimestamp(formData.expires_at, formData.timezone).toDate(),
         event_type: formData.event_type,
         event_link: formData.event_link,
         is_private: formData.is_private,
@@ -890,11 +891,12 @@ export default function EventForm({
               {/* Image Preview */}
               {imagePreview && (
                 <div className="relative">
-                  <div className="w-full h-48 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600 flex items-center justify-center overflow-hidden">
-                    <img
+                  <div className="w-full h-48 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600 relative overflow-hidden">
+                    <Image
                       src={imagePreview}
                       alt="Event Preview"
-                      className="max-w-full max-h-full object-contain"
+                      fill
+                      className="object-contain"
                     />
                   </div>
                   <div className="absolute top-2 right-2 flex gap-2">

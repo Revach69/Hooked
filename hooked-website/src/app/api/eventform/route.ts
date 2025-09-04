@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { EmailService } from '@/lib/emailService';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 // Firebase configuration
 const firebaseConfig = {
@@ -16,7 +16,6 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
 
 export async function POST(request: NextRequest) {
   try {
@@ -46,15 +45,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Save to database
+    // Save to database using cloud function for proper regional handling
     try {
-      await addDoc(collection(db, 'eventForms'), {
-        ...body,
-        status: 'New',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+      const functions = getFunctions(app);
+      const saveEventForm = httpsCallable(functions, 'saveEventForm');
+      
+      const result = await saveEventForm({
+        formData: {
+          ...body,
+          status: 'New',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }
       });
-      console.log('Event form saved to database');
+      
+      const responseData = result.data as { success: boolean; error?: string };
+      
+      if (responseData.success) {
+        console.log('Event form saved to database via cloud function');
+      } else {
+        console.error('Failed to save via cloud function:', responseData.error);
+      }
     } catch (dbError) {
       console.error('Failed to save to database:', dbError);
       // Continue with email sending even if database save fails

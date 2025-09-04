@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useRef } from 'react';
+import Image from 'next/image';
 import { X, RotateCcw, RotateCw, ZoomIn, ZoomOut, RotateCcw as ResetIcon } from 'lucide-react';
 
 interface ImageEditorProps {
@@ -424,14 +425,15 @@ export default function ImageEditor({ imageUrl, onSave, onCancel, aspectRatio = 
                 cursor: isDragging ? 'grabbing' : 'grab'
               }}
             >
-              <img
+              <Image
                 ref={imageRef}
                 src={imageUrl}
                 alt="Event image"
                 crossOrigin={imageUrl.startsWith('data:') ? undefined : "anonymous"}
                 onLoad={onImageLoad}
                 onError={onImageError}
-                className="absolute"
+                fill
+                className="absolute object-contain"
                 style={{
                   width: 'auto',
                   height: 'auto',

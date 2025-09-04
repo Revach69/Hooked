@@ -6,10 +6,16 @@
  */
 
 import { initializeApp, getApp, getApps, FirebaseApp, FirebaseOptions } from 'firebase/app';
-import { getFirestore, Firestore, connectFirestoreEmulator } from 'firebase/firestore';
+import { getFirestore, Firestore, connectFirestoreEmulator, initializeFirestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage, connectStorageEmulator } from 'firebase/storage';
 import { getFunctions, Functions, connectFunctionsEmulator } from 'firebase/functions';
-import { getRegionForCountry, RegionConfig, DEFAULT_REGION } from './regionUtils';
+import { 
+  getRegionForCountry, 
+  RegionConfig, 
+  DEFAULT_REGION,
+  getDatabaseConfigForRegion,
+  getStorageBucketForRegion
+} from './regionUtils';
 
 // Cache for Firebase app instances to avoid recreation
 const firebaseAppCache = new Map<string, FirebaseApp>();
@@ -19,21 +25,16 @@ const functionsCache = new Map<string, Functions>();
 
 /**
  * Get Firebase configuration for a specific region
- * Uses environment variables with region-specific overrides
+ * Uses actual storage bucket names and database IDs from your Firebase project
  */
 export function getFirebaseConfigForRegion(region: RegionConfig): FirebaseOptions {
   const baseProjectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!;
-  const baseStorageBucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET!;
   
-  // For now, we use the same project ID but different regional endpoints
-  // In the future, we might use separate projects per region
+  // Use the same project ID for all regions
   const regionProjectId = region.projectId || baseProjectId;
   
-  // Generate region-specific storage bucket name
-  // Format: project-id-region or existing bucket for default region
-  const storageBucket = region === DEFAULT_REGION 
-    ? baseStorageBucket
-    : `${baseProjectId}-${region.storage}`;
+  // Use actual storage bucket names from your Firebase project
+  const storageBucket = getStorageBucketForRegion(region);
 
   return {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
@@ -43,7 +44,7 @@ export function getFirebaseConfigForRegion(region: RegionConfig): FirebaseOption
     messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID!,
     appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID!,
     measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
-    // Note: databaseURL is automatically configured by Firestore SDK based on region
+    // Note: Firestore database ID is specified when initializing Firestore
   };
 }
 
@@ -52,8 +53,8 @@ export function getFirebaseConfigForRegion(region: RegionConfig): FirebaseOption
  * Uses caching to avoid recreating apps
  */
 export function getFirebaseAppForRegion(region: RegionConfig): FirebaseApp {
-  // Create unique app name based on region
-  const appName = `hooked-${region.database}-${region.storage}`;
+  // Create unique app name based on region database
+  const appName = `hooked-${region.database}`;
   
   // Check cache first
   if (firebaseAppCache.has(appName)) {
@@ -112,11 +113,12 @@ export function getEventSpecificFirebaseApp(eventCountry?: string | null): Fireb
 
 /**
  * Get region-specific Firestore instance
- * Automatically configures for the correct region with caching
+ * Automatically configures for the correct region and database with caching
  */
 export function getEventSpecificFirestore(eventCountry?: string | null): Firestore {
   const region = eventCountry ? getRegionForCountry(eventCountry) : DEFAULT_REGION;
-  const cacheKey = `${region.database}-${region.storage}`;
+  const dbConfig = getDatabaseConfigForRegion(region);
+  const cacheKey = `${dbConfig.databaseId}-${region.storage}`;
   
   // Check cache first
   if (firestoreCache.has(cacheKey)) {
@@ -125,10 +127,16 @@ export function getEventSpecificFirestore(eventCountry?: string | null): Firesto
 
   try {
     const app = getFirebaseAppForRegion(region);
-    const db = getFirestore(app);
     
-    // Configure Firestore settings for region
-    // The SDK automatically connects to the right region based on project configuration
+    // Initialize Firestore with specific database ID for named databases
+    let db: Firestore;
+    if (dbConfig.isDefault) {
+      // Use default database
+      db = getFirestore(app);
+    } else {
+      // Use named database (e.g., "au-southeast2", "eu-eur3", "us-nam5")
+      db = initializeFirestore(app, {}, dbConfig.databaseId);
+    }
     
     // Connect to emulator in development
     if (process.env.NODE_ENV === 'development' && 
@@ -136,7 +144,7 @@ export function getEventSpecificFirestore(eventCountry?: string | null): Firesto
       try {
         connectFirestoreEmulator(db, 'localhost', 8080);
         console.log('Connected Firestore to emulator');
-      } catch (error) {
+      } catch {
         // Emulator might already be connected
         console.log('Firestore emulator connection skipped (might already be connected)');
       }
@@ -144,15 +152,18 @@ export function getEventSpecificFirestore(eventCountry?: string | null): Firesto
     
     firestoreCache.set(cacheKey, db);
     
-    console.log(`Created Firestore instance for region:`, {
-      region: region.database,
+    console.log(`✅ Created Firestore instance for region:`, {
+      databaseId: dbConfig.databaseId,
+      isDefault: dbConfig.isDefault,
+      region: region.functions,
       displayName: region.displayName,
-      country: eventCountry
+      country: eventCountry,
+      actualDatabase: dbConfig.isDefault ? '(default)' : dbConfig.databaseId
     });
     
     return db;
   } catch (error) {
-    console.error(`Failed to create Firestore for region ${region.database}:`, error);
+    console.error(`Failed to create Firestore for database ${dbConfig.databaseId}:`, error);
     
     // Fallback to default region
     if (region !== DEFAULT_REGION) {
@@ -186,7 +197,7 @@ export function getEventSpecificStorage(eventCountry?: string | null): FirebaseS
       try {
         connectStorageEmulator(storage, 'localhost', 9199);
         console.log('Connected Storage to emulator');
-      } catch (error) {
+      } catch {
         // Emulator might already be connected
         console.log('Storage emulator connection skipped (might already be connected)');
       }
@@ -236,7 +247,7 @@ export function getEventSpecificFunctions(eventCountry?: string | null): Functio
       try {
         connectFunctionsEmulator(functions, 'localhost', 5001);
         console.log('Connected Functions to emulator');
-      } catch (error) {
+      } catch {
         // Emulator might already be connected
         console.log('Functions emulator connection skipped (might already be connected)');
       }
@@ -334,7 +345,8 @@ export async function validateRegionConnection(
   try {
     const db = getEventSpecificFirestore(eventCountry);
     // Try to read from a test collection (this validates connection)
-    await db.collection('_healthcheck').limit(1).get();
+    const { collection, getDocs, query, limit } = await import('firebase/firestore');
+    await getDocs(query(collection(db, '_healthcheck'), limit(1)));
     status.firestore = true;
   } catch (error) {
     errors.push(`Firestore connection failed: ${error}`);
@@ -344,7 +356,8 @@ export async function validateRegionConnection(
   try {
     const storage = getEventSpecificStorage(eventCountry);
     // Try to get storage reference (this validates connection)
-    storage.ref('_healthcheck');
+    const { ref } = await import('firebase/storage');
+    ref(storage, '_healthcheck');
     status.storage = true;
   } catch (error) {
     errors.push(`Storage connection failed: ${error}`);

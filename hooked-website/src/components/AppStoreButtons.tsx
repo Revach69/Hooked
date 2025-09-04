@@ -1,5 +1,7 @@
 'use client';
 
+import Image from 'next/image';
+
 // Declare gtag for TypeScript
 declare global {
   interface Window {
@@ -29,9 +31,11 @@ export default function AppStoreButtons() {
         aria-label="Download Hooked on the App Store"
         onClick={() => trackCTAButton('app_store_download', 'footer')}
       >
-        <img 
+        <Image 
           src="/Apple Store Badge.png" 
           alt="Download on the App Store" 
+          width={160}
+          height={48}
           className="h-12 w-[160px] object-contain"
         />
       </a>
@@ -45,9 +49,11 @@ export default function AppStoreButtons() {
         aria-label="Get Hooked on Google Play"
         onClick={() => trackCTAButton('play_store_download', 'footer')}
       >
-        <img 
+        <Image 
           src="/Play Store Badge.png" 
           alt="Get it on Google Play" 
+          width={160}
+          height={48}
           className="h-12 w-[160px] object-contain"
         />
       </a>

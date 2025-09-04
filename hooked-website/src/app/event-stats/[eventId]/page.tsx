@@ -9,7 +9,10 @@ interface EventStats {
   activeUsers: number;
   totalLikes: number;
   totalMatches: number;
+  uniqueMatchParticipants: number;
   totalMessages: number;
+  activeMessageSenders: number;
+  passiveMessageUsers: number;
   engagementRate: number;
   averageAge: number;
   passiveUsers: number;
@@ -224,18 +227,38 @@ export default function EventStatsPage() {
                   </div>
                 </div>
 
-                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 text-center">
-                  <div className="text-3xl font-bold text-green-600 dark:text-green-400 mb-2">
-                    {stats.totalMatches}
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6">
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-green-600 dark:text-green-400 mb-2">
+                      {stats.totalMatches}
+                    </div>
+                    <div className="text-gray-600 dark:text-gray-400 mb-3">Matches</div>
                   </div>
-                  <div className="text-gray-600 dark:text-gray-400">Matches</div>
+                  <div className="flex justify-center">
+                    <div className="text-center">
+                      <div className="text-sm text-gray-500 dark:text-gray-400">Unique Participants</div>
+                      <div className="text-lg font-semibold text-green-700 dark:text-green-300">{stats.uniqueMatchParticipants}</div>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 text-center">
-                  <div className="text-3xl font-bold text-purple-600 dark:text-purple-400 mb-2">
-                    {stats.totalMessages}
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6">
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-purple-600 dark:text-purple-400 mb-2">
+                      {stats.totalMessages}
+                    </div>
+                    <div className="text-gray-600 dark:text-gray-400 mb-3">Messages</div>
                   </div>
-                  <div className="text-gray-600 dark:text-gray-400">Messages</div>
+                  <div className="border-t border-gray-200 dark:border-gray-700 pt-3 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-500 dark:text-gray-400">Active Senders:</span>
+                      <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{stats.activeMessageSenders}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-500 dark:text-gray-400">Passive Users:</span>
+                      <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{stats.passiveMessageUsers}</span>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 text-center">

@@ -99,6 +99,8 @@ export default function Home() {
               await AsyncStorageUtils.removeItem('currentEventId');
               await AsyncStorageUtils.removeItem('currentSessionId');
               await AsyncStorageUtils.removeItem('currentEventCode');
+              await AsyncStorageUtils.removeItem('currentEventCountry');
+              await AsyncStorageUtils.removeItem('currentEventData');
               // Don't navigate to discovery, stay on home screen
               setIsCheckingResume(false);
               return;
@@ -109,6 +111,8 @@ export default function Home() {
             await AsyncStorageUtils.removeItem('currentEventId');
             await AsyncStorageUtils.removeItem('currentSessionId');
             await AsyncStorageUtils.removeItem('currentEventCode');
+            await AsyncStorageUtils.removeItem('currentEventCountry');
+            await AsyncStorageUtils.removeItem('currentEventData');
             setIsCheckingResume(false);
             return;
           }

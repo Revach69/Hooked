@@ -546,6 +546,7 @@ const styles = StyleSheet.create({
     color: '#ef4444',
     fontSize: 14,
     marginTop: 5,
+    textAlign: 'center',
   },
   buttonContainer: {
     padding: 20,

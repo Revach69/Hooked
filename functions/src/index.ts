@@ -2,6 +2,7 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
 import { onDocumentCreated, onDocumentWritten } from 'firebase-functions/v2/firestore';
 import * as admin from 'firebase-admin';
+import { getFirestore } from 'firebase-admin/firestore';
 import * as path from 'path';
 import fetch from 'node-fetch';
 
@@ -13,92 +14,186 @@ admin.initializeApp({
   databaseURL: 'https://hooked-69-default-rtdb.firebaseio.com'
 });
 
-const db = admin.firestore();
+// Regional configuration mapping
 
-// Get region from environment or default to us-central1
-const FUNCTION_REGION = process.env.FUNCTION_REGION || 'us-central1';
+
+// Define all regions where functions should be deployed
+const ALL_FUNCTION_REGIONS = ['me-west1', 'australia-southeast2', 'us-central1', 'europe-west3', 'asia-northeast1', 'southamerica-east1'];
+
+
+// Cloud Scheduler supported regions (from our deployment regions)
+// Based on https://cloud.google.com/scheduler/docs/locations
+// Available: us-central1, europe-west3, asia-northeast1, southamerica-east1
+// Using us-central1 for simplicity since scheduled functions process all regional databases anyway
+const SCHEDULER_REGION = 'us-central1';
+
+// Helper function to get all active database instances for scheduled jobs
+function getAllActiveDbs(): { dbId: string; db: admin.firestore.Firestore }[] {
+  const databases = [
+    { dbId: '(default)', db: getFirestore(admin.app(), '(default)') },
+    { dbId: 'au-southeast2', db: getFirestore(admin.app(), 'au-southeast2') },
+    { dbId: 'us-nam5', db: getFirestore(admin.app(), 'us-nam5') },
+    { dbId: 'eu-eur3', db: getFirestore(admin.app(), 'eu-eur3') },
+    { dbId: 'asia-ne1', db: getFirestore(admin.app(), 'asia-ne1') },
+    { dbId: 'southamerica-east1', db: getFirestore(admin.app(), 'southamerica-east1') }
+  ];
+  return databases;
+}
+
+// Get default database for admin operations that specifically need Israel DB
+function getDefaultDb(): admin.firestore.Firestore {
+  return getFirestore(admin.app(), '(default)');
+}
+
+// Cloud Function to search for an event by code across all regional databases
+export const searchEventByCode = onCall({
+  region: ALL_FUNCTION_REGIONS,  // Deploy to all regions since called before region assignment
+  cors: true,
+  maxInstances: 100,
+}, async (request) => {
+  const { eventCode } = request.data;
+  
+  if (!eventCode || typeof eventCode !== 'string') {
+    throw new HttpsError('invalid-argument', 'Event code is required');
+  }
+  
+  const normalizedCode = eventCode.toUpperCase();
+  console.log(`Searching for event with code: ${normalizedCode}`);
+  
+  try {
+    // Search across all regional databases
+    const databases = getAllActiveDbs();
+    
+    for (const { dbId, db } of databases) {
+      try {
+        const eventsQuery = db.collection('events')
+          .where('event_code', '==', normalizedCode)
+          .limit(1);
+        
+        const snapshot = await eventsQuery.get();
+        
+        if (!snapshot.empty) {
+          const eventDoc = snapshot.docs[0];
+          const eventData = eventDoc.data();
+          
+          console.log(`Found event ${normalizedCode} in database: ${dbId}`);
+          
+          // Return the event data with its ID and database location
+          return {
+            success: true,
+            event: {
+              id: eventDoc.id,
+              ...eventData,
+              _database: dbId, // Include which database it was found in
+            }
+          };
+        }
+      } catch (dbError) {
+        console.error(`Error searching database ${dbId}:`, dbError);
+        // Continue searching other databases
+      }
+    }
+    
+    // Event not found in any database
+    console.log(`Event ${normalizedCode} not found in any database`);
+    return {
+      success: false,
+      error: 'Event not found'
+    };
+    
+  } catch (error) {
+    console.error('Error searching for event:', error);
+    throw new HttpsError('internal', 'Failed to search for event');
+  }
+});
 
 // Cloud Function to clean up expired events and preserve analytics data
 export const cleanupExpiredEvents = onSchedule({
   schedule: 'every 1 hours',
-  region: FUNCTION_REGION,
+  region: SCHEDULER_REGION, // Deploy to scheduler-supported region
+  timeoutSeconds: 540, // 9 minutes for heavy processing
+  memory: '1GiB' // Increase memory for batch operations
 }, async (event) => {
     const now = admin.firestore.Timestamp.now();
     // Add 30-minute grace period as requested
     const thirtyMinutesAgo = new admin.firestore.Timestamp(now.seconds - (30 * 60), now.nanoseconds);
     
-    try {
-      console.log('Starting expired events cleanup with 30-minute grace period...');
-      
-      // Get events that expired more than 30 minutes ago and haven't been processed yet
-      // Note: We need to handle both events with expired:false and events without the expired field
-      const expiredEventsSnapshot1 = await db
-        .collection('events')
-        .where('expires_at', '<', thirtyMinutesAgo)
-        .where('expired', '==', false)
-        .get();
-      
-      const expiredEventsSnapshot2 = await db
-        .collection('events')
-        .where('expires_at', '<', thirtyMinutesAgo)
-        .get();
-      
-      // Combine and deduplicate events
-      const processedEventIds = new Set();
-      const allExpiredEvents: any[] = [];
-      
-      expiredEventsSnapshot1.docs.forEach(doc => {
-        processedEventIds.add(doc.id);
-        allExpiredEvents.push(doc);
-      });
-      
-      expiredEventsSnapshot2.docs.forEach(doc => {
-        const data = doc.data();
-        // Only include if not already processed and doesn't have expired:true
-        if (!processedEventIds.has(doc.id) && data.expired !== true) {
-          allExpiredEvents.push(doc);
+    const allDbs = getAllActiveDbs();
+    let totalProcessed = 0;
+    let totalFailed = 0;
+    
+    console.log('Starting expired events cleanup with 30-minute grace period across all databases...');
+    
+    // Process each database
+    for (const { dbId, db } of allDbs) {
+      try {
+        console.log(`🔍 Processing database: ${dbId}`);
+        
+        // Get events that expired more than 30 minutes ago and haven't been processed yet
+        // Optimized query using single inequality + missing field approach
+        const expiredEventsSnapshot = await db
+          .collection('events')
+          .where('expires_at', '<', thirtyMinutesAgo)
+          .where('expired', '!=', true) // This handles both false and missing fields
+          .get();
+        
+        const eventsToProcess = expiredEventsSnapshot.docs;
+        console.log(`📊 Database ${dbId}: Found ${eventsToProcess.length} expired events to process`);
+        
+        let dbProcessed = 0;
+        let dbFailed = 0;
+        
+        for (const eventDoc of eventsToProcess) {
+          try {
+            const eventData = eventDoc.data();
+            const eventId = eventDoc.id;
+            
+            console.log(`🔄 Processing expired event: ${eventId} (${eventData.name}) in ${dbId}`);
+            
+            // Generate and save analytics before deletion
+            const analyticsId = await generateEventAnalytics(eventId, eventData, db);
+            if (!analyticsId) {
+              console.warn(`⚠️  Failed to generate analytics for event ${eventId}, skipping cleanup`);
+              dbFailed++;
+              continue;
+            }
+            
+            // Delete all user-related data from the same database
+            await deleteEventUserData(eventId, db);
+            
+            // Mark event as expired and link to analytics
+            await db.collection('events').doc(eventId).update({
+              expired: true,
+              analytics_id: analyticsId,
+              updated_at: admin.firestore.FieldValue.serverTimestamp()
+            });
+            
+            console.log(`✅ Successfully processed expired event ${eventId} in ${dbId}`);
+            dbProcessed++;
+            
+          } catch (eventError: any) {
+            console.error(`❌ Error processing event ${eventDoc.id} in ${dbId}:`, eventError);
+            dbFailed++;
+          }
         }
-      });
-      
-      console.log(`Found ${allExpiredEvents.length} expired events to process`);
-      
-      for (const eventDoc of allExpiredEvents) {
-        const eventData = eventDoc.data();
-        const eventId = eventDoc.id;
         
-        console.log(`Processing expired event: ${eventId} (${eventData.name})`);
+        console.log(`📈 Database ${dbId} summary: ${dbProcessed} processed, ${dbFailed} failed`);
+        totalProcessed += dbProcessed;
+        totalFailed += dbFailed;
         
-        // Generate and save analytics before deletion
-        const analyticsId = await generateEventAnalytics(eventId, eventData);
-        if (!analyticsId) {
-          console.warn(`Failed to generate analytics for event ${eventId}, skipping cleanup`);
-          continue;
-        }
-        
-        // Delete all user-related data
-        await deleteEventUserData(eventId);
-        
-        // Mark event as expired and link to analytics
-        await db.collection('events').doc(eventId).update({
-          expired: true,
-          analytics_id: analyticsId,
-          updated_at: admin.firestore.FieldValue.serverTimestamp()
-        });
-        
-        console.log(`Successfully processed expired event ${eventId}`);
+      } catch (dbError: any) {
+        console.error(`💥 Error processing database ${dbId}:`, dbError);
+        totalFailed++;
       }
-      
-      console.log('Expired events cleanup completed successfully');
-      console.log('Processed events:', allExpiredEvents.length);
-      
-    } catch (error) {
-      console.error('Error during expired events cleanup:', error);
-      throw error;
     }
+    
+    console.log('🎯 Expired events cleanup completed across all databases');
+    console.log('📊 Total processed:', totalProcessed);
+    console.log('⚠️  Total failed:', totalFailed);
   });
 
 // Helper function to generate analytics for an event
-async function generateEventAnalytics(eventId: string, eventData: any): Promise<string | null> {
+async function generateEventAnalytics(eventId: string, eventData: any, db: admin.firestore.Firestore): Promise<string | null> {
   try {
     // Get all data in parallel
     const [profilesSnapshot, likesSnapshot, messagesSnapshot] = await Promise.all([
@@ -197,7 +292,7 @@ async function generateEventAnalytics(eventId: string, eventData: any): Promise<
 }
 
 // Helper function to delete all user data for an event
-async function deleteEventUserData(eventId: string): Promise<void> {
+async function deleteEventUserData(eventId: string, db: admin.firestore.Firestore): Promise<void> {
   const batchSize = 500;
   
   try {
@@ -219,22 +314,22 @@ async function deleteEventUserData(eventId: string): Promise<void> {
     ]);
     
     // Delete profiles
-    await deleteBatch(profilesSnapshot.docs, 'event_profiles', batchSize);
+    await deleteBatch(profilesSnapshot.docs, 'event_profiles', batchSize, db);
     
     // Delete likes
-    await deleteBatch(likesSnapshot.docs, 'likes', batchSize);
+    await deleteBatch(likesSnapshot.docs, 'likes', batchSize, db);
     
     // Delete messages 
-    await deleteBatch(messagesSnapshot.docs, 'messages', batchSize);
+    await deleteBatch(messagesSnapshot.docs, 'messages', batchSize, db);
     
     // Delete reports
-    await deleteBatch(reportsSnapshot.docs, 'reports', batchSize);
+    await deleteBatch(reportsSnapshot.docs, 'reports', batchSize, db);
     
     // Delete muted matches
-    await deleteBatch(mutedMatchesSnapshot.docs, 'muted_matches', batchSize);
+    await deleteBatch(mutedMatchesSnapshot.docs, 'muted_matches', batchSize, db);
     
     // Delete kicked users
-    await deleteBatch(kickedUsersSnapshot.docs, 'kicked_users', batchSize);
+    await deleteBatch(kickedUsersSnapshot.docs, 'kicked_users', batchSize, db);
     
     console.log(`Successfully deleted all user data for event ${eventId}`);
     
@@ -245,11 +340,11 @@ async function deleteEventUserData(eventId: string): Promise<void> {
 }
 
 // Helper function to delete documents in batches
-async function deleteBatch(docs: any[], collectionName: string, batchSize: number): Promise<void> {
+async function deleteBatch(docs: any[], collectionName: string, batchSize: number, database: admin.firestore.Firestore): Promise<void> {
   if (docs.length === 0) return;
   
   for (let i = 0; i < docs.length; i += batchSize) {
-    const batch = db.batch();
+    const batch = database.batch();
     const batchDocs = docs.slice(i, i + batchSize);
     
     batchDocs.forEach(doc => {
@@ -270,78 +365,90 @@ async function deleteBatch(docs: any[], collectionName: string, batchSize: numbe
 // Cloud Function to handle profile expiration notifications
 export const sendProfileExpirationNotifications = onSchedule({
   schedule: 'every 1 hours', // Changed from 6 hours to 1 hour
-  region: FUNCTION_REGION,
+  region: SCHEDULER_REGION, // Deploy to scheduler-supported region
+  timeoutSeconds: 540, // 9 minutes for heavy processing
+  memory: '1GiB' // Increase memory for batch operations
 }, async (event) => {
     const now = admin.firestore.Timestamp.now();
     const oneHourFromNow = new admin.firestore.Timestamp(now.seconds + 3600, now.nanoseconds);
     
     try {
-      console.log('Checking for events expiring in the next hour...');
+      console.log('Checking for events expiring in the next hour across all regions...');
       
-      // Get events expiring in the next hour
-      const expiringEventsSnapshot = await db
-        .collection('events')
-        .where('expires_at', '>', now)
-        .where('expires_at', '<', oneHourFromNow)
-        .get();
+      const databases = getAllActiveDbs();
+      let totalEventsProcessed = 0;
       
-      console.log(`Found ${expiringEventsSnapshot.size} events expiring soon`);
-      
-      for (const eventDoc of expiringEventsSnapshot.docs) {
-        const eventData = eventDoc.data();
-        const eventId = eventDoc.id;
-        const eventName = eventData.name || 'Event';
+      // Process each regional database
+      for (const { dbId, db } of databases) {
+        console.log(`Checking expiring events in database: ${dbId}`);
         
-        console.log(`Processing expiring event: ${eventName} (${eventId})`);
-        
-        // Get all active profiles for this event
-        const profilesSnapshot = await db
-          .collection('event_profiles')
-          .where('event_id', '==', eventId)
-          .where('is_visible', '==', true)
+        // Get events expiring in the next hour
+        const expiringEventsSnapshot = await db
+          .collection('events')
+          .where('expires_at', '>', now)
+          .where('expires_at', '<', oneHourFromNow)
           .get();
         
-        console.log(`Found ${profilesSnapshot.size} active profiles for expiring event ${eventName}`);
+        console.log(`Found ${expiringEventsSnapshot.size} events expiring soon in ${dbId}`);
         
-        // Send notification to each profile using the existing notification system
-        for (const profileDoc of profilesSnapshot.docs) {
-          const profileData = profileDoc.data();
-          const sessionId = profileData.session_id;
+        for (const eventDoc of expiringEventsSnapshot.docs) {
+          const eventData = eventDoc.data();
+          const eventId = eventDoc.id;
+          const eventName = eventData.name || 'Event';
           
-          if (!sessionId) {
-            console.warn(`Profile ${profileDoc.id} has no session_id, skipping notification`);
-            continue;
-          }
+          console.log(`Processing expiring event: ${eventName} (${eventId}) in ${dbId}`);
           
-          try {
-            // Create notification job for this user
-            const notificationJob = {
-              type: 'generic',
-              subject_session_id: sessionId,
-              aggregationKey: `expiration:${eventId}:${sessionId}`,
-              title: `${eventName} is about to end`,
-              body: 'Go say hi or swap numbers now!',
-              data: {
-                type: 'event_expiration',
-                event_id: eventId,
-                event_name: eventName
-              },
-              attempts: 0,
-              status: 'queued',
-              createdAt: admin.firestore.FieldValue.serverTimestamp(),
-              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            };
+          // Get all active profiles for this event from the same database
+          const profilesSnapshot = await db
+            .collection('event_profiles')
+            .where('event_id', '==', eventId)
+            .where('is_visible', '==', true)
+            .get();
+          
+          console.log(`Found ${profilesSnapshot.size} active profiles for expiring event ${eventName}`);
+          
+          // Send notification to each profile using the existing notification system
+          for (const profileDoc of profilesSnapshot.docs) {
+            const profileData = profileDoc.data();
+            const sessionId = profileData.session_id;
             
-            await db.collection('notification_jobs').add(notificationJob);
-            console.log(`Queued expiration notification for session ${sessionId} in event ${eventName}`);
+            if (!sessionId) {
+              console.warn(`Profile ${profileDoc.id} has no session_id, skipping notification`);
+              continue;
+            }
             
-          } catch (notificationError) {
-            console.error(`Failed to queue notification for session ${sessionId}:`, notificationError);
+            try {
+              // Create notification job for this user in the same database
+              const notificationJob = {
+                type: 'generic',
+                subject_session_id: sessionId,
+                aggregationKey: `expiration:${eventId}:${sessionId}`,
+                title: `${eventName} is about to end`,
+                body: 'Go say hi or swap numbers now!',
+                data: {
+                  type: 'event_expiration',
+                  event_id: eventId,
+                  event_name: eventName
+                },
+                attempts: 0,
+                status: 'queued',
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              };
+              
+              await db.collection('notification_jobs').add(notificationJob);
+              console.log(`Queued expiration notification for session ${sessionId} in event ${eventName} (${dbId})`);
+              
+            } catch (notificationError) {
+              console.error(`Failed to queue notification for session ${sessionId}:`, notificationError);
+            }
           }
         }
+        
+        totalEventsProcessed += expiringEventsSnapshot.size;
       }
       
-      console.log(`Expiring events processed: ${expiringEventsSnapshot.size} events`);
+      console.log(`Total expiring events processed across all regions: ${totalEventsProcessed}`);
       
     } catch (error) {
       console.error('Error sending expiration notifications:', error);
@@ -351,7 +458,7 @@ export const sendProfileExpirationNotifications = onSchedule({
 
 // Cloud Function to handle user profile saving
 export const saveUserProfile = onCall({
-  region: FUNCTION_REGION,
+  region: ALL_FUNCTION_REGIONS,
 }, async (request) => {
   // Verify authentication
   if (!request.auth) {
@@ -366,8 +473,9 @@ export const saveUserProfile = onCall({
   }
   
   try {
-    // Save profile data to user_saved_profiles collection
-    const savedProfileRef = await db.collection('user_saved_profiles').add({
+    // Save profile data to user_saved_profiles collection (use default db for user data)
+    const defaultDb = getDefaultDb();
+    const savedProfileRef = await defaultDb.collection('user_saved_profiles').add({
       user_id: userId,
       profile_data: profileData,
       created_at: admin.firestore.FieldValue.serverTimestamp(),
@@ -385,7 +493,7 @@ export const saveUserProfile = onCall({
 
 // Cloud Function to get user's saved profiles
 export const getUserSavedProfiles = onCall({
-  region: FUNCTION_REGION,
+  region: ALL_FUNCTION_REGIONS,
 }, async (request) => {
   // Verify authentication
   if (!request.auth) {
@@ -395,13 +503,14 @@ export const getUserSavedProfiles = onCall({
   const userId = request.auth.uid;
   
   try {
-    const savedProfilesSnapshot = await db
+    const defaultDb = getDefaultDb();
+    const savedProfilesSnapshot = await defaultDb
       .collection('user_saved_profiles')
       .where('user_id', '==', userId)
       .orderBy('created_at', 'desc')
       .get();
     
-    const savedProfiles = savedProfilesSnapshot.docs.map(doc => ({
+    const savedProfiles = savedProfilesSnapshot.docs.map((doc: any) => ({
       id: doc.id,
       ...doc.data()
     }));
@@ -414,9 +523,101 @@ export const getUserSavedProfiles = onCall({
   }
 });
 
+// === HTTP Request: getEventsFromAllRegions ===
+// Fetches events from all regional databases for admin dashboard
+// Bypasses browser SDK limitations with named databases
+export const getEventsFromAllRegions = onRequest({
+  region: ALL_FUNCTION_REGIONS,
+}, async (req, res) => {
+  // Set CORS headers manually
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.set('Access-Control-Max-Age', '3600');
+
+  // Handle preflight request
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
+
+  if (req.method !== 'POST') {
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+
+  try {
+    const { selectedRegions } = req.body;
+  
+    if (!selectedRegions || !Array.isArray(selectedRegions)) {
+      res.status(400).json({ error: 'selectedRegions array is required' });
+      return;
+    }
+    
+    console.log('getEventsFromAllRegions: Fetching events from regions:', selectedRegions);
+    
+    const allEvents: any[] = [];
+    const seenEventIds = new Set<string>();
+    
+    // Regional database mapping
+    const regionDbMapping: { [key: string]: { db: admin.firestore.Firestore; label: string } } = {
+      '(default)': { db: getDefaultDb(), label: 'Israel' },
+      'au-southeast2': { db: getFirestore(admin.app(), 'au-southeast2'), label: 'Australia' },
+      'eu-eur3': { db: getFirestore(admin.app(), 'eu-eur3'), label: 'Europe' },
+      'us-nam5': { db: getFirestore(admin.app(), 'us-nam5'), label: 'USA + Canada' },
+      'asia-ne1': { db: getFirestore(admin.app(), 'asia-ne1'), label: 'Asia' },
+      'southamerica-east1': { db: getFirestore(admin.app(), 'southamerica-east1'), label: 'South America' }
+    };
+    
+    for (const regionId of selectedRegions) {
+      if (regionDbMapping[regionId]) {
+        try {
+          const { db, label } = regionDbMapping[regionId];
+          console.log(`Fetching events from ${label} region (${regionId})`);
+          
+          const eventsSnapshot = await db.collection('events').get();
+          console.log(`Found ${eventsSnapshot.docs.length} events in ${label} database`);
+          
+          const regionEvents = eventsSnapshot.docs
+            .filter(doc => !seenEventIds.has(doc.id))
+            .map(doc => {
+              seenEventIds.add(doc.id);
+              const data = doc.data();
+              console.log(`Event found in ${label}:`, { id: doc.id, name: data.name });
+              
+              // Keep Firestore Timestamps as-is for proper data type consistency
+              const serializedData = { ...data };
+              
+              // Note: We keep Timestamps as Firestore Timestamp objects
+              // The frontend should handle these appropriately using timestamp conversion utilities
+              
+              return {
+                id: doc.id,
+                ...serializedData,
+                _region: label,
+                _databaseId: regionId
+              };
+            });
+            
+          allEvents.push(...regionEvents);
+          console.log(`Added ${regionEvents.length} unique events from ${label} region`);
+        } catch (error) {
+          console.error(`Failed to fetch events from ${regionDbMapping[regionId].label}:`, error);
+        }
+      }
+    }
+    
+    console.log(`getEventsFromAllRegions: Returning ${allEvents.length} total events`);
+    res.status(200).json({ events: allEvents });
+  } catch (error) {
+    console.error('getEventsFromAllRegions error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Cloud Function to set admin claims for a user
 export const setAdminClaim = onCall({
-  region: FUNCTION_REGION,
+  region: ALL_FUNCTION_REGIONS,
 }, async (request) => {
   // Verify authentication
   if (!request.auth) {
@@ -445,7 +646,7 @@ export const setAdminClaim = onCall({
 
 // Cloud Function to verify admin status
 export const verifyAdminStatus = onCall({
-  region: FUNCTION_REGION,
+  region: ALL_FUNCTION_REGIONS,
 }, async (request) => {
   // Verify authentication
   if (!request.auth) {
@@ -472,24 +673,44 @@ export const verifyAdminStatus = onCall({
 // Removed REGION constant - using FUNCTION_REGION directly
 
 // Shared helpers for push notifications
-async function fetchSessionTokens(sessionId: string) {
-  const snap = await admin.firestore()
-    .collection('push_tokens')
-    .where('sessionId', '==', sessionId)
-    .orderBy('updatedAt', 'desc')  // Get most recent tokens first
-    .limit(2)  // Limit to 2 tokens per session (iOS + Android)
-    .get();
+async function fetchSessionTokens(sessionId: string, regionalDb?: admin.firestore.Firestore, eventId?: string) {
+  // Simple, direct token fetching from the regional database only
+  // No fallback, no priority system - just read from the event's regional DB
   
-  // Deduplicate tokens and only return unique ones
-  const uniqueTokens = new Set<string>();
-  snap.forEach(d => {
-    const data = d.data() as any;
-    if (typeof data?.token === 'string' && data.token) {
-      uniqueTokens.add(data.token);
-    }
-  });
+  if (!regionalDb) {
+    console.warn(`fetchSessionTokens: No regional database provided for session ${sessionId.substring(0, 8)}...`);
+    return [];
+  }
   
-  return Array.from(uniqueTokens);
+  console.log(`Fetching push tokens for session ${sessionId.substring(0, 8)}... from regional database`);
+  
+  try {
+    const snap = await regionalDb
+      .collection('push_tokens')
+      .where('sessionId', '==', sessionId)
+      .orderBy('updatedAt', 'desc')
+      .limit(2) // iOS + Android
+      .get();
+    
+    console.log(`Found ${snap.size} push token documents for session ${sessionId.substring(0, 8)}...`);
+    
+    // Simple token extraction - no complex priority logic needed
+    const uniqueTokens = new Set<string>();
+    snap.forEach(doc => {
+      const data = doc.data() as any;
+      if (typeof data?.token === 'string' && data.token && data.isActive !== false) {
+        uniqueTokens.add(data.token);
+        console.log(`Active push token found for ${data.platform} (${data.token.substring(0, 20)}...)`);
+      } else if (data.isActive === false) {
+        console.log(`Skipping revoked push token for ${data.platform}`);
+      }
+    });
+    
+    return Array.from(uniqueTokens);
+  } catch (error) {
+    console.error(`Error fetching tokens from regional database:`, error);
+    return [];
+  }
 }
 
 // Circuit breaker for preventing duplicate notification content
@@ -583,7 +804,15 @@ async function sendExpoPush(toTokens: string[], payload: { title: string; body?:
     androidChannelId = 'matches';
   }
   
-  for (const chunk of chunks) {
+  // Process chunks with basic rate limiting to prevent overwhelming Expo servers
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    
+    // Add small delay between batches if processing multiple chunks
+    if (i > 0 && chunks.length > 1) {
+      await new Promise(resolve => setTimeout(resolve, 50)); // 50ms delay between batches
+    }
+    
     const messages = chunk.map(to => ({
       to,
       sound: 'default',
@@ -592,11 +821,36 @@ async function sendExpoPush(toTokens: string[], payload: { title: string; body?:
       collapseId: agg,       // Expo dedupe key
       threadId: agg,         // iOS grouping in Notification Center
       channelId: androidChannelId,  // Android notification channel
+      // Add unique notification ID and timestamp for client-side deduplication
+      data: {
+        ...payload.data,
+        notificationId: `${agg}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        timestamp: Date.now().toString()
+      },
+      // Enhanced notification configuration for better delivery
+      notification: {
+        title: payload.title,
+        body: payload.body || '',
+      },
+      // iOS specific - allows modification before display  
+      apns: {
+        payload: {
+          aps: {
+            'mutable-content': 1,
+            sound: 'default',
+            badge: 1
+          }
+        }
+      },
       android: {
         channelId: androidChannelId,
         priority: 'high',
         sound: 'default',
-        vibrate: true
+        vibrate: true,
+        notification: {
+          sound: 'default',
+          clickAction: 'NOTIFICATION_CLICK'
+        }
       },
       ios: {
         sound: 'default',
@@ -610,13 +864,200 @@ async function sendExpoPush(toTokens: string[], payload: { title: string; body?:
     });
     const json = await resp.json().catch(() => null);
     results.push({ status: resp.status, json });
+    
+    // Schedule receipt checking for successful sends
+    if (resp.status === 200 && json?.data) {
+      scheduleReceiptCheck(json.data, chunk);
+    }
   }
   return { sent: toTokens.length, results };
 }
 
-async function onceOnly(key: string) {
-  // Idempotency via notifications_log
-  const ref = admin.firestore().collection('notifications_log').doc(key);
+/**
+ * Check Expo push receipts to handle delivery failures and invalid tokens
+ */
+async function scheduleReceiptCheck(tickets: any[], tokens: string[]): Promise<void> {
+  // Schedule receipt check after 15 seconds to allow Expo to process
+  setTimeout(async () => {
+    try {
+      const ticketIds = tickets
+        .filter(t => t.id)
+        .map(t => t.id);
+      
+      if (ticketIds.length === 0) return;
+      
+      const receiptUrl = 'https://exp.host/--/api/v2/push/getReceipts';
+      const resp = await fetch(receiptUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: ticketIds }),
+      });
+      
+      const receiptsData = await resp.json();
+      const receipts = receiptsData.data || {};
+      
+      for (let i = 0; i < tickets.length; i++) {
+        const ticket = tickets[i];
+        const token = tokens[i];
+        
+        if (ticket.id && receipts[ticket.id]) {
+          const receipt = receipts[ticket.id];
+          
+          if (receipt.status === 'error') {
+            console.error(`Push delivery failed for token ${token.substring(0, 20)}...: ${receipt.message}`);
+            
+            // Handle DeviceNotRegistered errors by marking token as invalid
+            if (receipt.details?.error === 'DeviceNotRegistered') {
+              console.log(`Token ${token.substring(0, 20)}... is no longer valid, marking as revoked`);
+              await revokeInvalidToken(token);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('scheduleReceiptCheck: Error checking receipts:', error);
+      // Non-critical, don't throw
+    }
+  }, 15000); // Check after 15 seconds
+}
+
+/**
+ * Mark invalid tokens as revoked in the database
+ */
+async function revokeInvalidToken(token: string): Promise<void> {
+  try {
+    // Try to revoke in all active databases since we don't know which region it belongs to
+    const allDbs = getAllActiveDbs();
+    
+    for (const { db } of allDbs) {
+      const snapshot = await db
+        .collection('push_tokens')
+        .where('token', '==', token)
+        .limit(1)
+        .get();
+      
+      if (!snapshot.empty) {
+        const doc = snapshot.docs[0];
+        await doc.ref.update({
+          isActive: false,
+          revokedAt: admin.firestore.FieldValue.serverTimestamp(),
+          revokedReason: 'DeviceNotRegistered'
+        });
+        console.log(`Revoked invalid token in database: ${token.substring(0, 20)}...`);
+        break; // Found and updated, no need to check other databases
+      }
+    }
+  } catch (error) {
+    console.warn('revokeInvalidToken: Error revoking token:', error);
+    // Non-critical, continue
+  }
+}
+
+/**
+ * Send silent push notifications for background updates (unread counts, etc.)
+ * CRITICAL: iOS throttles silent pushes to ~2-3 per hour per app
+ * @unused Kept for future implementation of background updates
+ */
+// @ts-ignore - Kept for future implementation
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function _sendSilentPush(toTokens: string[], data: any, userId?: string) {
+  if (!toTokens.length) {
+    return { sent: 0, results: [] };
+  }
+  
+  // iOS throttling check - prevent excessive silent pushes
+  if (userId) {
+    const throttleKey = `silent_push_${userId}`;
+    const lastSilentPushTime = await getLastSilentPushTime(throttleKey);
+    const timeSinceLastPush = Date.now() - lastSilentPushTime;
+    const SILENT_PUSH_COOLDOWN = 20 * 60 * 1000; // 20 minutes minimum between silent pushes
+    
+    if (timeSinceLastPush < SILENT_PUSH_COOLDOWN) {
+      console.log(`sendSilentPush: Skipping silent push for ${userId} - too frequent (${Math.round(timeSinceLastPush / 1000 / 60)} mins ago)`);
+      return { sent: 0, results: [], skipped: true, reason: 'throttled' };
+    }
+    
+    // Record this silent push attempt
+    await recordSilentPushTime(throttleKey);
+  }
+  
+  const chunks: string[][] = [];
+  for (let i = 0; i < toTokens.length; i += 100) chunks.push(toTokens.slice(i, i + 100));
+  const results: any[] = [];
+  
+  for (const chunk of chunks) {
+    const messages = chunk.map(to => ({
+      to,
+      data: {
+        ...data,
+        type: 'silent_update',
+        notificationId: `silent_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        timestamp: Date.now().toString()
+      },
+      // No notification payload for silent push
+      apns: {
+        payload: {
+          aps: {
+            'content-available': 1, // Silent push for iOS
+          }
+        }
+      },
+      android: {
+        priority: 'high',
+        // No notification object for silent delivery
+      }
+    }));
+    
+    const resp = await fetch(EXPO_PUSH_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(messages),
+    });
+    const json = await resp.json().catch(() => null);
+    results.push({ status: resp.status, json });
+    
+    // Schedule receipt checking for successful sends
+    if (resp.status === 200 && json?.data) {
+      scheduleReceiptCheck(json.data, chunk);
+    }
+  }
+  return { sent: toTokens.length, results };
+}
+
+/**
+ * Get last silent push time for throttling
+ */
+async function getLastSilentPushTime(throttleKey: string): Promise<number> {
+  try {
+    const db = getDefaultDb();
+    const doc = await db.collection('silent_push_throttle').doc(throttleKey).get();
+    return doc.exists ? (doc.data()?.lastPushTime || 0) : 0;
+  } catch (error) {
+    console.warn('getLastSilentPushTime: Error reading throttle data:', error);
+    return 0; // Allow push on error
+  }
+}
+
+/**
+ * Record silent push time for throttling
+ */
+async function recordSilentPushTime(throttleKey: string): Promise<void> {
+  try {
+    const db = getDefaultDb();
+    await db.collection('silent_push_throttle').doc(throttleKey).set({
+      lastPushTime: Date.now(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+  } catch (error) {
+    console.warn('recordSilentPushTime: Error recording throttle data:', error);
+    // Non-critical, continue without throwing
+  }
+}
+
+async function onceOnly(key: string, db?: admin.firestore.Firestore) {
+  // Idempotency via notifications_log - use provided db or default
+  const targetDb = db || getDefaultDb();
+  const ref = targetDb.collection('notifications_log').doc(key);
   const snap = await ref.get();
   if (snap.exists) return false;
   await ref.set({ createdAt: admin.firestore.FieldValue.serverTimestamp() });
@@ -624,14 +1065,20 @@ async function onceOnly(key: string) {
 }
 
 // Queue management functions
-async function enqueueNotificationJob(job: Omit<NotificationJob, 'attempts' | 'status' | 'createdAt' | 'updatedAt'>): Promise<void> {
-  // Check for duplicate jobs with same aggregationKey in the last 30 seconds
-  const thirtySecondsAgo = new Date(Date.now() - 30000);
-  const duplicateCheck = await admin.firestore()
+async function enqueueNotificationJob(job: Omit<NotificationJob, 'attempts' | 'status' | 'createdAt' | 'updatedAt'>, db?: admin.firestore.Firestore): Promise<void> {
+  // Use provided db or default
+  const targetDb = db || getDefaultDb();
+  
+  // Check for duplicate jobs with enhanced uniqueness (event_id + type included)
+  // Extended to 2 minutes to catch rapid duplicates from multiple triggers
+  const twoMinutesAgo = new Date(Date.now() - 120000);
+  const duplicateCheck = await targetDb
     .collection('notification_jobs')
     .where('aggregationKey', '==', job.aggregationKey)
     .where('subject_session_id', '==', job.subject_session_id)
-    .where('createdAt', '>', thirtySecondsAgo)
+    .where('event_id', '==', job.event_id)
+    .where('type', '==', job.type)
+    .where('createdAt', '>', twoMinutesAgo)
     .limit(1)
     .get();
   
@@ -652,7 +1099,7 @@ async function enqueueNotificationJob(job: Omit<NotificationJob, 'attempts' | 's
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   };
   
-  await admin.firestore().collection('notification_jobs').add(jobDoc);
+  await targetDb.collection('notification_jobs').add(jobDoc);
   console.log('Enqueued notification job:', { type: job.type, subject: job.subject_session_id, aggregationKey: job.aggregationKey });
 }
 
@@ -661,127 +1108,123 @@ async function processNotificationJobs(): Promise<void> {
   const MAX_ATTEMPTS = 5;
   const STALENESS_CUTOFF_HOURS = 24; // Skip jobs older than 24 hours
   
+  const allDbs = getAllActiveDbs();
+  let totalProcessed = 0;
+  let totalFailed = 0;
+  
   try {
-    // Fetch queued jobs
-    const jobsSnapshot = await admin.firestore()
-      .collection('notification_jobs')
-      .where('status', '==', 'queued')
-      .orderBy('createdAt', 'asc')
-      .limit(MAX_JOBS_PER_RUN)
-      .get();
+    console.log('Processing notification jobs across all databases...');
     
-    if (jobsSnapshot.empty) {
-      console.log('No queued notification jobs to process');
-      return;
-    }
-    
-    console.log(`Processing ${jobsSnapshot.size} notification jobs`);
-    
-    for (const jobDoc of jobsSnapshot.docs) {
-      const job = jobDoc.data() as NotificationJob;
-      
-      // Check for stale jobs (older than cutoff)
-      const jobCreatedAt = job.createdAt as any;
-      if (jobCreatedAt && jobCreatedAt.toDate) {
-        const jobAge = Date.now() - jobCreatedAt.toDate().getTime();
-        const cutoffMs = STALENESS_CUTOFF_HOURS * 60 * 60 * 1000;
-        
-        if (jobAge > cutoffMs) {
-          console.log('Job is stale, marking as permanent failure:', jobDoc.id);
-          await jobDoc.ref.update({
-            status: 'permanent-failure',
-            error: `Job expired after ${STALENESS_CUTOFF_HOURS} hours`,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-          continue;
-        }
-      }
-      
+    // Process notification jobs from each database
+    for (const { dbId, db } of allDbs) {
       try {
-        // Check if recipient is in foreground (skip if so)
-        let isForeground = false;
-        try {
-          const appStateDoc = await admin.firestore().collection('app_states').doc(job.subject_session_id).get();
-          const appState = appStateDoc.exists ? appStateDoc.data() as any : null;
+        console.log(`🔍 Processing notification jobs from database: ${dbId}`);
+        
+        // Fetch queued jobs from this database
+        const jobsSnapshot = await db
+          .collection('notification_jobs')
+          .where('status', '==', 'queued')
+          .orderBy('createdAt', 'asc')
+          .limit(MAX_JOBS_PER_RUN)
+          .get();
+    
+        if (jobsSnapshot.empty) {
+          console.log(`📊 Database ${dbId}: No queued notification jobs to process`);
+          continue;
+        }
+    
+        console.log(`📊 Database ${dbId}: Processing ${jobsSnapshot.size} notification jobs`);
+    
+        for (const jobDoc of jobsSnapshot.docs) {
+          const job = jobDoc.data() as NotificationJob;
+          totalProcessed++;
           
-          if (appState?.isForeground === true && appState?.updatedAt) {
-            // Check if app state is recent (within 30 seconds for better reliability)
-            const APP_STATE_TTL_SECONDS = 30;
-            const appStateAge = Date.now() - appState.updatedAt.toDate().getTime();
-            const isRecent = appStateAge < (APP_STATE_TTL_SECONDS * 1000);
+          // Check for stale jobs (older than cutoff)
+          const jobCreatedAt = job.createdAt as any;
+          if (jobCreatedAt && jobCreatedAt.toDate) {
+            const jobAge = Date.now() - jobCreatedAt.toDate().getTime();
+            const cutoffMs = STALENESS_CUTOFF_HOURS * 60 * 60 * 1000;
             
-            isForeground = isRecent;
-          } else {
-            isForeground = false;
+            if (jobAge > cutoffMs) {
+              console.log('Job is stale, marking as permanent failure:', jobDoc.id);
+              await jobDoc.ref.update({
+                status: 'permanent-failure',
+                error: `Job expired after ${STALENESS_CUTOFF_HOURS} hours`,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              });
+              continue;
+            }
           }
-        } catch (error) {
-          console.log('Error reading app state, assuming not in foreground:', error);
-          isForeground = false;
+          
+          try {
+            // SIMPLIFIED: Always send notifications, let client decide how to display
+            // No more checking app states - following WhatsApp/Instagram pattern
+            
+            // Get tokens for recipient from the same regional database
+            const tokens = await fetchSessionTokens(job.subject_session_id, db, job.event_id);
+            
+            if (!tokens.length) {
+              console.log('No tokens found for recipient, marking as permanent failure');
+              await jobDoc.ref.update({
+                status: 'permanent-failure',
+                error: 'No push tokens found for recipient',
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              });
+              continue;
+            }
+            
+            // Send push notification
+            const result = await sendExpoPush(tokens, job.payload);
+            
+            // Check if successful
+            const success = result.results.every(r => r.status === 200);
+            
+            if (success) {
+              console.log('Notification sent successfully');
+              await jobDoc.ref.update({
+                status: 'sent',
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              });
+            } else {
+              throw new Error(`Push failed: ${JSON.stringify(result.results)}`);
+            }
+            
+          } catch (error) {
+            console.error('Error processing notification job:', error);
+            
+            const newAttempts = job.attempts + 1;
+            
+            if (newAttempts >= MAX_ATTEMPTS) {
+              // Mark as permanent failure
+              await jobDoc.ref.update({
+                status: 'permanent-failure',
+                attempts: newAttempts,
+                error: error instanceof Error ? error.message : 'Unknown error',
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              });
+              console.log('Job marked as permanent failure after max attempts');
+            } else {
+              // Increment attempts and keep queued (exponential backoff handled by scheduling)
+              await jobDoc.ref.update({
+                attempts: newAttempts,
+                error: error instanceof Error ? error.message : 'Unknown error',
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              });
+              console.log(`Job attempt ${newAttempts} failed, will retry`);
+            }
+          }
         }
         
-        if (isForeground) {
-          console.log('Recipient is in foreground, marking job as sent (client will handle)');
-          await jobDoc.ref.update({
-            status: 'sent',
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-          continue;
-        }
-        
-        // Get tokens for recipient
-        const tokens = await fetchSessionTokens(job.subject_session_id);
-        
-        if (!tokens.length) {
-          console.log('No tokens found for recipient, marking as permanent failure');
-          await jobDoc.ref.update({
-            status: 'permanent-failure',
-            error: 'No push tokens found for recipient',
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-          continue;
-        }
-        
-        // Send push notification
-        const result = await sendExpoPush(tokens, job.payload);
-        
-        // Check if successful
-        const success = result.results.every(r => r.status === 200);
-        
-        if (success) {
-          console.log('Notification sent successfully');
-          await jobDoc.ref.update({
-            status: 'sent',
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-        } else {
-          throw new Error(`Push failed: ${JSON.stringify(result.results)}`);
-        }
-        
-      } catch (error) {
-        console.error('Error processing notification job:', error);
-        
-        const newAttempts = job.attempts + 1;
-        
-        if (newAttempts >= MAX_ATTEMPTS) {
-          // Mark as permanent failure
-          await jobDoc.ref.update({
-            status: 'permanent-failure',
-            attempts: newAttempts,
-            error: error instanceof Error ? error.message : 'Unknown error',
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-          console.log('Job marked as permanent failure after max attempts');
-        } else {
-          // Increment attempts and keep queued (exponential backoff handled by scheduling)
-          await jobDoc.ref.update({
-            attempts: newAttempts,
-            error: error instanceof Error ? error.message : 'Unknown error',
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-          console.log(`Job attempt ${newAttempts} failed, will retry`);
-        }
+      } catch (dbError: any) {
+        console.error(`💥 Error processing database ${dbId}:`, dbError);
+        totalFailed++;
       }
     }
+    
+    console.log('🎯 Notification jobs processing completed across all databases');
+    console.log('📊 Total processed:', totalProcessed);
+    console.log('⚠️  Total failed:', totalFailed);
+    
   } catch (error) {
     console.error('Error in processNotificationJobs:', error);
   }
@@ -826,7 +1269,7 @@ function requireApiKey(req: any) {
 }
 
 export const notify = onRequest({
-  region: FUNCTION_REGION,
+  region: ALL_FUNCTION_REGIONS,
 }, async (req, res) => {
     try {
       if (req.method !== 'POST') {
@@ -841,7 +1284,12 @@ export const notify = onRequest({
         throw new HttpsError('invalid-argument', 'recipientSessionId and title required');
       }
 
-      const db = admin.firestore();
+      // Note: This legacy endpoint doesn't have event context
+      // In production, should use the newer notification system that includes eventId
+      console.warn('notify: Legacy endpoint used without event context - notifications may fail');
+      
+      // For legacy compatibility, try default database (but this won't work with new system)
+      const db = getDefaultDb();
       const snap = await db.collection('push_tokens')
         .where('sessionId', '==', recipientSessionId)
         .get();
@@ -914,13 +1362,18 @@ export const notify = onRequest({
     }
   }); 
 // Trigger: Mutual Match (likes)
-export const onMutualLike = onDocumentWritten({
-  document: 'likes/{likeId}',
-  region: FUNCTION_REGION,
-}, async (event) => {
+// Shared handler for mutual likes
+const mutualLikeHandler = async (event: any) => {
   const change = event.data;
   if (!change) {
     console.log('onMutualLike: No change data, returning early');
+    return;
+  }
+  
+  // Use the trigger's bound database to ensure same-db operations
+  const db = change.after?.ref?.firestore || change.before?.ref?.firestore;
+  if (!db) {
+    console.error('onMutualLike: No database reference found in trigger event');
     return;
   }
   
@@ -967,79 +1420,106 @@ export const onMutualLike = onDocumentWritten({
     
     console.log('onMutualLike idempotency check:', { pairKey, logKey });
     
-    if (!(await onceOnly(logKey))) {
+    if (!(await onceOnly(logKey, db))) {
       console.log('onMutualLike: Already processed, returning early');
       return;
     }
 
     console.log('onMutualLike: Proceeding with notification logic');
 
-    // Check app state for both users to handle edge cases where both might be in background
-    let likerIsForeground = false;
-    let likedIsForeground = false;
-
-    // Check second liker (creator) app state
+    // Get user names from event profiles for personalized notifications
+    let likerName = 'Someone';
+    let likedName = 'Someone';
+    
     try {
-      const likerAppStateDoc = await admin.firestore().collection('app_states').doc(likerSession).get();
-      const likerAppState = likerAppStateDoc.exists ? likerAppStateDoc.data() as any : null;
+      // Get profiles from the like document data first
+      const likerProfileId = after.from_profile_id;
+      const likedProfileId = after.to_profile_id;
       
-      if (likerAppState?.isForeground === true && likerAppState?.updatedAt) {
-        const APP_STATE_TTL_SECONDS = 30;
-        const appStateAge = Date.now() - likerAppState.updatedAt.toDate().getTime();
-        likerIsForeground = appStateAge < (APP_STATE_TTL_SECONDS * 1000);
+      console.log('onMutualLike: Looking up profile names:', { likerProfileId, likedProfileId });
+      
+      if (likerProfileId && likedProfileId) {
+        // Fetch both profiles in parallel for efficiency
+        const [likerProfile, likedProfile] = await Promise.all([
+          db.collection('event_profiles').doc(likerProfileId).get(),
+          db.collection('event_profiles').doc(likedProfileId).get()
+        ]);
+        
+        console.log('onMutualLike: Profile fetch results:', { 
+          likerExists: likerProfile.exists, 
+          likedExists: likedProfile.exists 
+        });
+        
+        if (likerProfile.exists) {
+          const likerData = likerProfile.data() as any;
+          likerName = likerData?.first_name || 'Someone';
+          console.log('onMutualLike: Liker name found:', likerName);
+        } else {
+          console.warn('onMutualLike: Liker profile not found:', likerProfileId);
+        }
+        
+        if (likedProfile.exists) {
+          const likedData = likedProfile.data() as any;
+          likedName = likedData?.first_name || 'Someone';
+          console.log('onMutualLike: Liked name found:', likedName);
+        } else {
+          console.warn('onMutualLike: Liked profile not found:', likedProfileId);
+        }
+      } else {
+        console.warn('onMutualLike: Missing profile IDs:', { likerProfileId, likedProfileId });
       }
+      
+      console.log('onMutualLike: Final retrieved names:', { likerName, likedName });
     } catch (error) {
-      console.log('Error reading app state for liker (creator), assuming foreground:', error);
-      likerIsForeground = true; // Default assumption: creator is in foreground
+      console.error('onMutualLike: Failed to get user names, using fallback:', error);
+      // Continue with fallback names
     }
 
-    console.log('Liker (creator) app state:', { likerSession, isForeground: likerIsForeground });
+    // REMOVED: App state checking - client now handles notification display
+    // Always create match notification jobs, client decides whether to show
 
-    // Check first liker (recipient) app state
-    try {
-      const appStateDoc = await admin.firestore().collection('app_states').doc(likedSession).get();
-      const appState = appStateDoc.exists ? appStateDoc.data() as any : null;
-      
-      if (appState?.isForeground === true && appState?.updatedAt) {
-        const APP_STATE_TTL_SECONDS = 30;
-        const appStateAge = Date.now() - appState.updatedAt.toDate().getTime();
-        likedIsForeground = appStateAge < (APP_STATE_TTL_SECONDS * 1000);
-      }
-    } catch (error) {
-      console.log('Error reading app state for recipient, assuming not in foreground:', error);
-      likedIsForeground = false;
+    console.log('Match notification: Server always sends, client decides display');
+
+    // CRITICAL FIX: Only process notifications from one direction to prevent duplicates
+    // Use lexicographic comparison to ensure consistent processing
+    const shouldProcess = likerSession < likedSession;
+    
+    if (!shouldProcess) {
+      console.log('Skipping notification processing - will be handled by the other direction:', {
+        likerSession: likerSession.substring(0, 8) + '...',
+        likedSession: likedSession.substring(0, 8) + '...',
+        comparison: `${likerSession < likedSession ? 'liker < liked' : 'liker >= liked'}`
+      });
+      return;
     }
     
-    console.log('Recipient app state:', { likedSession, isForeground: likedIsForeground });
+    console.log('Processing notifications for mutual match (lexicographically first direction):', {
+      likerSession: likerSession.substring(0, 8) + '...',
+      likedSession: likedSession.substring(0, 8) + '...'
+    });
 
-    // Send notifications based on app state
-    // First liker (recipient) - send if not in foreground
-    if (!likedIsForeground) {
-      console.log('Enqueuing match notification for recipient (not in foreground)');
+    // Send notifications to both users - client handles display logic
+    console.log('Enqueuing match notification for recipient (server always sends)');
       await enqueueNotificationJob({
         type: 'match',
         event_id: eventId,
         subject_session_id: likedSession,
         actor_session_id: likerSession,
         payload: {
-          title: '🔥 You got Hooked!',
-          body: `Start chatting!`,
+          title: `You got Hooked with ${likerName}!`,
+          body: `Start chatting now!`,
           data: { 
             type: 'match', 
             partnerSessionId: likerSession,
+            partnerName: likerName,
             aggregationKey: `match:${eventId}:${likedSession}`
           }
         },
         aggregationKey: `match:${eventId}:${likedSession}`
-      });
-    } else {
-      console.log('Recipient is in foreground - client will handle notification');
-    }
+      }, db);
 
-    // Second liker (creator) - send if not in foreground (edge case handling)
-    // This handles scenarios where the creator might also be in background
-    if (!likerIsForeground) {
-      console.log('Creator is also in background - sending notification to creator too');
+    // Send notification to second user (creator) as well - client handles display logic
+    console.log('Enqueuing match notification for creator (server always sends)');
       
       await enqueueNotificationJob({
         type: 'match',
@@ -1047,29 +1527,70 @@ export const onMutualLike = onDocumentWritten({
         subject_session_id: likerSession,
         actor_session_id: likedSession, 
         payload: {
-          title: '🔥 You got Hooked!',
-          body: `Start chatting!`,
+          title: `You got Hooked with ${likedName}!`,
+          body: `Start chatting now!`,
           data: { 
             type: 'match', 
             partnerSessionId: likedSession,
+            partnerName: likedName,
             aggregationKey: `match:${eventId}:${likerSession}`
           }
         },
         aggregationKey: `match:${eventId}:${likerSession}`
-      });
-    } else {
-      console.log('Creator is in foreground - client will handle notification with alert/toast');
-    }
-  });
+      }, db);
+};
+
+// Multi-region Firestore triggers for onMutualLike - FIXED VERSION
+// Each region/database needs its own export
+export const onMutualLikeILV2 = onDocumentWritten({
+  document: 'likes/{likeId}',
+  region: 'me-west1',
+  database: '(default)',
+}, mutualLikeHandler);
+
+export const onMutualLikeAU = onDocumentWritten({
+  document: 'likes/{likeId}',
+  region: 'australia-southeast2',
+  database: 'au-southeast2',
+}, mutualLikeHandler);
+
+export const onMutualLikeUS = onDocumentWritten({
+  document: 'likes/{likeId}',
+  region: 'us-central1',
+  database: 'us-nam5',
+}, mutualLikeHandler);
+
+export const onMutualLikeEU = onDocumentWritten({
+  document: 'likes/{likeId}',
+  region: 'europe-west3',
+  database: 'eu-eur3',
+}, mutualLikeHandler);
+
+export const onMutualLikeASIA = onDocumentWritten({
+  document: 'likes/{likeId}',
+  region: 'asia-northeast1',
+  database: 'asia-ne1',
+}, mutualLikeHandler);
+
+export const onMutualLikeSA = onDocumentWritten({
+  document: 'likes/{likeId}',
+  region: 'southamerica-east1',
+  database: 'southamerica-east1',
+}, mutualLikeHandler);
 
 // Trigger: New Message (messages)
-export const onMessageCreate = onDocumentCreated({
-  document: 'messages/{messageId}',
-  region: FUNCTION_REGION,
-}, async (event) => {
+// Shared handler for new messages
+const messageCreateHandler = async (event: any) => {
   const snap = event.data;
   if (!snap) {
     console.log('onMessageCreate: No snap data, returning early');
+    return;
+  }
+  
+  // Use the trigger's bound database to ensure same-db operations
+  const db = snap.ref?.firestore;
+  if (!db) {
+    console.error('onMessageCreate: No database reference found in trigger event');
     return;
   }
   
@@ -1080,10 +1601,10 @@ export const onMessageCreate = onDocumentCreated({
     const toProfile = d?.to_profile_id;
     let senderName = d?.sender_name;
     
-    // If sender_name is missing, look it up from the sender's profile
+    // If sender_name is missing, look it up from the sender's profile using same database
     if (!senderName) {
       try {
-        const senderProf = await admin.firestore()
+        const senderProf = await db
           .collection('event_profiles')
           .doc(fromProfile)
           .get();
@@ -1097,9 +1618,9 @@ export const onMessageCreate = onDocumentCreated({
     const preview = typeof d?.content === 'string' ? d.content.slice(0, 80) : undefined;
     if (!eventId || !fromProfile || !toProfile) return;
 
-    // Idempotency: 1 push per message id
+    // Idempotency: 1 push per message id (use regional database for consistency)
     const logKey = `msg:${eventId}:${messageId}`;
-    if (!(await onceOnly(logKey))) return;
+    if (!(await onceOnly(logKey, db))) return;
 
     // Don't notify the sender
     if (fromProfile === toProfile) return;
@@ -1109,7 +1630,7 @@ export const onMessageCreate = onDocumentCreated({
     if (typeof d?.to_session_id === 'string') {
       toSession = d.to_session_id;
     } else {
-      const prof = await admin.firestore()
+      const prof = await db
         .collection('event_profiles')
         .doc(toProfile)
         .get();
@@ -1124,7 +1645,7 @@ export const onMessageCreate = onDocumentCreated({
       fromSession = d.from_session_id;
     } else {
       try {
-        const senderProf = await admin.firestore()
+        const senderProf = await db
           .collection('event_profiles')
           .doc(fromProfile)
           .get();
@@ -1138,7 +1659,7 @@ export const onMessageCreate = onDocumentCreated({
     // Check if recipient has muted the sender
     if (fromSession) {
       try {
-        const mutedSnapshot = await admin.firestore()
+        const mutedSnapshot = await db
           .collection('muted_matches')
           .where('event_id', '==', eventId)
           .where('muter_session_id', '==', toSession)
@@ -1156,31 +1677,11 @@ export const onMessageCreate = onDocumentCreated({
       }
     }
 
-    // Check if recipient is in foreground - only send push if not in foreground
-    let isForeground = false;
-    let appState = null;
+    // REMOVED: App state checking - client now handles notification display
+    // Always enqueue message notifications, client decides whether to show
     
-    try {
-      const appStateDoc = await admin.firestore().collection('app_states').doc(toSession).get();
-      appState = appStateDoc.exists ? appStateDoc.data() as any : null;
-      
-      if (appState?.isForeground === true && appState?.updatedAt) {
-        // Check if app state is recent (within 30 seconds for better reliability)
-        const APP_STATE_TTL_SECONDS = 30;
-        const appStateAge = Date.now() - appState.updatedAt.toDate().getTime();
-        const isRecent = appStateAge < (APP_STATE_TTL_SECONDS * 1000);
-        
-        isForeground = isRecent;
-      } else {
-        isForeground = false;
-      }
-    } catch (error) {
-      console.log('Error reading app state for message recipient, assuming not in foreground:', error);
-      isForeground = false;
-    }
-    
-    if (!isForeground) {
-      console.log('Enqueuing message notification for recipient (not in foreground)');
+    console.log('Message notification: Server always sends, client decides display');
+    console.log('Enqueuing message notification for recipient (server always sends)');
       await enqueueNotificationJob({
         type: 'message',
         event_id: eventId,
@@ -1193,15 +1694,51 @@ export const onMessageCreate = onDocumentCreated({
             type: 'message', 
             conversationId: toProfile,
             partnerSessionId: fromSession,
+            partnerName: senderName,
             aggregationKey: `message:${eventId}:${toProfile}`
           }
         },
         aggregationKey: `message:${eventId}:${toProfile}`
-      });
-    } else {
-      console.log('Message recipient is in foreground - client will handle notification');
-    }
-  });
+      }, db);
+};
+
+// Multi-region Firestore triggers for onMessageCreate
+// Each region/database needs its own export
+export const onMessageCreateIL = onDocumentCreated({
+  document: 'messages/{messageId}',
+  region: 'me-west1',
+  database: '(default)',
+}, messageCreateHandler);
+
+export const onMessageCreateAU = onDocumentCreated({
+  document: 'messages/{messageId}',
+  region: 'australia-southeast2',
+  database: 'au-southeast2',
+}, messageCreateHandler);
+
+export const onMessageCreateUS = onDocumentCreated({
+  document: 'messages/{messageId}',
+  region: 'us-central1',
+  database: 'us-nam5',
+}, messageCreateHandler);
+
+export const onMessageCreateEU = onDocumentCreated({
+  document: 'messages/{messageId}',
+  region: 'europe-west3',
+  database: 'eu-eur3',
+}, messageCreateHandler);
+
+export const onMessageCreateASIA = onDocumentCreated({
+  document: 'messages/{messageId}',
+  region: 'asia-northeast1',
+  database: 'asia-ne1',
+}, messageCreateHandler);
+
+export const onMessageCreateSA = onDocumentCreated({
+  document: 'messages/{messageId}',
+  region: 'southamerica-east1',
+  database: 'southamerica-east1',
+}, messageCreateHandler);
 
 // === Callable: savePushToken ===
 // Saves/updates a user's Expo token under push_tokens/{sessionId}_{platform}
@@ -1210,7 +1747,9 @@ export const onMessageCreate = onDocumentCreated({
 // Runs every minute to process queued notification jobs
 export const processNotificationJobsScheduled = onSchedule({
   schedule: 'every 1 minutes',
-  region: FUNCTION_REGION,
+  region: SCHEDULER_REGION, // Deploy to scheduler-supported region
+  timeoutSeconds: 540, // 9 minutes for heavy processing
+  memory: '1GiB' // Increase memory for batch operations
 }, async (event) => {
     console.log('Scheduled notification job processing started');
     await processNotificationJobs();
@@ -1218,11 +1757,8 @@ export const processNotificationJobsScheduled = onSchedule({
   });
 
 // === Trigger: Process Notification Jobs on Create ===
-// Processes jobs immediately when they're created (for faster delivery)
-export const processNotificationJobsOnCreate = onDocumentCreated({
-  document: 'notification_jobs/{jobId}',
-  region: FUNCTION_REGION,
-}, async (event) => {
+// Shared handler for processing notification jobs
+const processNotificationJobsHandler = async (event: any) => {
   const snap = event.data;
   if (!snap) {
     console.log('processNotificationJobsOnCreate: No snap data, returning early');
@@ -1234,18 +1770,319 @@ export const processNotificationJobsOnCreate = onDocumentCreated({
     console.log('New notification job created, processing immediately');
     await processNotificationJobs();
   }
+};
+
+// Multi-region Firestore triggers for processNotificationJobsOnCreate
+// Each region/database needs its own export
+export const processNotificationJobsOnCreateIL = onDocumentCreated({
+  document: 'notification_jobs/{jobId}',
+  region: 'me-west1',
+  database: '(default)',
+}, processNotificationJobsHandler);
+
+export const processNotificationJobsOnCreateAU = onDocumentCreated({
+  document: 'notification_jobs/{jobId}',
+  region: 'australia-southeast2',
+  database: 'au-southeast2',
+}, processNotificationJobsHandler);
+
+export const processNotificationJobsOnCreateUS = onDocumentCreated({
+  document: 'notification_jobs/{jobId}',
+  region: 'us-central1',
+  database: 'us-nam5',
+}, processNotificationJobsHandler);
+
+export const processNotificationJobsOnCreateEU = onDocumentCreated({
+  document: 'notification_jobs/{jobId}',
+  region: 'europe-west3',
+  database: 'eu-eur3',
+}, processNotificationJobsHandler);
+
+export const processNotificationJobsOnCreateASIA = onDocumentCreated({
+  document: 'notification_jobs/{jobId}',
+  region: 'asia-northeast1',
+  database: 'asia-ne1',
+}, processNotificationJobsHandler);
+
+export const processNotificationJobsOnCreateSA = onDocumentCreated({
+  document: 'notification_jobs/{jobId}',
+  region: 'southamerica-east1',
+  database: 'southamerica-east1',
+}, processNotificationJobsHandler);
+
+// Country to region mapping - matches regionUtils.ts
+interface CountryRegionMapping {
+  [country: string]: {
+    database: string;
+    storage: string;
+    functions: string;
+    displayName: string;
+  };
+}
+
+const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
+  'Israel': { database: '(default)', storage: 'hooked-69.firebasestorage.app', functions: 'me-west1', displayName: 'Middle East (Israel)' },
+  'Australia': { database: 'au-southeast2', storage: 'hooked-australia', functions: 'australia-southeast2', displayName: 'Australia (Sydney)' },
+  'United States': { database: 'us-nam5', storage: 'hooked-us-nam5', functions: 'us-central1', displayName: 'US Multi-Region (NAM5)' },
+  // European countries - all use eu-eur3
+  'United Kingdom': { database: 'eu-eur3', storage: 'hooked-eu', functions: 'europe-west3', displayName: 'Europe Multi-Region (EUR3)' },
+  'Germany': { database: 'eu-eur3', storage: 'hooked-eu', functions: 'europe-west3', displayName: 'Europe Multi-Region (EUR3)' },
+  'France': { database: 'eu-eur3', storage: 'hooked-eu', functions: 'europe-west3', displayName: 'Europe Multi-Region (EUR3)' },
+  'Spain': { database: 'eu-eur3', storage: 'hooked-eu', functions: 'europe-west3', displayName: 'Europe Multi-Region (EUR3)' },
+  'Italy': { database: 'eu-eur3', storage: 'hooked-eu', functions: 'europe-west3', displayName: 'Europe Multi-Region (EUR3)' },
+  'Netherlands': { database: 'eu-eur3', storage: 'hooked-eu', functions: 'europe-west3', displayName: 'Europe Multi-Region (EUR3)' },
+  'Belgium': { database: 'eu-eur3', storage: 'hooked-eu', functions: 'europe-west3', displayName: 'Europe Multi-Region (EUR3)' },
+  'Portugal': { database: 'eu-eur3', storage: 'hooked-eu', functions: 'europe-west3', displayName: 'Europe Multi-Region (EUR3)' },
+  'Austria': { database: 'eu-eur3', storage: 'hooked-eu', functions: 'europe-west3', displayName: 'Europe Multi-Region (EUR3)' },
+  'Switzerland': { database: 'eu-eur3', storage: 'hooked-eu', functions: 'europe-west3', displayName: 'Europe Multi-Region (EUR3)' },
+  'Ireland': { database: 'eu-eur3', storage: 'hooked-eu', functions: 'europe-west3', displayName: 'Europe Multi-Region (EUR3)' },
+  'Poland': { database: 'eu-eur3', storage: 'hooked-eu', functions: 'europe-west3', displayName: 'Europe Multi-Region (EUR3)' },
+  'Czech Republic': { database: 'eu-eur3', storage: 'hooked-eu', functions: 'europe-west3', displayName: 'Europe Multi-Region (EUR3)' },
+  'Sweden': { database: 'eu-eur3', storage: 'hooked-eu', functions: 'europe-west3', displayName: 'Europe Multi-Region (EUR3)' },
+  'Norway': { database: 'eu-eur3', storage: 'hooked-eu', functions: 'europe-west3', displayName: 'Europe Multi-Region (EUR3)' },
+  'Denmark': { database: 'eu-eur3', storage: 'hooked-eu', functions: 'europe-west3', displayName: 'Europe Multi-Region (EUR3)' },
+  // Asian countries - all use asia-ne1
+  'Japan': { database: 'asia-ne1', storage: 'hooked-asia', functions: 'asia-northeast1', displayName: 'Asia (Tokyo)' },
+  'Singapore': { database: 'asia-ne1', storage: 'hooked-asia', functions: 'asia-northeast1', displayName: 'Asia (Tokyo)' },
+  'South Korea': { database: 'asia-ne1', storage: 'hooked-asia', functions: 'asia-northeast1', displayName: 'Asia (Tokyo)' },
+  'Thailand': { database: 'asia-ne1', storage: 'hooked-asia', functions: 'asia-northeast1', displayName: 'Asia (Tokyo)' },
+  'Malaysia': { database: 'asia-ne1', storage: 'hooked-asia', functions: 'asia-northeast1', displayName: 'Asia (Tokyo)' },
+  'Indonesia': { database: 'asia-ne1', storage: 'hooked-asia', functions: 'asia-northeast1', displayName: 'Asia (Tokyo)' },
+  // South American countries - all use southamerica-east1
+  'Brazil': { database: 'southamerica-east1', storage: 'hooked-southamerica-east1', functions: 'southamerica-east1', displayName: 'South America (São Paulo)' },
+  'Argentina': { database: 'southamerica-east1', storage: 'hooked-southamerica-east1', functions: 'southamerica-east1', displayName: 'South America (São Paulo)' },
+  'Chile': { database: 'southamerica-east1', storage: 'hooked-southamerica-east1', functions: 'southamerica-east1', displayName: 'South America (São Paulo)' },
+  'Colombia': { database: 'southamerica-east1', storage: 'hooked-southamerica-east1', functions: 'southamerica-east1', displayName: 'South America (São Paulo)' },
+  'Peru': { database: 'southamerica-east1', storage: 'hooked-southamerica-east1', functions: 'southamerica-east1', displayName: 'South America (São Paulo)' },
+  'Venezuela': { database: 'southamerica-east1', storage: 'hooked-southamerica-east1', functions: 'southamerica-east1', displayName: 'South America (São Paulo)' },
+  'Uruguay': { database: 'southamerica-east1', storage: 'hooked-southamerica-east1', functions: 'southamerica-east1', displayName: 'South America (São Paulo)' },
+  'Paraguay': { database: 'southamerica-east1', storage: 'hooked-southamerica-east1', functions: 'southamerica-east1', displayName: 'South America (São Paulo)' },
+  'Bolivia': { database: 'southamerica-east1', storage: 'hooked-southamerica-east1', functions: 'southamerica-east1', displayName: 'South America (São Paulo)' },
+  'Ecuador': { database: 'southamerica-east1', storage: 'hooked-southamerica-east1', functions: 'southamerica-east1', displayName: 'South America (São Paulo)' },
+  // Additional countries
+  'New Zealand': { database: 'au-southeast2', storage: 'hooked-australia', functions: 'australia-southeast2', displayName: 'Australia Dual-Region - Optimized for NZ' },
+  'Canada': { database: 'us-nam5', storage: 'hooked-us-nam5', functions: 'us-central1', displayName: 'US Multi-Region (NAM5) - Optimized for Canada' }
+};
+
+// Get regional database for country
+function getRegionalDatabase(country: string): admin.firestore.Firestore {
+  const regionMapping = COUNTRY_REGION_MAPPING[country];
+  const databaseId = regionMapping?.database || '(default)';
+  
+  console.log(`📍 Getting regional database for country: ${country} -> ${databaseId}`);
+  
+  if (databaseId === '(default)') {
+    return admin.firestore();
+  } else {
+    // Use named database in Cloud Functions (server-side)
+    // This is the correct syntax for Firebase Admin SDK v12+
+    return getFirestore(admin.app(), databaseId);
+  }
+}
+
+// Get regional database by event_id (searches all databases)
+async function getRegionalDatabaseForEvent(eventId: string): Promise<admin.firestore.Firestore> {
+  const databases = getAllActiveDbs();
+  
+  // Try to find the event in each database
+  for (const { dbId, db } of databases) {
+    try {
+      const eventDoc = await db.collection('events').doc(eventId).get();
+      if (eventDoc.exists) {
+        console.log(`📍 Found event ${eventId} in database: ${dbId}`);
+        return db;
+      }
+    } catch (error) {
+      console.warn(`Error checking event ${eventId} in database ${dbId}:`, error);
+      continue;
+    }
+  }
+  
+  console.warn(`⚠️ Event ${eventId} not found in any database, using default`);
+  return getDefaultDb();
+}
+
+// Note: getCurrentFunctionRegion removed as it's not needed for current implementation
+
+// === Callable: createEventInRegion ===
+// Creates an event in the appropriate regional database based on country
+// Deployed to all regions so clients can call the nearest one
+export const createEventInRegion = onCall({
+  region: ALL_FUNCTION_REGIONS,
+}, async (request) => {
+  const { eventData } = request.data;
+  
+  if (!eventData || !eventData.country) {
+    throw new HttpsError('invalid-argument', 'Event data and country are required');
+  }
+  
+  try {
+    console.log(`🌍 Creating event in region for country: ${eventData.country}`);
+    
+    // Get the appropriate regional database for the country
+    const targetDb = getRegionalDatabase(eventData.country);
+    const regionMapping = COUNTRY_REGION_MAPPING[eventData.country];
+    const targetDatabase = regionMapping?.database || '(default)';
+    
+    // Generate organizer password (6-8 characters)
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    const length = Math.floor(Math.random() * 3) + 6;
+    let organizerPassword = '';
+    for (let i = 0; i < length; i++) {
+      organizerPassword += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    
+    // Process date fields - convert Date objects to Firestore Timestamps
+    const processedEventData = { ...eventData };
+    
+    // Handle date fields - convert to Firestore Timestamps with detailed logging
+    const dateFields = ['starts_at', 'expires_at', 'start_date'];
+    for (const field of dateFields) {
+      if (processedEventData[field]) {
+        console.log(`🔍 Processing ${field}:`, {
+          value: processedEventData[field],
+          type: typeof processedEventData[field],
+          isDate: processedEventData[field] instanceof Date,
+          hasSeconds: processedEventData[field]._seconds !== undefined
+        });
+        
+        if (typeof processedEventData[field] === 'string') {
+          // Convert from ISO string to Firestore Timestamp
+          processedEventData[field] = admin.firestore.Timestamp.fromDate(new Date(processedEventData[field]));
+          console.log(`📅 Converted ${field} from ISO string to Firestore Timestamp:`, processedEventData[field]);
+        } else if (processedEventData[field] instanceof Date) {
+          // Convert Date object to Firestore Timestamp
+          processedEventData[field] = admin.firestore.Timestamp.fromDate(processedEventData[field]);
+          console.log(`📅 Converted ${field} from Date to Firestore Timestamp:`, processedEventData[field]);
+        } else if (processedEventData[field]._seconds !== undefined) {
+          // Handle serialized Firestore Timestamp objects from frontend
+          processedEventData[field] = new admin.firestore.Timestamp(
+            processedEventData[field]._seconds,
+            processedEventData[field]._nanoseconds || 0
+          );
+          console.log(`📅 Reconstructed ${field} from serialized Firestore Timestamp:`, processedEventData[field]);
+        } else {
+          console.log(`⚠️ Unknown ${field} format, keeping as-is:`, processedEventData[field]);
+        }
+      }
+    }
+    
+    // Add region configuration to event data
+    const eventDataWithRegion = {
+      ...processedEventData,
+      organizer_password: organizerPassword,
+      region: targetDatabase, // For backward compatibility
+      regionConfig: regionMapping ? {
+        database: regionMapping.database,
+        storage: regionMapping.storage,
+        functions: regionMapping.functions,
+        displayName: regionMapping.displayName,
+        isActive: true
+      } : undefined,
+      created_at: admin.firestore.FieldValue.serverTimestamp(),
+      updated_at: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    
+    console.log(`📝 Event data prepared for database: ${targetDatabase}`);
+    
+    const docRef = await targetDb.collection('events').add(eventDataWithRegion);
+    
+    console.log(`✅ Successfully created event ${docRef.id} in database: ${targetDatabase}`);
+    console.log(`📍 Event region info:`, {
+      country: eventData.country,
+      database: targetDatabase,
+      displayName: regionMapping?.displayName || 'Default (Middle East)'
+    });
+    
+    return { 
+      success: true,
+      eventId: docRef.id, 
+      database: targetDatabase,
+      region: regionMapping?.displayName || 'Default (Middle East)',
+      organizerPassword
+    };
+  } catch (error) {
+    console.error('❌ Failed to create event in region:', error);
+    throw new HttpsError('internal', `Failed to create event: ${error}`);
+  }
 });
 
-export const savePushToken = onCall(async (request) => {
+// === HTTP: deleteEventInRegion ===
+// Deletes an event from the appropriate regional database
+export const deleteEventInRegion = onRequest({
+  region: ALL_FUNCTION_REGIONS,
+}, async (req, res) => {
+  // Set CORS headers manually
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.set('Access-Control-Max-Age', '3600');
+
+  // Handle preflight request
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
+
+  if (req.method !== 'POST') {
+    res.status(405).json({ success: false, error: 'Method not allowed' });
+    return;
+  }
+
+  try {
+    const { eventId, databaseId } = req.body;
+    
+    if (!eventId || !databaseId) {
+      res.status(400).json({ success: false, error: 'Event ID and database ID are required' });
+      return;
+    }
+    
+    console.log(`🗑️ Deleting event ${eventId} from database: ${databaseId}`);
+    
+    // Get the appropriate regional database
+    let targetDb: admin.firestore.Firestore;
+    if (databaseId === '(default)') {
+      targetDb = getDefaultDb();
+    } else {
+      targetDb = getFirestore(admin.app(), databaseId);
+    }
+    
+    // Check if event exists
+    const eventDoc = await targetDb.collection('events').doc(eventId).get();
+    if (!eventDoc.exists) {
+      res.status(404).json({ success: false, error: `Event with ID ${eventId} not found in database ${databaseId}` });
+      return;
+    }
+    
+    // Delete the event
+    await targetDb.collection('events').doc(eventId).delete();
+    
+    console.log(`✅ Successfully deleted event ${eventId} from database: ${databaseId}`);
+    
+    res.json({ 
+      success: true,
+      eventId,
+      database: databaseId
+    });
+  } catch (error) {
+    console.error('❌ Failed to delete event from region:', error);
+    res.status(500).json({ success: false, error: `Failed to delete event: ${error}` });
+  }
+});
+
+export const savePushToken = onCall({
+  region: ALL_FUNCTION_REGIONS, // Deploy to all regions for better performance
+}, async (request) => {
   console.log('savePushToken: Called with data (NO APP CHECK):', {
     hasToken: !!request.data?.token,
     tokenLength: request.data?.token?.length,
     platform: request.data?.platform,
     sessionId: request.data?.sessionId?.substring(0, 8) + '...',
-    hasInstallationId: !!request.data?.installationId
+    hasInstallationId: !!request.data?.installationId,
+    hasEventId: !!request.data?.eventId
   });
   
-  const { token, platform, sessionId, installationId } = request.data;
+  const { token, platform, sessionId, installationId, eventId } = request.data;
 
     // Validate required fields
     if (typeof token !== 'string' || !token.trim()) {
@@ -1265,16 +2102,29 @@ export const savePushToken = onCall(async (request) => {
     }
 
     try {
+      // Store push tokens in the regional database if eventId provided, otherwise use default
+      // This allows backward compatibility and users without events to still receive notifications
+      
+      let db;
+      if (eventId) {
+        // Use regional database for this event
+        db = await getRegionalDatabaseForEvent(eventId);
+        console.log('savePushToken: Using regional database for event:', eventId);
+      } else {
+        // Fallback to default database if no event context
+        db = getDefaultDb();
+        console.log('savePushToken: No eventId provided, using default database');
+      }
       const docId = `${sessionId}_${platform}`;
       
       // Revoke older tokens for this session/platform combination
-      const existingTokensSnapshot = await admin.firestore()
+      const existingTokensSnapshot = await db
         .collection('push_tokens')
         .where('sessionId', '==', sessionId)
         .where('platform', '==', platform)
         .get();
 
-      const batch = admin.firestore().batch();
+      const batch = db.batch();
       
       // Mark existing tokens as revoked
       existingTokensSnapshot.docs.forEach(doc => {
@@ -1287,7 +2137,7 @@ export const savePushToken = onCall(async (request) => {
       });
 
       // Upsert current token
-      batch.set(admin.firestore().collection('push_tokens').doc(docId), {
+      batch.set(db.collection('push_tokens').doc(docId), {
         token,
         platform,
         sessionId,
@@ -1300,7 +2150,7 @@ export const savePushToken = onCall(async (request) => {
 
       await batch.commit();
 
-      console.log('savePushToken: Successfully saved token for session:', sessionId, 'platform:', platform);
+      console.log('savePushToken: Successfully saved token for session:', sessionId, 'platform:', platform, 'in regional database');
       return { success: true };
     } catch (error) {
       console.error('savePushToken: Error saving token:', error);
@@ -1308,12 +2158,17 @@ export const savePushToken = onCall(async (request) => {
     }
   });
 
-// === Callable: setAppState ===
-// Updates the app state (foreground/background) for a session with App Check validation
-// Expects: { sessionId: string, isForeground: boolean, installationId?: string }
+// === Callable: setAppState === [DEPRECATED - Client handles notification display now]
+// Updates the app state (foreground/background) for a session with regional database support
+// Expects: { sessionId: string, isForeground: boolean, installationId?: string, eventId?: string }
 // Note: No authentication required - app state tracking should work for all users
-export const setAppState = onCall(async (request) => {
-  const { sessionId, isForeground, installationId } = request.data;
+// If eventId provided, stores in regional database; otherwise uses default database
+// DEPRECATED: Following WhatsApp/Instagram pattern - client decides notification display
+/*
+export const setAppState = onCall({
+  region: ALL_FUNCTION_REGIONS, // Deploy to all regions for app state tracking
+}, async (request) => {
+  const { sessionId, isForeground, installationId, eventId } = request.data;
 
     // Validate required fields
     if (typeof sessionId !== 'string' || !sessionId.trim()) {
@@ -1331,8 +2186,12 @@ export const setAppState = onCall(async (request) => {
     }
 
     try {
-      // Store app state in Firestore
-      await admin.firestore().collection('app_states').doc(sessionId).set({
+      // App states are stored in regional database based on event context
+      // If no event context available, fallback to default database
+      const db = eventId ? await getRegionalDatabaseForEvent(eventId) : getDefaultDb();
+      console.log(`setAppState: Using ${eventId ? 'regional' : 'default'} database for session:`, sessionId);
+      
+      await db.collection('app_states').doc(sessionId).set({
         isForeground,
         installationId: installationId || null,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1345,12 +2204,13 @@ export const setAppState = onCall(async (request) => {
       throw new HttpsError('internal', 'Failed to update app state');
     }
   });
+*/
 
 // === Callable: setMute ===
 // Sets mute status between two sessions - NO authentication required
 // Expects: { event_id: string, muter_session_id: string, muted_session_id: string, muted: boolean }
 export const setMute = onCall({
-  region: FUNCTION_REGION,
+  region: ALL_FUNCTION_REGIONS,
 }, async (request) => {
   console.log('setMute: Function called with data:', request.data);
   
@@ -1363,12 +2223,15 @@ export const setMute = onCall({
       return { success: false, error: 'Missing required fields' };
     }
 
+    // Find the correct regional database for this event
+    const targetDb = await getRegionalDatabaseForEvent(event_id);
+    
     const docId = `${event_id}_${muter_session_id}_${muted_session_id}`;
     console.log('setMute: Document ID:', docId);
     
     if (muted) {
-      // Create mute record
-      await admin.firestore().collection('muted_matches').doc(docId).set({
+      // Create mute record in the same database as the event
+      await targetDb.collection('muted_matches').doc(docId).set({
         event_id,
         muter_session_id,
         muted_session_id,
@@ -1377,8 +2240,8 @@ export const setMute = onCall({
       });
       console.log('setMute: Mute record created');
     } else {
-      // Remove mute record
-      await admin.firestore().collection('muted_matches').doc(docId).delete();
+      // Remove mute record from the same database as the event
+      await targetDb.collection('muted_matches').doc(docId).delete();
       console.log('setMute: Mute record deleted');
     }
 
@@ -1391,14 +2254,16 @@ export const setMute = onCall({
   }
 });
 
-// === Callable: updateAppState === (Legacy - for backward compatibility)
-// Updates the app state (foreground/background) for a session
-// Expects: { isForeground: boolean, sessionId?: string }
+// === Callable: updateAppState === [DEPRECATED - Client handles notification display now]
+// Updates the app state (foreground/background) for a session with regional database support
+// Expects: { isForeground: boolean, sessionId?: string, eventId?: string }
+// If eventId provided, stores in regional database; otherwise uses default database
+// DEPRECATED: Following WhatsApp/Instagram pattern - client decides notification display
+/*
 export const updateAppState = onCall({
-  region: FUNCTION_REGION,
+  region: ALL_FUNCTION_REGIONS,
 }, async (request) => {
-  const isForeground = request.data?.isForeground;
-  const sessionId = request.data?.sessionId;
+  const { isForeground, sessionId, eventId } = request.data;
 
     if (typeof isForeground !== 'boolean') {
       throw new HttpsError('invalid-argument', 'isForeground is required');
@@ -1410,8 +2275,12 @@ export const updateAppState = onCall({
     }
 
     try {
-      // Store app state in Firestore for notification triggers to check
-      await admin.firestore().collection('app_states').doc(sessionId).set({
+      // App states are stored in regional database based on event context
+      // If no event context available, fallback to default database
+      const db = eventId ? await getRegionalDatabaseForEvent(eventId) : getDefaultDb();
+      console.log(`updateAppState: Using ${eventId ? 'regional' : 'default'} database for session:`, sessionId);
+      
+      await db.collection('app_states').doc(sessionId).set({
         isForeground,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
@@ -1423,6 +2292,7 @@ export const updateAppState = onCall({
       throw new HttpsError('internal', 'Failed to update app state');
     }
   });
+*/
 
 // === Callable: sendCrossDeviceNotification ===
 // Sends notifications across devices using the existing push token infrastructure
@@ -1450,7 +2320,9 @@ export const sendCrossDeviceNotification = onCall(async (request) => {
         try {
           const eventId = notificationData?.event_id;
           if (eventId) {
-            const mutedSnapshot = await admin.firestore()
+            // Find the correct regional database for this event
+            const targetDb = await getRegionalDatabaseForEvent(eventId);
+            const mutedSnapshot = await targetDb
               .collection('muted_matches')
               .where('event_id', '==', eventId)
               .where('muter_session_id', '==', targetSessionId)
@@ -1467,47 +2339,21 @@ export const sendCrossDeviceNotification = onCall(async (request) => {
         }
       }
 
-      // Get push tokens for target session
-      const tokens = await fetchSessionTokens(targetSessionId);
+      // Get push tokens for target session from the appropriate regional database
+      if (!notificationData?.event_id) {
+        return { success: false, error: 'event_id is required in notification data' };
+      }
+      
+      const tokenDb = await getRegionalDatabaseForEvent(notificationData.event_id);
+      const tokens = await fetchSessionTokens(targetSessionId, tokenDb, notificationData.event_id);
 
       if (tokens.length === 0) {
         return { success: false, error: 'No push tokens found for target session' };
       }
 
-      // Check if user is in foreground to avoid duplicate notifications
-      try {
-        const appStateDoc = await admin.firestore().collection('app_states').doc(targetSessionId).get();
-        const appState = appStateDoc.data();
-        
-        if (appState) {
-          const isInForeground = appState.isForeground === true;
-          const stateAge = Date.now() - (appState.updatedAt?.toMillis?.() || 0);
-          const isRecentState = stateAge < 15000; // State updated within last 15 seconds
-          
-          console.log('sendCrossDeviceNotification: App state check:', {
-            targetSessionId,
-            isInForeground,
-            stateAge,
-            isRecentState,
-            type
-          });
-          
-          // Skip push notification if user is actively using the app
-          // Exception: Always send urgent notifications
-          if (isInForeground && isRecentState && type !== 'urgent') {
-            console.log('sendCrossDeviceNotification: User is in foreground, skipping push notification');
-            return { 
-              success: true, 
-              skipped: true, 
-              reason: 'user_in_foreground',
-              message: 'User is actively using the app, client-side notification will handle this'
-            };
-          }
-        }
-      } catch (appStateError) {
-        console.warn('Error checking app state, proceeding with notification:', appStateError);
-        // Continue with notification if app state check fails
-      }
+      // REMOVED: App state checking - client now handles notification display
+      // Always send cross-device notifications, client decides whether to show
+      console.log('sendCrossDeviceNotification: Server always sends, client decides display');
 
       // Apply circuit breaker to prevent duplicate notification content
       // For messages, include sender ID and message content for exact duplicate detection
@@ -1561,7 +2407,7 @@ export const sendCrossDeviceNotification = onCall(async (request) => {
 // Fresh function to avoid caching issues
 // Expects: { event_id: string, muter_session_id: string, muted_session_id: string, muted: boolean }
 export const setMuteV2 = onCall({
-  region: FUNCTION_REGION,
+  region: ALL_FUNCTION_REGIONS,
 }, async (request) => {
   console.log('setMuteV2: Function called with data:', request.data);
   
@@ -1574,12 +2420,14 @@ export const setMuteV2 = onCall({
       return { success: false, error: 'Missing required fields' };
     }
 
+    // Find the correct regional database for this event
+    const targetDb = await getRegionalDatabaseForEvent(event_id);
     const docId = `${event_id}_${muter_session_id}_${muted_session_id}`;
     console.log('setMuteV2: Document ID:', docId);
     
     if (muted) {
-      // Create mute record
-      await admin.firestore().collection('muted_matches').doc(docId).set({
+      // Create mute record in the same database as the event
+      await targetDb.collection('muted_matches').doc(docId).set({
         event_id,
         muter_session_id,
         muted_session_id,
@@ -1588,8 +2436,8 @@ export const setMuteV2 = onCall({
       });
       console.log('setMuteV2: Mute record created');
     } else {
-      // Remove mute record
-      await admin.firestore().collection('muted_matches').doc(docId).delete();
+      // Remove mute record from the same database as the event
+      await targetDb.collection('muted_matches').doc(docId).delete();
       console.log('setMuteV2: Mute record deleted');
     }
 
@@ -1605,7 +2453,7 @@ export const setMuteV2 = onCall({
 // === Backup Callable: setMuteBackup ===
 // Alternative mute function in case setMute has persistent App Check issues
 export const setMuteBackup = onCall({
-  region: FUNCTION_REGION,
+  region: ALL_FUNCTION_REGIONS,
 }, async (request) => {
   const { event_id, muter_session_id, muted_session_id, muted } = request.data;
 
@@ -1637,11 +2485,13 @@ export const setMuteBackup = onCall({
   }
 
   try {
+    // Find the correct regional database for this event
+    const targetDb = await getRegionalDatabaseForEvent(event_id);
     const docId = `${event_id}_${muter_session_id}_${muted_session_id}`;
 
     if (muted) {
-      // Create or update mute record
-      await admin.firestore().collection('muted_matches').doc(docId).set({
+      // Create or update mute record in the same database as the event
+      await targetDb.collection('muted_matches').doc(docId).set({
         event_id,
         muter_session_id,
         muted_session_id,
@@ -1649,8 +2499,8 @@ export const setMuteBackup = onCall({
         updated_at: admin.firestore.FieldValue.serverTimestamp(),
       });
     } else {
-      // Remove mute record
-      await admin.firestore().collection('muted_matches').doc(docId).delete();
+      // Remove mute record from the same database as the event
+      await targetDb.collection('muted_matches').doc(docId).delete();
     }
 
     console.log('setMuteBackup: Successfully updated mute status:', { 
@@ -1664,5 +2514,348 @@ export const setMuteBackup = onCall({
   } catch (error) {
     console.error('setMuteBackup: Error updating mute status:', error);
     throw new HttpsError('internal', 'Failed to update mute status');
+  }
+});
+
+// Cloud Function to save event form data
+export const saveEventForm = onCall({
+  region: ALL_FUNCTION_REGIONS,
+  memory: '256MiB',
+  timeoutSeconds: 30,
+}, async (request) => {
+  const { formData } = request.data;
+
+  if (!formData) {
+    throw new HttpsError('invalid-argument', 'Form data is required');
+  }
+
+  try {
+    // Use default database for event forms (admin data)
+    const db = getDefaultDb();
+    const docRef = await db.collection('eventForms').add({
+      ...formData,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    console.log('Event form saved with ID:', docRef.id);
+    return { success: true, id: docRef.id };
+  } catch (error) {
+    console.error('Error saving event form:', error);
+    throw new HttpsError('internal', 'Failed to save event form', error);
+  }
+});
+
+// Cloud Function to create admin client
+export const createAdminClient = onCall({
+  region: ALL_FUNCTION_REGIONS,
+  memory: '256MiB',
+  timeoutSeconds: 30,
+}, async (request) => {
+  const { clientData } = request.data;
+
+  if (!clientData) {
+    throw new HttpsError('invalid-argument', 'Client data is required');
+  }
+
+  try {
+    // Use default database for admin clients
+    const db = getDefaultDb();
+    const docRef = await db.collection('adminClients').add({
+      ...clientData,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    console.log('Admin client created with ID:', docRef.id);
+    return { success: true, id: docRef.id };
+  } catch (error) {
+    console.error('Error creating admin client:', error);
+    throw new HttpsError('internal', 'Failed to create admin client', error);
+  }
+});
+
+// Cloud Functions to get event data (profiles, likes, messages)
+export const getEventProfiles = onRequest({
+  region: ALL_FUNCTION_REGIONS,
+  memory: '256MiB',
+  timeoutSeconds: 30,
+}, async (req, res) => {
+  // Set CORS headers
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
+
+  try {
+    const { eventId } = req.body;
+
+    if (!eventId) {
+      res.status(400).json({ error: 'Event ID is required' });
+      return;
+    }
+
+    // Get all databases to search for the event first
+    const allDbs = getAllActiveDbs();
+    let targetDb = null;
+    
+    // Find which database contains the event
+    for (const { dbId, db } of allDbs) {
+      try {
+        const eventDoc = await db.collection('events').doc(eventId).get();
+        if (eventDoc.exists) {
+          targetDb = db;
+          console.log(`Found event ${eventId} in database: ${dbId}`);
+          break;
+        }
+      } catch (error) {
+        console.warn(`Failed to check database ${dbId}:`, error);
+        continue;
+      }
+    }
+
+    if (!targetDb) {
+      res.status(404).json({ error: 'Event not found' });
+      return;
+    }
+
+    // Get event profiles from the correct database
+    const profilesSnapshot = await targetDb.collection('event_profiles')
+      .where('event_id', '==', eventId)
+      .get();
+
+    const profiles = profilesSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    res.json({ success: true, profiles });
+  } catch (error) {
+    console.error('Error getting event profiles:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+export const getEventLikes = onRequest({
+  region: ALL_FUNCTION_REGIONS,
+  memory: '256MiB',
+  timeoutSeconds: 30,
+}, async (req, res) => {
+  // Set CORS headers
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
+
+  try {
+    const { eventId } = req.body;
+
+    if (!eventId) {
+      res.status(400).json({ error: 'Event ID is required' });
+      return;
+    }
+
+    // Get all databases to search for the event first
+    const allDbs = getAllActiveDbs();
+    let targetDb = null;
+    
+    // Find which database contains the event
+    for (const { dbId, db } of allDbs) {
+      try {
+        const eventDoc = await db.collection('events').doc(eventId).get();
+        if (eventDoc.exists) {
+          targetDb = db;
+          console.log(`Found event ${eventId} in database: ${dbId}`);
+          break;
+        }
+      } catch (error) {
+        console.warn(`Failed to check database ${dbId}:`, error);
+        continue;
+      }
+    }
+
+    if (!targetDb) {
+      res.status(404).json({ error: 'Event not found' });
+      return;
+    }
+
+    // Get likes from the correct database
+    const likesSnapshot = await targetDb.collection('likes')
+      .where('event_id', '==', eventId)
+      .get();
+
+    const likes = likesSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    res.json({ success: true, likes });
+  } catch (error) {
+    console.error('Error getting event likes:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+export const getEventMessages = onRequest({
+  region: ALL_FUNCTION_REGIONS,
+  memory: '256MiB',
+  timeoutSeconds: 30,
+}, async (req, res) => {
+  // Set CORS headers
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
+
+  try {
+    const { eventId } = req.body;
+
+    if (!eventId) {
+      res.status(400).json({ error: 'Event ID is required' });
+      return;
+    }
+
+    // Get all databases to search for the event first
+    const allDbs = getAllActiveDbs();
+    let targetDb = null;
+    
+    // Find which database contains the event
+    for (const { dbId, db } of allDbs) {
+      try {
+        const eventDoc = await db.collection('events').doc(eventId).get();
+        if (eventDoc.exists) {
+          targetDb = db;
+          console.log(`Found event ${eventId} in database: ${dbId}`);
+          break;
+        }
+      } catch (error) {
+        console.warn(`Failed to check database ${dbId}:`, error);
+        continue;
+      }
+    }
+
+    if (!targetDb) {
+      res.status(404).json({ error: 'Event not found' });
+      return;
+    }
+
+    // Get messages from the correct database
+    const messagesSnapshot = await targetDb.collection('messages')
+      .where('event_id', '==', eventId)
+      .get();
+
+    const messages = messagesSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    res.json({ success: true, messages });
+  } catch (error) {
+    console.error('Error getting event messages:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Debug monitoring function for notification system
+export const debugNotifications = onRequest({
+  region: ALL_FUNCTION_REGIONS,
+}, async (req, res) => {
+  try {
+    const { sessionId, eventId } = req.query;
+    
+    if (!sessionId) {
+      res.status(400).json({ error: 'sessionId parameter required' });
+      return;
+    }
+    
+    // Determine which database to use
+    let db;
+    if (eventId) {
+      db = await getRegionalDatabaseForEvent(eventId as string);
+    } else {
+      db = getDefaultDb();
+    }
+    
+    console.log('debugNotifications: Checking notification jobs for sessionId:', sessionId);
+    
+    // Get pending notification jobs for this user
+    const jobsSnapshot = await db.collection('notification_jobs')
+      .where('subject_session_id', '==', sessionId)
+      .where('status', '==', 'pending')
+      .orderBy('createdAt', 'desc')
+      .limit(50)
+      .get();
+    
+    // Count duplicates by aggregation key
+    const duplicates: { [key: string]: number } = {};
+    const jobs = jobsSnapshot.docs.map(doc => {
+      const data = doc.data();
+      const aggregationKey = data.aggregationKey;
+      if (aggregationKey) {
+        duplicates[aggregationKey] = (duplicates[aggregationKey] || 0) + 1;
+      }
+      return {
+        id: doc.id,
+        ...data,
+        created: data.createdAt?.toDate?.()?.toISOString() || 'unknown'
+      };
+    });
+    
+    // Get processed jobs from last hour
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const processedJobsSnapshot = await db.collection('notification_jobs')
+      .where('subject_session_id', '==', sessionId)
+      .where('status', 'in', ['completed', 'failed'])
+      .where('updatedAt', '>=', oneHourAgo)
+      .orderBy('updatedAt', 'desc')
+      .limit(20)
+      .get();
+    
+    const processedJobs = processedJobsSnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        status: data.status,
+        type: data.type,
+        aggregationKey: data.aggregationKey,
+        created: data.createdAt?.toDate?.()?.toISOString() || 'unknown',
+        updated: data.updatedAt?.toDate?.()?.toISOString() || 'unknown'
+      };
+    });
+    
+    const duplicateEntries = Object.entries(duplicates).filter(([_, count]) => count > 1);
+    
+    res.json({
+      sessionId,
+      eventId: eventId || 'default',
+      summary: {
+        totalPending: jobs.length,
+        totalProcessedLastHour: processedJobs.length,
+        duplicateKeys: duplicateEntries.length,
+        hasDuplicates: duplicateEntries.length > 0
+      },
+      duplicates: duplicateEntries.map(([key, count]) => ({ key, count })),
+      pendingJobs: jobs,
+      recentProcessed: processedJobs
+    });
+    
+  } catch (error) {
+    console.error('debugNotifications error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error', 
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 });

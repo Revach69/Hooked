@@ -706,6 +706,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     color: '#6b7280',
+    textAlign: 'center',
   },
   header: {
     flexDirection: 'row',

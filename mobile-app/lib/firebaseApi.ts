@@ -18,7 +18,21 @@ import {
   signOut as firebaseSignOut, 
   updateProfile as firebaseUpdateProfile
 } from 'firebase/auth';
-import { db, storage } from './firebaseConfig';
+import { db, storage, getDbForEvent } from './firebaseConfig';
+
+// Helper function to get all regional databases for cross-region operations
+function getAllDatabases() {
+  const regions = [
+    'Israel',        // (default) database  
+    'Australia',     // au-southeast2
+    'United Kingdom', // eu-eur3
+    'United States', // us-nam5
+    'Japan',         // asia-ne1
+    'Brazil'         // southamerica-east1
+  ];
+  
+  return regions.map(country => getDbForEvent(country));
+}
 import { auth } from './firebaseAuth';
 import { trace } from './firebasePerformance';
 import * as Sentry from '@sentry/react-native';
@@ -284,7 +298,10 @@ export const EventAPI = {
         // Generate organizer password if not provided
         const organizerPassword = data.organizer_password || generateOrganizerPassword();
         
-        const docRef = await addDoc(collection(db, 'events'), {
+        // Determine which database to use - regional if location provided, default for backward compatibility
+        const targetDb = data.location ? getDbForEvent(data.location) : db;
+        
+        const docRef = await addDoc(collection(targetDb, 'events'), {
           ...data,
           organizer_password: organizerPassword,
           created_at: serverTimestamp(),
@@ -305,11 +322,60 @@ export const EventAPI = {
   async filter(filters: Partial<Event> = {}): Promise<Event[]> {
     return firebaseRetry(async () => {
       return trace('filter_events', async () => {
+        // If filtering by event_code, search all regional databases
+        if (filters.event_code) {
+          console.log(`🔍 Searching all regional databases for event code: ${filters.event_code}`);
+          console.log(`🔍 Converting event code to uppercase: ${filters.event_code.toUpperCase()}`);
+          
+          const allEvents: Event[] = [];
+          const regions = [
+            { country: 'Israel', label: 'Israel' },
+            { country: 'Australia', label: 'Australia' }, 
+            { country: 'United Kingdom', label: 'Europe' },
+            { country: 'United States', label: 'USA + Canada' },
+            { country: 'Japan', label: 'Asia' },
+            { country: 'Brazil', label: 'South America' }
+          ];
+          
+          for (const region of regions) {
+            try {
+              console.log(`🔍 Searching ${region.label} region (${region.country})...`);
+              const regionalDb = getDbForEvent(region.country);
+              console.log(`🔍 Got database for ${region.label}:`, regionalDb.app.name);
+              
+              const eventsCollection = collection(regionalDb, 'events');
+              const q = query(eventsCollection, where('event_code', '==', filters.event_code.toUpperCase()));
+              
+              console.log(`🔍 Executing query in ${region.label} database...`);
+              const snapshot = await getDocs(q);
+              console.log(`🔍 Query result for ${region.label}: ${snapshot.docs.length} documents found`);
+              
+              if (snapshot.docs.length > 0) {
+                console.log(`📍 Event codes found in ${region.label}:`, snapshot.docs.map(doc => doc.data().event_code));
+              }
+              
+              const regionEvents = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+              })) as Event[];
+              
+              allEvents.push(...regionEvents);
+              
+              if (regionEvents.length > 0) {
+                console.log(`📍 Found event with code ${filters.event_code} in ${region.label} region`);
+              }
+            } catch (error) {
+              console.warn(`⚠️ Failed to search ${region.label} region:`, error);
+            }
+          }
+          
+          console.log(`🎯 Total events found across all regions: ${allEvents.length}`);
+          return allEvents;
+        }
+        
+        // For other filters, use default database (backward compatibility)
         let q: any = collection(db, 'events');
         
-        if (filters.event_code) {
-          q = query(q, where('event_code', '==', filters.event_code));
-        }
         if (filters.id) {
           q = query(q, where('__name__', '==', filters.id));
         }
@@ -323,29 +389,71 @@ export const EventAPI = {
     }, { operation: 'Filter events' });
   },
 
-  async get(id: string): Promise<Event | null> {
+  async get(id: string, eventCountry?: string): Promise<Event | null> {
     return firebaseRetry(async () => {
-      const docRef = doc(db, 'events', id);
-      const docSnap = await getDoc(docRef);
-      
-      // @ts-ignore - React Native Firebase v23 exists is a boolean property, not function
-      if (docSnap.exists) {
-        return { id: docSnap.id, ...docSnap.data() } as Event;
+      // If we have event country, use regional database directly
+      if (eventCountry) {
+        const regionalDb = getDbForEvent(eventCountry);
+        const docRef = doc(regionalDb, 'events', id);
+        const docSnap = await getDoc(docRef);
+        
+        // @ts-ignore - React Native Firebase v23 exists is a boolean property, not function
+        if (docSnap.exists) {
+          return { id: docSnap.id, ...docSnap.data() } as Event;
+        }
+        return null;
       }
+      
+      // Search all regional databases for the event ID
+      const regions = [
+        { country: 'Israel', label: 'Israel' },
+        { country: 'Australia', label: 'Australia' }, 
+        { country: 'United Kingdom', label: 'Europe' },
+        { country: 'United States', label: 'USA + Canada' },
+        { country: 'Japan', label: 'Asia' },
+        { country: 'Brazil', label: 'South America' }
+      ];
+      
+      for (const region of regions) {
+        try {
+          const regionalDb = getDbForEvent(region.country);
+          const docRef = doc(regionalDb, 'events', id);
+          const docSnap = await getDoc(docRef);
+          
+          // @ts-ignore - React Native Firebase v23 exists is a boolean property, not function
+          if (docSnap.exists) {
+            console.log(`📍 Found event ${id} in ${region.label} region`);
+            return { id: docSnap.id, ...docSnap.data() } as Event;
+          }
+        } catch (error) {
+          console.warn(`⚠️ Failed to search for event ${id} in ${region.label} region:`, error);
+        }
+      }
+      
       return null;
     }, { operation: 'Get event' });
   },
 
   async update(id: string, data: Partial<Event>): Promise<void> {
     return firebaseRetry(async () => {
-      const docRef = doc(db, 'events', id);
+      // First get the event to determine which regional database to use
+      const event = await EventAPI.get(id);
+      const eventCountry = event?.location;
+      const eventDb = getDbForEvent(eventCountry);
+      
+      const docRef = doc(eventDb, 'events', id);
       await updateDoc(docRef, { ...data, updated_at: serverTimestamp() });
     }, { operation: 'Update event' });
   },
 
   async delete(id: string): Promise<void> {
     return firebaseRetry(async () => {
-      const docRef = doc(db, 'events', id);
+      // First get the event to determine which regional database to use
+      const event = await EventAPI.get(id);
+      const eventCountry = event?.location;
+      const eventDb = getDbForEvent(eventCountry);
+      
+      const docRef = doc(eventDb, 'events', id);
       await deleteDoc(docRef);
     }, { operation: 'Delete event' });
   }
@@ -355,8 +463,21 @@ export const EventAPI = {
 export const EventProfileAPI = {
   async create(data: Omit<EventProfile, 'id' | 'created_at' | 'updated_at'>): Promise<EventProfile> {
     try {
+      // Try to get the event country from AsyncStorage first (faster)
+      const storedCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+      
+      let eventDb;
+      if (storedCountry) {
+        eventDb = getDbForEvent(storedCountry);
+      } else {
+        // Fallback: Get the event to determine which regional database to use
+        const event = await EventAPI.get(data.event_id);
+        const eventCountry = event?.location;
+        eventDb = getDbForEvent(eventCountry);
+      }
+      
       // Simplified version without retry logic and performance monitoring
-      const docRef = await addDoc(collection(db, 'event_profiles'), {
+      const docRef = await addDoc(collection(eventDb, 'event_profiles'), {
         ...data,
         created_at: serverTimestamp(),
         updated_at: serverTimestamp()
@@ -382,7 +503,23 @@ export const EventProfileAPI = {
   async filter(filters: Partial<EventProfile> = {}): Promise<EventProfile[]> {
     return firebaseRetry(async () => {
       return trace('filter_event_profiles', async () => {
-        let q: any = collection(db, 'event_profiles');
+        // Determine which database to use based on event_id
+        let targetDb = db; // default fallback
+        if (filters.event_id) {
+          // Try to get the event country from AsyncStorage first (faster)
+          const storedCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+          
+          if (storedCountry) {
+            targetDb = getDbForEvent(storedCountry);
+          } else {
+            // Fallback: fetch event to determine region
+            const event = await EventAPI.get(filters.event_id);
+            const eventCountry = event?.location;
+            targetDb = getDbForEvent(eventCountry);
+          }
+        }
+        
+        let q: any = collection(targetDb, 'event_profiles');
         
         if (filters.event_id) {
           q = query(q, where('event_id', '==', filters.event_id));
@@ -403,9 +540,10 @@ export const EventProfileAPI = {
     }, { operation: 'Filter event profiles' });
   },
 
-  async get(id: string): Promise<EventProfile | null> {
+  async get(id: string, eventCountry?: string): Promise<EventProfile | null> {
     return firebaseRetry(async () => {
-      const docRef = doc(db, 'event_profiles', id);
+      const targetDb = getDbForEvent(eventCountry);
+      const docRef = doc(targetDb, 'event_profiles', id);
       const docSnap = await getDoc(docRef);
       
       // @ts-ignore - React Native Firebase v23 exists is a boolean property, not function
@@ -416,23 +554,26 @@ export const EventProfileAPI = {
     }, { operation: 'Get event profile' });
   },
 
-  async update(id: string, data: Partial<EventProfile>): Promise<void> {
+  async update(id: string, data: Partial<EventProfile>, eventCountry?: string): Promise<void> {
     return firebaseRetry(async () => {
-      const docRef = doc(db, 'event_profiles', id);
+      const targetDb = getDbForEvent(eventCountry);
+      const docRef = doc(targetDb, 'event_profiles', id);
       await updateDoc(docRef, { ...data, updated_at: serverTimestamp() });
     }, { operation: 'Update event profile' });
   },
 
-  async delete(id: string): Promise<void> {
+  async delete(id: string, eventCountry?: string): Promise<void> {
     return firebaseRetry(async () => {
-      const docRef = doc(db, 'event_profiles', id);
+      const targetDb = getDbForEvent(eventCountry);
+      const docRef = doc(targetDb, 'event_profiles', id);
       await deleteDoc(docRef);
     }, { operation: 'Delete event profile' });
   },
 
-  async toggleVisibility(id: string, isVisible: boolean): Promise<void> {
+  async toggleVisibility(id: string, isVisible: boolean, eventCountry?: string): Promise<void> {
     return firebaseRetry(async () => {
-      const docRef = doc(db, 'event_profiles', id);
+      const targetDb = getDbForEvent(eventCountry);
+      const docRef = doc(targetDb, 'event_profiles', id);
       await updateDoc(docRef, { 
         is_visible: isVisible, 
         updated_at: serverTimestamp() 
@@ -450,7 +591,20 @@ export const LikeAPI = {
         created_at: serverTimestamp()
       };
       
-      const docRef = await addDoc(collection(db, 'likes'), likeData);
+      // Try to get the event country from AsyncStorage first (faster)
+      const storedCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+      
+      let eventDb;
+      if (storedCountry) {
+        eventDb = getDbForEvent(storedCountry);
+      } else {
+        // Fallback: Get the event to determine which regional database to use
+        const event = await EventAPI.get(data.event_id);
+        const eventCountry = event?.location;
+        eventDb = getDbForEvent(eventCountry);
+      }
+      
+      const docRef = await addDoc(collection(eventDb, 'likes'), likeData);
       
       // Don't read back the document since users might not have read permissions
       // Instead, return the data we already have with the document ID
@@ -464,7 +618,23 @@ export const LikeAPI = {
 
   async filter(filters: Partial<Like> = {}): Promise<Like[]> {
     return firebaseRetry(async () => {
-      let q: any = collection(db, 'likes');
+      // Determine which database to use based on event_id
+      let targetDb = db; // default fallback
+      if (filters.event_id) {
+        // Try to get the event country from AsyncStorage first (faster)
+        const storedCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+        
+        if (storedCountry) {
+          targetDb = getDbForEvent(storedCountry);
+        } else {
+          // Fallback: fetch event to determine region
+          const event = await EventAPI.get(filters.event_id);
+          const eventCountry = event?.location;
+          targetDb = getDbForEvent(eventCountry);
+        }
+      }
+      
+      let q: any = collection(targetDb, 'likes');
       
       if (filters.event_id) {
         q = query(q, where('event_id', '==', filters.event_id));
@@ -490,9 +660,10 @@ export const LikeAPI = {
     }, { operation: 'Filter likes' });
   },
 
-  async get(id: string): Promise<Like | null> {
+  async get(id: string, eventCountry?: string): Promise<Like | null> {
     return firebaseRetry(async () => {
-      const docRef = doc(db, 'likes', id);
+      const targetDb = getDbForEvent(eventCountry);
+      const docRef = doc(targetDb, 'likes', id);
       const docSnap = await getDoc(docRef);
       
       // @ts-ignore - React Native Firebase v23 exists is a boolean property, not function
@@ -503,16 +674,18 @@ export const LikeAPI = {
     }, { operation: 'Get like' });
   },
 
-  async update(id: string, data: Partial<Like>): Promise<void> {
+  async update(id: string, data: Partial<Like>, eventCountry?: string): Promise<void> {
     return firebaseRetry(async () => {
-      const docRef = doc(db, 'likes', id);
+      const targetDb = getDbForEvent(eventCountry);
+      const docRef = doc(targetDb, 'likes', id);
       await updateDoc(docRef, data);
     }, { operation: 'Update like' });
   },
 
-  async delete(id: string): Promise<void> {
+  async delete(id: string, eventCountry?: string): Promise<void> {
     return firebaseRetry(async () => {
-      const docRef = doc(db, 'likes', id);
+      const targetDb = getDbForEvent(eventCountry);
+      const docRef = doc(targetDb, 'likes', id);
       await deleteDoc(docRef);
     }, { operation: 'Delete like' });
   }
@@ -522,7 +695,20 @@ export const LikeAPI = {
 export const MessageAPI = {
   async create(data: Omit<Message, 'id' | 'created_at'>): Promise<Message> {
     return firebaseRetry(async () => {
-      const docRef = await addDoc(collection(db, 'messages'), {
+      // Try to get the event country from AsyncStorage first (faster)
+      const storedCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+      
+      let eventDb;
+      if (storedCountry) {
+        eventDb = getDbForEvent(storedCountry);
+      } else {
+        // Fallback: Get the event to determine which regional database to use
+        const event = await EventAPI.get(data.event_id);
+        const eventCountry = event?.location;
+        eventDb = getDbForEvent(eventCountry);
+      }
+      
+      const docRef = await addDoc(collection(eventDb, 'messages'), {
         ...data,
         seen: false, // Messages start as unseen
         created_at: serverTimestamp()
@@ -539,7 +725,23 @@ export const MessageAPI = {
 
   async filter(filters: Partial<Message> = {}): Promise<Message[]> {
     return firebaseRetry(async () => {
-      let q: any = collection(db, 'messages');
+      // Determine which database to use based on event_id
+      let targetDb = db; // default fallback
+      if (filters.event_id) {
+        // Try to get the event country from AsyncStorage first (faster)
+        const storedCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+        
+        if (storedCountry) {
+          targetDb = getDbForEvent(storedCountry);
+        } else {
+          // Fallback: fetch event to determine region
+          const event = await EventAPI.get(filters.event_id);
+          const eventCountry = event?.location;
+          targetDb = getDbForEvent(eventCountry);
+        }
+      }
+      
+      let q: any = collection(targetDb, 'messages');
       
       if (filters.event_id) {
         q = query(q, where('event_id', '==', filters.event_id));
@@ -561,16 +763,18 @@ export const MessageAPI = {
     }, { operation: 'Filter messages' });
   },
 
-  async update(id: string, data: Partial<Message>): Promise<void> {
+  async update(id: string, data: Partial<Message>, eventCountry?: string): Promise<void> {
     return firebaseRetry(async () => {
-      const docRef = doc(db, 'messages', id);
+      const targetDb = getDbForEvent(eventCountry);
+      const docRef = doc(targetDb, 'messages', id);
       await updateDoc(docRef, { ...data, updated_at: serverTimestamp() });
     }, { operation: 'Update message' });
   },
 
-  async delete(id: string): Promise<void> {
+  async delete(id: string, eventCountry?: string): Promise<void> {
     return firebaseRetry(async () => {
-      const docRef = doc(db, 'messages', id);
+      const targetDb = getDbForEvent(eventCountry);
+      const docRef = doc(targetDb, 'messages', id);
       await deleteDoc(docRef);
     }, { operation: 'Delete message' });
   }
@@ -581,7 +785,18 @@ export const MessageAPI = {
 export const EventFeedbackAPI = {
   async create(data: Omit<EventFeedback, 'id' | 'created_at'>): Promise<EventFeedback> {
     return firebaseRetry(async () => {
-      const docRef = await addDoc(collection(db, 'event_feedback'), {
+      // Use stored event country first, then get the event to determine which regional database to use
+      let eventDb;
+      const storedCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+      if (storedCountry) {
+        eventDb = getDbForEvent(storedCountry);
+      } else {
+        const event = await EventAPI.get(data.event_id);
+        const eventCountry = event?.location;
+        eventDb = getDbForEvent(eventCountry);
+      }
+      
+      const docRef = await addDoc(collection(eventDb, 'event_feedback'), {
         ...data,
         created_at: serverTimestamp()
       });
@@ -596,7 +811,20 @@ export const EventFeedbackAPI = {
 
   async filter(filters: Partial<EventFeedback> = {}): Promise<EventFeedback[]> {
     return firebaseRetry(async () => {
-      let q: any = collection(db, 'event_feedback');
+      // Determine which database to use based on event_id
+      let targetDb = db; // default fallback
+      if (filters.event_id) {
+        const storedCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+        if (storedCountry) {
+          targetDb = getDbForEvent(storedCountry);
+        } else {
+          const event = await EventAPI.get(filters.event_id);
+          const eventCountry = event?.location;
+          targetDb = getDbForEvent(eventCountry);
+        }
+      }
+      
+      let q: any = collection(targetDb, 'event_feedback');
       
       if (filters.event_id) {
         q = query(q, where('event_id', '==', filters.event_id));
@@ -618,7 +846,18 @@ export const EventFeedbackAPI = {
 export const KickedUserAPI = {
   async create(data: Omit<KickedUser, 'id' | 'created_at'>): Promise<KickedUser> {
     return firebaseRetry(async () => {
-      const docRef = await addDoc(collection(db, 'kicked_users'), {
+      // Use stored event country first, then get the event to determine which regional database to use
+      let eventDb;
+      const storedCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+      if (storedCountry) {
+        eventDb = getDbForEvent(storedCountry);
+      } else {
+        const event = await EventAPI.get(data.event_id);
+        const eventCountry = event?.location;
+        eventDb = getDbForEvent(eventCountry);
+      }
+      
+      const docRef = await addDoc(collection(eventDb, 'kicked_users'), {
         ...data,
         created_at: serverTimestamp()
       });
@@ -633,7 +872,20 @@ export const KickedUserAPI = {
 
   async filter(filters: Partial<KickedUser> = {}): Promise<KickedUser[]> {
     return firebaseRetry(async () => {
-      let q: any = collection(db, 'kicked_users');
+      // Determine which database to use based on event_id
+      let targetDb = db; // default fallback
+      if (filters.event_id) {
+        const storedCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+        if (storedCountry) {
+          targetDb = getDbForEvent(storedCountry);
+        } else {
+          const event = await EventAPI.get(filters.event_id);
+          const eventCountry = event?.location;
+          targetDb = getDbForEvent(eventCountry);
+        }
+      }
+      
+      let q: any = collection(targetDb, 'kicked_users');
       
       if (filters.event_id) {
         q = query(q, where('event_id', '==', filters.event_id));
@@ -650,9 +902,10 @@ export const KickedUserAPI = {
     }, { operation: 'Filter kicked users' });
   },
 
-  async get(id: string): Promise<KickedUser | null> {
+  async get(id: string, eventCountry?: string): Promise<KickedUser | null> {
     return firebaseRetry(async () => {
-      const docRef = doc(db, 'kicked_users', id);
+      const targetDb = getDbForEvent(eventCountry);
+      const docRef = doc(targetDb, 'kicked_users', id);
       const docSnap = await getDoc(docRef);
       
       // @ts-ignore - React Native Firebase v23 exists is a boolean property, not function
@@ -663,9 +916,10 @@ export const KickedUserAPI = {
     }, { operation: 'Get kicked user' });
   },
 
-  async delete(id: string): Promise<void> {
+  async delete(id: string, eventCountry?: string): Promise<void> {
     return firebaseRetry(async () => {
-      const docRef = doc(db, 'kicked_users', id);
+      const targetDb = getDbForEvent(eventCountry);
+      const docRef = doc(targetDb, 'kicked_users', id);
       await deleteDoc(docRef);
     }, { operation: 'Delete kicked user record' });
   }
@@ -675,7 +929,20 @@ export const KickedUserAPI = {
 export const BlockedMatchAPI = {
   async create(data: Omit<BlockedMatch, 'id' | 'created_at'>): Promise<BlockedMatch> {
     return firebaseRetry(async () => {
-      const docRef = await addDoc(collection(db, 'blocked_matches'), {
+      // Try to get the event country from AsyncStorage first (faster)
+      const storedCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+      
+      let eventDb;
+      if (storedCountry) {
+        eventDb = getDbForEvent(storedCountry);
+      } else {
+        // Fallback: Get the event to determine which regional database to use
+        const event = await EventAPI.get(data.event_id);
+        const eventCountry = event?.location;
+        eventDb = getDbForEvent(eventCountry);
+      }
+      
+      const docRef = await addDoc(collection(eventDb, 'blocked_matches'), {
         ...data,
         created_at: serverTimestamp()
       });
@@ -690,7 +957,23 @@ export const BlockedMatchAPI = {
 
   async filter(filters: Partial<BlockedMatch> = {}): Promise<BlockedMatch[]> {
     return firebaseRetry(async () => {
-      let q: any = collection(db, 'blocked_matches');
+      // Determine which database to use based on event_id
+      let targetDb = db; // default fallback
+      if (filters.event_id) {
+        // Try to get the event country from AsyncStorage first (faster)
+        const storedCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+        
+        if (storedCountry) {
+          targetDb = getDbForEvent(storedCountry);
+        } else {
+          // Fallback: fetch event to determine region
+          const event = await EventAPI.get(filters.event_id);
+          const eventCountry = event?.location;
+          targetDb = getDbForEvent(eventCountry);
+        }
+      }
+      
+      let q: any = collection(targetDb, 'blocked_matches');
       
       if (filters.event_id) {
         q = query(q, where('event_id', '==', filters.event_id));
@@ -710,9 +993,10 @@ export const BlockedMatchAPI = {
     }, { operation: 'Filter blocked matches' });
   },
 
-  async delete(id: string): Promise<void> {
+  async delete(id: string, eventCountry?: string): Promise<void> {
     return firebaseRetry(async () => {
-      const docRef = doc(db, 'blocked_matches', id);
+      const targetDb = getDbForEvent(eventCountry);
+      const docRef = doc(targetDb, 'blocked_matches', id);
       await deleteDoc(docRef);
     }, { operation: 'Unblock match' });
   }
@@ -724,7 +1008,19 @@ export const MutedMatchAPI = {
     return firebaseRetry(async () => {
       try {
         console.log('Creating muted match record:', data);
-        const docRef = await addDoc(collection(db, 'muted_matches'), {
+        
+        // Use stored event country first, then get the event to determine which regional database to use
+        let eventDb;
+        const storedCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+        if (storedCountry) {
+          eventDb = getDbForEvent(storedCountry);
+        } else {
+          const event = await EventAPI.get(data.event_id);
+          const eventCountry = event?.location;
+          eventDb = getDbForEvent(eventCountry);
+        }
+        
+        const docRef = await addDoc(collection(eventDb, 'muted_matches'), {
           ...data,
           created_at: serverTimestamp()
         });
@@ -744,7 +1040,20 @@ export const MutedMatchAPI = {
 
   async filter(filters: Partial<MutedMatch> = {}): Promise<MutedMatch[]> {
     return firebaseRetry(async () => {
-      let q: any = collection(db, 'muted_matches');
+      // Determine which database to use based on event_id
+      let targetDb = db; // default fallback
+      if (filters.event_id) {
+        const storedCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+        if (storedCountry) {
+          targetDb = getDbForEvent(storedCountry);
+        } else {
+          const event = await EventAPI.get(filters.event_id);
+          const eventCountry = event?.location;
+          targetDb = getDbForEvent(eventCountry);
+        }
+      }
+      
+      let q: any = collection(targetDb, 'muted_matches');
       
       if (filters.event_id) {
         q = query(q, where('event_id', '==', filters.event_id));
@@ -764,9 +1073,10 @@ export const MutedMatchAPI = {
     }, { operation: 'Filter muted matches' });
   },
 
-  async delete(id: string): Promise<void> {
+  async delete(id: string, eventCountry?: string): Promise<void> {
     return firebaseRetry(async () => {
-      const docRef = doc(db, 'muted_matches', id);
+      const targetDb = getDbForEvent(eventCountry);
+      const docRef = doc(targetDb, 'muted_matches', id);
       await deleteDoc(docRef);
     }, { operation: 'Unmute match' });
   }
@@ -776,7 +1086,20 @@ export const MutedMatchAPI = {
 export const SkippedProfileAPI = {
   async create(data: Omit<SkippedProfile, 'id' | 'created_at'>): Promise<SkippedProfile> {
     return firebaseRetry(async () => {
-      const docRef = await addDoc(collection(db, 'skipped_profiles'), {
+      // Try to get the event country from AsyncStorage first (faster)
+      const storedCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+      
+      let eventDb;
+      if (storedCountry) {
+        eventDb = getDbForEvent(storedCountry);
+      } else {
+        // Fallback: Get the event to determine which regional database to use
+        const event = await EventAPI.get(data.event_id);
+        const eventCountry = event?.location;
+        eventDb = getDbForEvent(eventCountry);
+      }
+      
+      const docRef = await addDoc(collection(eventDb, 'skipped_profiles'), {
         ...data,
         created_at: serverTimestamp()
       });
@@ -791,7 +1114,23 @@ export const SkippedProfileAPI = {
 
   async filter(filters: Partial<SkippedProfile> = {}): Promise<SkippedProfile[]> {
     return firebaseRetry(async () => {
-      let q: any = collection(db, 'skipped_profiles');
+      // Determine which database to use based on event_id
+      let targetDb = db; // default fallback
+      if (filters.event_id) {
+        // Try to get the event country from AsyncStorage first (faster)
+        const storedCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+        
+        if (storedCountry) {
+          targetDb = getDbForEvent(storedCountry);
+        } else {
+          // Fallback: fetch event to determine region
+          const event = await EventAPI.get(filters.event_id);
+          const eventCountry = event?.location;
+          targetDb = getDbForEvent(eventCountry);
+        }
+      }
+      
+      let q: any = collection(targetDb, 'skipped_profiles');
       
       if (filters.event_id) {
         q = query(q, where('event_id', '==', filters.event_id));
@@ -811,9 +1150,10 @@ export const SkippedProfileAPI = {
     }, { operation: 'Filter skipped profiles' });
   },
 
-  async delete(id: string): Promise<void> {
+  async delete(id: string, eventCountry?: string): Promise<void> {
     return firebaseRetry(async () => {
-      const docRef = doc(db, 'skipped_profiles', id);
+      const targetDb = getDbForEvent(eventCountry);
+      const docRef = doc(targetDb, 'skipped_profiles', id);
       await deleteDoc(docRef);
     }, { operation: 'Unskip profile' });
   }
@@ -824,12 +1164,22 @@ export const ReportAPI = {
   async create(data: Omit<Report, 'id' | 'created_at'>): Promise<Report> {
     return firebaseRetry(async () => {
       // Enhanced validation and logging
-  
       
       // Validate required fields
       if (!data.event_id || !data.reporter_session_id || !data.reported_session_id || !data.reason) {
         // Missing required fields for report creation
         throw new Error('Missing required fields for report creation');
+      }
+      
+      // Use stored event country first, then get the event to determine which regional database to use
+      let eventDb;
+      const storedCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+      if (storedCountry) {
+        eventDb = getDbForEvent(storedCountry);
+      } else {
+        const event = await EventAPI.get(data.event_id);
+        const eventCountry = event?.location;
+        eventDb = getDbForEvent(eventCountry);
       }
       
       // Ensure status is set to pending if not provided
@@ -839,9 +1189,7 @@ export const ReportAPI = {
         created_at: serverTimestamp()
       };
       
-
-      
-      const docRef = await addDoc(collection(db, 'reports'), reportData);
+      const docRef = await addDoc(collection(eventDb, 'reports'), reportData);
       
       
       // Don't read back the document since users don't have read permissions
@@ -882,7 +1230,20 @@ export const ReportAPI = {
         }
       }
       
-      let q: any = collection(db, 'reports');
+      // Determine which database to use based on event_id
+      let targetDb = db; // default fallback
+      if (filters.event_id) {
+        const storedCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+        if (storedCountry) {
+          targetDb = getDbForEvent(storedCountry);
+        } else {
+          const event = await EventAPI.get(filters.event_id);
+          const eventCountry = event?.location;
+          targetDb = getDbForEvent(eventCountry);
+        }
+      }
+      
+      let q: any = collection(targetDb, 'reports');
       
       if (filters.event_id) {
         q = query(q, where('event_id', '==', filters.event_id));
@@ -908,9 +1269,10 @@ export const ReportAPI = {
     }, { operation: 'Filter reports' });
   },
 
-  async get(id: string): Promise<Report | null> {
+  async get(id: string, eventCountry?: string): Promise<Report | null> {
     return firebaseRetry(async () => {
-      const docRef = doc(db, 'reports', id);
+      const targetDb = getDbForEvent(eventCountry);
+      const docRef = doc(targetDb, 'reports', id);
       const docSnap = await getDoc(docRef);
       
       // @ts-ignore - React Native Firebase v23 exists is a boolean property, not function
@@ -921,16 +1283,18 @@ export const ReportAPI = {
     }, { operation: 'Get report' });
   },
 
-  async update(id: string, data: Partial<Report>): Promise<void> {
+  async update(id: string, data: Partial<Report>, eventCountry?: string): Promise<void> {
     return firebaseRetry(async () => {
-      const docRef = doc(db, 'reports', id);
+      const targetDb = getDbForEvent(eventCountry);
+      const docRef = doc(targetDb, 'reports', id);
       await updateDoc(docRef, { ...data, updated_at: serverTimestamp() });
     }, { operation: 'Update report' });
   },
 
-  async delete(id: string): Promise<void> {
+  async delete(id: string, eventCountry?: string): Promise<void> {
     return firebaseRetry(async () => {
-      const docRef = doc(db, 'reports', id);
+      const targetDb = getDbForEvent(eventCountry);
+      const docRef = doc(targetDb, 'reports', id);
       await deleteDoc(docRef);
     }, { operation: 'Delete report' });
   }
@@ -1232,12 +1596,23 @@ export const AdminClientAPI = {
 export const EventAnalyticsAPI = {
   async create(data: Omit<EventAnalytics, 'id' | 'created_at'>): Promise<EventAnalytics> {
     return await firebaseRetry(async () => {
+      // Use stored event country first, then get the event to determine which regional database to use
+      let eventDb;
+      const storedCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+      if (storedCountry) {
+        eventDb = getDbForEvent(storedCountry);
+      } else {
+        const event = await EventAPI.get(data.event_id);
+        const eventCountry = event?.location;
+        eventDb = getDbForEvent(eventCountry);
+      }
+      
       const analyticsData = {
         ...data,
         created_at: serverTimestamp(),
       };
       
-      const docRef = await addDoc(collection(db, 'event_analytics'), analyticsData);
+      const docRef = await addDoc(collection(eventDb, 'event_analytics'), analyticsData);
       
       return { 
         id: docRef.id, 
@@ -1249,7 +1624,20 @@ export const EventAnalyticsAPI = {
 
   async filter(filters: Partial<EventAnalytics> = {}): Promise<EventAnalytics[]> {
     return await firebaseRetry(async () => {
-      const colRef = collection(db, 'event_analytics');
+      // Determine which database to use based on event_id
+      let targetDb = db; // default fallback
+      if (filters.event_id) {
+        const storedCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+        if (storedCountry) {
+          targetDb = getDbForEvent(storedCountry);
+        } else {
+          const event = await EventAPI.get(filters.event_id);
+          const eventCountry = event?.location;
+          targetDb = getDbForEvent(eventCountry);
+        }
+      }
+      
+      const colRef = collection(targetDb, 'event_analytics');
       let constraints = [];
       
       if (filters.event_id) {
@@ -1270,16 +1658,38 @@ export const EventAnalyticsAPI = {
 
   async get(id: string): Promise<EventAnalytics | null> {
     return await firebaseRetry(async () => {
-      const docSnap = await getDoc(doc(db, 'event_analytics', id));
-      if (!docSnap.exists()) return null;
-      return { id: docSnap.id, ...docSnap.data() } as EventAnalytics;
+      // Since we don't have event_id, try all regional databases
+      const databases = getAllDatabases();
+      for (const database of databases) {
+        try {
+          const docSnap = await getDoc(doc(database, 'event_analytics', id));
+          if (docSnap.exists()) {
+            return { id: docSnap.id, ...docSnap.data() } as EventAnalytics;
+          }
+        } catch (error) {
+          // Continue to next database if this one fails
+          console.log(`Failed to check analytics in database, trying next...`);
+        }
+      }
+      return null;
     }, { operation: 'Get event analytics' });
   },
 
   async getByEventId(eventId: string): Promise<EventAnalytics | null> {
     return await firebaseRetry(async () => {
+      // Use stored event country first, then get the event to determine which regional database to use
+      let eventDb;
+      const storedCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+      if (storedCountry) {
+        eventDb = getDbForEvent(storedCountry);
+      } else {
+        const event = await EventAPI.get(eventId);
+        const eventCountry = event?.location;
+        eventDb = getDbForEvent(eventCountry);
+      }
+      
       const q = query(
-        collection(db, 'event_analytics'),
+        collection(eventDb, 'event_analytics'),
         where('event_id', '==', eventId)
       );
       
@@ -1293,14 +1703,39 @@ export const EventAnalyticsAPI = {
 
   async delete(id: string): Promise<void> {
     return await firebaseRetry(async () => {
-      await deleteDoc(doc(db, 'event_analytics', id));
+      // Since we don't have event_id, try all regional databases
+      const databases = getAllDatabases();
+      for (const database of databases) {
+        try {
+          const docRef = doc(database, 'event_analytics', id);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            await deleteDoc(docRef);
+            return; // Found and deleted
+          }
+        } catch (error) {
+          // Continue to next database if this one fails
+          console.log(`Failed to check analytics in database, trying next...`);
+        }
+      }
     }, { operation: 'Delete event analytics' });
   },
 
   async deleteByEventId(eventId: string): Promise<void> {
     return await firebaseRetry(async () => {
+      // Use stored event country first, then get the event to determine which regional database to use
+      let eventDb;
+      const storedCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+      if (storedCountry) {
+        eventDb = getDbForEvent(storedCountry);
+      } else {
+        const event = await EventAPI.get(eventId);
+        const eventCountry = event?.location;
+        eventDb = getDbForEvent(eventCountry);
+      }
+      
       const q = query(
-        collection(db, 'event_analytics'),
+        collection(eventDb, 'event_analytics'),
         where('event_id', '==', eventId)
       );
       

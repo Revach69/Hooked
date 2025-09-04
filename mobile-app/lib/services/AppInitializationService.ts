@@ -203,6 +203,11 @@ class AppInitializationServiceClass {
           const success = await ensurePushSetupFunction({ sessionId });
           console.log('AppInitializationService: Idempotent push setup result:', { success });
           
+          // Critical: Set up token refresh handler for app updates  
+          if (success) {
+            this.setupTokenRefreshHandler(sessionId);
+          }
+          
           // Set up AppState integration for push token refresh
           this.setupAppStatePushTokenRefresh();
         } catch (error) {
@@ -489,6 +494,64 @@ class AppInitializationServiceClass {
         healthCheck: this.diagnostics.healthCheck
       }
     });
+  }
+
+  /**
+   * Set up Expo push token refresh handler
+   * Critical for handling token changes after app updates
+   */
+  private setupTokenRefreshHandler(sessionId: string): void {
+    try {
+      // For Expo apps, we need to use Notifications.addPushTokenListener
+      import('expo-notifications').then(({ addPushTokenListener }) => {
+        console.log('AppInitializationService: Setting up token refresh handler');
+        
+        const subscription = addPushTokenListener(async (tokenData) => {
+          try {
+            const newToken = tokenData.data;
+            console.log('AppInitializationService: Push token refreshed, updating server');
+            
+            Sentry.addBreadcrumb({
+              message: 'Push token refreshed',
+              level: 'info',
+              category: 'push_notification',
+              data: { 
+                sessionId: sessionId.substring(0, 8) + '...',
+                tokenPrefix: newToken.substring(0, 20) + '...'
+              }
+            });
+            
+            // Re-register the new token
+            const { registerPushToken } = await import('../notifications/registerPushToken');
+            const success = await registerPushToken(sessionId);
+            
+            if (success) {
+              console.log('AppInitializationService: Token refresh registration successful');
+            } else {
+              console.warn('AppInitializationService: Token refresh registration failed');
+            }
+            
+          } catch (error) {
+            console.error('AppInitializationService: Error handling token refresh:', error);
+            Sentry.captureException(error, {
+              tags: {
+                operation: 'push_token_refresh',
+                source: 'app_initialization_service'
+              }
+            });
+          }
+        });
+        
+        // Store subscription for cleanup if needed
+        console.log('AppInitializationService: Token refresh handler set up successfully');
+        
+      }).catch(error => {
+        console.warn('AppInitializationService: Failed to set up token refresh handler:', error);
+      });
+      
+    } catch (error) {
+      console.warn('AppInitializationService: Error setting up token refresh handler:', error);
+    }
   }
 }
 

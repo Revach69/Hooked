@@ -130,7 +130,26 @@ export default function Consent() {
         router.replace('/home');
         return;
       }
+      
+      // First try to get the stored event data
+      const storedEventData = await AsyncStorageUtils.getItem<any>('currentEventData');
+      if (storedEventData) {
+        // Convert date strings back to Date objects
+        const eventWithDates = {
+          ...storedEventData,
+          starts_at: storedEventData.starts_at ? new Date(storedEventData.starts_at) : null,
+          expires_at: storedEventData.expires_at ? new Date(storedEventData.expires_at) : null,
+          start_date: storedEventData.start_date ? new Date(storedEventData.start_date) : null,
+          created_at: storedEventData.created_at ? new Date(storedEventData.created_at) : null,
+          updated_at: storedEventData.updated_at ? new Date(storedEventData.updated_at) : null,
+        };
+        setEvent(eventWithDates);
+        return;
+      }
+      
+      // Fallback to fetching from database if no stored data
       const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
+      const eventCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
       
       if (!eventId) {
         Sentry.captureException(new Error('No event ID found in AsyncStorage'));
@@ -139,7 +158,7 @@ export default function Consent() {
       }
       
       try {
-        const foundEvent = await EventAPI.get(eventId);
+        const foundEvent = await EventAPI.get(eventId, eventCountry || undefined);
         
         if (foundEvent) {
           setEvent(foundEvent);

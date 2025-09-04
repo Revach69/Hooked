@@ -113,12 +113,7 @@ export const formatDateInTimezone = (
 ): string => {
   const dateObj = typeof date === 'string' ? new Date(date) : date;
   
-  console.log('🎨 FORMAT DATE DEBUG:', {
-    input: typeof date === 'string' ? date : date.toISOString(),
-    timezone,
-    dateObjISO: dateObj.toISOString(),
-    expectedResult: `UTC time ${dateObj.toISOString()} should display as local time in ${timezone}`
-  });
+  // Debug logging removed for cleaner console
   
   // NOW WITH PROPER TIMEZONE CONVERSION:
   // Convert UTC stored time back to event's local time for display
@@ -134,11 +129,7 @@ export const formatDateInTimezone = (
   
   const result = dateObj.toLocaleDateString('en-US', { ...defaultOptions, ...options });
   
-  console.log('FORMAT DATE RESULT:', { 
-    result,
-    timezone,
-    utcInput: dateObj.toISOString()
-  });
+  // Result logging removed for cleaner console
   
   return result;
 };
@@ -149,11 +140,11 @@ export const formatDateWithTimezone = (
   timezone: string,
   showTimezone: boolean = true
 ): string => {
-  console.log('FORMAT DATE WITH TIMEZONE:', { date, timezone, showTimezone });
+  // Debug logging removed for cleaner console
   
   const formatted = formatDateInTimezone(date, timezone);
   
-  console.log('FORMAT DATE WITH TIMEZONE RESULT:', { formatted });
+  // Result logging removed for cleaner console
   
   if (showTimezone) {
     const timezoneAbbr = getTimezoneAbbreviation(timezone);
@@ -237,22 +228,58 @@ export const getAvailableTimezones = (): Array<{ value: string; label: string }>
 };
 
 // Helper function to safely convert any date/timestamp format to a Date object
-export const toDate = (dateInput: string | Date | { toDate?: () => Date; seconds?: number }): Date | null => {
+export const toDate = (dateInput: string | Date | { toDate?: () => Date; seconds?: number; _seconds?: number; nanoseconds?: number; _nanoseconds?: number }): Date | null => {
   if (!dateInput) return null;
   
   try {
     if (typeof dateInput === 'string') {
-      return new Date(dateInput);
+      // Handle ISO strings from Cloud Functions
+      const date = new Date(dateInput);
+      if (isNaN(date.getTime())) {
+        console.error('Invalid string date:', dateInput);
+        return null;
+      }
+      return date;
     } else if (dateInput instanceof Date) {
+      if (isNaN(dateInput.getTime())) {
+        console.error('Invalid Date object:', dateInput);
+        return null;
+      }
       return dateInput;
     } else if (dateInput.toDate && typeof dateInput.toDate === 'function') {
       // Firestore Timestamp
-      return dateInput.toDate();
-    } else if (dateInput.seconds) {
-      // Firestore Timestamp object with seconds
-      return new Date(dateInput.seconds * 1000);
+      const date = dateInput.toDate();
+      if (isNaN(date.getTime())) {
+        console.error('Invalid Firestore timestamp:', dateInput);
+        return null;
+      }
+      return date;
+    } else if (dateInput.seconds !== undefined || dateInput._seconds !== undefined) {
+      // Firestore Timestamp object with seconds (handle both formats)
+      const seconds = dateInput.seconds || dateInput._seconds;
+      console.log('🔍 Processing timestamp object:', { seconds, nanoseconds: dateInput.nanoseconds || dateInput._nanoseconds });
+      if (typeof seconds !== 'number' || seconds < 0) {
+        console.error('Invalid timestamp seconds:', dateInput);
+        return null;
+      }
+      const date = new Date(seconds * 1000);
+      console.log('🔍 Converted timestamp to date:', date);
+      if (isNaN(date.getTime())) {
+        console.error('Invalid timestamp conversion:', dateInput, date);
+        return null;
+      }
+      return date;
     } else {
-      return new Date(dateInput as string | number | Date);
+      console.error('Unknown date format - detailed:', {
+        dateInput,
+        type: typeof dateInput,
+        keys: Object.keys(dateInput),
+        hasSeconds: 'seconds' in dateInput,
+        hasToDate: 'toDate' in dateInput,
+        secondsValue: dateInput.seconds,
+        secondsType: typeof dateInput.seconds
+      });
+      return null;
     }
   } catch (error) {
     console.error('Error converting to Date:', dateInput, error);

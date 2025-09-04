@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Event } from '@/lib/firebaseApi';
 import { toDate } from '@/lib/timezoneUtils';
+import Image from 'next/image';
 import { 
   Copy, 
   Download, 
@@ -27,7 +28,6 @@ interface EventCardProps {
   onEdit: (event: Event) => void;
   onDelete: (eventId: string) => void;
   onDownloadData: (eventId: string) => void;
-  onDownloadQR: (eventId: string) => void;
   onDownloadQRSign: (eventId: string) => void;
   onReports?: (eventId: string, eventName: string) => void;
   isCollapsible?: boolean;
@@ -65,7 +65,6 @@ export default function EventCard({
   onEdit,
   onDelete,
   onDownloadData,
-  onDownloadQR: _,
   onDownloadQRSign,
   onReports,
   isCollapsible = false,
@@ -216,9 +215,11 @@ export default function EventCard({
                   </div>
                 ) : (
                   <div className="qr-code">
-                    <img 
+                    <Image 
                       src={qrCodeUrl} 
                       alt="QR Code" 
+                      width={192}
+                      height={192}
                       className="w-48 h-48"
                       onLoad={() => setIsLoadingQR(false)}
                     />

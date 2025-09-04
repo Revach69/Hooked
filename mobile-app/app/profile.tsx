@@ -267,13 +267,17 @@ export default function Profile() {
     React.useCallback(() => {
       if (profile?.id) {
         // Refresh profile data to ensure toggle state is current
-        EventProfileAPI.get(profile.id).then((updatedProfile) => {
-          if (updatedProfile) {
-            setProfile(updatedProfile);
+        const refreshProfile = async () => {
+          try {
+            const updatedProfile = await EventProfileAPI.get(profile.id);
+            if (updatedProfile) {
+              setProfile(updatedProfile);
+            }
+          } catch {
+            // Handle error silently
           }
-        }).catch(() => {
-          // Handle error silently
-        });
+        };
+        refreshProfile();
       }
     }, [profile?.id])
   );
@@ -1268,6 +1272,7 @@ export default function Profile() {
       fontSize: 18,
       color: isDark ? '#9ca3af' : '#6b7280',
       marginTop: 10,
+      textAlign: 'center',
     },
     reportButton: {
       flexDirection: 'row',

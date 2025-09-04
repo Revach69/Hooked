@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { EventAPI, EventProfile, Like, Message, EventAnalytics, type Event } from '@/lib/firebaseApi';
 import { AdminClientAPI } from '@/lib/firestore/clients';
 import type { AdminClient } from '@/types/admin';
@@ -15,7 +15,9 @@ import {
   MapPin,
   Calendar,
   Clock,
-  Copy
+  Copy,
+  Filter,
+  ChevronDown
 } from 'lucide-react';
 import * as QRCode from 'qrcode';
 import dynamic from 'next/dynamic';
@@ -81,40 +83,76 @@ function QRCodeGenerator({ joinLink, eventCode }: { joinLink: string; eventCode:
   );
 }
 
+// Regional database configurations for the filter
+const REGIONS = [
+  { id: '(default)', label: 'Israel', database: '(default)', country: 'Israel' },
+  { id: 'au-southeast2', label: 'Australia', database: 'au-southeast2', country: 'Australia' },
+  { id: 'eu-eur3', label: 'Europe', database: 'eu-eur3', country: 'United Kingdom' },
+  { id: 'us-nam5', label: 'USA + Canada', database: 'us-nam5', country: 'United States' },
+  { id: 'asia-ne1', label: 'Asia', database: 'asia-ne1', country: 'Japan' },
+  { id: 'southamerica-east1', label: 'South America', database: 'southamerica-east1', country: 'Brazil' }
+];
+
 export default function EventsPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [events, setEvents] = useState<Event[]>([]);
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
+  const [selectedRegions, setSelectedRegions] = useState<Set<string>>(new Set(REGIONS.map(r => r.id)));
+  const [showRegionFilter, setShowRegionFilter] = useState(false);
   
   // Modal states
   const [showEventForm, setShowEventForm] = useState(false);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [showAnalytics, setShowAnalytics] = useState(false);
-  const [analyticsEvent, setAnalyticsEvent] = useState<{ id: string; name: string } | null>(null);
+  const [analyticsEvent, setAnalyticsEvent] = useState<{ id: string; name: string; country?: string } | null>(null);
   const [showReports, setShowReports] = useState(false);
-  const [reportsEvent, setReportsEvent] = useState<{ id: string; name: string } | null>(null);
+  const [reportsEvent, setReportsEvent] = useState<{ id: string; name: string; country?: string } | null>(null);
   const [showLinkEvent, setShowLinkEvent] = useState(false);
   const [linkingEvent, setLinkingEvent] = useState<Event | null>(null);
   const [clients, setClients] = useState<AdminClient[]>([]);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Load events on mount
-  useEffect(() => {
-    loadEvents();
-    loadClients();
-  }, []);
-
-  const loadEvents = async () => {
+  const loadEvents = useCallback(async () => {
     try {
       setIsLoading(true);
-      const allEvents = await EventAPI.filter({});
-      setEvents(allEvents);
-    } catch {
-      // Error loading events
+      console.log('🚀 Loading events using HTTP endpoint for proper CORS support');
+      
+      // Use HTTP endpoint to fetch events from regional databases (bypasses browser SDK limitations)
+      const selectedRegionsArray = Array.from(selectedRegions);
+      console.log('📡 Calling getEventsFromAllRegions with regions:', selectedRegionsArray);
+      
+      const response = await fetch('https://us-central1-hooked-69.cloudfunctions.net/getEventsFromAllRegions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ selectedRegions: selectedRegionsArray }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const eventsData = await response.json() as { events: (Event & { _region: string })[] };
+      
+      console.log(`✅ Received ${eventsData.events.length} events from HTTP endpoint`);
+      setEvents(eventsData.events);
+      
+    } catch (error) {
+      console.error('❌ Failed to load events via Cloud Function:', error);
+      console.log('🔄 Falling back to direct database access');
+      
+      // Fallback to direct database access (may not work with named databases)
+      try {
+        const allEvents = await EventAPI.filter({});
+        setEvents(allEvents.map(event => ({ ...event, _region: 'Israel' })));
+      } catch (fallbackError) {
+        console.error('❌ Fallback also failed:', fallbackError);
+      }
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [selectedRegions]);
 
   const loadClients = async () => {
     try {
@@ -124,6 +162,31 @@ export default function EventsPage() {
       console.error('Failed to load clients:', error);
     }
   };
+
+  // Load events on mount and when region selection changes
+  useEffect(() => {
+    loadEvents();
+    loadClients();
+  }, [loadEvents]);
+  
+  useEffect(() => {
+    loadEvents();
+  }, [loadEvents, selectedRegions]);
+
+  // Close region filter when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (!target.closest('.region-filter-container')) {
+        setShowRegionFilter(false);
+      }
+    };
+
+    if (showRegionFilter) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [showRegionFilter]);
 
   const handleCreateEvent = () => {
     setEditingEvent(null);
@@ -193,12 +256,12 @@ export default function EventsPage() {
         if (isExpiredEvent) {
           // For expired events, delete both the event and its analytics data
           await Promise.all([
-            EventAPI.delete(eventId),
+            EventAPI.deleteFromRegion(eventId, event.country, (event as Event & { _databaseId?: string })._databaseId),
             event.analytics_id ? EventAnalytics.delete(event.analytics_id) : Promise.resolve()
           ]);
         } else {
           // For active/upcoming events, just delete the event (will also trigger cleanup of user data)
-          await EventAPI.delete(eventId);
+          await EventAPI.deleteFromRegion(eventId, event.country, (event as Event & { _databaseId?: string })._databaseId);
         }
         
         await loadEvents();
@@ -212,13 +275,14 @@ export default function EventsPage() {
   const handleAnalytics = (eventId: string) => {
     const event = events.find(e => e.id === eventId);
     if (event) {
-      setAnalyticsEvent({ id: eventId, name: event.name });
+      setAnalyticsEvent({ id: eventId, name: event.name, country: event.country });
       setShowAnalytics(true);
     }
   };
 
   const handleReports = (eventId: string, eventName: string) => {
-    setReportsEvent({ id: eventId, name: eventName });
+    const event = events.find(e => e.id === eventId);
+    setReportsEvent({ id: eventId, name: eventName, country: event?.country });
     setShowReports(true);
   };
 
@@ -236,15 +300,33 @@ export default function EventsPage() {
     }
   };
 
+  const handleRegionToggle = (regionId: string) => {
+    const newSelectedRegions = new Set(selectedRegions);
+    if (newSelectedRegions.has(regionId)) {
+      newSelectedRegions.delete(regionId);
+    } else {
+      newSelectedRegions.add(regionId);
+    }
+    setSelectedRegions(newSelectedRegions);
+  };
+
+  const handleSelectAllRegions = () => {
+    setSelectedRegions(new Set(REGIONS.map(r => r.id)));
+  };
+
+  const handleDeselectAllRegions = () => {
+    setSelectedRegions(new Set());
+  };
+
   const handleDownloadData = async (eventId: string) => {
     try {
       const event = events.find(e => e.id === eventId);
       if (!event) return;
 
-      // Get profiles, likes, and messages for this event
-      const profiles = await EventProfile.filter({ event_id: eventId });
-      const likes = await Like.filter({ event_id: eventId });
-      const messages = await Message.filter({ event_id: eventId });
+      // Get profiles, likes, and messages for this event from the correct regional database
+      const profiles = await EventProfile.filter({ event_id: eventId }, event.country);
+      const likes = await Like.filter({ event_id: eventId }, event.country);
+      const messages = await Message.filter({ event_id: eventId }, event.country);
 
       // Convert to CSV
       const profilesCsv = convertToCSV(profiles as unknown as Record<string, unknown>[]);
@@ -364,18 +446,20 @@ export default function EventsPage() {
 
   const formatDate = (dateInput: string | Date | { toDate?: () => Date; seconds?: number }, timezone?: string) => {
     const date = toDate(dateInput);
-    if (!date) return 'Invalid Date';
+    if (!date || isNaN(date.getTime())) {
+      console.error('Invalid date encountered:', { dateInput, date });
+      return 'Invalid Date';
+    }
     
-    console.log('FORMAT DATE CALLED:', {
-      dateInput: typeof dateInput === 'object' && 'seconds' in dateInput ? `Timestamp(${dateInput.seconds})` : dateInput,
-      dateISO: date.toISOString(),
-      timezone
-    });
-    
-    return formatDateWithTimezone(date.toISOString(), timezone || 'UTC');
+    try {
+      return formatDateWithTimezone(date.toISOString(), timezone || 'UTC');
+    } catch (error) {
+      console.error('Error formatting date:', { dateInput, date, error });
+      return 'Invalid Date';
+    }
   };
 
-  const renderEventCard = (event: Event) => {
+  const renderEventCard = (event: Event & { _region?: string }) => {
     const status = getEventStatus(event);
     const isExpanded = expandedEvents.has(event.id);
 
@@ -394,6 +478,11 @@ export default function EventsPage() {
               <span className={`${status.bgColor} ${status.color} px-3 py-1 rounded-full text-sm font-medium`}>
                 {status.status}
               </span>
+              {event._region && (
+                <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm font-medium">
+                  {event._region}
+                </span>
+              )}
             </div>
             
             <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400">
@@ -646,12 +735,65 @@ export default function EventsPage() {
     <div className="max-w-6xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Events Dashboard
-          </h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400">Create and manage Hooked events</p>
+        <div className="flex items-center space-x-6">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+              Events Dashboard
+            </h1>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Create and manage Hooked events</p>
+          </div>
+          
+          {/* Region Filter */}
+          <div className="relative region-filter-container">
+            <button
+              onClick={() => setShowRegionFilter(!showRegionFilter)}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              <Filter className="h-4 w-4 mr-2" />
+              Regions ({selectedRegions.size})
+              <ChevronDown className="h-4 w-4 ml-2" />
+            </button>
+            
+            {showRegionFilter && (
+              <div className="absolute top-full left-0 mt-2 w-64 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg z-50">
+                <div className="p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-medium text-gray-900 dark:text-white">Filter by Region</span>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={handleSelectAllRegions}
+                        className="text-xs text-blue-600 hover:text-blue-700"
+                      >
+                        All
+                      </button>
+                      <button
+                        onClick={handleDeselectAllRegions}
+                        className="text-xs text-gray-600 hover:text-gray-700"
+                      >
+                        None
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    {REGIONS.map(region => (
+                      <label key={region.id} className="flex items-center space-x-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedRegions.has(region.id)}
+                          onChange={() => handleRegionToggle(region.id)}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="text-sm text-gray-700 dark:text-gray-300">{region.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
+        
         <button
           onClick={handleCreateEvent}
           className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -719,6 +861,7 @@ export default function EventsPage() {
         <AnalyticsModal
           eventId={analyticsEvent.id}
           eventName={analyticsEvent.name}
+          eventCountry={analyticsEvent.country}
           isOpen={showAnalytics}
           onClose={() => {
             setShowAnalytics(false);
@@ -731,6 +874,8 @@ export default function EventsPage() {
         <ReportsModal
           eventId={reportsEvent.id}
           eventName={reportsEvent.name}
+          eventCountry={reportsEvent.country}
+          eventDatabaseId={(reportsEvent as Event & { _databaseId?: string })._databaseId}
           isOpen={showReports}
           onClose={() => {
             setShowReports(false);

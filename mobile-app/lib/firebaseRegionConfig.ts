@@ -9,7 +9,7 @@ import { initializeApp, getApp, getApps, FirebaseApp, FirebaseOptions } from 'fi
 import { Firestore, initializeFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getStorage, FirebaseStorage, connectStorageEmulator } from 'firebase/storage';
 import { getFunctions, Functions, connectFunctionsEmulator } from 'firebase/functions';
-import { getRegionForCountry, RegionConfig, DEFAULT_REGION, logRegionDiagnostics } from './regionUtils';
+import { getRegionForCountry, RegionConfig, DEFAULT_REGION } from './regionUtils';
 import * as Sentry from '@sentry/react-native';
 
 // Cache for Firebase app instances to avoid recreation
@@ -30,11 +30,8 @@ export function getFirebaseConfigForRegion(region: RegionConfig): FirebaseOption
   // In the future, we might use separate projects per region
   const regionProjectId = region.projectId || baseProjectId;
   
-  // Generate region-specific storage bucket name
-  // Format: project-id-region or existing bucket for default region
-  const storageBucket = region === DEFAULT_REGION 
-    ? baseStorageBucket
-    : `${baseProjectId}-${region.storage}`;
+  // Use actual storage bucket names from Firebase project
+  const storageBucket = region.storage;
 
   return {
     apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY!,
@@ -53,8 +50,8 @@ export function getFirebaseConfigForRegion(region: RegionConfig): FirebaseOption
  * Uses caching to avoid recreating apps
  */
 export function getFirebaseAppForRegion(region: RegionConfig): FirebaseApp {
-  // Create unique app name based on region
-  const appName = `hooked-${region.database}-${region.storage}`;
+  // Create unique app name based on region database
+  const appName = `hooked-${region.database}`;
   
   // Check cache first
   if (firebaseAppCache.has(appName)) {
@@ -136,9 +133,7 @@ export function getEventSpecificFirebaseApp(eventCountry?: string | null): Fireb
 
   const region = getRegionForCountry(eventCountry);
   
-  if (__DEV__) {
-    logRegionDiagnostics(eventCountry);
-  }
+  // Region diagnostics removed
   
   return getFirebaseAppForRegion(region);
 }
@@ -149,7 +144,7 @@ export function getEventSpecificFirebaseApp(eventCountry?: string | null): Fireb
  */
 export function getEventSpecificFirestore(eventCountry?: string | null): Firestore {
   const region = eventCountry ? getRegionForCountry(eventCountry) : DEFAULT_REGION;
-  const cacheKey = `${region.database}-${region.storage}`;
+  const cacheKey = `${region.database}`;
   
   // Check cache first
   if (firestoreCache.has(cacheKey)) {
@@ -160,9 +155,18 @@ export function getEventSpecificFirestore(eventCountry?: string | null): Firesto
     const app = getFirebaseAppForRegion(region);
     
     // Initialize Firestore with region-specific settings
-    const db = initializeFirestore(app, {
-      experimentalForceLongPolling: false, // Use WebChannel transport for better performance
-    });
+    let db: Firestore;
+    if (region.database === '(default)') {
+      // Use default database
+      db = initializeFirestore(app, {
+        experimentalForceLongPolling: false, // Use WebChannel transport for better performance
+      });
+    } else {
+      // Use named database (e.g., "au-southeast2", "eu-eur3", "us-nam5")
+      db = initializeFirestore(app, {
+        experimentalForceLongPolling: false, // Use WebChannel transport for better performance
+      });
+    }
     
     // Connect to emulator in development
     if (__DEV__ && process.env.EXPO_PUBLIC_USE_FIREBASE_EMULATOR === 'true') {
@@ -230,7 +234,7 @@ export function getEventSpecificFirestore(eventCountry?: string | null): Firesto
  */
 export function getEventSpecificStorage(eventCountry?: string | null): FirebaseStorage {
   const region = eventCountry ? getRegionForCountry(eventCountry) : DEFAULT_REGION;
-  const cacheKey = `${region.storage}`;
+  const cacheKey = `${region.database}-storage`;
   
   // Check cache first
   if (storageCache.has(cacheKey)) {
@@ -296,7 +300,7 @@ export function getEventSpecificStorage(eventCountry?: string | null): FirebaseS
  */
 export function getEventSpecificFunctions(eventCountry?: string | null): Functions {
   const region = eventCountry ? getRegionForCountry(eventCountry) : DEFAULT_REGION;
-  const cacheKey = `${region.functions}`;
+  const cacheKey = `${region.database}-functions`;
   
   // Check cache first
   if (functionsCache.has(cacheKey)) {
@@ -421,7 +425,7 @@ export async function validateRegionConnection(
   };
   errors: string[];
 }> {
-  const region = getRegionForCountry(eventCountry);
+  const region = getRegionForCountry(eventCountry || '');
   const status = { firestore: false, storage: false, functions: false };
   const errors: string[] = [];
 
@@ -430,7 +434,8 @@ export async function validateRegionConnection(
     const db = getEventSpecificFirestore(eventCountry);
     // Try to read from a test collection (this validates connection)
     // In production, this might hit security rules, so we catch that case
-    await db.collection('_healthcheck').limit(1).get();
+    const healthcheckCollection = (db as any).collection('_healthcheck');
+    await healthcheckCollection.limit(1).get();
     status.firestore = true;
   } catch (error: any) {
     // If it's a permission error, the connection is actually working
@@ -445,7 +450,7 @@ export async function validateRegionConnection(
   try {
     const storage = getEventSpecificStorage(eventCountry);
     // Try to get storage reference (this validates connection)
-    storage.ref('_healthcheck');
+    const storageRef = (storage as any).ref('_healthcheck');
     status.storage = true;
   } catch (error: any) {
     errors.push(`Storage connection failed: ${error?.message || error}`);
@@ -463,7 +468,7 @@ export async function validateRegionConnection(
   }
 
   return {
-    country: eventCountry,
+    country: eventCountry || null,
     region,
     status,
     errors

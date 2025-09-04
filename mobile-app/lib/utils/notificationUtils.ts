@@ -1,8 +1,9 @@
 import * as Notifications from 'expo-notifications';
 import * as Sentry from '@sentry/react-native';
 import { httpsCallable } from 'firebase/functions';
-import { functions } from '../firebaseConfig';
+import { functions, getFunctionsForEvent } from '../firebaseConfig';
 import { getInstallationId } from '../session/sessionId';
+import { AsyncStorageUtils } from '../asyncStorageUtils';
 
 export interface NotificationPermissionStatus {
   granted: boolean;
@@ -53,38 +54,25 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
 }
 
 /**
+ * @deprecated App state tracking is no longer used - client handles notification display
  * Update app state on server (foreground/background)
  */
-export async function updateAppState(isForeground: boolean, sessionId?: string): Promise<void> {
-  try {
-    if (!sessionId) {
-      console.warn('updateAppState: No sessionId provided, skipping');
-      return;
-    }
-
-    const updateAppStateCallable = httpsCallable(functions, 'updateAppState');
-    await updateAppStateCallable({ isForeground, sessionId });
-  } catch (error) {
-    Sentry.captureException(error);
-  }
+export async function updateAppState(isForeground: boolean, sessionId?: string, eventId?: string): Promise<void> {
+  // DEPRECATED: Server no longer tracks app state
+  // Notifications are always sent, client decides whether to display
+  console.warn('updateAppState is deprecated - client handles notification display');
+  return Promise.resolve();
 }
 
 /**
+ * @deprecated App state tracking is no longer used - client handles notification display
  * Set app state using the new session-based callable (preferred)
  */
-export async function setAppState(isForeground: boolean, sessionId: string): Promise<void> {
-  try {
-    const setAppStateCallable = httpsCallable(functions, 'setAppState');
-    const installationId = await getInstallationId();
-    
-    await setAppStateCallable({ 
-      sessionId, 
-      isForeground, 
-      installationId 
-    });
-  } catch (error) {
-    Sentry.captureException(error);
-  }
+export async function setAppState(isForeground: boolean, sessionId: string, eventId?: string): Promise<void> {
+  // DEPRECATED: Server no longer tracks app state
+  // Notifications are always sent, client decides whether to display
+  console.warn('setAppState is deprecated - client handles notification display');
+  return Promise.resolve();
 }
 
 /**

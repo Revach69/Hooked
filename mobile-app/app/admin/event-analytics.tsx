@@ -229,6 +229,7 @@ export default function EventAnalytics() {
       marginTop: 16,
       fontSize: 16,
       color: isDark ? '#9ca3af' : '#6b7280',
+      textAlign: 'center',
     },
     header: {
       flexDirection: 'row',

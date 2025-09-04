@@ -1,9 +1,10 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
-import { app } from '../firebaseConfig';
+import { app, getFunctionsForEvent } from '../firebaseConfig';
 import * as Sentry from '@sentry/react-native';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getInstallationId } from '../session/sessionId';
+import { AsyncStorageUtils } from '../asyncStorageUtils';
 
 export async function registerPushToken(sessionId: string): Promise<boolean> {
   try {
@@ -16,27 +17,71 @@ export async function registerPushToken(sessionId: string): Promise<boolean> {
       return false;
     }
 
-    // Check permissions first
+    // Enhanced permission checking with platform-specific edge cases
     const perms = await Notifications.getPermissionsAsync();
-    const granted = perms.status === 'granted';
+    console.log('registerPushToken: Current permissions:', {
+      status: perms.status,
+      ios: perms.ios,
+      android: perms.android
+    });
+    
+    let granted = perms.status === 'granted';
+    
+    // iOS specific: Also accept 'provisional' authorization
+    if (Platform.OS === 'ios' && perms.ios) {
+      granted = granted || perms.ios.status === Notifications.IosAuthorizationStatus.PROVISIONAL;
+    }
     
     if (!granted) {
       Sentry.addBreadcrumb({
         message: 'Push notification permissions not granted, requesting...',
         level: 'info',
-        category: 'push_notification'
+        category: 'push_notification',
+        data: { 
+          currentStatus: perms.status,
+          platform: Platform.OS
+        }
       });
       
       // Try to request permissions
-      const requestResult = await Notifications.requestPermissionsAsync();
-      const newGranted = requestResult.status === 'granted';
+      const requestResult = await Notifications.requestPermissionsAsync({
+        ios: {
+          allowAlert: true,
+          allowBadge: true,
+          allowSound: true,
+          allowDisplayInCarPlay: false,
+          allowCriticalAlerts: false,
+          provideAppNotificationSettings: false,
+          allowProvisional: true, // Allow provisional notifications on iOS
+          // allowAnnouncements: false, // Not available in current Expo SDK
+        },
+      });
+      
+      console.log('registerPushToken: Permission request result:', requestResult);
+      
+      let newGranted = requestResult.status === 'granted';
+      
+      // iOS: Also accept provisional
+      if (Platform.OS === 'ios' && requestResult.ios) {
+        newGranted = newGranted || requestResult.ios.status === Notifications.IosAuthorizationStatus.PROVISIONAL;
+      }
       
       if (!newGranted) {
+        const errorMessage = Platform.OS === 'ios' 
+          ? 'iOS notification permissions denied - user will not receive any push notifications'
+          : 'Android notification permissions denied - user will not receive any push notifications';
+          
+        console.warn('registerPushToken:', errorMessage);
+        
         Sentry.addBreadcrumb({
-          message: 'Push notification permissions denied by user',
+          message: 'Push notification permissions permanently denied',
           level: 'warning',
           category: 'push_notification',
-          data: { requestResult }
+          data: { 
+            requestResult,
+            platform: Platform.OS,
+            canAskAgain: perms.canAskAgain
+          }
         });
         return false;
       }
@@ -44,7 +89,12 @@ export async function registerPushToken(sessionId: string): Promise<boolean> {
       Sentry.addBreadcrumb({
         message: 'Push notification permissions granted',
         level: 'info',
-        category: 'push_notification'
+        category: 'push_notification',
+        data: {
+          status: requestResult.status,
+          platform: Platform.OS,
+          provisional: Platform.OS === 'ios' && requestResult.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL
+        }
       });
     }
 
@@ -83,7 +133,18 @@ export async function registerPushToken(sessionId: string): Promise<boolean> {
       // Only App Check verification is required for security
       console.log('Calling savePushToken with App Check verification (no user auth required)');
       
-      const functions = getFunctions(app, 'us-central1');
+      // Get current event country for regional function selection
+      let eventCountry: string | null = null;
+      try {
+        const event = await AsyncStorageUtils.getItem<any>('currentEvent');
+        eventCountry = event?.location || null;
+        console.log('Push token registration: Using event country for regional function:', eventCountry);
+      } catch (error) {
+        console.warn('Failed to get event country, using default region for push token registration:', error);
+      }
+      
+      // Use regional Functions instance or fallback to us-central1
+      const functions = eventCountry ? getFunctionsForEvent(eventCountry) : getFunctions(app, 'us-central1');
       const savePushToken = httpsCallable(functions, 'savePushToken');
       
       // Get installation ID
@@ -96,11 +157,26 @@ export async function registerPushToken(sessionId: string): Promise<boolean> {
         installationId: installationId.substring(0, 8) + '...'
       });
       
+      // Get current event ID for regional database selection (optional)
+      const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
+      
+      if (!eventId) {
+        console.log('Push token registration: No event ID, will use default database');
+        Sentry.addBreadcrumb({
+          message: 'Push token registration: No event ID, using default database',
+          level: 'info',
+          category: 'push_notification'
+        });
+      } else {
+        console.log('Push token registration: Using event ID for regional storage:', eventId);
+      }
+      
       const result = await savePushToken({
         token: expoToken.data,
         platform,
         sessionId,
-        installationId
+        installationId,
+        eventId // Include event ID for regional database selection
       });
       
       console.log('savePushToken result:', result);

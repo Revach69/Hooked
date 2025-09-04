@@ -14,20 +14,19 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID!
 };
 
-// Initialize Firebase app only on client side
-let app: ReturnType<typeof initializeApp> | null = null;
-let auth: ReturnType<typeof getAuth> | null = null;
-let db: ReturnType<typeof getFirestore> | null = null;
-let storage: ReturnType<typeof getStorage> | null = null;
-
-if (typeof window !== 'undefined') {
+// Initialize Firebase app only on client side with proper error handling
+const initializeFirebaseApp = () => {
+  if (typeof window === 'undefined') {
+    return { app: null, auth: null, db: null, storage: null };
+  }
+  
   try {
-    app = initializeApp(firebaseConfig);
+    const app = initializeApp(firebaseConfig);
     console.log('✅ Firebase app initialized successfully');
     
-    auth = getAuth(app);
-    db = getFirestore(app);
-    storage = getStorage(app);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const storage = getStorage(app);
     
     console.log('✅ Firebase services initialized:', {
       auth: !!auth,
@@ -35,22 +34,33 @@ if (typeof window !== 'undefined') {
       storage: !!storage,
       projectId: firebaseConfig.projectId
     });
+    
+    return { app, auth, db, storage };
   } catch (error: unknown) {
     console.error('❌ Failed to initialize Firebase app:', error);
     // Create a fallback app with a different name if initialization fails
     try {
-      app = initializeApp(firebaseConfig, 'fallback-app');
+      const app = initializeApp(firebaseConfig, 'fallback-app');
       console.log('✅ Firebase app initialized with fallback name');
       
-      auth = getAuth(app);
-      db = getFirestore(app);
-      storage = getStorage(app);
+      const auth = getAuth(app);
+      const db = getFirestore(app);
+      const storage = getStorage(app);
+      
+      return { app, auth, db, storage };
     } catch (fallbackError: unknown) {
       console.error('❌ Failed to initialize Firebase app with fallback:', fallbackError);
-      throw new Error('Firebase initialization failed completely');
+      return { app: null, auth: null, db: null, storage: null };
     }
   }
-}
+};
+
+// Initialize Firebase services
+const firebase = initializeFirebaseApp();
+const app = firebase.app;
+const auth = firebase.auth;
+const db = firebase.db;
+const storage = firebase.storage;
 
 export { auth, db, storage };
 export default app;
@@ -58,21 +68,30 @@ export default app;
 // Helper functions to ensure Firebase is initialized
 export const getAuthInstance = () => {
   if (!auth) {
-    throw new Error('Firebase Auth not initialized');
+    if (typeof window === 'undefined') {
+      throw new Error('Firebase Auth cannot be initialized on server side');
+    }
+    throw new Error('Firebase Auth not initialized - check console for initialization errors');
   }
   return auth;
 };
 
 export const getDbInstance = () => {
   if (!db) {
-    throw new Error('Firebase Firestore not initialized');
+    if (typeof window === 'undefined') {
+      throw new Error('Firebase Firestore cannot be initialized on server side');
+    }
+    throw new Error('Firebase Firestore not initialized - check console for initialization errors');
   }
   return db;
 };
 
 export const getStorageInstance = () => {
   if (!storage) {
-    throw new Error('Firebase Storage not initialized');
+    if (typeof window === 'undefined') {
+      throw new Error('Firebase Storage cannot be initialized on server side');
+    }
+    throw new Error('Firebase Storage not initialized - check console for initialization errors');
   }
   return storage;
 };

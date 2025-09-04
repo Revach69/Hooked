@@ -1,7 +1,7 @@
 {
   "indexes": [
     {
-      "collectionGroup": "messages",
+      "collectionGroup": "event_profiles",
       "queryScope": "COLLECTION",
       "fields": [
         {
@@ -9,142 +9,11 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "created_at",
+          "fieldPath": "is_visible",
           "order": "ASCENDING"
         }
-      ]
-    },
-    {
-      "collectionGroup": "messages",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "event_id",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "from_profile_id",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "created_at",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "messages",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "event_id",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "to_profile_id",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "created_at",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "messages",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "event_id",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "to_profile_id",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "created_at",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "messages",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "event_id",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "from_profile_id",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "to_profile_id",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "created_at",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "likes",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "event_id",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "liker_session_id",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "likes",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "event_id",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "liked_session_id",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "likes",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "event_id",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "from_profile_id",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "likes",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "event_id",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "to_profile_id",
-          "order": "ASCENDING"
-        }
-      ]
+      ],
+      "density": "SPARSE_ALL"
     },
     {
       "collectionGroup": "event_profiles",
@@ -158,10 +27,11 @@
           "fieldPath": "session_id",
           "order": "ASCENDING"
         }
-      ]
+      ],
+      "density": "SPARSE_ALL"
     },
     {
-      "collectionGroup": "event_profiles",
+      "collectionGroup": "likes",
       "queryScope": "COLLECTION",
       "fields": [
         {
@@ -169,10 +39,34 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "is_visible",
+          "fieldPath": "from_profile_id",
           "order": "ASCENDING"
         }
-      ]
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "likes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "event_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "is_mutual",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "liked_session_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_at",
+          "order": "DESCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
     },
     {
       "collectionGroup": "likes",
@@ -194,7 +88,8 @@
           "fieldPath": "created_at",
           "order": "DESCENDING"
         }
-      ]
+      ],
+      "density": "SPARSE_ALL"
     },
     {
       "collectionGroup": "likes",
@@ -205,18 +100,11 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "is_mutual",
-          "order": "ASCENDING"
-        },
-        {
           "fieldPath": "liked_session_id",
           "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "created_at",
-          "order": "DESCENDING"
         }
-      ]
+      ],
+      "density": "SPARSE_ALL"
     },
     {
       "collectionGroup": "likes",
@@ -227,32 +115,121 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "is_mutual",
+          "fieldPath": "liker_session_id",
+          "order": "ASCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "likes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "event_id",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "liked_session_id",
+          "fieldPath": "to_profile_id",
+          "order": "ASCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "messages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "event_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_at",
+          "order": "ASCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "messages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "event_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "from_profile_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_at",
+          "order": "ASCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "messages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "event_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "from_profile_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "to_profile_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_at",
+          "order": "ASCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "messages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "event_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "to_profile_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_at",
+          "order": "ASCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "messages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "event_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "to_profile_id",
           "order": "ASCENDING"
         },
         {
           "fieldPath": "created_at",
           "order": "DESCENDING"
         }
-      ]
-    },
-    {
-      "collectionGroup": "notification_jobs",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "ASCENDING"
-        }
-      ]
+      ],
+      "density": "SPARSE_ALL"
     },
     {
       "collectionGroup": "notification_jobs",
@@ -270,107 +247,23 @@
           "fieldPath": "updatedAt",
           "order": "ASCENDING"
         }
-      ]
-    },
-    {
-      "collectionGroup": "events",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "expires_at",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "expired",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "events",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "expired",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "expires_at",
-          "order": "ASCENDING"
-        }
-      ]
+      ],
+      "density": "SPARSE_ALL"
     },
     {
       "collectionGroup": "notification_jobs",
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "aggregationKey",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "subject_session_id",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "event_id",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "type",
+          "fieldPath": "status",
           "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
           "order": "ASCENDING"
         }
-      ]
-    },
-    {
-      "collectionGroup": "push_tokens",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "sessionId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "updatedAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "push_tokens",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "sessionId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "platform",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "muted_matches",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "event_id",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "muter_session_id",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "muted_session_id",
-          "order": "ASCENDING"
-        }
-      ]
+      ],
+      "density": "SPARSE_ALL"
     }
   ],
   "fieldOverrides": []

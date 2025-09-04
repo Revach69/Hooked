@@ -1,15 +1,7 @@
 import { db, auth } from './firebaseConfig';
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
-import {
-  collection,
-  doc,
-  getDocs,
-  getDoc,
-  query,
-  orderBy,
-  addDoc,
-} from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { signInAnonymously } from 'firebase/auth';
 
 // Utility function to convert Firestore Timestamps to Date objects
@@ -69,7 +61,35 @@ export const EventAPI = {
         console.warn('Firebase not initialized');
         return [];
       }
-      
+
+      // Use getEventsFromAllRegions cloud function for multi-region support
+      try {
+        const functions = getFunctions();
+        const getEventsFromAllRegions = httpsCallable(functions, 'getEventsFromAllRegions');
+        
+        const result = await getEventsFromAllRegions({});
+        const responseData = result.data as { 
+          success: boolean; 
+          events?: FirestoreEvent[]; 
+          error?: string 
+        };
+        
+        if (responseData.success && responseData.events) {
+          return responseData.events.map(event => ({
+            id: event.id,
+            ...event,
+            starts_at: event.starts_at?.toDate ? event.starts_at.toDate() : new Date(event.starts_at),
+            start_date: event.start_date?.toDate ? event.start_date.toDate() : new Date(event.start_date || event.starts_at),
+            expires_at: event.expires_at?.toDate ? event.expires_at.toDate() : new Date(event.expires_at),
+            created_at: event.created_at?.toDate ? event.created_at.toDate().toISOString() : new Date(event.created_at).toISOString(),
+            updated_at: event.updated_at?.toDate ? event.updated_at.toDate().toISOString() : new Date(event.updated_at).toISOString()
+          })) as FirestoreEvent[];
+        }
+      } catch (cloudError) {
+        console.warn('Failed to fetch events from cloud function, falling back to direct query:', cloudError);
+      }
+
+      // Fallback to direct query for backward compatibility
       const q = query(collection(db, 'events'), orderBy('starts_at', 'desc'));
       const snapshot = await getDocs(q);
       return snapshot.docs.map(doc => ({ 
@@ -88,7 +108,38 @@ export const EventAPI = {
         console.warn('Firebase not initialized');
         return null;
       }
-      
+
+      // Use cloud function to search across all regions for the event
+      try {
+        const functions = getFunctions();
+        const getEventsFromAllRegions = httpsCallable(functions, 'getEventsFromAllRegions');
+        
+        const result = await getEventsFromAllRegions({ eventId: id });
+        const responseData = result.data as { 
+          success: boolean; 
+          events?: FirestoreEvent[]; 
+          error?: string 
+        };
+        
+        if (responseData.success && responseData.events && responseData.events.length > 0) {
+          const event = responseData.events.find(e => e.id === id);
+          if (event) {
+            return {
+              id: event.id,
+              ...event,
+              starts_at: event.starts_at?.toDate ? event.starts_at.toDate() : new Date(event.starts_at),
+              start_date: event.start_date?.toDate ? event.start_date.toDate() : new Date(event.start_date || event.starts_at),
+              expires_at: event.expires_at?.toDate ? event.expires_at.toDate() : new Date(event.expires_at),
+              created_at: event.created_at?.toDate ? event.created_at.toDate().toISOString() : new Date(event.created_at).toISOString(),
+              updated_at: event.updated_at?.toDate ? event.updated_at.toDate().toISOString() : new Date(event.updated_at).toISOString()
+            } as FirestoreEvent;
+          }
+        }
+      } catch (cloudError) {
+        console.warn('Failed to fetch event from cloud function, falling back to direct query:', cloudError);
+      }
+
+      // Fallback to direct query
       const docRef = doc(db, 'events', id);
       const docSnap = await getDoc(docRef);
       if (!docSnap.exists()) return null;
@@ -205,77 +256,116 @@ export interface ContactFormData {
 
 export async function createClientFromContactForm(formData: ContactFormData) {
   try {
-    // Initialize Firebase if not already initialized
-    let firestoreDb = db;
-    if (!firestoreDb) {
-      console.log('Firebase not initialized, creating new instance...');
+    // Use cloud function to create admin client for proper regional handling
+    try {
+      const functions = getFunctions();
+      const createAdminClient = httpsCallable(functions, 'createAdminClient');
       
-      // Check if we have the required environment variables
-      const requiredEnvVars = {
-        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
+      const clientData = {
+        name: 'Unknown', // Default value as required
+        type: 'Other Organization' as const, // Default value as required
+        eventKind: 'Party' as const, // Default value as required
+        pocName: formData.fullName, // Map to Name of POC
+        phone: formData.phone || null,
+        email: formData.email || null,
+        country: 'Unknown', // Default value for required field
+        expectedAttendees: null,
+        eventDate: null,
+        organizerFormSent: 'No' as const,
+        status: 'Pre-Discussion' as const, // Default for contact form entries
+        source: 'Contact Form' as const, // Default for contact form entries
+        description: formData.message || null,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        createdByUid: null
       };
+
+      const result = await createAdminClient({ clientData });
+      const responseData = result.data as { success: boolean; id?: string; error?: string };
       
-      console.log('Environment variables check:', {
-        hasApiKey: !!requiredEnvVars.apiKey,
-        hasAuthDomain: !!requiredEnvVars.authDomain,
-        hasProjectId: !!requiredEnvVars.projectId
-      });
-      
-      if (!requiredEnvVars.apiKey || !requiredEnvVars.authDomain || !requiredEnvVars.projectId) {
-        throw new Error('Missing required Firebase environment variables');
+      if (responseData.success && responseData.id) {
+        console.log('Client document created via cloud function with ID:', responseData.id);
+        return responseData.id;
+      } else {
+        throw new Error(responseData.error || 'Failed to create client via cloud function');
       }
+    } catch (cloudError) {
+      console.warn('Failed to create client via cloud function, falling back to direct creation:', cloudError);
       
-      const firebaseConfig = {
-        apiKey: requiredEnvVars.apiKey,
-        authDomain: requiredEnvVars.authDomain,
-        projectId: requiredEnvVars.projectId,
-        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || '',
-        messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '',
-        appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || '',
-        measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || ''
+      // Fallback to direct creation
+      // Initialize Firebase if not already initialized
+      let firestoreDb = db;
+      if (!firestoreDb) {
+        console.log('Firebase not initialized, creating new instance...');
+        
+        // Check if we have the required environment variables
+        const requiredEnvVars = {
+          apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+          authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+          projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
+        };
+        
+        console.log('Environment variables check:', {
+          hasApiKey: !!requiredEnvVars.apiKey,
+          hasAuthDomain: !!requiredEnvVars.authDomain,
+          hasProjectId: !!requiredEnvVars.projectId
+        });
+        
+        if (!requiredEnvVars.apiKey || !requiredEnvVars.authDomain || !requiredEnvVars.projectId) {
+          throw new Error('Missing required Firebase environment variables');
+        }
+        
+        const firebaseConfig = {
+          apiKey: requiredEnvVars.apiKey,
+          authDomain: requiredEnvVars.authDomain,
+          projectId: requiredEnvVars.projectId,
+          storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || '',
+          messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '',
+          appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || '',
+          measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || ''
+        };
+        
+        console.log('Initializing Firebase with project:', firebaseConfig.projectId);
+        
+        try {
+          const app = initializeApp(firebaseConfig);
+          firestoreDb = getFirestore(app);
+          console.log('Firebase initialized successfully');
+        } catch (initError) {
+          console.error('Firebase initialization error:', initError);
+          throw new Error(`Firebase initialization failed: ${initError}`);
+        }
+      }
+
+      if (!firestoreDb) {
+        throw new Error('Firestore database not available');
+      }
+
+      const clientData = {
+        name: 'Unknown', // Default value as required
+        type: 'Other Organization' as const, // Default value as required
+        eventKind: 'Party' as const, // Default value as required
+        pocName: formData.fullName, // Map to Name of POC
+        phone: formData.phone || null,
+        email: formData.email || null,
+        country: 'Unknown', // Default value for required field
+        expectedAttendees: null,
+        eventDate: null,
+        organizerFormSent: 'No' as const,
+        status: 'Pre-Discussion' as const, // Default for contact form entries
+        source: 'Contact Form' as const, // Default for contact form entries
+        description: formData.message || null,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        createdByUid: null
       };
-      
-      console.log('Initializing Firebase with project:', firebaseConfig.projectId);
-      
-      try {
-        const app = initializeApp(firebaseConfig);
-        firestoreDb = getFirestore(app);
-        console.log('Firebase initialized successfully');
-      } catch (initError) {
-        console.error('Firebase initialization error:', initError);
-        throw new Error(`Firebase initialization failed: ${initError}`);
-      }
+
+      console.log('Creating client document with fallback method:', clientData);
+      const { addDoc, collection } = await import('firebase/firestore');
+      const docRef = await addDoc(collection(firestoreDb, 'adminClients'), clientData);
+      console.log('Client document created successfully with ID:', docRef.id);
+      return docRef.id;
     }
-
-    if (!firestoreDb) {
-      throw new Error('Firestore database not available');
-    }
-
-    const clientData = {
-      name: 'Unknown', // Default value as required
-      type: 'Other Organization' as const, // Default value as required
-      eventKind: 'Party' as const, // Default value as required
-      pocName: formData.fullName, // Map to Name of POC
-      phone: formData.phone || null,
-      email: formData.email || null,
-      country: 'Unknown', // Default value for required field
-      expectedAttendees: null,
-      eventDate: null,
-      organizerFormSent: 'No' as const,
-      status: 'Pre-Discussion' as const, // Default for contact form entries
-      source: 'Contact Form' as const, // Default for contact form entries
-      description: formData.message || null,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      createdByUid: null
-    };
-
-    console.log('Creating client document with data:', clientData);
-    const docRef = await addDoc(collection(firestoreDb, 'adminClients'), clientData);
-    console.log('Client document created successfully with ID:', docRef.id);
-    return docRef.id;
   } catch (error) {
     console.error('Error creating client from contact form:', error);
     throw error;

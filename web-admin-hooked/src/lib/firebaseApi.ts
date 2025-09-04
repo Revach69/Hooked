@@ -16,7 +16,11 @@ import {
   deleteField,
   Timestamp,
   Firestore,
+  getFirestore
 } from 'firebase/firestore';
+import { httpsCallable, getFunctions } from 'firebase/functions';
+import { getApp, getApps } from 'firebase/app';
+import { toDate } from './timezoneUtils';
 
 // Types matching the mobile app
 export interface Event {
@@ -155,11 +159,16 @@ const generateOrganizerPassword = (): string => {
 
 // Helper function to get database instance with region awareness
 const getDbInstanceForEvent = (eventCountry?: string): Firestore => {
+  console.log(`🔍 Getting database for event country: ${eventCountry}`);
+  
   if (eventCountry) {
     // Use region-specific database for events with country
-    return getEventSpecificFirestore(eventCountry);
+    const regionalDb = getEventSpecificFirestore(eventCountry);
+    console.log(`🌍 Using regional database for country: ${eventCountry}`);
+    return regionalDb;
   }
   // Fall back to default database
+  console.log(`🏠 Using default database (no country specified)`);
   return getDbInstance();
 };
 
@@ -185,57 +194,153 @@ const populateRegionConfig = (event: Event): Event => {
 // Event API - renamed to avoid conflict with browser Event
 export const EventAPI = {
   async create(data: Omit<Event, 'id' | 'created_at' | 'updated_at'>): Promise<Event> {
-    // Always generate organizer password automatically
-    const organizerPassword = generateOrganizerPassword();
+    console.log('🚀 Creating event using Cloud Function for proper regional support');
     
-    // Populate region configuration if country is provided
-    let eventDataWithRegion = { ...data };
-    if (data.country) {
-      const regionConfig = getRegionForCountry(data.country);
-      eventDataWithRegion = {
+    try {
+      // Use Cloud Function to create event in the correct regional database
+      // This avoids browser SDK limitations with named databases
+      const app = getApp();
+      
+      // Get the appropriate functions region based on event country
+      const regionConfig = data.country ? getRegionForCountry(data.country) : null;
+      const functionsRegion = regionConfig?.functions || 'me-west1';
+      
+      console.log(`🌍 Using functions region: ${functionsRegion} for country: ${data.country}`);
+      
+      const functions = getFunctions(app, functionsRegion); // Call the regional function
+      const createEventInRegion = httpsCallable(functions, 'createEventInRegion');
+      
+      const result = await createEventInRegion({ eventData: data });
+      const responseData = result.data as { 
+        success: boolean; 
+        id: string; 
+        eventId?: string;
+        database?: string;
+        region?: string;
+        organizerPassword?: string;
+        error?: string;
+      };
+      
+      if (!responseData.success) {
+        throw new Error(`Failed to create event: ${responseData.error || 'Unknown error'}`);
+      }
+      
+      console.log('✅ Event created via Cloud Function:', {
+        eventId: responseData.eventId,
+        database: responseData.database,
+        region: responseData.region,
+        country: data.country
+      });
+      
+      // Use the existing regionConfig variable from above
+      const createdEvent: Event = {
+        id: responseData.eventId || '',
         ...data,
-        region: regionConfig.database, // Set region field for backward compatibility
-        regionConfig: {
+        organizer_password: responseData.organizerPassword,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        region: responseData.database,
+        regionConfig: regionConfig ? {
           database: regionConfig.database,
           storage: regionConfig.storage,
           functions: regionConfig.functions,
           displayName: regionConfig.displayName,
           isActive: regionConfig.isActive
-        }
+        } : undefined
       };
+      
+      return populateRegionConfig(createdEvent);
+      
+    } catch (error) {
+      console.error('❌ Failed to create event via Cloud Function:', error);
+      console.log('🔄 Falling back to direct database creation (may not work with named databases)');
+      
+      // Fallback to direct database creation (for backward compatibility)
+      // This may not work properly with regional databases in browser
+      const organizerPassword = generateOrganizerPassword();
+      
+      let eventDataWithRegion = { ...data };
+      if (data.country) {
+        const regionConfig = getRegionForCountry(data.country);
+        eventDataWithRegion = {
+          ...data,
+          region: regionConfig.database,
+          regionConfig: {
+            database: regionConfig.database,
+            storage: regionConfig.storage,
+            functions: regionConfig.functions,
+            displayName: regionConfig.displayName,
+            isActive: regionConfig.isActive
+          }
+        };
+      }
+      
+      const eventData = {
+        ...eventDataWithRegion,
+        organizer_password: organizerPassword,
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp(),
+      };
+      
+      const dbInstance = getDbInstanceForEvent(data.country);
+      const docRef = await addDoc(collection(dbInstance, 'events'), eventData);
+      
+      console.log(`⚠️  Created event using fallback method:`, {
+        eventId: docRef.id,
+        country: data.country,
+        region: eventDataWithRegion.region,
+        warning: 'This may have been created in the default database instead of the target regional database'
+      });
+      
+      const createdEvent = { 
+        id: docRef.id, 
+        ...eventDataWithRegion,
+        organizer_password: organizerPassword,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      } as Event;
+      
+      return populateRegionConfig(createdEvent);
     }
-    
-    const eventData = {
-      ...eventDataWithRegion,
-      organizer_password: organizerPassword,
-      created_at: serverTimestamp(),
-      updated_at: serverTimestamp(),
-    };
-    
-    // Use region-specific database for event creation
-    const dbInstance = getDbInstanceForEvent(data.country);
-    const docRef = await addDoc(collection(dbInstance, 'events'), eventData);
-    
-    console.log(`Created event in region-specific database:`, {
-      eventId: docRef.id,
-      country: data.country,
-      region: eventDataWithRegion.region,
-      regionDisplayName: eventDataWithRegion.regionConfig?.displayName
-    });
-    
-    // Return the event with populated region configuration
-    const createdEvent = { 
-      id: docRef.id, 
-      ...eventDataWithRegion,
-      organizer_password: organizerPassword,
-      created_at: new Date().toISOString(), // Convert serverTimestamp to ISO string
-      updated_at: new Date().toISOString() // Convert serverTimestamp to ISO string
-    } as Event;
-    
-    return populateRegionConfig(createdEvent);
   },
 
   async filter(filters: Partial<Event> = {}): Promise<Event[]> {
+    // Use getEventsFromAllRegions cloud function for multi-region support
+    try {
+      const app = getApp();
+      const functions = getFunctions(app);
+      const getEventsFromAllRegions = httpsCallable(functions, 'getEventsFromAllRegions');
+      
+      const result = await getEventsFromAllRegions({ 
+        eventCode: filters.event_code,
+        eventId: filters.id
+      });
+      
+      const responseData = result.data as { 
+        success: boolean; 
+        events?: Event[]; 
+        error?: string 
+      };
+      
+      if (responseData.success && responseData.events) {
+        return responseData.events.map(event => {
+          // Convert Timestamp objects to proper format
+          const processedEvent = {
+            ...event,
+            starts_at: event.starts_at ? toDate(event.starts_at) : undefined,
+            start_date: event.start_date ? toDate(event.start_date) : undefined,
+            expires_at: event.expires_at ? toDate(event.expires_at) : undefined,
+            created_at: event.created_at ? toDate(event.created_at) : undefined,
+            updated_at: event.updated_at ? toDate(event.updated_at) : undefined,
+          };
+          return populateRegionConfig(processedEvent as Event);
+        });
+      }
+    } catch (error) {
+      console.warn('Failed to fetch events from cloud function, falling back to direct multi-region search:', error);
+    }
+    
+    // Fallback to direct multi-region search
     // For admin dashboard, we need to search across all regions
     // This is acceptable as admin operations are infrequent
     
@@ -309,6 +414,39 @@ export const EventAPI = {
   },
 
   async get(id: string, eventCountry?: string): Promise<Event | null> {
+    // Use getEventsFromAllRegions cloud function for multi-region support
+    try {
+      const app = getApp();
+      const functions = getFunctions(app);
+      const getEventsFromAllRegions = httpsCallable(functions, 'getEventsFromAllRegions');
+      
+      const result = await getEventsFromAllRegions({ eventId: id });
+      const responseData = result.data as { 
+        success: boolean; 
+        events?: Event[]; 
+        error?: string 
+      };
+      
+      if (responseData.success && responseData.events && responseData.events.length > 0) {
+        const event = responseData.events.find(e => e.id === id);
+        if (event) {
+          // Convert Timestamp objects to proper format
+          const processedEvent = {
+            ...event,
+            starts_at: event.starts_at ? toDate(event.starts_at) : undefined,
+            start_date: event.start_date ? toDate(event.start_date) : undefined,
+            expires_at: event.expires_at ? toDate(event.expires_at) : undefined,
+            created_at: event.created_at ? toDate(event.created_at) : undefined,
+            updated_at: event.updated_at ? toDate(event.updated_at) : undefined,
+          };
+          return populateRegionConfig(processedEvent as Event);
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to fetch event from cloud function, falling back to direct search:', error);
+    }
+
+    // Fallback to direct multi-region search
     // Try to get from the specified region first, then fall back to multi-region search
     if (eventCountry) {
       try {
@@ -420,6 +558,47 @@ export const EventAPI = {
       region: existingEvent.regionConfig?.displayName || 'Default'
     });
   },
+
+  async deleteFromRegion(id: string, country?: string, databaseId?: string): Promise<void> {
+    console.log('🗑️ Deleting event from specific region:', { id, country, databaseId });
+    
+    try {
+      const regionConfig = country ? getRegionForCountry(country) : null;
+      const functionsRegion = regionConfig?.functions || 'me-west1';
+      
+      console.log(`🌍 Using functions region: ${functionsRegion} for deletion`);
+      
+      // Use HTTP endpoint for proper CORS support
+      const deleteUrl = `https://${functionsRegion}-hooked-69.cloudfunctions.net/deleteEventInRegion`;
+      
+      const response = await fetch(deleteUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          eventId: id,
+          databaseId: databaseId || regionConfig?.database || '(default)'
+        })
+      });
+      
+      const responseData = await response.json();
+      
+      if (!response.ok || !responseData.success) {
+        throw new Error(`Failed to delete event: ${responseData.error || 'Unknown error'}`);
+      }
+      
+      console.log('✅ Event deleted via HTTP endpoint:', {
+        eventId: id,
+        database: databaseId,
+        region: regionConfig?.displayName || 'Default'
+      });
+      
+    } catch (error) {
+      console.error('❌ Failed to delete event via HTTP endpoint:', error);
+      throw error;
+    }
+  },
 };
 
 // EventProfile API
@@ -443,8 +622,40 @@ export const EventProfile = {
     } as EventProfile;
   },
 
-  async filter(filters: Partial<EventProfile> = {}): Promise<EventProfile[]> {
-    const dbInstance = getDbInstance();
+  async filter(filters: Partial<EventProfile> = {}, eventCountry?: string): Promise<EventProfile[]> {
+    // For specific event profiles, try to use cloud functions if available
+    if (filters.event_id) {
+      try {
+        // First get the event to determine region
+        const event = await EventAPI.get(filters.event_id);
+        const regionConfig = event?.country ? getRegionForCountry(event.country) : null;
+        const functionsRegion = regionConfig?.functions || 'us-central1';
+        
+        const app = getApp();
+        const functions = getFunctions(app, functionsRegion);
+        const getEventProfiles = httpsCallable(functions, 'getEventProfiles');
+        
+        const result = await getEventProfiles({ eventId: filters.event_id });
+        const responseData = result.data as { success: boolean; profiles?: EventProfile[]; error?: string };
+        
+        if (responseData.success && responseData.profiles) {
+          // Filter by additional criteria if needed
+          let profiles = responseData.profiles;
+          if (filters.session_id) {
+            profiles = profiles.filter(p => p.session_id === filters.session_id);
+          }
+          if (filters.id) {
+            profiles = profiles.filter(p => p.id === filters.id);
+          }
+          return profiles as EventProfile[];
+        }
+      } catch (error) {
+        console.warn('Failed to fetch profiles from cloud function, falling back to direct query:', error);
+      }
+    }
+
+    // Fallback to direct database query
+    const dbInstance = getDbInstanceForEvent(eventCountry);
     let q = query(collection(dbInstance, 'event_profiles'));
     
     if (filters.event_id) {
@@ -480,6 +691,17 @@ export const EventProfile = {
     const dbInstance = getDbInstance();
     await deleteDoc(doc(dbInstance, 'event_profiles', id));
   },
+
+  async deleteFromRegion(id: string, country?: string, databaseId?: string): Promise<void> {
+    const regionConfig = country ? getRegionForCountry(country) : null;
+    const targetDatabaseId = databaseId || regionConfig?.database || '(default)';
+    
+    const dbInstance = targetDatabaseId === '(default)' 
+      ? getDbInstance() 
+      : getFirestore(getApps()[0], targetDatabaseId);
+    
+    await deleteDoc(doc(dbInstance, 'event_profiles', id));
+  },
 };
 
 // Like API
@@ -501,8 +723,8 @@ export const Like = {
     } as Like;
   },
 
-  async filter(filters: Partial<Like> = {}): Promise<Like[]> {
-    const dbInstance = getDbInstance();
+  async filter(filters: Partial<Like> = {}, eventCountry?: string): Promise<Like[]> {
+    const dbInstance = getDbInstanceForEvent(eventCountry);
     let q = query(collection(dbInstance, 'likes'));
     
     if (filters.event_id) {
@@ -541,6 +763,17 @@ export const Like = {
     const dbInstance = getDbInstance();
     await deleteDoc(doc(dbInstance, 'likes', id));
   },
+
+  async deleteFromRegion(id: string, country?: string, databaseId?: string): Promise<void> {
+    const regionConfig = country ? getRegionForCountry(country) : null;
+    const targetDatabaseId = databaseId || regionConfig?.database || '(default)';
+    
+    const dbInstance = targetDatabaseId === '(default)' 
+      ? getDbInstance() 
+      : getFirestore(getApps()[0], targetDatabaseId);
+    
+    await deleteDoc(doc(dbInstance, 'likes', id));
+  },
 };
 
 // Message API
@@ -562,8 +795,8 @@ export const Message = {
     } as Message;
   },
 
-  async filter(filters: Partial<Message> = {}): Promise<Message[]> {
-    const dbInstance = getDbInstance();
+  async filter(filters: Partial<Message> = {}, eventCountry?: string): Promise<Message[]> {
+    const dbInstance = getDbInstanceForEvent(eventCountry);
     let q = query(collection(dbInstance, 'messages'));
     
     if (filters.event_id) {
@@ -594,6 +827,17 @@ export const Message = {
     const dbInstance = getDbInstance();
     await deleteDoc(doc(dbInstance, 'messages', id));
   },
+
+  async deleteFromRegion(id: string, country?: string, databaseId?: string): Promise<void> {
+    const regionConfig = country ? getRegionForCountry(country) : null;
+    const targetDatabaseId = databaseId || regionConfig?.database || '(default)';
+    
+    const dbInstance = targetDatabaseId === '(default)' 
+      ? getDbInstance() 
+      : getFirestore(getApps()[0], targetDatabaseId);
+    
+    await deleteDoc(doc(dbInstance, 'messages', id));
+  },
 };
 
 // KickedUser API
@@ -612,6 +856,28 @@ export const KickedUserAPI = {
       id: docRef.id, 
       ...data,
       created_at: new Date().toISOString() // Convert serverTimestamp to ISO string
+    } as KickedUser;
+  },
+
+  async createInRegion(data: Omit<KickedUser, 'id' | 'created_at'>, country?: string, databaseId?: string): Promise<KickedUser> {
+    const regionConfig = country ? getRegionForCountry(country) : null;
+    const targetDatabaseId = databaseId || regionConfig?.database || '(default)';
+    
+    const dbInstance = targetDatabaseId === '(default)' 
+      ? getDbInstance() 
+      : getFirestore(getApps()[0], targetDatabaseId);
+
+    const kickedUserData = {
+      ...data,
+      created_at: serverTimestamp(),
+    };
+    
+    const docRef = await addDoc(collection(dbInstance, 'kicked_users'), kickedUserData);
+    
+    return { 
+      id: docRef.id, 
+      ...data,
+      created_at: new Date().toISOString()
     } as KickedUser;
   },
 
@@ -641,6 +907,17 @@ export const KickedUserAPI = {
     const dbInstance = getDbInstance();
     await deleteDoc(doc(dbInstance, 'kicked_users', id));
   },
+
+  async deleteFromRegion(id: string, country?: string, databaseId?: string): Promise<void> {
+    const regionConfig = country ? getRegionForCountry(country) : null;
+    const targetDatabaseId = databaseId || regionConfig?.database || '(default)';
+    
+    const dbInstance = targetDatabaseId === '(default)' 
+      ? getDbInstance() 
+      : getFirestore(getApps()[0], targetDatabaseId);
+    
+    await deleteDoc(doc(dbInstance, 'kicked_users', id));
+  },
 };
 
 // Report API
@@ -662,8 +939,8 @@ export const ReportAPI = {
     } as Report;
   },
 
-  async filter(filters: Partial<Report> = {}): Promise<Report[]> {
-    const dbInstance = getDbInstance();
+  async filter(filters: Partial<Report> = {}, eventCountry?: string): Promise<Report[]> {
+    const dbInstance = getDbInstanceForEvent(eventCountry);
     let q = query(collection(dbInstance, 'reports'));
     
     if (filters.event_id) {
@@ -702,8 +979,33 @@ export const ReportAPI = {
     });
   },
 
+  async updateInRegion(id: string, data: Partial<Report>, country?: string, databaseId?: string): Promise<void> {
+    const regionConfig = country ? getRegionForCountry(country) : null;
+    const targetDatabaseId = databaseId || regionConfig?.database || '(default)';
+    
+    const dbInstance = targetDatabaseId === '(default)' 
+      ? getDbInstance() 
+      : getFirestore(getApps()[0], targetDatabaseId);
+    
+    await updateDoc(doc(dbInstance, 'reports', id), {
+      ...data,
+      updated_at: serverTimestamp(),
+    });
+  },
+
   async delete(id: string): Promise<void> {
     const dbInstance = getDbInstance();
+    await deleteDoc(doc(dbInstance, 'reports', id));
+  },
+
+  async deleteFromRegion(id: string, country?: string, databaseId?: string): Promise<void> {
+    const regionConfig = country ? getRegionForCountry(country) : null;
+    const targetDatabaseId = databaseId || regionConfig?.database || '(default)';
+    
+    const dbInstance = targetDatabaseId === '(default)' 
+      ? getDbInstance() 
+      : getFirestore(getApps()[0], targetDatabaseId);
+    
     await deleteDoc(doc(dbInstance, 'reports', id));
   },
 };
