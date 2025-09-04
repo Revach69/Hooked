@@ -1157,6 +1157,17 @@ async function processNotificationJobs(): Promise<void> {
           }
           
           try {
+            // FIX 3: Skip push for jobs marked as skipPush
+            if (job.skipPush === true) {
+              console.log('🚫 Skipping push notification as requested:', job.metadata?.reason);
+              await jobDoc.ref.update({
+                status: 'skipped',
+                skippedReason: job.metadata?.reason || 'user_active',
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+              });
+              continue;
+            }
+            
             // SIMPLIFIED: Always send notifications, let client decide how to display
             // No more checking app states - following WhatsApp/Instagram pattern
             
@@ -1247,8 +1258,11 @@ interface NotificationJob {
   };
   aggregationKey: string;
   attempts: number;
-  status: 'queued' | 'sent' | 'permanent-failure';
+  status: 'queued' | 'sent' | 'permanent-failure' | 'skipped';
   error?: string;
+  skipPush?: boolean;
+  metadata?: { reason?: string };
+  skippedReason?: string;
   createdAt: admin.firestore.FieldValue;
   updatedAt: admin.firestore.FieldValue;
 }
@@ -1361,6 +1375,31 @@ export const notify = onRequest({
       res.status(code).json({ error: err?.message || 'Unknown error' });
     }
   }); 
+// Helper function to check if user is recently active (likely in foreground)
+async function shouldSendPushNotification(sessionId: string, db: any): Promise<boolean> {
+  const recentActivityRef = db.collection('user_activity').doc(sessionId);
+  
+  try {
+    await recentActivityRef.set({
+      lastActive: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    
+    const activityDoc = await recentActivityRef.get();
+    const lastActive = activityDoc.data()?.lastActive?.toMillis() || 0;
+    const isRecentlyActive = (Date.now() - lastActive) < 5000; // Active in last 5 seconds
+    
+    if (isRecentlyActive) {
+      console.log(`🚫 User ${sessionId.substring(0, 8)}... is recently active, skip push`);
+      return false;
+    }
+  } catch (error) {
+    console.log('⚠️ Activity check failed, sending notification anyway:', error);
+    // If check fails, send notification anyway
+  }
+  
+  return true;
+}
+
 // Trigger: Mutual Match (likes)
 // Shared handler for mutual likes
 const mutualLikeHandler = async (event: any) => {
@@ -1377,10 +1416,12 @@ const mutualLikeHandler = async (event: any) => {
     return;
   }
   
-  console.log('onMutualLike triggered:', { 
+  console.log('🚨 onMutualLike triggered:', { 
     beforeExists: change.before?.exists, 
     afterExists: change.after?.exists,
-    likeId: event.params.likeId
+    likeId: event.params.likeId,
+    timestamp: new Date().toISOString(),
+    region: process.env.FUNCTION_REGION || 'unknown'
   });
 
   const before = change.before?.exists ? change.before.data() as any : null;
@@ -1414,19 +1455,49 @@ const mutualLikeHandler = async (event: any) => {
       return;
     }
 
-    // Idempotency key: match per event per pair
-    const pairKey = [likerSession, likedSession].sort().join('|');
-    const logKey = `match:${eventId}:${pairKey}`;
+    // FIX 1: STRONGER DEDUPLICATION - Transaction-based processing with document ID check
+    const likeDocId = event.params.likeId;
+    const [firstUser, secondUser] = [likerSession, likedSession].sort();
     
-    console.log('onMutualLike idempotency check:', { 
-      pairKey, 
-      logKey,
-      likeDocumentId: event.params.likeId,
+    console.log('🔍 Deduplication check:', { 
+      likeDocId,
+      firstUser: firstUser.substring(0, 8) + '...',
+      secondUser: secondUser.substring(0, 8) + '...',
       documentDirection: `${likerSession.substring(0, 8)} → ${likedSession.substring(0, 8)}`
     });
     
-    if (!(await onceOnly(logKey, db))) {
-      console.log('onMutualLike: Already processed by another document trigger, returning early');
+    // Only process if this document ID follows canonical pattern
+    const expectedDocPattern = new RegExp(`${firstUser}.*${secondUser}|${eventId}.*${firstUser}.*${secondUser}`);
+    
+    if (!expectedDocPattern.test(likeDocId)) {
+      console.log('🛑 SKIP: Non-canonical document ID pattern:', likeDocId);
+      return;
+    }
+    
+    // Transaction-based processing with stronger key
+    const matchKey = `match_v2:${eventId}:${[likerSession, likedSession].sort().join('_')}`;
+    const processedRef = db.collection('_system_locks').doc(matchKey);
+    
+    try {
+      const processed = await db.runTransaction(async (transaction: any) => {
+        const doc = await transaction.get(processedRef);
+        if (doc.exists && doc.data()?.processed === true) {
+          return false; // Already processed
+        }
+        transaction.set(processedRef, {
+          processed: true,
+          processedBy: likeDocId,
+          timestamp: admin.firestore.FieldValue.serverTimestamp()
+        });
+        return true; // We got the lock
+      });
+      
+      if (!processed) {
+        console.log('🛑 SKIP: Already processed by another trigger');
+        return;
+      }
+    } catch (error) {
+      console.log('🛑 SKIP: Transaction failed, another instance processing');
       return;
     }
 
@@ -1485,30 +1556,7 @@ const mutualLikeHandler = async (event: any) => {
 
     console.log('Match notification: Server always sends, client decides display');
 
-    // CRITICAL FIX: Only process notifications from one direction to prevent duplicates
-    // We need to determine which like document this is:
-    // - If likerSession < likedSession in the doc, this is the "first → second" like
-    // - If likerSession > likedSession in the doc, this is the "second → first" like
-    // We only process when the DOCUMENT represents first → second (smaller ID first)
-    
-    // Create a canonical order to determine which document should process
-    const [firstUser, secondUser] = [likerSession, likedSession].sort();
-    const isCanonicalDocument = (likerSession === firstUser && likedSession === secondUser);
-    
-    if (!isCanonicalDocument) {
-      console.log('Skipping notification - non-canonical document direction:', {
-        documentDirection: `${likerSession.substring(0, 8)} → ${likedSession.substring(0, 8)}`,
-        canonicalDirection: `${firstUser.substring(0, 8)} → ${secondUser.substring(0, 8)}`,
-        willBeHandledBy: 'canonical document'
-      });
-      return;
-    }
-    
-    console.log('Processing notifications for mutual match (canonical document):', {
-      firstUser: firstUser.substring(0, 8) + '...',
-      secondUser: secondUser.substring(0, 8) + '...',
-      documentDirection: `${likerSession.substring(0, 8)} → ${likedSession.substring(0, 8)}`
-    });
+    console.log('🎯 PROCESSING - transaction lock acquired, proceeding with notifications');
 
     // Send notifications to both users - client handles display logic
     // Note: We're now in the canonical document, so we send to both users
@@ -1518,45 +1566,67 @@ const mutualLikeHandler = async (event: any) => {
     const firstUserName = (likerSession === firstUser) ? likerName : likedName;
     const secondUserName = (likerSession === secondUser) ? likerName : likedName;
     
-    // Send notification to first user (alphabetically first)
-    console.log('Enqueuing match notification for first user (server always sends)');
-    await enqueueNotificationJob({
-      type: 'match',
-      event_id: eventId,
-      subject_session_id: firstUser,
-      actor_session_id: secondUser,
-      payload: {
-        title: `You got Hooked with ${secondUserName}!`,
-        body: `Start chatting now!`,
-        data: { 
-          type: 'match', 
-          partnerSessionId: secondUser,
-          partnerName: secondUserName,
-          aggregationKey: `match:${eventId}:${firstUser}`
-        }
-      },
-      aggregationKey: `match:${eventId}:${firstUser}`
-    }, db);
+    // FIX 2: Check activity before sending notifications
+    // likerSession = The one who just liked (triggered this mutual - likely in foreground)
+    // likedSession = The one who liked earlier
+    
+    // Send notification to first user (the one who liked earlier)
+    const shouldSendToFirst = await shouldSendPushNotification(firstUser, db);
+    if (shouldSendToFirst) {
+      console.log('📤 Enqueuing match notification for first user:', {
+        recipient: firstUser.substring(0, 8) + '...',
+        partner: secondUser.substring(0, 8) + '...',
+        partnerName: secondUserName
+      });
+      await enqueueNotificationJob({
+        type: 'match',
+        event_id: eventId,
+        subject_session_id: firstUser,
+        actor_session_id: secondUser,
+        payload: {
+          title: `You got Hooked with ${secondUserName}!`,
+          body: `Start chatting now!`,
+          data: { 
+            type: 'match', 
+            partnerSessionId: secondUser,
+            partnerName: secondUserName,
+            aggregationKey: `match:${eventId}:${firstUser}`
+          }
+        },
+        aggregationKey: `match:${eventId}:${firstUser}`
+      }, db);
+    } else {
+      console.log('🚫 First user recently active, skipping push notification');
+    }
 
-    // Send notification to second user (alphabetically second)
-    console.log('Enqueuing match notification for second user (server always sends)');
-    await enqueueNotificationJob({
-      type: 'match',
-      event_id: eventId,
-      subject_session_id: secondUser,
-      actor_session_id: firstUser, 
-      payload: {
-        title: `You got Hooked with ${firstUserName}!`,
-        body: `Start chatting now!`,
-        data: { 
-          type: 'match', 
-          partnerSessionId: firstUser,
-          partnerName: firstUserName,
-          aggregationKey: `match:${eventId}:${secondUser}`
-        }
-      },
-      aggregationKey: `match:${eventId}:${secondUser}`
-    }, db);
+    // Send notification to second user (the one who just liked - likely in foreground)
+    const shouldSendToSecond = await shouldSendPushNotification(secondUser, db);
+    if (shouldSendToSecond) {
+      console.log('📤 Enqueuing match notification for second user:', {
+        recipient: secondUser.substring(0, 8) + '...',
+        partner: firstUser.substring(0, 8) + '...',
+        partnerName: firstUserName
+      });
+      await enqueueNotificationJob({
+        type: 'match',
+        event_id: eventId,
+        subject_session_id: secondUser,
+        actor_session_id: firstUser, 
+        payload: {
+          title: `You got Hooked with ${firstUserName}!`,
+          body: `Start chatting now!`,
+          data: { 
+            type: 'match', 
+            partnerSessionId: firstUser,
+            partnerName: firstUserName,
+            aggregationKey: `match:${eventId}:${secondUser}`
+          }
+        },
+        aggregationKey: `match:${eventId}:${secondUser}`
+      }, db);
+    } else {
+      console.log('🚫 Second user recently active (likely triggered match), skipping push notification');
+    }
 };
 
 // Multi-region Firestore triggers for onMutualLike - FIXED VERSION
