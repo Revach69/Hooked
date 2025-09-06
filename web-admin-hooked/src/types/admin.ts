@@ -1,10 +1,15 @@
 export type ClientEvent = {
   id: string;                      // Unique event ID for this client
   expectedAttendees?: number | null;
-  eventDate?: string | null;       // ISO date (yyyy-mm-dd) or null
+  eventDate?: string | null;       // ISO date (yyyy-mm-dd) or null - deprecated, use accessTime/startTime/endTime
+  accessTime?: string | null;      // When users can access the event on app
+  startTime?: string | null;       // Actual start time of the event
+  endTime?: string | null;         // When event ends and app content gets deleted
   organizerFormSent?: 'Yes' | 'No';
   eventCardCreated?: 'Yes' | 'No';
   description?: string | null;
+  eventLink?: string | null;       // External event link
+  eventImage?: string | null;      // Event image filename/URL
   linkedFormId?: string | null;    // Reference to linked event form
   linkedEventId?: string | null;   // Reference to linked event
   eventKind?: string;              // Event type for this specific event
@@ -35,14 +40,20 @@ export type EventForm = {
   fullName: string;
   email: string;
   phone: string;
-  eventDetails?: string;
+  eventDetails?: string;       // Deprecated, use eventDescription
+  eventDescription?: string;   // New field name
   eventAddress: string;
   venueName: string;
   eventType: string;
   otherEventType?: string;
   expectedAttendees: string;
   eventName: string;
-  eventDate: string;
+  eventDate: string;           // Legacy field
+  accessTime?: string;         // New time field
+  startTime?: string;          // New time field
+  endTime?: string;            // New time field
+  eventLink?: string;          // New field
+  eventImage?: string;         // New field (filename)
   posterPreference: string;
   eventVisibility: string;
   socialMedia?: string;

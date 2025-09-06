@@ -118,8 +118,13 @@ export const AdminClientAPI = {
       organizerFormSent: 'Yes',
       eventCardCreated: 'No',
       expectedAttendees: formData?.expectedAttendees ? parseInt(formData.expectedAttendees) : null,
-      eventDate: formData?.eventDate || null,
-      description: formData?.eventDetails || null,
+      eventDate: formData?.eventDate || null, // Keep legacy field
+      accessTime: formData?.accessTime || null,
+      startTime: formData?.startTime || null,
+      endTime: formData?.endTime || null,
+      description: formData?.eventDescription || formData?.eventDetails || null,
+      eventLink: formData?.eventLink || null,
+      eventImage: formData?.eventImage || null,
       eventKind: formData?.eventType || null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()

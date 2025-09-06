@@ -34,9 +34,14 @@ export function EventFormModal({ open, onOpenChange, event, onSave, clientName }
   const [formData, setFormData] = useState<Omit<ClientEvent, 'id'>>({
     expectedAttendees: null,
     eventDate: null,
+    accessTime: null,
+    startTime: null,
+    endTime: null,
     organizerFormSent: 'No',
     eventCardCreated: 'No',
     description: null,
+    eventLink: null,
+    eventImage: null,
     linkedFormId: null,
     linkedEventId: null,
     eventKind: 'House Party'
@@ -50,9 +55,14 @@ export function EventFormModal({ open, onOpenChange, event, onSave, clientName }
       setFormData({
         expectedAttendees: event.expectedAttendees,
         eventDate: event.eventDate,
+        accessTime: event.accessTime,
+        startTime: event.startTime,
+        endTime: event.endTime,
         organizerFormSent: event.organizerFormSent || 'No',
         eventCardCreated: event.eventCardCreated || 'No',
         description: event.description,
+        eventLink: event.eventLink,
+        eventImage: event.eventImage,
         linkedFormId: event.linkedFormId,
         linkedEventId: event.linkedEventId,
         eventKind: event.eventKind || 'House Party'
@@ -61,9 +71,14 @@ export function EventFormModal({ open, onOpenChange, event, onSave, clientName }
       setFormData({
         expectedAttendees: null,
         eventDate: null,
+        accessTime: null,
+        startTime: null,
+        endTime: null,
         organizerFormSent: 'No',
         eventCardCreated: 'No',
         description: null,
+        eventLink: null,
+        eventImage: null,
         linkedFormId: null,
         linkedEventId: null,
         eventKind: 'House Party'
@@ -150,13 +165,46 @@ export function EventFormModal({ open, onOpenChange, event, onSave, clientName }
             {errors.expectedAttendees && <p className="text-sm text-red-500">{errors.expectedAttendees}</p>}
           </div>
 
-          {/* Event Date */}
+          {/* Event Date (Legacy - keep for backward compatibility) */}
           <div className="space-y-2">
-            <label className="text-sm font-medium">Date of Event</label>
+            <label className="text-sm font-medium">Date of Event (Legacy)</label>
             <Input
               type="date"
               value={formData.eventDate || ''}
               onChange={(e) => handleInputChange('eventDate', e.target.value || null)}
+            />
+          </div>
+
+          {/* Access Time */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Access Time</label>
+            <p className="text-xs text-gray-500">From this time users will be able to access the event on the app</p>
+            <Input
+              type="datetime-local"
+              value={formData.accessTime || ''}
+              onChange={(e) => handleInputChange('accessTime', e.target.value || null)}
+            />
+          </div>
+
+          {/* Start Time */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Start Time</label>
+            <p className="text-xs text-gray-500">Actual start time of the event, will also be presented on our website</p>
+            <Input
+              type="datetime-local"
+              value={formData.startTime || ''}
+              onChange={(e) => handleInputChange('startTime', e.target.value || null)}
+            />
+          </div>
+
+          {/* End Time */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">End Time</label>
+            <p className="text-xs text-gray-500">When event ends and everything on the app gets deleted</p>
+            <Input
+              type="datetime-local"
+              value={formData.endTime || ''}
+              onChange={(e) => handleInputChange('endTime', e.target.value || null)}
             />
           </div>
 
@@ -192,6 +240,30 @@ export function EventFormModal({ open, onOpenChange, event, onSave, clientName }
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Event Link */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Event Link</label>
+            <p className="text-xs text-gray-500">Will be presented on event card in IRL page on website as the "Join event" button</p>
+            <Input
+              type="url"
+              value={formData.eventLink || ''}
+              onChange={(e) => handleInputChange('eventLink', e.target.value || null)}
+              placeholder="https://example.com/event"
+            />
+          </div>
+
+          {/* Event Image */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Event Image</label>
+            <p className="text-xs text-gray-500">Will be presented on event card in IRL page on website and admin dashboard</p>
+            <Input
+              type="text"
+              value={formData.eventImage || ''}
+              onChange={(e) => handleInputChange('eventImage', e.target.value || null)}
+              placeholder="Image filename or URL"
+            />
           </div>
 
           {/* Description */}

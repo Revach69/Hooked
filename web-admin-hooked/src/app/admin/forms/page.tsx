@@ -75,23 +75,37 @@ export default function FormsPage() {
       // Convert expected attendees from string to number
       const expectedAttendees = convertExpectedAttendees(form.expectedAttendees);
       
-      // Create client data from form
+      // Create the event data from the form
+      const eventData = {
+        id: `event_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        expectedAttendees,
+        eventDate: form.eventDate, // Keep legacy field for backward compatibility
+        accessTime: form.accessTime || null,
+        startTime: form.startTime || null,
+        endTime: form.endTime || null,
+        organizerFormSent: 'Yes' as const,
+        eventCardCreated: 'No' as const,
+        description: form.eventDescription || form.eventDetails || `Event: ${form.eventName} at ${form.venueName}`,
+        eventLink: form.eventLink || null,
+        eventImage: form.eventImage || null,
+        linkedFormId: form.id,
+        linkedEventId: null,
+        eventKind,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      // Create client data from form (without the event-specific fields)
       const clientData: Omit<AdminClient, 'id' | 'createdAt' | 'updatedAt'> = {
         name: form.fullName, // Use fullName as client name initially
         type,
-        eventKind,
         pocName: form.fullName,
         phone: form.phone,
         email: form.email,
-        expectedAttendees,
-        eventDate: form.eventDate,
+        country: null, // Form doesn't have country field
         status: 'Initial Discussion',
         source: 'Contact Form',
-        description: form.eventDetails || `Event: ${form.eventName} at ${form.venueName}`,
-        organizerFormSent: 'Yes',
-        eventCardCreated: 'No',
-        linkedFormId: form.id, // Link to this form
-        linkedEventId: null
+        events: [eventData] // Include the event in the events array
       };
 
       // Create the client
@@ -104,7 +118,7 @@ export default function FormsPage() {
       await loadData();
       
       // Show success message
-      alert(`Client "${newClient.name}" created successfully and linked to form!`);
+      alert(`Client "${newClient.name}" created successfully with event and linked to form!`);
     } catch (error) {
       console.error('Failed to create client from form:', error);
       throw error;

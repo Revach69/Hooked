@@ -4,7 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Edit, Trash2, ChevronDown, ChevronRight, FileText, Calendar, Merge, Plus } from 'lucide-react';
+import { Edit, Trash2, ChevronDown, ChevronRight, FileText, Calendar, Merge, Plus, ExternalLink, Download, Image } from 'lucide-react';
 import type { AdminClient, ClientEvent } from '@/types/admin';
 
 interface ClientsTableProps {
@@ -136,12 +136,53 @@ export function ClientsTable({
     }
   };
 
+  const formatDateTime = (dateTimeString: string | null) => {
+    if (!dateTimeString) return '-';
+    try {
+      const date = new Date(dateTimeString);
+      return date.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return dateTimeString;
+    }
+  };
+
+  const handleImageDownload = (imageName: string | null) => {
+    if (!imageName) return;
+    // For now, just log the action - in a real app, this would download from cloud storage
+    console.log('Download image:', imageName);
+    // You could implement actual download logic here:
+    // const link = document.createElement('a');
+    // link.href = `your-storage-url/${imageName}`;
+    // link.download = imageName;
+    // link.click();
+  };
+
   const renderEventRow = (event: ClientEvent, clientId: string, index: number) => (
     <tr key={event.id} className="border-t border-gray-100 bg-gray-50">
+      {/* Expected Attendees */}
       <td className="px-4 py-2 text-sm">{event.expectedAttendees || '-'}</td>
+      
+      {/* Access Time */}
       <td className="px-4 py-2 text-sm">
-        {event.eventDate ? new Date(event.eventDate).toLocaleDateString() : '-'}
+        {formatDateTime(event.accessTime)}
       </td>
+      
+      {/* Start Time */}
+      <td className="px-4 py-2 text-sm">
+        {formatDateTime(event.startTime)}
+      </td>
+      
+      {/* End Time */}
+      <td className="px-4 py-2 text-sm">
+        {formatDateTime(event.endTime)}
+      </td>
+      
+      {/* Organizer Form Sent */}
       <td className="px-4 py-2">
         <div className="flex items-center gap-2">
           <Select
@@ -175,6 +216,8 @@ export function ClientsTable({
           )}
         </div>
       </td>
+      
+      {/* Event Card Created */}
       <td className="px-4 py-2">
         <div className="flex items-center gap-2">
           <Select
@@ -208,9 +251,51 @@ export function ClientsTable({
           )}
         </div>
       </td>
+      
+      {/* Event Link */}
+      <td className="px-4 py-2">
+        {event.eventLink ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              window.open(event.eventLink!, '_blank');
+            }}
+            title="Open event link"
+          >
+            <ExternalLink className="h-3 w-3" />
+          </Button>
+        ) : (
+          <span className="text-gray-400">-</span>
+        )}
+      </td>
+      
+      {/* Event Image */}
+      <td className="px-4 py-2">
+        {event.eventImage ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleImageDownload(event.eventImage);
+            }}
+            title="Download event image"
+          >
+            <Download className="h-3 w-3" />
+          </Button>
+        ) : (
+          <span className="text-gray-400">-</span>
+        )}
+      </td>
+      
+      {/* Description */}
       <td className="px-4 py-2 text-sm max-w-xs truncate" title={event.description || ''}>
         {event.description || '-'}
       </td>
+      
+      {/* Actions */}
       <td className="px-4 py-2">
         <div className="flex space-x-2">
           {onEditEvent && (
@@ -503,9 +588,13 @@ export function ClientsTable({
                                   <thead>
                                     <tr className="border-b border-gray-200 dark:border-gray-700">
                                       <th className="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-300"># of Expected Attendees</th>
-                                      <th className="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-300">Date of Event</th>
+                                      <th className="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-300">Access Time</th>
+                                      <th className="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-300">Start Time</th>
+                                      <th className="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-300">End Time</th>
                                       <th className="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-300">Organizer Form Sent</th>
                                       <th className="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-300">Event Card Created</th>
+                                      <th className="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-300">Event Link</th>
+                                      <th className="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-300">Event Image</th>
                                       <th className="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-300">Description</th>
                                       <th className="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-300">Actions</th>
                                     </tr>
