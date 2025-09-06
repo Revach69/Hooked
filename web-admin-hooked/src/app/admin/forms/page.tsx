@@ -186,6 +186,29 @@ export default function FormsPage() {
     }
   };
 
+  const handleUnlinkForm = async (formId: string) => {
+    try {
+      // Get the form to find the linked client
+      const form = forms.find(f => f.id === formId);
+      if (!form || !form.linkedClientId) {
+        console.error('Form not found or not linked');
+        return;
+      }
+
+      // Unlink the form from the client
+      await AdminClientAPI.unlinkForm(form.linkedClientId, formId);
+      
+      // Update the form to remove the client link
+      await EventFormAPI.update(formId, { linkedClientId: null });
+      
+      // Reload data to reflect changes
+      await loadData();
+    } catch (error) {
+      console.error('Failed to unlink form:', error);
+      throw error;
+    }
+  };
+
   const getClientName = (clientId: string) => {
     const client = clients.find(c => c.id === clientId);
     return client?.name || 'Unknown Client';
@@ -288,6 +311,7 @@ export default function FormsPage() {
               onEdit={handleEditForm}
               onDelete={handleDeleteForm}
               onLink={handleLinkForm}
+              onUnlink={handleUnlinkForm}
               onCreateClient={handleCreateClientFromForm}
               linkedClientName={form.linkedClientId ? getClientName(form.linkedClientId) : undefined}
             />
