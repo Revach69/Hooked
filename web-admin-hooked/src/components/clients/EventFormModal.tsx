@@ -33,7 +33,6 @@ const EVENT_CARD_OPTIONS = ['Yes', 'No'] as const;
 export function EventFormModal({ open, onOpenChange, event, onSave, clientName }: EventFormModalProps) {
   const [formData, setFormData] = useState<Omit<ClientEvent, 'id'>>({
     expectedAttendees: null,
-    eventDate: null,
     accessTime: null,
     startTime: null,
     endTime: null,
@@ -54,7 +53,6 @@ export function EventFormModal({ open, onOpenChange, event, onSave, clientName }
     if (event) {
       setFormData({
         expectedAttendees: event.expectedAttendees,
-        eventDate: event.eventDate,
         accessTime: event.accessTime,
         startTime: event.startTime,
         endTime: event.endTime,
@@ -70,7 +68,6 @@ export function EventFormModal({ open, onOpenChange, event, onSave, clientName }
     } else {
       setFormData({
         expectedAttendees: null,
-        eventDate: null,
         accessTime: null,
         startTime: null,
         endTime: null,
@@ -163,16 +160,6 @@ export function EventFormModal({ open, onOpenChange, event, onSave, clientName }
               className={errors.expectedAttendees ? 'border-red-500' : ''}
             />
             {errors.expectedAttendees && <p className="text-sm text-red-500">{errors.expectedAttendees}</p>}
-          </div>
-
-          {/* Event Date (Legacy - keep for backward compatibility) */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Date of Event (Legacy)</label>
-            <Input
-              type="date"
-              value={formData.eventDate || ''}
-              onChange={(e) => handleInputChange('eventDate', e.target.value || null)}
-            />
           </div>
 
           {/* Access Time */}

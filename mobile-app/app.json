@@ -17,7 +17,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.hookedapp.app",
-      "buildNumber": "1.2.0",
+      "buildNumber": "12",
       "splash": {
         "image": "./assets/icon-rounded.png",
         "resizeMode": "contain",
@@ -62,7 +62,7 @@
         }
       },
       "package": "com.hookedapp.app",
-      "versionCode": 10,
+      "versionCode": 12,
       "googleServicesFile": "./android/app/google-services.json",
       "intentFilters": [
         {
@@ -151,7 +151,7 @@
         "url": "https://u.expo.dev/7a1de260-e3cb-4cbb-863c-1557213d69f0"
       }
     },
-    "runtimeVersion": "1.1.9",
+    "runtimeVersion": "1.2.0",
     "updates": {
       "url": "https://u.expo.dev/7a1de260-e3cb-4cbb-863c-1557213d69f0"
     }

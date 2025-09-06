@@ -64,27 +64,43 @@ export default function ZoomableImage({
     },
     onActive: (event) => {
       'worklet';
-      // Apply scale with constraints
+      // Apply scale with smooth constraints - allows fractional zoom levels
+      // event.scale naturally provides continuous values (1.0, 1.1, 1.2, etc.)
       const newScale = Math.min(Math.max(event.scale, minZoom), maxZoom);
       scale.value = newScale;
       
-      // Adjust focal point for pinch center
-      if (newScale > 1) {
-        focalX.value = event.focalX;
-        focalY.value = event.focalY;
-      }
+      // Adjust focal point for pinch center to zoom towards finger position
+      focalX.value = event.focalX - screenWidth / 2;
+      focalY.value = event.focalY - 140; // Approximate image center height
     },
     onEnd: () => {
       'worklet';
       // Always snap back to 1x zoom when user releases pinch
       scale.value = withSpring(1, {
-        damping: 15,
-        stiffness: 100,
+        damping: 12,
+        stiffness: 150,
+        mass: 0.8,
       });
-      translateX.value = withSpring(0);
-      translateY.value = withSpring(0);
-      focalX.value = withSpring(0);
-      focalY.value = withSpring(0);
+      translateX.value = withSpring(0, {
+        damping: 12,
+        stiffness: 150,
+        mass: 0.8,
+      });
+      translateY.value = withSpring(0, {
+        damping: 12,
+        stiffness: 150,
+        mass: 0.8,
+      });
+      focalX.value = withSpring(0, {
+        damping: 12,
+        stiffness: 150,
+        mass: 0.8,
+      });
+      focalY.value = withSpring(0, {
+        damping: 12,
+        stiffness: 150,
+        mass: 0.8,
+      });
       isZoomed.value = false;
       
       if (onZoomEnd) {
@@ -103,12 +119,14 @@ export default function ZoomableImage({
     },
     onActive: (event) => {
       'worklet';
-      // Only pan when zoomed in
-      if (scale.value > 1) {
-        // Calculate bounds to prevent panning too far
-        const maxTranslateX = (screenWidth * (scale.value - 1)) / 2;
-        const maxTranslateY = (200 * (scale.value - 1)) / 2; // Assuming image height of ~200
+      // Only pan when zoomed in (allow very small zoom for smooth transition)
+      if (scale.value > 1.05) {
+        // Calculate bounds based on current zoom level to prevent panning too far
+        const zoomFactor = scale.value - 1;
+        const maxTranslateX = (screenWidth * zoomFactor) / 2;
+        const maxTranslateY = (280 * zoomFactor) / 2; // Image container height
         
+        // Apply bounds checking
         translateX.value = Math.min(
           Math.max(event.translationX, -maxTranslateX),
           maxTranslateX

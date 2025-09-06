@@ -174,6 +174,7 @@ export interface EventProfile {
   about_me?: string;
   height_cm?: number;
   interests?: string[];
+  instagram_handle?: string;
 }
 
 export interface Like {

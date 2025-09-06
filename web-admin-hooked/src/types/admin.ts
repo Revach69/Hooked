@@ -1,7 +1,6 @@
 export type ClientEvent = {
   id: string;                      // Unique event ID for this client
   expectedAttendees?: number | null;
-  eventDate?: string | null;       // ISO date (yyyy-mm-dd) or null - deprecated, use accessTime/startTime/endTime
   accessTime?: string | null;      // When users can access the event on app
   startTime?: string | null;       // Actual start time of the event
   endTime?: string | null;         // When event ends and app content gets deleted
@@ -43,6 +42,7 @@ export type EventForm = {
   eventDetails?: string;       // Deprecated, use eventDescription
   eventDescription?: string;   // New field name
   eventAddress: string;
+  country?: string;            // New country field
   venueName: string;
   eventType: string;
   otherEventType?: string;

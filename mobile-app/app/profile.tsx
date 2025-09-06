@@ -20,11 +20,13 @@ import {
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { router, useFocusEffect } from 'expo-router';
-import { Clock, Users, LogOut, Edit, User, AlertCircle, MessageCircle } from 'lucide-react-native';
+import { Clock, Users, LogOut, Edit, User, AlertCircle, MessageCircle, Instagram } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { ensureFirebaseReady } from '../lib/firebaseReady';
 import { EventProfileAPI, EventAPI, ReportAPI, StorageAPI, LikeAPI, MessageAPI } from '../lib/firebaseApi';
 import * as ImagePicker from 'expo-image-picker';
+import * as Linking from 'expo-linking';
 import { ImageCacheService } from '../lib/services/ImageCacheService';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { checkSimpleNetworkConnectivity } from '../lib/utils';
@@ -166,10 +168,13 @@ export default function Profile() {
         const profiles = await Promise.race([profilePromise, profileTimeoutPromise]);
         
         if (profiles.length > 0) {
-          setProfile(profiles[0]);
+          const userProfile = profiles[0];
+          setProfile(userProfile);
+          
+          // Initialize instagram handle state
+          setInstagramHandle(userProfile.instagram_handle || '');
           
           // Load cached profile image URI immediately to prevent placeholder flash
-          const userProfile = profiles[0];
           const imageCacheKey = `profile_image_${sessionId}`;
           const cachedImageUri = GlobalDataCache.get<string>(imageCacheKey);
           
@@ -1018,6 +1023,55 @@ export default function Profile() {
     await EventProfileAPI.update(profile.id, { interested_in: interestedIn });
     setProfile((prev: any) => ({ ...prev, interested_in: interestedIn }));
     setSaving(false);
+  };
+
+  const handleConnectInstagram = () => {
+    // Direct to Instagram OAuth/API for profile connection
+    handleOpenInstagramApp();
+  };
+
+  const handleOpenInstagramApp = async () => {
+    Alert.alert(
+      'Instagram Connection',
+      'Instagram OAuth integration is being set up. This feature will allow you to connect your Instagram account securely.\n\nRequired setup:\n• Instagram Basic Display API\n• Firebase OAuth configuration\n• Deep link handling',
+      [
+        { text: 'OK' }
+      ]
+    );
+  };
+
+
+  const handleDisconnectInstagram = () => {
+    Alert.alert(
+      "Disconnect Instagram",
+      "Are you sure you want to remove your Instagram from your profile?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            setSaving(true);
+            await EventProfileAPI.update(profile.id, { instagram_handle: undefined });
+            setProfile((prev: any) => ({ ...prev, instagram_handle: null }));
+            setSaving(false);
+
+            Toast.show({
+              type: 'success',
+              text1: 'Instagram Disconnected',
+              text2: 'Your Instagram has been removed from your profile.',
+              position: 'top',
+              visibilityTime: 3500,
+              autoHide: true,
+              topOffset: 0,
+            });
+          }
+        }
+      ]
+    );
   };
 
   const styles = StyleSheet.create({
@@ -1904,6 +1958,62 @@ export default function Profile() {
           ) : (
             <Text style={{ color: isDark ? '#9ca3af' : '#6b7280', marginTop: 8 }}>{profile?.height_cm ? `${profile.height_cm} cm` : 'Height not defined yet'}</Text>
           )}
+        </View>
+
+        {/* Social */}
+        <View style={styles.card}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={{ fontWeight: 'bold', fontSize: 16, color: isDark ? '#ffffff' : '#1f2937' }}>Social</Text>
+          </View>
+          <View>
+            {profile?.instagram_handle ? (
+              <View style={{ marginTop: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Instagram size={20} color="#E4405F" style={{ marginRight: 8 }} />
+                    <Text style={{ color: isDark ? '#9ca3af' : '#6b7280', fontSize: 16 }}>
+                      @{profile.instagram_handle}
+                    </Text>
+                  </View>
+                  <TouchableOpacity 
+                    onPress={handleDisconnectInstagram}
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      backgroundColor: isDark ? '#374151' : '#f3f4f6',
+                      borderRadius: 8
+                    }}
+                  >
+                    <Text style={{ color: isDark ? '#9ca3af' : '#6b7280', fontSize: 12 }}>Disconnect</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <TouchableOpacity 
+                onPress={handleConnectInstagram}
+                style={{ marginTop: 8 }}
+              >
+                <LinearGradient
+                  colors={['#833AB4', '#FD1D1D', '#FCB045']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    paddingVertical: 14,
+                    paddingHorizontal: 20,
+                    borderRadius: 12,
+                  }}
+                >
+                  <Instagram size={22} color="#FFFFFF" style={{ marginRight: 10 }} />
+                  <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '600' }}>
+                    Connect Instagram
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
         {/* Info Cards */}

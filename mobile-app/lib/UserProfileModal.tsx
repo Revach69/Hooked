@@ -11,7 +11,8 @@ import {
   PanResponder,
   Animated,
 } from 'react-native';
-import { X, MapPin, Heart } from 'lucide-react-native';
+import { X, MapPin, Heart, Instagram } from 'lucide-react-native';
+import * as Linking from 'expo-linking';
 import ZoomableImage from './components/ZoomableImage';
 
 const { width, height } = Dimensions.get('window');
@@ -289,6 +290,25 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
     }
   };
 
+  const handleInstagramPress = () => {
+    if (profile.instagram_handle) {
+      const instagramUrl = `instagram://user?username=${profile.instagram_handle}`;
+      const webUrl = `https://instagram.com/${profile.instagram_handle}`;
+      
+      Linking.canOpenURL(instagramUrl)
+        .then((supported) => {
+          if (supported) {
+            Linking.openURL(instagramUrl);
+          } else {
+            Linking.openURL(webUrl);
+          }
+        })
+        .catch(() => {
+          Linking.openURL(webUrl);
+        });
+    }
+  };
+
   return (
     <Modal
       visible={visible}
@@ -326,7 +346,7 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
                 source={{ uri: profile.profile_photo_url }}
                 style={styles.profileImage}
                 containerStyle={{ width: '100%', height: '100%' }}
-                maxZoom={3}
+                maxZoom={5}
                 minZoom={1}
                 onZoomStart={() => setIsZooming(true)}
                 onZoomEnd={() => setIsZooming(false)}
@@ -351,6 +371,14 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
                   <MapPin size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
                   <Text style={styles.locationText}>{profile.location}</Text>
                 </View>
+              )}
+              
+              {/* Instagram - Optional */}
+              {profile.instagram_handle && (
+                <TouchableOpacity style={styles.locationRow} onPress={handleInstagramPress}>
+                  <Instagram size={16} color="#E4405F" />
+                  <Text style={[styles.locationText, { color: '#E4405F' }]}>@{profile.instagram_handle}</Text>
+                </TouchableOpacity>
               )}
               
               {/* Skip and Like Buttons */}

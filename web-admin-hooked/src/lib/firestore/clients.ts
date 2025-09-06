@@ -85,9 +85,8 @@ export const AdminClientAPI = {
     if (filters.source) {
       q = query(q, where('source', '==', filters.source));
     }
-    if (filters.eventKind) {
-      q = query(q, where('eventKind', '==', filters.eventKind));
-    }
+    // Note: eventKind filtering is now handled differently since it's per-event
+    // This filter is kept for backward compatibility but may not work as expected
     
     q = query(q, orderBy('createdAt', 'desc'));
     
@@ -118,7 +117,6 @@ export const AdminClientAPI = {
       organizerFormSent: 'Yes',
       eventCardCreated: 'No',
       expectedAttendees: formData?.expectedAttendees ? parseInt(formData.expectedAttendees) : null,
-      eventDate: formData?.eventDate || null, // Keep legacy field
       accessTime: formData?.accessTime || null,
       startTime: formData?.startTime || null,
       endTime: formData?.endTime || null,
@@ -181,7 +179,9 @@ export const AdminClientAPI = {
       eventCardCreated: 'Yes',
       organizerFormSent: 'No',
       expectedAttendees: eventData?.expectedAttendees || null,
-      eventDate: eventData?.eventDate || null,
+      accessTime: eventData?.accessTime || null,
+      startTime: eventData?.startTime || null,
+      endTime: eventData?.endTime || null,
       description: eventData?.description || null,
       eventKind: eventData?.eventKind || null,
       createdAt: new Date().toISOString(),

@@ -169,17 +169,17 @@ export function ClientsTable({
       
       {/* Access Time */}
       <td className="px-4 py-2 text-sm">
-        {formatDateTime(event.accessTime)}
+        {formatDateTime(event.accessTime || null)}
       </td>
       
       {/* Start Time */}
       <td className="px-4 py-2 text-sm">
-        {formatDateTime(event.startTime)}
+        {formatDateTime(event.startTime || null)}
       </td>
       
       {/* End Time */}
       <td className="px-4 py-2 text-sm">
-        {formatDateTime(event.endTime)}
+        {formatDateTime(event.endTime || null)}
       </td>
       
       {/* Organizer Form Sent */}
@@ -279,7 +279,7 @@ export function ClientsTable({
             size="sm"
             onClick={(e) => {
               e.stopPropagation();
-              handleImageDownload(event.eventImage);
+              handleImageDownload(event.eventImage || null);
             }}
             title="Download event image"
           >

@@ -117,6 +117,13 @@ export function EventFormModal({ form, isOpen, onClose, onSave }: EventFormModal
             <div className="text-sm mt-1">{form.eventAddress}</div>
           </div>
 
+          {form.country && (
+            <div>
+              <Label className="text-sm font-medium text-gray-500">Country</Label>
+              <div className="text-sm mt-1">{form.country}</div>
+            </div>
+          )}
+
           {form.eventDetails && (
             <div>
               <Label className="text-sm font-medium text-gray-500">Event Details</Label>

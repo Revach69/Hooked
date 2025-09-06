@@ -79,7 +79,6 @@ export default function FormsPage() {
       const eventData = {
         id: `event_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         expectedAttendees,
-        eventDate: form.eventDate, // Keep legacy field for backward compatibility
         accessTime: form.accessTime || null,
         startTime: form.startTime || null,
         endTime: form.endTime || null,
@@ -102,7 +101,7 @@ export default function FormsPage() {
         pocName: form.fullName,
         phone: form.phone,
         email: form.email,
-        country: null, // Form doesn't have country field
+        country: form.country || null,
         status: 'Initial Discussion',
         source: 'Contact Form',
         events: [eventData] // Include the event in the events array
@@ -156,34 +155,10 @@ export default function FormsPage() {
       // 3. phone
       if (!client.phone) updates.phone = form.phone;
 
-      // 4. expectedAttendees (convert string to number)
-      if (client.expectedAttendees == null) {
-        const mapExpectedAttendees = (val: string) => {
-          switch (val) {
-            case '<50': return 50;
-            case '51-100': return 75;
-            case '101-200': return 150;
-            case '201-300': return 250;
-            case '>300': return 350;
-            default:
-              const num = parseInt(val, 10);
-              return isNaN(num) ? null : num;
-          }
-        };
-        updates.expectedAttendees = mapExpectedAttendees(form.expectedAttendees);
-      }
+      // 4. country
+      if (!client.country) updates.country = form.country || null;
 
-      // 5. eventDate
-      if (!client.eventDate) updates.eventDate = form.eventDate;
-
-      // 6. eventKind (eventType/otherEventType)
-      if (!client.eventKind) {
-        // Allow free text for 'Other' event types by casting as any
-        const eventKindValue = form.eventType === "Other" && form.otherEventType
-          ? form.otherEventType
-          : form.eventType;
-        updates.eventKind = eventKindValue; // allow free text for custom event types
-      }
+      // Note: eventKind is now managed per-event, not at client level
 
       // Only update if there are fields to update
       if (Object.keys(updates).length > 0) {

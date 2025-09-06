@@ -17,9 +17,43 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
+interface EventFormData {
+  fullName: string;
+  email: string;
+  phone: string;
+  eventDescription: string;
+  eventAddress: string;
+  country: string;
+  venueName: string;
+  eventType: string;
+  otherEventType?: string;
+  expectedAttendees: string;
+  eventName: string;
+  accessTime: string;
+  startTime: string;
+  endTime: string;
+  eventLink?: string;
+  eventImage?: string;
+  posterPreference: string;
+  eventVisibility: string;
+  socialMedia?: string;
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const formData = await request.formData();
+    
+    // Convert FormData to regular object
+    const body: Partial<EventFormData> = {};
+    for (const [key, value] of formData.entries()) {
+      if (key === 'eventImage' && value instanceof File) {
+        // Handle file - for now we'll just store the filename
+        // In a production app, you'd upload this to cloud storage
+        body[key as keyof EventFormData] = value.name;
+      } else {
+        body[key as keyof EventFormData] = value as string;
+      }
+    }
     
     // Validate that required environment variables are set
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
@@ -31,7 +65,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate required fields
-    const requiredFields = ['fullName', 'email', 'phone', 'eventAddress', 'venueName', 'eventType', 'expectedAttendees', 'eventName', 'eventDate', 'posterPreference', 'eventVisibility'];
+    const requiredFields: (keyof EventFormData)[] = ['fullName', 'email', 'phone', 'eventAddress', 'country', 'venueName', 'eventType', 'expectedAttendees', 'eventName', 'accessTime', 'startTime', 'endTime', 'posterPreference', 'eventVisibility'];
     const missingFields = requiredFields.filter(field => !body[field]);
     
     if (body.eventType === 'Other' && !body.otherEventType) {
@@ -73,7 +107,7 @@ export async function POST(request: NextRequest) {
 
     // Send email as backup
     const emailService = new EmailService();
-    await emailService.sendEventFormEmail(body);
+    await emailService.sendEventFormEmail(body as EventFormData);
 
     return NextResponse.json(
       { message: 'Event form submitted successfully' },

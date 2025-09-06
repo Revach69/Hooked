@@ -383,7 +383,7 @@ export default function EventForm({
         return new Date(timestamp.seconds * 1000); // Raw timestamp object
       }
     }
-    return new Date(timestamp);
+    return new Date(timestamp as string | number | Date);
   };
 
   const categorizeEventsByStatus = (events: Event[]): {
