@@ -1,6 +1,6 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
-import { onDocumentCreated, onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { onDocumentCreated, onDocumentWritten, onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import * as path from 'path';
@@ -1662,6 +1662,45 @@ export const onMutualLikeASIA = onDocumentWritten({
 }, mutualLikeHandler);
 
 export const onMutualLikeSA = onDocumentWritten({
+  document: 'likes/{likeId}',
+  region: 'southamerica-east1',
+  database: 'southamerica-east1',
+}, mutualLikeHandler);
+
+// CRITICAL FIX: Add onDocumentUpdated triggers to catch field updates
+// When like documents are created first and then updated with is_mutual: true,
+// onDocumentWritten doesn't fire, but onDocumentUpdated will
+export const onMutualLikeUpdateILV2 = onDocumentUpdated({
+  document: 'likes/{likeId}',
+  region: 'me-west1',
+  database: '(default)',
+}, mutualLikeHandler);
+
+export const onMutualLikeUpdateAU = onDocumentUpdated({
+  document: 'likes/{likeId}',
+  region: 'australia-southeast2',
+  database: 'au-southeast2',
+}, mutualLikeHandler);
+
+export const onMutualLikeUpdateUS = onDocumentUpdated({
+  document: 'likes/{likeId}',
+  region: 'us-central1',
+  database: 'us-nam5',
+}, mutualLikeHandler);
+
+export const onMutualLikeUpdateEU = onDocumentUpdated({
+  document: 'likes/{likeId}',
+  region: 'europe-west3',
+  database: 'eu-eur3',
+}, mutualLikeHandler);
+
+export const onMutualLikeUpdateASIA = onDocumentUpdated({
+  document: 'likes/{likeId}',
+  region: 'asia-northeast1',
+  database: 'asia-ne1',
+}, mutualLikeHandler);
+
+export const onMutualLikeUpdateSA = onDocumentUpdated({
   document: 'likes/{likeId}',
   region: 'southamerica-east1',
   database: 'southamerica-east1',

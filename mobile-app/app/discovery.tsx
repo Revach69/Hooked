@@ -14,7 +14,7 @@ import {
   StatusBar,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Heart, Filter, Users, User, MessageCircle, X } from 'lucide-react-native';
 import { EventProfileAPI, LikeAPI, EventAPI, BlockedMatchAPI, SkippedProfileAPI } from '../lib/firebaseApi';
 import * as Sentry from '@sentry/react-native';
@@ -262,25 +262,40 @@ export default function Discovery() {
           console.log('Discovery: Using stored event data');
         } else {
           // Fallback to database query with regional support
-          // Add timeout to prevent hanging indefinitely
+          // Add timeout to prevent hanging indefinitely - but make it more lenient in dev
+          const timeoutDuration = __DEV__ ? 45000 : 30000; // 45s in dev, 30s in production
           const eventTimeoutPromise = new Promise<never>((_, reject) => {
-            setTimeout(() => reject(new Error('Event loading timeout')), 30000); // 30 second timeout - give more time
+            setTimeout(() => reject(new Error('Event loading timeout')), timeoutDuration);
           });
           
-          // Get event country for regional database targeting
-          const eventCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
-          const eventPromise = eventCountry 
-            ? EventAPI.get(eventId, eventCountry)
-            : EventAPI.filter({ id: eventId });
-          
-          const result = await Promise.race([eventPromise, eventTimeoutPromise]);
-          const events = Array.isArray(result) ? result : (result ? [result] : []);
-          
-          if (events.length > 0) {
-            eventData = events[0];
-            setCurrentEvent(eventData);
-            GlobalDataCache.set(CacheKeys.DISCOVERY_EVENT, eventData, 10 * 60 * 1000); // Cache for 10 minutes
-            console.log('Discovery: Loaded and cached event data from database');
+          try {
+            // Get event country for regional database targeting
+            const eventCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+            const eventPromise = eventCountry 
+              ? EventAPI.get(eventId, eventCountry)
+              : EventAPI.filter({ id: eventId });
+            
+            const result = await Promise.race([eventPromise, eventTimeoutPromise]);
+            const events = Array.isArray(result) ? result : (result ? [result] : []);
+            
+            if (events.length > 0) {
+              eventData = events[0];
+              setCurrentEvent(eventData);
+              GlobalDataCache.set(CacheKeys.DISCOVERY_EVENT, eventData, 10 * 60 * 1000); // Cache for 10 minutes
+              console.log('Discovery: Loaded and cached event data from database');
+            }
+          } catch (databaseError) {
+            console.warn('Discovery: Failed to load event from database:', databaseError);
+            
+            // In development, don't immediately clear session data on network errors
+            if (__DEV__) {
+              console.log('Discovery: Development mode - not clearing session data on network error');
+              // Try to continue with minimal functionality
+              return;
+            }
+            
+            // In production, still clear on actual network failures after some attempts
+            eventData = null;
           }
         }
       }
@@ -290,9 +305,10 @@ export default function Discovery() {
         await loadBlockedProfiles(eventId, sessionId);
         await loadSkippedProfiles(eventId, sessionId);
         await loadViewedProfiles(eventId);
-      } else {
-        // Event doesn't exist - clear only after confirmation
-        console.log('Event not found in discovery, clearing session data');
+      } else if (!__DEV__) {
+        // Only clear session data and redirect in production builds
+        // In development, network issues are common and shouldn't reset the session
+        console.log('Event not found, clearing session data');
         await AsyncStorageUtils.multiRemove([
           'currentEventId',
           'currentSessionId',
@@ -302,9 +318,10 @@ export default function Discovery() {
           'currentEventCountry',
           'currentEventData'
         ]);
-        // 1. Event expired - correct to go home
         router.replace('/home');
         return;
+      } else {
+        console.log('Discovery: Development mode - event not found but keeping session for debugging');
       }
 
       // Verify that the user's profile actually exists in the database
@@ -404,6 +421,33 @@ export default function Discovery() {
     // Initialize image cache service
     ImageCacheService.initialize();
   }, [initializeSession]);
+
+  // Force refresh user profile data when page gains focus (e.g., after visibility toggle on profile page)
+  useFocusEffect(
+    useCallback(() => {
+      const refreshUserProfile = async () => {
+        if (currentSessionId && currentEvent?.id) {
+          try {
+            const eventCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+            const profiles = await EventProfileAPI.filter({
+              event_id: currentEvent.id,
+              session_id: currentSessionId
+            }, eventCountry);
+            
+            if (profiles.length > 0) {
+              const updatedProfile = profiles[0];
+              setCurrentUserProfile(updatedProfile);
+              console.log('Discovery: Refreshed user profile on focus, is_visible:', updatedProfile.is_visible);
+            }
+          } catch (error) {
+            console.error('Error refreshing user profile on focus:', error);
+          }
+        }
+      };
+
+      refreshUserProfile();
+    }, [currentSessionId, currentEvent?.id])
+  );
 
   // Check and show How It Works modal after event and profile are loaded
   useEffect(() => {
@@ -1550,14 +1594,14 @@ export default function Discovery() {
         {/* Bottom Navigation */}
         <View style={styles.bottomNavigation}>
           <TouchableOpacity
-            style={styles.navButton}
+            style={[styles.navButton, styles.navButtonActive]}
             onPress={() => {}} // Already on discovery page but hidden
             accessibilityRole="button"
             accessibilityLabel="Discover"
             accessibilityHint="Currently on discovery page"
           >
-            <Users size={24} color="#9ca3af" />
-            <Text style={styles.navButtonText}>Discover</Text>
+            <Users size={24} color="#8b5cf6" />
+            <Text style={[styles.navButtonText, styles.navButtonTextActive]}>Discover</Text>
           </TouchableOpacity>
           
           <TouchableOpacity
@@ -1572,14 +1616,14 @@ export default function Discovery() {
           </TouchableOpacity>
           
           <TouchableOpacity
-            style={[styles.navButton, styles.navButtonActive]}
+            style={styles.navButton}
             onPress={() => router.push('/profile')}
             accessibilityRole="button"
             accessibilityLabel="Profile Tab"
             accessibilityHint="Navigate to your profile settings"
           >
-            <User size={24} color="#8b5cf6" />
-            <Text style={[styles.navButtonText, styles.navButtonTextActive]}>Profile</Text>
+            <User size={24} color="#9ca3af" />
+            <Text style={styles.navButtonText}>Profile</Text>
           </TouchableOpacity>
         </View>
 

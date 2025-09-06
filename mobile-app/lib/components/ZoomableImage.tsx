@@ -5,6 +5,7 @@ import {
   Dimensions,
   ImageStyle,
   ViewStyle,
+  Image,
 } from 'react-native';
 import {
   GestureHandlerRootView,
@@ -181,10 +182,19 @@ export default function ZoomableImage({
             shouldCancelWhenOutside={false}
           >
             <Animated.View style={[styles.imageWrapper, animatedStyle]}>
-              <Animated.Image
+              <Image
                 source={source}
                 style={[styles.image, style]}
                 resizeMode="contain"
+                onError={(error) => {
+                  console.log('ZoomableImage: Failed to load image:', source.uri, error.nativeEvent.error);
+                }}
+                onLoad={() => {
+                  console.log('ZoomableImage: Successfully loaded image:', source.uri);
+                }}
+                onLoadStart={() => {
+                  console.log('ZoomableImage: Started loading image:', source.uri);
+                }}
               />
             </Animated.View>
           </PinchGestureHandler>
