@@ -1,10 +1,9 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
   Modal,
   TouchableOpacity,
-  Image,
   ScrollView,
   StyleSheet,
   useColorScheme,
@@ -13,6 +12,7 @@ import {
   Animated,
 } from 'react-native';
 import { X, MapPin, Heart } from 'lucide-react-native';
+import ZoomableImage from './components/ZoomableImage';
 
 const { width, height } = Dimensions.get('window');
 
@@ -29,6 +29,7 @@ interface UserProfileModalProps {
 export default function UserProfileModal({ visible, profile, onClose, onLike, onSkip, isLiked = false, isSkipped = false }: UserProfileModalProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const [isZooming, setIsZooming] = useState(false);
   
   // Animation values for swipe gesture
   const translateY = useRef(new Animated.Value(0)).current;
@@ -43,11 +44,14 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
     extrapolate: 'clamp',
   });
   
-  // PanResponder for swipe to dismiss (only active on image area)
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
+  // PanResponder for swipe to dismiss (only active on image area and when not zooming)
+  const panResponder = React.useMemo(
+    () => PanResponder.create({
+      onStartShouldSetPanResponder: () => !isZooming,
       onMoveShouldSetPanResponder: (_, gestureState) => {
+        // Don't respond if zooming
+        if (isZooming) return false;
+        
         // Only respond to clear vertical swipes with significant movement
         // This prevents conflicts with taps and accidental gestures
         const isVerticalSwipe = Math.abs(gestureState.dy) > Math.abs(gestureState.dx);
@@ -84,8 +88,9 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
           }).start();
         }
       },
-    })
-  ).current;
+    }),
+    [isZooming, onClose, translateY]
+  );
 
   if (!profile) return null;
 
@@ -314,13 +319,17 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
             <X size={24} color="white" />
           </TouchableOpacity>
 
-          {/* Profile Image - Swipeable */}
+          {/* Profile Image - Swipeable and Zoomable */}
           <View style={styles.imageContainer} {...panResponder.panHandlers}>
             {profile.profile_photo_url ? (
-              <Image
+              <ZoomableImage
                 source={{ uri: profile.profile_photo_url }}
-                onError={() => {}}
                 style={styles.profileImage}
+                containerStyle={{ width: '100%', height: '100%' }}
+                maxZoom={3}
+                minZoom={1}
+                onZoomStart={() => setIsZooming(true)}
+                onZoomEnd={() => setIsZooming(false)}
               />
             ) : (
               <View style={styles.fallbackAvatar}>
