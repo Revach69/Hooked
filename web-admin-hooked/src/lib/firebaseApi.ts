@@ -569,7 +569,9 @@ export const EventAPI = {
       console.log(`🌍 Using functions region: ${functionsRegion} for deletion`);
       
       // Use HTTP endpoint for proper CORS support
-      const deleteUrl = `https://${functionsRegion}-hooked-69.cloudfunctions.net/deleteEventInRegion`;
+      // Use environment-aware project ID
+      const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'hooked-69';
+      const deleteUrl = `https://${functionsRegion}-${projectId}.cloudfunctions.net/deleteEventInRegion`;
       
       const response = await fetch(deleteUrl, {
         method: 'POST',

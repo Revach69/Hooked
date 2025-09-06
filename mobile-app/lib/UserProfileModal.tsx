@@ -375,9 +375,8 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
               
               {/* Instagram - Optional */}
               {profile.instagram_handle && (
-                <TouchableOpacity style={styles.locationRow} onPress={handleInstagramPress}>
-                  <Instagram size={16} color="#E4405F" />
-                  <Text style={[styles.locationText, { color: '#E4405F' }]}>@{profile.instagram_handle}</Text>
+                <TouchableOpacity style={[styles.locationRow, { justifyContent: 'center', paddingVertical: 8 }]} onPress={handleInstagramPress}>
+                  <Instagram size={24} color="#E4405F" />
                 </TouchableOpacity>
               )}
               

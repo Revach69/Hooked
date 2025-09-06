@@ -50,7 +50,7 @@ export default function SurveyScreen() {
           Toast.show({
             type: 'error',
             text1: 'Survey Unavailable',
-            text2: 'This survey is no longer available. Surveys are only available between 2-26 hours after an event ends.',
+            text2: 'This survey is no longer available.',
             position: 'top',
             visibilityTime: 3500,
             autoHide: true,
@@ -123,7 +123,7 @@ export default function SurveyScreen() {
       Toast.show({
         type: 'success',
         text1: 'Thank You!',
-        text2: 'Your feedback helps us improve Hooked for everyone!',
+        text2: 'Thank you for your feedback!',
         position: 'top',
         visibilityTime: 3500,
         autoHide: true,

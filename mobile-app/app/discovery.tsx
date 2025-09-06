@@ -471,10 +471,11 @@ export default function Discovery() {
   useEffect(() => {
     if (!currentEvent?.id || !currentSessionId || !currentUserProfile?.id) return;
 
-    try {
-      // Get event-specific database
-      const eventCountry = currentEvent?.location;
-      const eventDb = getDbForEvent(eventCountry);
+    const setupMessageListener = async () => {
+      try {
+        // Get event-specific database
+        const eventCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+        const eventDb = getDbForEvent(eventCountry);
       
       const messagesQuery = query(
         collection(eventDb, 'messages'),
@@ -493,14 +494,17 @@ export default function Discovery() {
         }
       });
 
-      return () => unsubscribe();
-    } catch (error) {
-      Sentry.captureException(error);
-    }
+        return () => unsubscribe();
+      } catch (error) {
+        Sentry.captureException(error);
+      }
+    };
+
+    setupMessageListener();
   }, [currentEvent?.id, currentSessionId, currentUserProfile?.id]);
 
   // Define setupOtherListeners before it's used
-  const setupOtherListeners = useCallback(() => {
+  const setupOtherListeners = useCallback(async () => {
     if (!currentEvent?.id || !currentSessionId) return;
 
     // Prevent multiple listener creation
@@ -510,7 +514,7 @@ export default function Discovery() {
 
     try {
       // Get event-specific database
-      const eventCountry = currentEvent?.location;
+      const eventCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
       const eventDb = getDbForEvent(eventCountry);
       
       // 2. Other visible profiles listener
@@ -612,10 +616,11 @@ export default function Discovery() {
     // Clean up existing listeners before creating new ones
     cleanupAllListeners();
 
-    try {
-      // Get event-specific database
-      const eventCountry = currentEvent?.location;
-      const eventDb = getDbForEvent(eventCountry);
+    const setupConsolidatedListeners = async () => {
+      try {
+        // Get event-specific database
+        const eventCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+        const eventDb = getDbForEvent(eventCountry);
       
       // 1. User profile listener
       const userProfileQuery = query(
@@ -668,11 +673,14 @@ export default function Discovery() {
         Sentry.captureException(error);
       });
 
-      listenersRef.current.userProfile = userProfileUnsubscribe;
+        listenersRef.current.userProfile = userProfileUnsubscribe;
 
-    } catch (error) {
-      Sentry.captureException(error);
-    }
+      } catch (error) {
+        Sentry.captureException(error);
+      }
+    };
+
+    setupConsolidatedListeners();
 
     return () => {
       cleanupAllListeners();
@@ -931,7 +939,7 @@ export default function Discovery() {
       Toast.show({
         type: 'warning',
         text1: 'Profile Not Visible',
-        text2: 'Both profiles must be visible to like someone. Please make sure your profile is visible in settings.',
+        text2: 'Make your profile visible in settings to like others.',
         position: 'top',
         visibilityTime: 3500,
         autoHide: true,
@@ -976,7 +984,7 @@ export default function Discovery() {
         const theirLikeRecord = theirLikesToMe[0];
 
         // Update both records for mutual match
-        const eventCountry = currentEvent?.location;
+        const eventCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry') || undefined;
         await trackAsyncOperation('update_like_mutual', async () => {
           await Promise.all([
             LikeAPI.update(newLike.id, { 

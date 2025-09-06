@@ -353,12 +353,12 @@ export function ClientsTable({
   const sortedData = useMemo(() => {
     const sorted = [...filteredData];
     sorted.sort((a, b) => {
-      let aValue: any = a[sortBy as keyof AdminClient];
-      let bValue: any = b[sortBy as keyof AdminClient];
+      let aValue: unknown = a[sortBy as keyof AdminClient];
+      let bValue: unknown = b[sortBy as keyof AdminClient];
       
       if (sortBy === 'createdAt') {
-        aValue = new Date(aValue as any).getTime();
-        bValue = new Date(bValue as any).getTime();
+        aValue = new Date(aValue as string).getTime();
+        bValue = new Date(bValue as string).getTime();
       }
       
       if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
@@ -373,7 +373,7 @@ export function ClientsTable({
       {mergeMode && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <p className="text-blue-800">
-            Merge mode active. Select a target client to merge "{clients.find(c => c.id === selectedClientForMerge)?.name}" into.
+            Merge mode active. Select a target client to merge &quot;{clients.find(c => c.id === selectedClientForMerge)?.name}&quot; into.
             <Button 
               variant="ghost" 
               size="sm" 

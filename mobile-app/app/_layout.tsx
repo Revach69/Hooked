@@ -41,6 +41,7 @@ import { useIsForegroundGetter } from '../lib/notifications/helpers';
 import CustomSplashScreen from '../lib/components/SplashScreen';
 import ErrorBoundary from '../lib/components/ErrorBoundary';
 import { CustomMatchToast } from '../lib/components/CustomMatchToast';
+import MatchAlertModal from '../lib/components/MatchAlertModal';
 import * as Notifications from 'expo-notifications';
 // import { AppStateSyncService } from '../lib/services/AppStateSyncService'; // DEPRECATED - Client handles notification display
 import * as Linking from 'expo-linking';
@@ -65,6 +66,14 @@ import { getSessionAndInstallationIds } from '../lib/session/sessionId';
 export default function RootLayout() {
   const router = useRouter();
   const [appIsReady, setAppIsReady] = useState(false);
+  
+  // Match alert modal state
+  const [matchModalVisible, setMatchModalVisible] = useState(false);
+  const [matchModalData, setMatchModalData] = useState<{
+    partnerName: string;
+    partnerImage?: string;
+    partnerSessionId: string;
+  } | null>(null);
 
   // 1) Provide getIsForeground to the router
   const getIsForeground = useIsForegroundGetter();
@@ -140,28 +149,15 @@ export default function RootLayout() {
         
         // CLIENT-SIDE DECISION: Show in-app notification if foreground
         if (isForeground && data?.source !== 'local_fallback') {
-          // Show in-app toast/alert for foreground notifications
+          // Show in-app alert for foreground notifications
           if (data?.type === 'match') {
-            Toast.show({
-              type: 'success',
-              text1: notification.request.content.title || 'New Match!',
-              text2: notification.request.content.body || 'You have a new match!',
-              position: 'top',
-              visibilityTime: 4000,
-              onPress: () => {
-                if (data?.partnerSessionId) {
-                  router.push({
-                    pathname: '/chat',
-                    params: {
-                      matchId: data.partnerSessionId,
-                      matchName: data.partnerName || 'Your match'
-                    }
-                  });
-                } else {
-                  router.push('/matches');
-                }
-              }
+            // Show custom match alert modal instead of toast
+            setMatchModalData({
+              partnerName: data.partnerName || 'Your match',
+              partnerImage: data.partnerImage, // If available in notification data
+              partnerSessionId: data.partnerSessionId || ''
             });
+            setMatchModalVisible(true);
           } else if (data?.type === 'message') {
             Toast.show({
               type: 'info',
@@ -211,6 +207,26 @@ export default function RootLayout() {
       sub.remove();
     };
   }, [getIsForeground, router]);
+
+  // Match modal handlers
+  const handleStartChatting = () => {
+    if (matchModalData?.partnerSessionId) {
+      router.push({
+        pathname: '/chat',
+        params: {
+          matchId: matchModalData.partnerSessionId,
+          matchName: matchModalData.partnerName
+        }
+      });
+    } else {
+      router.push('/matches');
+    }
+  };
+
+  const handleCloseMatchModal = () => {
+    setMatchModalVisible(false);
+    setMatchModalData(null);
+  };
 
   // 2.5) Push notification tap handler with analytics
   useEffect(() => {
@@ -653,6 +669,15 @@ export default function RootLayout() {
           ),
           /* eslint-enable react/prop-types */
         }}
+        />
+        
+        {/* Match Alert Modal */}
+        <MatchAlertModal
+          visible={matchModalVisible}
+          partnerName={matchModalData?.partnerName || ''}
+          partnerImage={matchModalData?.partnerImage}
+          onStartChatting={handleStartChatting}
+          onClose={handleCloseMatchModal}
         />
       </ErrorBoundary>
     </GestureHandlerRootView>

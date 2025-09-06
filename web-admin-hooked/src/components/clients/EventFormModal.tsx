@@ -111,7 +111,7 @@ export function EventFormModal({ open, onOpenChange, event, onSave, clientName }
     }
   };
 
-  const handleInputChange = (field: string, value: any) => {
+  const handleInputChange = (field: string, value: string | number | boolean | null) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
@@ -232,7 +232,7 @@ export function EventFormModal({ open, onOpenChange, event, onSave, clientName }
           {/* Event Link */}
           <div className="space-y-2">
             <label className="text-sm font-medium">Event Link</label>
-            <p className="text-xs text-gray-500">Will be presented on event card in IRL page on website as the "Join event" button</p>
+            <p className="text-xs text-gray-500">Will be presented on event card in IRL page on website as the &quot;Join event&quot; button</p>
             <Input
               type="url"
               value={formData.eventLink || ''}

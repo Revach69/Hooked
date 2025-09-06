@@ -124,7 +124,9 @@ export default function EventsPage() {
       const selectedRegionsArray = Array.from(selectedRegions);
       console.log('📡 Calling getEventsFromAllRegions with regions:', selectedRegionsArray);
       
-      const response = await fetch('https://us-central1-hooked-69.cloudfunctions.net/getEventsFromAllRegions', {
+      // Use environment-aware Firebase project ID
+      const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'hooked-69';
+      const response = await fetch(`https://us-central1-${projectId}.cloudfunctions.net/getEventsFromAllRegions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

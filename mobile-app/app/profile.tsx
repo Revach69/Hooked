@@ -21,7 +21,6 @@ import {
 import Toast from 'react-native-toast-message';
 import { router, useFocusEffect } from 'expo-router';
 import { Clock, Users, LogOut, Edit, User, AlertCircle, MessageCircle, Instagram } from 'lucide-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { ensureFirebaseReady } from '../lib/firebaseReady';
 import { EventProfileAPI, EventAPI, ReportAPI, StorageAPI, LikeAPI, MessageAPI } from '../lib/firebaseApi';
@@ -70,6 +69,8 @@ export default function Profile() {
   const [cachedProfileImageUri, setCachedProfileImageUri] = useState<string | null>(null);
   const [cachedUserImageUris, setCachedUserImageUris] = useState<Map<string, string>>(new Map());
   const [showImagePreview, setShowImagePreview] = useState(false);
+  const [instagramHandle, setInstagramHandle] = useState(profile?.instagram_handle || '');
+  const [editingInstagram, setEditingInstagram] = useState(false);
 
   // Load cached image URI immediately on mount to prevent flash
   useEffect(() => {
@@ -413,7 +414,7 @@ export default function Profile() {
       Toast.show({
         type: 'warning',
         text1: 'File Too Large',
-        text2: 'Image must be smaller than 5MB. Please choose a smaller image.',
+        text2: 'Image must be smaller than 5MB.',
         position: 'top',
         visibilityTime: 3500,
         autoHide: true,
@@ -931,11 +932,35 @@ export default function Profile() {
   };
 
   const handleSaveAboutMe = async () => {
-    setSaving(true);
-    await EventProfileAPI.update(profile.id, { about_me: aboutMe });
-    setProfile((prev: any) => ({ ...prev, about_me: aboutMe }));
-    setEditingAboutMe(false);
-    setSaving(false);
+    try {
+      setSaving(true);
+      await EventProfileAPI.update(profile.id, { about_me: aboutMe });
+      setProfile((prev: any) => ({ ...prev, about_me: aboutMe }));
+      setEditingAboutMe(false);
+      
+      Toast.show({
+        type: 'success',
+        text1: 'About Me Updated!',
+        text2: 'Your about me section has been saved.',
+        position: 'top',
+        visibilityTime: 2000,
+        autoHide: true,
+        topOffset: 0,
+      });
+    } catch (error) {
+      console.error('Error saving about me:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Save Failed',
+        text2: 'Failed to save about me. Please try again.',
+        position: 'top',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 0,
+      });
+    } finally {
+      setSaving(false);
+    }
   };
   // Convert feet/inches to cm
   const feetInchesToCm = (feet: number, inches: number): number => {
@@ -945,19 +970,43 @@ export default function Profile() {
 
 
   const handleSaveHeight = async () => {
-    setSaving(true);
-    let heightInCm: number;
-    
-    if (heightUnit === 'cm') {
-      heightInCm = parseInt(height);
-    } else {
-      heightInCm = feetInchesToCm(parseInt(feet), parseInt(inches));
+    try {
+      setSaving(true);
+      let heightInCm: number;
+      
+      if (heightUnit === 'cm') {
+        heightInCm = parseInt(height);
+      } else {
+        heightInCm = feetInchesToCm(parseInt(feet), parseInt(inches));
+      }
+      
+      await EventProfileAPI.update(profile.id, { height_cm: heightInCm });
+      setProfile((prev: any) => ({ ...prev, height_cm: heightInCm }));
+      setEditingHeight(false);
+      
+      Toast.show({
+        type: 'success',
+        text1: 'Height Updated!',
+        text2: 'Your height has been saved.',
+        position: 'top',
+        visibilityTime: 2000,
+        autoHide: true,
+        topOffset: 0,
+      });
+    } catch (error) {
+      console.error('Error saving height:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Save Failed',
+        text2: 'Failed to save height. Please try again.',
+        position: 'top',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 0,
+      });
+    } finally {
+      setSaving(false);
     }
-    
-    await EventProfileAPI.update(profile.id, { height_cm: heightInCm });
-    setProfile((prev: any) => ({ ...prev, height_cm: heightInCm }));
-    setEditingHeight(false);
-    setSaving(false);
   };
   const handleToggleInterest = (interest: string) => {
     let newInterests = [...interests];
@@ -969,11 +1018,35 @@ export default function Profile() {
     setInterests(newInterests);
   };
   const handleSaveInterests = async () => {
-    setSaving(true);
-    await EventProfileAPI.update(profile.id, { interests });
-    setProfile((prev: any) => ({ ...prev, interests }));
-    setShowInterests(false);
-    setSaving(false);
+    try {
+      setSaving(true);
+      await EventProfileAPI.update(profile.id, { interests });
+      setProfile((prev: any) => ({ ...prev, interests }));
+      setShowInterests(false);
+      
+      Toast.show({
+        type: 'success',
+        text1: 'Interests Updated!',
+        text2: 'Your interests have been saved.',
+        position: 'top',
+        visibilityTime: 2000,
+        autoHide: true,
+        topOffset: 0,
+      });
+    } catch (error) {
+      console.error('Error saving interests:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Save Failed',
+        text2: 'Failed to save interests. Please try again.',
+        position: 'top',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 0,
+      });
+    } finally {
+      setSaving(false);
+    }
   };
   const handleToggleVisibility = async (value: boolean) => {
     try {
@@ -987,8 +1060,8 @@ export default function Profile() {
         type: 'success',
         text1: value ? 'Profile Visible' : 'Profile Hidden',
         text2: value 
-          ? 'Your profile is now visible to other users. You can see and be seen by other users in discovery.' 
-          : 'Your profile is now hidden. You won\'t see other users in discovery, but you can still access your matches and chat with them.',
+          ? 'You can now see and be seen by other users.' 
+          : 'You won\'t see other users, but can still chat with matches.',
         position: 'top',
         visibilityTime: 3500,
         autoHide: true,
@@ -1025,19 +1098,62 @@ export default function Profile() {
     setSaving(false);
   };
 
-  const handleConnectInstagram = () => {
-    // Direct to Instagram OAuth/API for profile connection
-    handleOpenInstagramApp();
+  const handleSaveInstagram = async () => {
+    const trimmedHandle = instagramHandle.trim();
+    if (!trimmedHandle) {
+      Toast.show({
+        type: 'error',
+        text1: 'Invalid Handle',
+        text2: 'Please enter a valid Instagram handle.',
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
+      return;
+    }
+    setSaving(true);
+    // Accept both @username and username formats - just use the username part
+    const cleanHandle = trimmedHandle.startsWith('@') ? trimmedHandle.slice(1) : trimmedHandle;
+    await EventProfileAPI.update(profile.id, { instagram_handle: cleanHandle });
+    setProfile((prev: any) => ({ ...prev, instagram_handle: cleanHandle }));
+    setInstagramHandle(cleanHandle);
+    setEditingInstagram(false);
+    setSaving(false);
+
+    Toast.show({
+      type: 'success',
+      text1: 'Instagram Connected!',
+      text2: 'Instagram handle added to profile.',
+      position: 'top',
+      visibilityTime: 3500,
+      autoHide: true,
+      topOffset: 0,
+    });
   };
 
-  const handleOpenInstagramApp = async () => {
-    Alert.alert(
-      'Instagram Connection',
-      'Instagram OAuth integration is being set up. This feature will allow you to connect your Instagram account securely.\n\nRequired setup:\n• Instagram Basic Display API\n• Firebase OAuth configuration\n• Deep link handling',
-      [
-        { text: 'OK' }
-      ]
-    );
+  const handleOpenInstagramProfile = async () => {
+    if (profile?.instagram_handle) {
+      const instagramUrl = `instagram://user?username=${profile.instagram_handle}`;
+      const webUrl = `https://instagram.com/${profile.instagram_handle}`;
+      
+      try {
+        const canOpenApp = await Linking.canOpenURL(instagramUrl);
+        if (canOpenApp) {
+          await Linking.openURL(instagramUrl);
+        } else {
+          await Linking.openURL(webUrl);
+        }
+      } catch (error) {
+        console.error('Error opening Instagram:', error);
+        // Fallback to web URL
+        try {
+          await Linking.openURL(webUrl);
+        } catch (fallbackError) {
+          console.error('Error opening Instagram web URL:', fallbackError);
+        }
+      }
+    }
   };
 
 
@@ -1056,13 +1172,15 @@ export default function Profile() {
           onPress: async () => {
             setSaving(true);
             await EventProfileAPI.update(profile.id, { instagram_handle: undefined });
-            setProfile((prev: any) => ({ ...prev, instagram_handle: null }));
+            setProfile((prev: any) => ({ ...prev, instagram_handle: undefined }));
+            setInstagramHandle('');
+            setEditingInstagram(false);
             setSaving(false);
 
             Toast.show({
               type: 'success',
               text1: 'Instagram Disconnected',
-              text2: 'Your Instagram has been removed from your profile.',
+              text2: 'Instagram removed from profile.',
               position: 'top',
               visibilityTime: 3500,
               autoHide: true,
@@ -1960,60 +2078,75 @@ export default function Profile() {
           )}
         </View>
 
-        {/* Social */}
+        {/* Instagram */}
         <View style={styles.card}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={{ fontWeight: 'bold', fontSize: 16, color: isDark ? '#ffffff' : '#1f2937' }}>Social</Text>
+            <Text style={{ fontWeight: 'bold', fontSize: 16, color: isDark ? '#ffffff' : '#1f2937' }}>Instagram</Text>
+            <TouchableOpacity 
+              onPress={() => setEditingInstagram(!editingInstagram)}
+              disabled={saving}
+            >
+              <Edit size={18} color={isDark ? '#9ca3af' : '#6b7280'} />
+            </TouchableOpacity>
           </View>
-          <View>
-            {profile?.instagram_handle ? (
-              <View style={{ marginTop: 8 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Instagram size={20} color="#E4405F" style={{ marginRight: 8 }} />
-                    <Text style={{ color: isDark ? '#9ca3af' : '#6b7280', fontSize: 16 }}>
-                      @{profile.instagram_handle}
-                    </Text>
-                  </View>
-                  <TouchableOpacity 
-                    onPress={handleDisconnectInstagram}
-                    style={{
-                      paddingHorizontal: 12,
-                      paddingVertical: 6,
-                      backgroundColor: isDark ? '#374151' : '#f3f4f6',
-                      borderRadius: 8
-                    }}
-                  >
-                    <Text style={{ color: isDark ? '#9ca3af' : '#6b7280', fontSize: 12 }}>Disconnect</Text>
-                  </TouchableOpacity>
-                </View>
+          {editingInstagram ? (
+            <View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+                <Instagram size={20} color="#E4405F" style={{ marginRight: 8 }} />
+                <TextInput
+                  style={[styles.input, { flex: 1, minHeight: 45, paddingVertical: 12 }]}
+                  value={instagramHandle}
+                  onChangeText={setInstagramHandle}
+                  placeholder="@username"
+                  placeholderTextColor={isDark ? '#6b7280' : '#9ca3af'}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
               </View>
-            ) : (
-              <TouchableOpacity 
-                onPress={handleConnectInstagram}
-                style={{ marginTop: 8 }}
-              >
-                <LinearGradient
-                  colors={['#833AB4', '#FD1D1D', '#FCB045']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
+              <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 8 }}>
+                <TouchableOpacity onPress={handleSaveInstagram} disabled={saving} style={styles.saveButton}>
+                  <Text style={styles.saveButtonText}>Save</Text>
+                </TouchableOpacity>
+                {profile?.instagram_handle && (
+                  <TouchableOpacity onPress={handleDisconnectInstagram} disabled={saving} style={[styles.cancelButton, { backgroundColor: '#ef4444' }]}>
+                    <Text style={[styles.cancelButtonText, { color: '#ffffff' }]}>Remove</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity onPress={() => { 
+                  setEditingInstagram(false); 
+                  setInstagramHandle(profile?.instagram_handle || ''); 
+                }} style={styles.cancelButton}>
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <View>
+              {profile?.instagram_handle ? (
+                <TouchableOpacity 
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    paddingVertical: 14,
-                    paddingHorizontal: 20,
-                    borderRadius: 12,
+                    marginTop: 8,
+                    paddingVertical: 12,
+                    paddingHorizontal: 16,
+                    backgroundColor: isDark ? '#374151' : '#f9fafb',
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    borderColor: '#E4405F'
                   }}
+                  onPress={handleOpenInstagramProfile}
                 >
-                  <Instagram size={22} color="#FFFFFF" style={{ marginRight: 10 }} />
-                  <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '600' }}>
-                    Connect Instagram
+                  <Instagram size={20} color="#E4405F" style={{ marginRight: 8 }} />
+                  <Text style={{ color: '#E4405F', fontSize: 16, fontWeight: '500' }}>
+                    @{profile.instagram_handle}
                   </Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            )}
-          </View>
+                </TouchableOpacity>
+              ) : (
+                <Text style={{ color: isDark ? '#9ca3af' : '#6b7280', marginTop: 8 }}>No Instagram handle added yet</Text>
+              )}
+            </View>
+          )}
         </View>
 
         {/* Info Cards */}

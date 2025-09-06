@@ -97,7 +97,7 @@ export const AdminClientAPI = {
     })) as AdminClient[];
   },
 
-  async linkForm(clientId: string, formId: string, formData?: any): Promise<void> {
+  async linkForm(clientId: string, formId: string, formData?: Record<string, unknown>): Promise<void> {
     const dbInstance = getDbInstance();
     const docRef = doc(dbInstance, 'adminClients', clientId);
     
@@ -159,7 +159,7 @@ export const AdminClientAPI = {
     });
   },
 
-  async linkEvent(clientId: string, eventId: string, eventData?: any): Promise<void> {
+  async linkEvent(clientId: string, eventId: string, eventData?: Record<string, unknown>): Promise<void> {
     const dbInstance = getDbInstance();
     const docRef = doc(dbInstance, 'adminClients', clientId);
     
