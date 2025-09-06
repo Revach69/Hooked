@@ -98,42 +98,118 @@ export const AdminClientAPI = {
     })) as AdminClient[];
   },
 
-  async linkForm(clientId: string, formId: string): Promise<void> {
+  async linkForm(clientId: string, formId: string, formData?: any): Promise<void> {
     const dbInstance = getDbInstance();
     const docRef = doc(dbInstance, 'adminClients', clientId);
-    await updateDoc(docRef, { 
+    
+    // Get the current client data
+    const clientDoc = await getDoc(docRef);
+    if (!clientDoc.exists()) {
+      throw new Error('Client not found');
+    }
+    
+    const currentClient = clientDoc.data() as AdminClient;
+    const currentEvents = currentClient.events || [];
+    
+    // Create a new event entry for this client based on the form
+    const newEvent = {
+      id: `event_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       linkedFormId: formId,
       organizerFormSent: 'Yes',
+      eventCardCreated: 'No',
+      expectedAttendees: formData?.expectedAttendees ? parseInt(formData.expectedAttendees) : null,
+      eventDate: formData?.eventDate || null,
+      description: formData?.eventDetails || null,
+      eventKind: formData?.eventType || null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    // Add the new event to the events array
+    const updatedEvents = [...currentEvents, newEvent];
+    
+    await updateDoc(docRef, { 
+      events: updatedEvents,
       updatedAt: serverTimestamp() 
     });
   },
 
-  async unlinkForm(clientId: string): Promise<void> {
+  async unlinkForm(clientId: string, formId: string): Promise<void> {
     const dbInstance = getDbInstance();
     const docRef = doc(dbInstance, 'adminClients', clientId);
+    
+    // Get the current client data
+    const clientDoc = await getDoc(docRef);
+    if (!clientDoc.exists()) {
+      throw new Error('Client not found');
+    }
+    
+    const currentClient = clientDoc.data() as AdminClient;
+    const currentEvents = currentClient.events || [];
+    
+    // Remove the event that has this linkedFormId
+    const updatedEvents = currentEvents.filter(event => event.linkedFormId !== formId);
+    
     await updateDoc(docRef, { 
-      linkedFormId: null,
-      organizerFormSent: 'No',
+      events: updatedEvents,
       updatedAt: serverTimestamp() 
     });
   },
 
-  async linkEvent(clientId: string, eventId: string): Promise<void> {
+  async linkEvent(clientId: string, eventId: string, eventData?: any): Promise<void> {
     const dbInstance = getDbInstance();
     const docRef = doc(dbInstance, 'adminClients', clientId);
-    await updateDoc(docRef, { 
+    
+    // Get the current client data
+    const clientDoc = await getDoc(docRef);
+    if (!clientDoc.exists()) {
+      throw new Error('Client not found');
+    }
+    
+    const currentClient = clientDoc.data() as AdminClient;
+    const currentEvents = currentClient.events || [];
+    
+    // Create a new event entry for this client
+    const newEvent = {
+      id: `event_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       linkedEventId: eventId,
       eventCardCreated: 'Yes',
+      organizerFormSent: 'No',
+      expectedAttendees: eventData?.expectedAttendees || null,
+      eventDate: eventData?.eventDate || null,
+      description: eventData?.description || null,
+      eventKind: eventData?.eventKind || null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    // Add the new event to the events array
+    const updatedEvents = [...currentEvents, newEvent];
+    
+    await updateDoc(docRef, { 
+      events: updatedEvents,
       updatedAt: serverTimestamp() 
     });
   },
 
-  async unlinkEvent(clientId: string): Promise<void> {
+  async unlinkEvent(clientId: string, eventId: string): Promise<void> {
     const dbInstance = getDbInstance();
     const docRef = doc(dbInstance, 'adminClients', clientId);
+    
+    // Get the current client data
+    const clientDoc = await getDoc(docRef);
+    if (!clientDoc.exists()) {
+      throw new Error('Client not found');
+    }
+    
+    const currentClient = clientDoc.data() as AdminClient;
+    const currentEvents = currentClient.events || [];
+    
+    // Remove the event that has this linkedEventId
+    const updatedEvents = currentEvents.filter(event => event.linkedEventId !== eventId);
+    
     await updateDoc(docRef, { 
-      linkedEventId: null,
-      eventCardCreated: 'No',
+      events: updatedEvents,
       updatedAt: serverTimestamp() 
     });
   }

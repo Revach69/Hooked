@@ -25,17 +25,6 @@ const CLIENT_TYPES = [
   'Other Organization'
 ] as const;
 
-const EVENT_KINDS = [
-  'House Party',
-  'Club',
-  'Wedding',
-  'Meetup',
-  'High Tech Event',
-  'Retreat',
-  'Party',
-  'Conference'
-] as const;
-
 const STATUS_OPTIONS = [
   'Initial Discussion',
   'Negotiation',
@@ -52,8 +41,6 @@ const SOURCE_OPTIONS = [
   'Olim in TLV',
   'Contact Form'
 ] as const;
-
-const ORGANIZER_FORM_OPTIONS = ['Yes', 'No'] as const;
 
 const COUNTRY_OPTIONS = [
   'Afghanistan', 'Albania', 'Algeria', 'Andorra', 'Angola', 'Argentina', 'Armenia', 'Australia', 'Austria', 'Azerbaijan',
@@ -82,17 +69,12 @@ export function ClientFormSheet({ open, onOpenChange, client, onSuccess }: Clien
   const [formData, setFormData] = useState<Partial<AdminClient>>({
     name: '',
     type: 'Company',
-    eventKind: 'House Party',
     pocName: '',
     phone: '',
     email: '',
     country: '',
-    expectedAttendees: null,
-    eventDate: null,
-    organizerFormSent: 'No',
     status: 'Initial Discussion',
-    source: undefined,
-    description: ''
+    source: undefined
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -103,33 +85,23 @@ export function ClientFormSheet({ open, onOpenChange, client, onSuccess }: Clien
       setFormData({
         name: client.name,
         type: client.type,
-        eventKind: client.eventKind,
         pocName: client.pocName,
         phone: client.phone || '',
         email: client.email || '',
         country: client.country || '',
-        expectedAttendees: client.expectedAttendees,
-        eventDate: client.eventDate,
-        organizerFormSent: client.organizerFormSent || 'No',
         status: client.status,
-        source: client.source,
-        description: client.description || ''
+        source: client.source
       });
     } else {
       setFormData({
         name: '',
         type: 'Company',
-        eventKind: 'House Party',
         pocName: '',
         phone: '',
         email: '',
         country: '',
-        expectedAttendees: null,
-        eventDate: null,
-        organizerFormSent: 'No',
         status: 'Initial Discussion',
-        source: undefined,
-        description: ''
+        source: undefined
       });
     }
     setErrors({});
@@ -150,22 +122,12 @@ export function ClientFormSheet({ open, onOpenChange, client, onSuccess }: Clien
       newErrors.type = 'Type is required';
     }
 
-    if (!formData.eventKind) {
-      newErrors.eventKind = 'Event is required';
-    }
-
     if (!formData.status) {
       newErrors.status = 'Status is required';
     }
 
     if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = 'Invalid email format';
-    }
-
-    if (formData.expectedAttendees !== null && formData.expectedAttendees !== undefined) {
-      if (formData.expectedAttendees < 0) {
-        newErrors.expectedAttendees = 'Expected attendees must be 0 or greater';
-      }
     }
 
     setErrors(newErrors);
@@ -181,17 +143,13 @@ export function ClientFormSheet({ open, onOpenChange, client, onSuccess }: Clien
         ...formData,
         name: formData.name!,
         type: formData.type!,
-        eventKind: formData.eventKind!,
         pocName: formData.pocName!,
         status: formData.status!,
-        expectedAttendees: formData.expectedAttendees || null,
-        eventDate: formData.eventDate || null,
         phone: formData.phone || null,
         email: formData.email || null,
         country: formData.country || null,
         source: formData.source || undefined,
-        description: formData.description || null,
-        organizerFormSent: formData.organizerFormSent || 'No'
+        events: client?.events || []
       };
 
       if (client) {
@@ -261,23 +219,6 @@ export function ClientFormSheet({ open, onOpenChange, client, onSuccess }: Clien
             {errors.type && <p className="text-sm text-red-500">{errors.type}</p>}
           </div>
 
-          {/* Event Kind */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Event *</label>
-            <Select value={formData.eventKind} onValueChange={(value) => handleInputChange('eventKind', value)}>
-              <SelectTrigger className={errors.eventKind ? 'border-red-500' : ''}>
-                <SelectValue placeholder="Select event type" />
-              </SelectTrigger>
-              <SelectContent>
-                {EVENT_KINDS.map((eventKind) => (
-                  <SelectItem key={eventKind} value={eventKind}>
-                    {eventKind}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {errors.eventKind && <p className="text-sm text-red-500">{errors.eventKind}</p>}
-          </div>
 
           {/* POC Name */}
           <div className="space-y-2">
@@ -331,46 +272,6 @@ export function ClientFormSheet({ open, onOpenChange, client, onSuccess }: Clien
             </Select>
           </div>
 
-          {/* Expected Attendees */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium"># of Expected Attendees</label>
-            <Input
-              type="number"
-              min="0"
-              value={formData.expectedAttendees || ''}
-              onChange={(e) => handleInputChange('expectedAttendees', e.target.value ? parseInt(e.target.value) : null)}
-              placeholder="Number of attendees"
-              className={errors.expectedAttendees ? 'border-red-500' : ''}
-            />
-            {errors.expectedAttendees && <p className="text-sm text-red-500">{errors.expectedAttendees}</p>}
-          </div>
-
-          {/* Event Date */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Date of Event</label>
-            <Input
-              type="date"
-              value={formData.eventDate || ''}
-              onChange={(e) => handleInputChange('eventDate', e.target.value || null)}
-            />
-          </div>
-
-          {/* Organizer Form Sent */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Event Organizer Form Sent?</label>
-            <Select value={formData.organizerFormSent} onValueChange={(value) => handleInputChange('organizerFormSent', value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select option" />
-              </SelectTrigger>
-              <SelectContent>
-                {ORGANIZER_FORM_OPTIONS.map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {option}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
 
           {/* Status */}
           <div className="space-y-2">
@@ -407,16 +308,6 @@ export function ClientFormSheet({ open, onOpenChange, client, onSuccess }: Clien
             </Select>
           </div>
 
-          {/* Description */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Description</label>
-            <Textarea
-              value={formData.description || ''}
-              onChange={(e) => handleInputChange('description', e.target.value)}
-              placeholder="Additional notes or description"
-              rows={3}
-            />
-          </div>
 
           {errors.submit && (
             <p className="text-sm text-red-500">{errors.submit}</p>

@@ -6,13 +6,14 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ClientsTable } from '@/components/clients/ClientsTable';
 import { ClientFormSheet } from '@/components/clients/ClientFormSheet';
+import { EventFormModal } from '@/components/clients/EventFormModal';
 import { FormViewerModal } from '@/components/FormViewerModal';
 import { EventViewerModal } from '@/components/EventViewerModal';
 import { AdminClientAPI } from '@/lib/firestore/clients';
 import { EventFormAPI } from '@/lib/firestore/eventForms';
 import { EventAPI } from '@/lib/firebaseApi';
 import { Plus } from 'lucide-react';
-import type { AdminClient, EventForm, Event } from '@/types/admin';
+import type { AdminClient, ClientEvent, EventForm, Event } from '@/types/admin';
 
 export default function ClientsPage() {
   const [clients, setClients] = useState<AdminClient[]>([]);
@@ -28,6 +29,9 @@ export default function ClientsPage() {
   // Modal states
   const [showClientForm, setShowClientForm] = useState(false);
   const [editingClient, setEditingClient] = useState<AdminClient | null>(null);
+  const [showEventForm, setShowEventForm] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<ClientEvent | null>(null);
+  const [eventClientId, setEventClientId] = useState<string | null>(null);
   const [selectedForm, setSelectedForm] = useState<EventForm | null>(null);
   const [isFormViewerOpen, setIsFormViewerOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
@@ -142,13 +146,56 @@ export default function ClientsPage() {
   };
 
   const handleAddEvent = (clientId: string) => {
-    // TODO: Implement add event functionality
-    console.log('Add event for client:', clientId);
+    setEventClientId(clientId);
+    setEditingEvent(null);
+    setShowEventForm(true);
   };
 
-  const handleEditEvent = (clientId: string, event: any) => {
-    // TODO: Implement edit event functionality
-    console.log('Edit event:', event, 'for client:', clientId);
+  const handleEditEvent = (clientId: string, event: ClientEvent) => {
+    setEventClientId(clientId);
+    setEditingEvent(event);
+    setShowEventForm(true);
+  };
+
+  const handleSaveEvent = async (eventData: Omit<ClientEvent, 'id'>) => {
+    if (!eventClientId) return;
+
+    try {
+      const client = clients.find(c => c.id === eventClientId);
+      if (!client) return;
+
+      let updatedEvents = [...(client.events || [])];
+
+      if (editingEvent) {
+        // Update existing event
+        updatedEvents = updatedEvents.map(e => 
+          e.id === editingEvent.id ? { ...e, ...eventData } : e
+        );
+      } else {
+        // Add new event
+        const newEvent: ClientEvent = {
+          id: `event_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          ...eventData,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        updatedEvents.push(newEvent);
+      }
+
+      await AdminClientAPI.update(eventClientId, { events: updatedEvents });
+      
+      // Update local state
+      setClients(prev => prev.map(c => 
+        c.id === eventClientId ? { ...c, events: updatedEvents } : c
+      ));
+
+      setShowEventForm(false);
+      setEditingEvent(null);
+      setEventClientId(null);
+    } catch (error) {
+      console.error('Failed to save event:', error);
+      throw error;
+    }
   };
 
   const handleDeleteEvent = async (clientId: string, eventId: string) => {
@@ -323,6 +370,20 @@ export default function ClientsPage() {
         }}
         client={editingClient}
         onSuccess={handleClientFormSuccess}
+      />
+
+      <EventFormModal
+        open={showEventForm}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowEventForm(false);
+            setEditingEvent(null);
+            setEventClientId(null);
+          }
+        }}
+        event={editingEvent}
+        clientName={eventClientId ? clients.find(c => c.id === eventClientId)?.name || 'Unknown' : 'Unknown'}
+        onSave={handleSaveEvent}
       />
 
       <FormViewerModal

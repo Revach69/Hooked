@@ -178,7 +178,7 @@ export default function FormsPage() {
 
       // Link the form to the client as before
       await EventFormAPI.update(formId, { linkedClientId: clientId });
-      await AdminClientAPI.linkForm(clientId, formId);
+      await AdminClientAPI.linkForm(clientId, formId, form);
       await loadData();
     } catch (error) {
       console.error('Failed to link form:', error);
