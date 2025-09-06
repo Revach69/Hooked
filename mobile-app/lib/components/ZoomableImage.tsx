@@ -76,18 +76,16 @@ export default function ZoomableImage({
     },
     onEnd: () => {
       'worklet';
-      // Snap back to min zoom if scale is too small
-      if (scale.value < 1.2) {
-        scale.value = withSpring(1, {
-          damping: 15,
-          stiffness: 100,
-        });
-        translateX.value = withSpring(0);
-        translateY.value = withSpring(0);
-        focalX.value = withSpring(0);
-        focalY.value = withSpring(0);
-        isZoomed.value = false;
-      }
+      // Always snap back to 1x zoom when user releases pinch
+      scale.value = withSpring(1, {
+        damping: 15,
+        stiffness: 100,
+      });
+      translateX.value = withSpring(0);
+      translateY.value = withSpring(0);
+      focalX.value = withSpring(0);
+      focalY.value = withSpring(0);
+      isZoomed.value = false;
       
       if (onZoomEnd) {
         runOnJS(onZoomEnd)();
@@ -145,22 +143,7 @@ export default function ZoomableImage({
     } as any;
   });
   
-  const handleDoubleTap = () => {
-    'worklet';
-    if (scale.value > 1) {
-      // Reset zoom
-      scale.value = withSpring(1);
-      translateX.value = withSpring(0);
-      translateY.value = withSpring(0);
-      focalX.value = withSpring(0);
-      focalY.value = withSpring(0);
-      isZoomed.value = false;
-    } else {
-      // Zoom to 2x at center
-      scale.value = withSpring(2);
-      isZoomed.value = true;
-    }
-  };
+  // Double-tap functionality removed - zoom always resets on release
   
   return (
     <GestureHandlerRootView style={[styles.container, containerStyle]}>
