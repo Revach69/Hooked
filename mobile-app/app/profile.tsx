@@ -30,6 +30,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { checkSimpleNetworkConnectivity } from '../lib/utils';
 import * as Sentry from '@sentry/react-native';
 import { GlobalDataCache, CacheKeys } from '../lib/cache/GlobalDataCache';
+import { AsyncStorageCacheManager } from '../lib/cache/AsyncStorageCacheManager';
+import ProgressiveImage from '../lib/components/ProgressiveImage';
 
 
 export default function Profile() {

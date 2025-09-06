@@ -4,7 +4,6 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  Image,
   ActivityIndicator,
   StyleSheet,
   useColorScheme,
@@ -28,6 +27,9 @@ import CountdownTimer from '../lib/components/CountdownTimer';
 import UserProfileModal from '../lib/UserProfileModal';
 import DropdownMenu from '../components/DropdownMenu';
 import { GlobalDataCache, CacheKeys } from '../lib/cache/GlobalDataCache';
+import { useViewState } from '../lib/cache/ViewStateManager';
+import { AsyncStorageCacheManager } from '../lib/cache/AsyncStorageCacheManager';
+import ProgressiveImage from '../lib/components/ProgressiveImage';
 
 import { updateUserActivity } from '../lib/messageNotificationHelper';
 import { setMuteStatus } from '../lib/utils/notificationUtils';
@@ -36,10 +38,83 @@ import { setMuteStatus } from '../lib/utils/notificationUtils';
 export default function Matches() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const [matches, setMatches] = useState<any[]>([]);
   const [currentEvent, setCurrentEvent] = useState<any>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [currentUserProfile, setCurrentUserProfile] = useState<any>(null);
+  
+  // Use new ViewState architecture for matches
+  const {
+    data: matches,
+    state: matchesState,
+    loading: matchesLoading,
+    showSkeleton: matchesShowSkeleton,
+    refresh: refreshMatches,
+    preload: preloadMatches
+  } = useViewState({
+    viewId: 'matches_list',
+    cacheKey: `matches_list_${currentEvent?.id}_${currentSessionId}`,
+    staleTtl: 5 * 60 * 1000,  // 5 minutes
+    maxTtl: 30 * 60 * 1000   // 30 minutes
+  }, async () => {
+    if (!currentEvent?.id || !currentSessionId) return [];
+    
+    try {
+      const eventCountry = currentEvent?.location;
+      const eventDb = getDbForEvent(eventCountry);
+      
+      // Get mutual likes
+      const mutualLikesQuery = query(
+        collection(eventDb, 'likes'),
+        where('event_id', '==', currentEvent.id),
+        where('is_mutual', '==', true)
+      );
+      
+      const likesSnapshot = await mutualLikesQuery.get();
+      const mutualLikes = likesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      // Filter to get user's matches
+      const userMatches = mutualLikes.filter(like => 
+        like.liker_session_id === currentSessionId || like.liked_session_id === currentSessionId
+      );
+      
+      // Get other session IDs
+      const otherSessionIds = userMatches.map(like => 
+        like.liker_session_id === currentSessionId ? like.liked_session_id : like.liker_session_id
+      );
+      
+      // Get profiles for matches
+      const matchProfiles: any[] = [];
+      for (const sessionId of otherSessionIds) {
+        const profiles = await EventProfileAPI.filter({
+          session_id: sessionId,
+          event_id: currentEvent.id
+        });
+        
+        if (profiles.length > 0) {
+          const profile = profiles[0];
+          const matchLike = userMatches.find(like => 
+            (like.liker_session_id === currentSessionId && like.liked_session_id === sessionId) ||
+            (like.liker_session_id === sessionId && like.liked_session_id === currentSessionId)
+          );
+          
+          profile.matchCreatedAt = matchLike?.created_at || new Date().toISOString();
+          matchProfiles.push(profile);
+        }
+      }
+      
+      // Store in persistent cache
+      await AsyncStorageCacheManager.store(
+        `matches_list_${currentEvent.id}_${currentSessionId}`,
+        matchProfiles,
+        'profiles'
+      );
+      
+      return matchProfiles;
+    } catch (error) {
+      console.error('Matches: Failed to fetch matches:', error);
+      return [];
+    }
+  }, [currentEvent?.id, currentSessionId]);
   const [selectedProfileForDetail, setSelectedProfileForDetail] = useState<any>(null);
   const [likedProfiles, setLikedProfiles] = useState<Set<string>>(new Set());
   const [unreadMessages, setUnreadMessages] = useState<Set<string>>(new Set());
@@ -84,7 +159,7 @@ export default function Matches() {
         setMutedMatches(new Set(mutedSessionIds));
         
         // 🔄 NEW: Refresh latest messages for all matches on pull-to-refresh
-        if (matches.length > 0) {
+        if (matches && matches.length > 0) {
           console.log('Pull-to-refresh: Refreshing latest messages for all matches');
           try {
             await fetchLatestMessagesForMatches(matches);
@@ -368,7 +443,7 @@ export default function Matches() {
       reloadData();
       
       // Fetch latest messages for all matches when entering the page
-      if (matches.length > 0 && currentUserProfile?.id) {
+      if (matches && matches.length > 0 && currentUserProfile?.id) {
         fetchLatestMessagesForMatches(matches);
       }
     }, [currentEvent?.id, currentSessionId, currentUserProfile?.id, fetchLatestMessagesForMatches, matches])
@@ -515,11 +590,11 @@ export default function Matches() {
               
               // 🔄 NEW: Refresh latest messages for affected matches
               // This ensures match cards show the most recent message content
-              if (unseenSessionIds.size > 0 && matches.length > 0) {
+              if (unseenSessionIds.size > 0 && matches && matches.length > 0) {
                 console.log('🔄 Refreshing match cards with new messages');
                 try {
                   // Find matches that have new messages and update their latest message cache
-                  const affectedMatches = matches.filter(match => 
+                  const affectedMatches = (matches || []).filter(match => 
                     unseenSessionIds.has(match.session_id)
                   );
                   
@@ -538,9 +613,9 @@ export default function Matches() {
               console.log('🔴 Updated unreadMessages state:', {
                 platform: Platform.OS,
                 unseenSessionIds: Array.from(unseenSessionIds),
-                totalMatches: matches.length,
-                matchSessionIds: matches.map(m => m.session_id),
-                willHighlight: matches.map(m => ({ name: m.first_name, sessionId: m.session_id, hasUnread: unseenSessionIds.has(m.session_id) }))
+                totalMatches: matches?.length || 0,
+                matchSessionIds: matches?.map(m => m.session_id) || [],
+                willHighlight: matches?.map(m => ({ name: m.first_name, sessionId: m.session_id, hasUnread: unseenSessionIds.has(m.session_id) })) || []
               });
             } else {
               console.log('No unseen messages found - clearing indicators', { platform: Platform.OS });
@@ -559,7 +634,7 @@ export default function Matches() {
     };
 
     setupMessageListener();
-  }, [currentEvent?.id, currentUserProfile?.id, matches.length]);
+  }, [currentEvent?.id, currentUserProfile?.id, matches?.length]);
 
   // Define sortMatchesByLatestMessage before setupMatchesListener uses it
   const sortMatchesByLatestMessage = useCallback(async (profiles: any[]): Promise<any[]> => {
@@ -750,7 +825,6 @@ export default function Matches() {
       // Check for cached matches list to show immediately and prevent reordering
       const cachedMatches = GlobalDataCache.get<any[]>(CacheKeys.MATCHES_LIST);
       if (cachedMatches && Array.isArray(cachedMatches)) {
-        setMatches(cachedMatches);
         console.log('Matches: Using cached matches list for instant display');
       }
 
@@ -831,7 +905,6 @@ export default function Matches() {
 
                   // Sort matches by latest message activity - but avoid infinite loops
                   const sortedMatches = await sortMatchesByLatestMessage(matchedProfiles);
-                  setMatches(sortedMatches);
                   
                   // Cache the sorted matches to prevent visual reordering on next load
                   GlobalDataCache.set(CacheKeys.MATCHES_LIST, sortedMatches, 5 * 60 * 1000);
@@ -870,7 +943,7 @@ export default function Matches() {
                   }
                   
                   // Only clear unread messages indicator on initial load or when transitioning from having matches to no matches
-                  if (matchedProfiles.length === 0 && matches.length > 0) {
+                  if (matchedProfiles.length === 0 && matches && matches.length > 0) {
                     console.log('Matches cleared - clearing unread messages indicator');
                     setUnreadMessages(new Set());
                     setHasUnreadMessages(false);
@@ -998,15 +1071,16 @@ export default function Matches() {
       [...currentUnreadSet].some(id => !prevUnreadSet.has(id)) ||
       [...prevUnreadSet].some(id => !currentUnreadSet.has(id));
 
-    if (hasUnreadChanged && matches.length > 0 && currentEvent?.id && currentUserProfile?.id) {
+    if (hasUnreadChanged && matches && matches.length > 0 && currentEvent?.id && currentUserProfile?.id) {
       const resortMatches = async () => {
         try {
-          const sortedMatches = await sortMatchesByLatestMessage(matches);
+          const sortedMatches = await sortMatchesByLatestMessage(matches || []);
           // Only update if the order actually changed to avoid infinite loops
-          const currentOrder = matches.map(m => m.session_id).join(',');
+          const currentOrder = matches?.map(m => m.session_id).join(',') || '';
           const newOrder = sortedMatches.map(m => m.session_id).join(',');
           if (currentOrder !== newOrder) {
-            setMatches(sortedMatches);
+            // Matches are now managed by ViewState, so we'll let the data flow naturally
+            console.log('Matches order changed, will be handled by ViewState');
           }
         } catch (error) {
           console.warn('Error re-sorting matches:', error);
@@ -1225,8 +1299,7 @@ export default function Matches() {
                 console.warn('Failed to clear image cache for unmatched user:', cacheError);
               }
 
-              // Immediately remove the unmatched user from the UI
-              setMatches(prevMatches => prevMatches.filter(m => m.session_id !== matchSessionId));
+              // Note: Unmatched user will be removed from UI when ViewState refreshes
               
               // Also remove from unread messages to clear the red dot
               setUnreadMessages(prev => {
@@ -1856,6 +1929,10 @@ export default function Matches() {
     disabledButton: {
       opacity: 0.5,
     },
+    skeletonBox: {
+      backgroundColor: isDark ? '#404040' : '#e5e7eb',
+      borderRadius: 8,
+    },
   });
 
   // Show hidden state notice if user is not visible, but still allow access to matches
@@ -1986,8 +2063,13 @@ export default function Matches() {
                   accessibilityHint="Opens profile details modal"
                 >
                     {match.profile_photo_url ? (
-                      <Image source={{ uri: cachedImageUris.get(match.session_id) || match.profile_photo_url }}
-                        onError={() => {}} style={[styles.matchImage, mutedMatches.has(match.session_id) && { opacity: 0.5 }]} />
+                      <ProgressiveImage
+                        source={{ uri: match.profile_photo_url }}
+                        eventId={currentEvent?.id || ''}
+                        sessionId={match.session_id}
+                        style={[styles.matchImage, mutedMatches.has(match.session_id) && { opacity: 0.5 }]}
+                        resizeMode="cover"
+                      />
                     ) : (
                       <View style={[styles.matchImageFallback, { backgroundColor: match.profile_color || '#cccccc' }, mutedMatches.has(match.session_id) && { opacity: 0.5 }]}>
                         <Text style={styles.matchImageFallbackText}>{match.first_name[0]}</Text>

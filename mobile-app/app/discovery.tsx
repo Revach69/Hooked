@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { router } from 'expo-router';
-import { Heart, Filter, Users, User, MessageCircle, X } from 'lucide-react-native';
+import { Filter, Users, User, MessageCircle, X } from 'lucide-react-native';
 import { EventProfileAPI, LikeAPI, EventAPI, BlockedMatchAPI, SkippedProfileAPI } from '../lib/firebaseApi';
 import * as Sentry from '@sentry/react-native';
 
@@ -32,6 +32,9 @@ import { HowItWorksUtils } from '../lib/utils/howItWorksUtils';
 import { updateUserActivity } from '../lib/messageNotificationHelper';
 import { usePerformanceMonitoring } from '../lib/hooks/usePerformanceMonitoring';
 import { GlobalDataCache, CacheKeys } from '../lib/cache/GlobalDataCache';
+import { useViewState } from '../lib/cache/ViewStateManager';
+import { AsyncStorageCacheManager } from '../lib/cache/AsyncStorageCacheManager';
+import ProgressiveImage from '../lib/components/ProgressiveImage';
 
 // Dual Handle Range Slider Component
 interface DualHandleRangeSliderProps {
@@ -188,9 +191,49 @@ export default function Discovery() {
     enableScreenTracking: true,
     enableUserInteractionTracking: true 
   });
-  const [profiles, setProfiles] = useState<any[]>([]);
   const [currentUserProfile, setCurrentUserProfile] = useState<any>(null);
   const [filteredProfiles, setFilteredProfiles] = useState<any[]>([]);
+  
+  // Use new ViewState architecture for profiles
+  const {
+    data: profiles,
+    state: profilesState,
+    loading: profilesLoading,
+    showSkeleton,
+    refresh: refreshProfiles,
+    preload: preloadProfiles
+  } = useViewState({
+    viewId: 'discovery_profiles',
+    cacheKey: `discovery_profiles_${currentEvent?.id || 'unknown'}`,
+    staleTtl: 2 * 60 * 1000, // 2 minutes
+    maxTtl: 10 * 60 * 1000   // 10 minutes
+  }, async () => {
+    if (!currentEvent?.id || !currentSessionId) return [];
+    
+    const eventCountry = currentEvent?.location;
+    const eventDb = getDbForEvent(eventCountry);
+    
+    const snapshot = await eventDb.collection('event_profiles')
+      .where('event_id', '==', currentEvent.id)
+      .where('is_visible', '==', true)
+      .get();
+    
+    const allProfiles = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    
+    const otherProfiles = allProfiles.filter(p => p.session_id !== currentSessionId);
+    
+    // Store in persistent cache
+    await AsyncStorageCacheManager.store(
+      `discovery_profiles_${currentEvent.id}`,
+      otherProfiles,
+      'profiles'
+    );
+    
+    return otherProfiles;
+  }, [currentEvent?.id, currentSessionId]);
   const [currentEvent, setCurrentEvent] = useState<any>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [filters, setFilters] = useState({
@@ -520,22 +563,9 @@ export default function Discovery() {
         where('is_visible', '==', true)
       );
 
-      // Check for cached profiles first to show immediately - both profiles and filtered profiles
-      const cachedProfiles = GlobalDataCache.get<any[]>(CacheKeys.DISCOVERY_PROFILES);
-      const cachedFilteredProfiles = GlobalDataCache.get<any[]>(`${CacheKeys.DISCOVERY_PROFILES}_filtered`);
-      
-      if (cachedProfiles && Array.isArray(cachedProfiles)) {
-        setProfiles(cachedProfiles);
-        console.log('Discovery: Using cached profiles for instant display');
-        
-        // Also set filtered profiles immediately to prevent visual reordering
-        if (cachedFilteredProfiles && Array.isArray(cachedFilteredProfiles)) {
-          setFilteredProfiles(cachedFilteredProfiles);
-          console.log('Discovery: Using cached filtered profiles to prevent reordering');
-        }
-      }
-
-      const otherProfilesUnsubscribe = onSnapshot(otherProfilesQuery, (otherSnapshot) => {
+      // New architecture handles caching automatically via useViewState
+      // Set up real-time listener for live updates
+      const otherProfilesUnsubscribe = onSnapshot(otherProfilesQuery, async (otherSnapshot) => {
         try {
           const allVisibleProfiles = otherSnapshot.docs.map(doc => ({
             id: doc.id,
@@ -544,16 +574,33 @@ export default function Discovery() {
           const otherUsersProfiles = allVisibleProfiles.filter(p => 
             p.session_id !== currentSessionId
           );
-          setProfiles(otherUsersProfiles);
           
-          // Cache the fresh data for next time
-          GlobalDataCache.set(CacheKeys.DISCOVERY_PROFILES, otherUsersProfiles, 2 * 60 * 1000); // Cache for 2 minutes
+          // Update caches and trigger refresh
+          GlobalDataCache.set(`discovery_profiles_${currentEvent?.id}`, otherUsersProfiles, 2 * 60 * 1000);
+          await AsyncStorageCacheManager.store(
+            `discovery_profiles_${currentEvent?.id}`,
+            otherUsersProfiles,
+            'profiles'
+          );
+          
+          // Prefetch images for new profiles
+          const newProfiles = otherUsersProfiles.slice(0, 6);
+          const imageUrls = newProfiles
+            .map(p => p.profile_photo_url)
+            .filter(Boolean);
+          
+          if (imageUrls.length > 0) {
+            ProgressiveImageLoader.preloadImages(imageUrls, currentEvent?.id || '', 'high');
+          }
+          
+          // Trigger ViewState refresh
+          refreshProfiles();
         } catch (error) {
           Sentry.captureException(error);
         }
-              }, (error) => {
-          Sentry.captureException(error);
-        });
+      }, (error) => {
+        Sentry.captureException(error);
+      });
 
       listenersRef.current.otherProfiles = otherProfilesUnsubscribe;
 
@@ -644,7 +691,6 @@ export default function Discovery() {
 
           // If user is not visible, don't load other profiles and show hidden state
           if (!userProfile.is_visible) {
-            setProfiles([]);
             setFilteredProfiles([]);
             // Clean up other listeners when user is not visible
             if (listenersRef.current.otherProfiles) {
@@ -916,6 +962,15 @@ export default function Discovery() {
         [{ text: 'OK' }]
       );
       return;
+    }
+    
+    // Prefetch chat data in case this creates a match
+    if (currentEvent?.id && currentSessionId) {
+      PrefetchManager.prefetchChatMessages(
+        likedProfile.session_id,
+        currentEvent.id,
+        currentSessionId
+      );
     }
 
     const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
@@ -1489,6 +1544,10 @@ export default function Discovery() {
       borderRadius: 12,
       zIndex: 1,
     },
+    skeletonBox: {
+      backgroundColor: isDark ? '#404040' : '#e5e7eb',
+      borderRadius: 8,
+    },
   });
 
   // Show hidden state if user is not visible
@@ -1630,7 +1689,29 @@ export default function Discovery() {
       {/* Profiles Grid */}
       <ScrollView style={styles.profilesContainer}>
         <View style={styles.profilesGrid}>
-          {(() => {
+          {showSkeleton && (!profiles || profiles.length === 0) ? (
+            // Skeleton loading state
+            (() => {
+              const skeletonRows = [];
+              for (let i = 0; i < 6; i += 3) { // Show 2 rows of skeleton
+                skeletonRows.push(
+                  <View key={`skeleton-${i}`} style={styles.profileRow}>
+                    {Array.from({ length: 3 }, (_, index) => (
+                      <View key={`skeleton-card-${i}-${index}`} style={styles.profileCard}>
+                        <View style={styles.profileImageContainer}>
+                          <View style={[styles.skeletonBox, { width: '100%', height: '100%', borderRadius: 12 }]} />
+                        </View>
+                        <View style={styles.nameOverlay}>
+                          <View style={[styles.skeletonBox, { width: 60, height: 16, borderRadius: 8 }]} />
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                );
+              }
+              return skeletonRows;
+            })()
+          ) : (() => {
             const rows = [];
             for (let i = 0; i < filteredProfiles.length; i += 3) {
               const rowProfiles = filteredProfiles.slice(i, i + 3);
@@ -1650,9 +1731,10 @@ export default function Discovery() {
                     >
                       <View style={styles.profileImageContainer}>
                         {profile.profile_photo_url ? (
-                          <Image
-                            source={{ uri: cachedImageUris.get(profile.session_id) || profile.profile_photo_url }}
-                            onError={() => {}}
+                          <ProgressiveImage
+                            source={{ uri: profile.profile_photo_url }}
+                            eventId={currentEvent?.id || ''}
+                            sessionId={profile.session_id}
                             style={styles.profileImage}
                             resizeMode="cover"
                           />
