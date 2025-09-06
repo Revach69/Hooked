@@ -115,15 +115,70 @@ class ImageOptimizationServiceClass {
 
   /**
    * Optimize specifically for profile photos
-   * Smaller dimensions and higher compression since they're mostly shown as thumbnails
+   * IMPORTANT: For profile photos that come from expo-image-picker with allowsEditing=true,
+   * the image is already cropped to the user's preference. We only apply compression,
+   * not resizing, to preserve the exact crop that the user selected.
    */
   async optimizeProfilePhoto(uri: string): Promise<string> {
-    return this.optimizeForUpload(uri, {
-      maxWidth: 800,
-      maxHeight: 800,
-      quality: 0.6,
-      format: 'jpeg'
-    });
+    try {
+      console.log('ImageOptimizationService: Optimizing profile photo (crop-preserving mode)');
+
+      // Check if ImageManipulator is available
+      if (!ImageManipulator || !ImageManipulator.manipulateAsync) {
+        console.warn('ImageOptimizationService: expo-image-manipulator not available, skipping optimization');
+        return uri;
+      }
+
+      // Get info about the already-cropped image for logging
+      const imageInfo = await ImageManipulator.manipulateAsync(
+        uri,
+        [], 
+        { compress: 1, format: ImageManipulator.SaveFormat.JPEG }
+      );
+      
+      console.log(`ImageOptimizationService: Input image dimensions: ${imageInfo.width}x${imageInfo.height}`);
+
+      // For profile photos from expo-image-picker with allowsEditing=true,
+      // the image is already cropped to 1:1 aspect ratio at the user's preferred crop area.
+      // We should ONLY compress, not resize, to preserve the exact crop positioning.
+      const result = await ImageManipulator.manipulateAsync(
+        uri,
+        [], // NO resize manipulations - preserve the exact cropped image
+        {
+          compress: 0.6, // Only apply compression
+          format: ImageManipulator.SaveFormat.JPEG,
+        }
+      );
+      
+      console.log(`ImageOptimizationService: Output image dimensions: ${result.width}x${result.height}`);
+      console.log(`ImageOptimizationService: Crop preserved - no resize applied`);
+
+      console.log('ImageOptimizationService: Profile photo compression complete (crop preserved)');
+      
+      Sentry.addBreadcrumb({
+        message: 'ImageOptimizationService: Profile photo compressed without resize',
+        level: 'info',
+        category: 'image_optimization',
+        data: { 
+          preservedCrop: true,
+          compressionOnly: true
+        }
+      });
+
+      return result.uri;
+    } catch (error) {
+      console.error('ImageOptimizationService: Failed to optimize profile photo:', error);
+      
+      Sentry.captureException(error, {
+        tags: {
+          operation: 'profile_photo_optimization',
+          source: 'ImageOptimizationService'
+        }
+      });
+
+      // Return original URI if optimization fails
+      return uri;
+    }
   }
 
   /**

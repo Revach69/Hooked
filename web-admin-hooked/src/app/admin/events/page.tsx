@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { EventAPI, EventProfile, Like, Message, EventAnalytics, type Event } from '@/lib/firebaseApi';
+import { EventAPI, EventProfile, Like, Message, type Event } from '@/lib/firebaseApi';
 import { AdminClientAPI } from '@/lib/firestore/clients';
 import type { AdminClient } from '@/types/admin';
 import { 
@@ -246,28 +246,46 @@ export default function EventsPage() {
     const event = events.find(e => e.id === eventId);
     if (!event) return;
 
-    const isExpiredEvent = event.expired === true;
-    const confirmMessage = isExpiredEvent 
-      ? 'Are you sure you want to permanently delete this expired event and its analytics data? This action cannot be undone.'
-      : 'Are you sure you want to delete this event? This will remove all associated data.';
+    const confirmMessage = 'Are you sure you want to delete this event? This will permanently remove:\n\n• All user profiles\n• All likes and matches\n• All messages\n• All reports and feedback\n• All related data\n\nThis action cannot be undone.';
 
     if (window.confirm(confirmMessage)) {
+      // Show loading indicator
+      const loadingDiv = document.createElement('div');
+      loadingDiv.innerHTML = `
+        <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center;">
+          <div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div style="width: 24px; height: 24px; border: 3px solid #f3f4f6; border-top: 3px solid #3b82f6; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+              <span style="font-size: 16px; color: #374151;">Deleting event and all related data...</span>
+            </div>
+          </div>
+        </div>
+        <style>
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        </style>
+      `;
+      document.body.appendChild(loadingDiv);
+
       try {
-        if (isExpiredEvent) {
-          // For expired events, delete both the event and its analytics data
-          await Promise.all([
-            EventAPI.deleteFromRegion(eventId, event.country, (event as Event & { _databaseId?: string })._databaseId),
-            event.analytics_id ? EventAnalytics.delete(event.analytics_id) : Promise.resolve()
-          ]);
-        } else {
-          // For active/upcoming events, just delete the event (will also trigger cleanup of user data)
-          await EventAPI.deleteFromRegion(eventId, event.country, (event as Event & { _databaseId?: string })._databaseId);
-        }
+        // Use comprehensive deletion
+        await EventAPI.deleteComprehensive(eventId, event.country, (event as Event & { _databaseId?: string })._databaseId);
+        
+        // Remove loading indicator
+        document.body.removeChild(loadingDiv);
+        
+        // Show success message
+        alert('Event and all related data deleted successfully!');
         
         await loadEvents();
       } catch (error) {
+        // Remove loading indicator
+        document.body.removeChild(loadingDiv);
+        
         console.error('Error deleting event:', error);
-        alert('Failed to delete event. Please try again.');
+        alert('Failed to delete event. Some data may have been partially removed. Please check the console for details.');
       }
     }
   };

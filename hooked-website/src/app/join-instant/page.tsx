@@ -74,21 +74,21 @@ function JoinInstantContent() {
             <>
               <div className="space-y-3 mb-6">
                 <button
-                  onClick={handleOpenApp}
+                  onClick={handleAppStore}
                   className="w-full bg-gradient-to-r from-pink-500 to-purple-600 text-white font-semibold py-4 px-6 rounded-xl hover:from-pink-600 hover:to-purple-700 transition-colors"
                 >
-                  🚀 Open in The Hooked App
+                  📱 Download from App Store
                 </button>
                 
                 <p className="text-sm text-gray-500">
-                  Don&apos;t have the app? Download it:
+                  Already have the app? Open it directly:
                 </p>
                 
                 <button
-                  onClick={handleAppStore}
+                  onClick={handleOpenApp}
                   className="w-full bg-gray-900 text-white font-semibold py-3 px-6 rounded-xl hover:bg-gray-800 transition-colors"
                 >
-                  📱 Download from App Store
+                  🚀 Open in The Hooked App
                 </button>
               </div>
               

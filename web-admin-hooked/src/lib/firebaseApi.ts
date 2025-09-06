@@ -599,6 +599,88 @@ export const EventAPI = {
       throw error;
     }
   },
+
+  async deleteComprehensive(id: string, country?: string, databaseId?: string): Promise<void> {
+    console.log('🗑️ Starting comprehensive deletion for event:', { id, country, databaseId });
+    
+    try {
+      // Track deletion progress
+      const deletionCounts = {
+        profiles: 0,
+        likes: 0,
+        messages: 0,
+        kickedUsers: 0,
+        reports: 0,
+        analytics: 0
+      };
+
+      // 1. Delete all event profiles
+      console.log('Deleting event profiles...');
+      const profiles = await EventProfile.filter({ event_id: id }, country);
+      for (const profile of profiles) {
+        await EventProfile.deleteFromRegion(profile.id, country, databaseId);
+        deletionCounts.profiles++;
+      }
+      console.log(`Deleted ${deletionCounts.profiles} event profiles`);
+      
+      // 2. Delete all likes for this event
+      console.log('Deleting likes...');
+      const likes = await Like.filter({ event_id: id }, country);
+      for (const like of likes) {
+        await Like.deleteFromRegion(like.id, country, databaseId);
+        deletionCounts.likes++;
+      }
+      console.log(`Deleted ${deletionCounts.likes} likes`);
+      
+      // 3. Delete all messages for this event
+      console.log('Deleting messages...');
+      const messages = await Message.filter({ event_id: id }, country);
+      for (const message of messages) {
+        await Message.deleteFromRegion(message.id, country, databaseId);
+        deletionCounts.messages++;
+      }
+      console.log(`Deleted ${deletionCounts.messages} messages`);
+      
+      // 4. Delete kicked users
+      console.log('Deleting kicked users...');
+      const kickedUsers = await KickedUserAPI.filter({ event_id: id }, country);
+      for (const kicked of kickedUsers) {
+        await KickedUserAPI.deleteFromRegion(kicked.id, country, databaseId);
+        deletionCounts.kickedUsers++;
+      }
+      console.log(`Deleted ${deletionCounts.kickedUsers} kicked user entries`);
+      
+      // 5. Delete reports
+      console.log('Deleting reports...');
+      const reports = await ReportAPI.filter({ event_id: id }, country);
+      for (const report of reports) {
+        await ReportAPI.deleteFromRegion(report.id, country, databaseId);
+        deletionCounts.reports++;
+      }
+      console.log(`Deleted ${deletionCounts.reports} reports`);
+      
+      // 6. Delete analytics data (if exists)
+      console.log('Deleting analytics data...');
+      try {
+        await EventAnalytics.deleteByEventId(id);
+        deletionCounts.analytics++;
+        console.log('Deleted analytics data');
+      } catch (analyticsError) {
+        console.warn('Error deleting analytics (may not exist):', analyticsError);
+      }
+      
+      // 7. Finally, delete the event itself using the original method
+      console.log('Deleting event document...');
+      await this.deleteFromRegion(id, country, databaseId);
+      
+      console.log('✅ Comprehensive event deletion completed successfully!');
+      console.log('Deletion summary:', deletionCounts);
+      
+    } catch (error) {
+      console.error('❌ Error during comprehensive event deletion:', error);
+      throw error;
+    }
+  },
 };
 
 // EventProfile API

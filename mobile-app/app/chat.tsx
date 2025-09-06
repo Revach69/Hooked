@@ -14,6 +14,7 @@ import {
   Keyboard,
   Modal,
   ActivityIndicator,
+  Clipboard,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { ArrowLeft, Send, Flag, X, VolumeX, Volume2, UserX } from 'lucide-react-native';
@@ -440,6 +441,13 @@ export default function Chat() {
           
           if (matchProfiles.length === 0) {
             // Match profile not found - they might have been deleted
+            // Check if we're in the middle of profile deletion to avoid false alerts
+            const isDeletingProfile = await AsyncStorageUtils.getItem<boolean>('profileDeletionInProgress');
+            if (isDeletingProfile) {
+              console.log('Profile deletion in progress - skipping unavailable user alert');
+              return;
+            }
+            
             // Show alert once and navigate back to discovery
             if (!hasShownUnavailableAlert) {
               setHasShownUnavailableAlert(true);
@@ -808,6 +816,46 @@ export default function Chat() {
     }
   };
 
+  const handleMessageLongPress = (message: ChatMessage) => {
+    Alert.alert(
+      'Copy Message',
+      'Would you like to copy this message?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: 'Copy',
+          onPress: async () => {
+            try {
+              await Clipboard.setString(message.content);
+              Toast.show({
+                type: 'success',
+                text1: 'Copied!',
+                text2: 'Message copied to clipboard',
+                position: 'top',
+                visibilityTime: 2000,
+                autoHide: true,
+                topOffset: 0,
+              });
+            } catch {
+              Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: 'Failed to copy message',
+                position: 'top',
+                visibilityTime: 2000,
+                autoHide: true,
+                topOffset: 0,
+              });
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const renderMessage = ({ item }: { item: ChatMessage }) => {
     const isMyMessage = item.from_profile_id === currentUserProfileId;
     
@@ -816,37 +864,44 @@ export default function Chat() {
         styles.messageContainer,
         isMyMessage ? styles.myMessage : styles.theirMessage
       ]}>
-        <View style={[
-          styles.messageBubble,
-          isMyMessage ? styles.myMessageBubble : styles.theirMessageBubble
-        ]}>
-          <Text 
-            style={[
-              styles.messageText,
-              isMyMessage ? styles.myMessageText : styles.theirMessageText
-            ]}
-            selectable={true}
-            accessible={true}
-            accessibilityRole="text"
-            accessibilityLabel={`Message: ${item.content}`}
-          >
-            {item.content}
-          </Text>
-          <Text style={[
-            styles.messageTime,
-            isMyMessage ? styles.myMessageTime : styles.theirMessageTime
+        <TouchableOpacity 
+          onLongPress={() => handleMessageLongPress(item)}
+          delayLongPress={500}
+          activeOpacity={0.8}
+        >
+          <View style={[
+            styles.messageBubble,
+            isMyMessage ? styles.myMessageBubble : styles.theirMessageBubble
           ]}>
-            {(() => {
-              let date: Date;
-              if (item.created_at instanceof Timestamp) {
-                date = item.created_at.toDate();
-              } else {
-                date = new Date(item.created_at);
-              }
-              return formatTime(date);
-            })()}
-          </Text>
-        </View>
+            <Text 
+              style={[
+                styles.messageText,
+                isMyMessage ? styles.myMessageText : styles.theirMessageText
+              ]}
+              selectable={true}
+              accessible={true}
+              accessibilityRole="text"
+              accessibilityLabel={`Message: ${item.content}`}
+              accessibilityHint="Double tap to select text, long press to copy message"
+            >
+              {item.content}
+            </Text>
+            <Text style={[
+              styles.messageTime,
+              isMyMessage ? styles.myMessageTime : styles.theirMessageTime
+            ]}>
+              {(() => {
+                let date: Date;
+                if (item.created_at instanceof Timestamp) {
+                  date = item.created_at.toDate();
+                } else {
+                  date = new Date(item.created_at);
+                }
+                return formatTime(date);
+              })()}
+            </Text>
+          </View>
+        </TouchableOpacity>
       </View>
     );
   };

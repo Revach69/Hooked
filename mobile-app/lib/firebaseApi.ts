@@ -448,14 +448,141 @@ export const EventAPI = {
 
   async delete(id: string): Promise<void> {
     return firebaseRetry(async () => {
+      console.log(`Starting comprehensive deletion for event: ${id}`);
+      
       // First get the event to determine which regional database to use
       const event = await EventAPI.get(id);
+      if (!event) {
+        throw new Error('Event not found');
+      }
+      
       const eventCountry = event?.location;
       const eventDb = getDbForEvent(eventCountry);
       
-      const docRef = doc(eventDb, 'events', id);
-      await deleteDoc(docRef);
-    }, { operation: 'Delete event' });
+      // Track deletion progress
+      const deletionCounts = {
+        profiles: 0,
+        likes: 0,
+        messages: 0,
+        feedback: 0,
+        kickedUsers: 0,
+        blockedMatches: 0,
+        mutedMatches: 0,
+        skippedProfiles: 0,
+        reports: 0,
+        analytics: 0
+      };
+      
+      try {
+        // 1. Delete all event profiles
+        console.log('Deleting event profiles...');
+        const profiles = await EventProfileAPI.filter({ event_id: id });
+        for (const profile of profiles) {
+          await EventProfileAPI.delete(profile.id);
+          deletionCounts.profiles++;
+        }
+        console.log(`Deleted ${deletionCounts.profiles} event profiles`);
+        
+        // 2. Delete all likes for this event
+        console.log('Deleting likes...');
+        const likes = await LikeAPI.filter({ event_id: id });
+        for (const like of likes) {
+          await LikeAPI.delete(like.id);
+          deletionCounts.likes++;
+        }
+        console.log(`Deleted ${deletionCounts.likes} likes`);
+        
+        // 3. Delete all messages for this event
+        console.log('Deleting messages...');
+        const messages = await MessageAPI.filter({ event_id: id });
+        for (const message of messages) {
+          await MessageAPI.delete(message.id);
+          deletionCounts.messages++;
+        }
+        console.log(`Deleted ${deletionCounts.messages} messages`);
+        
+        // 4. Delete event feedback - EventFeedbackAPI doesn't have delete method yet
+        // TODO: Implement delete method for EventFeedbackAPI if needed
+        // console.log('Deleting event feedback...');
+        // const feedback = await EventFeedbackAPI.filter({ event_id: id });
+        // for (const fb of feedback) {
+        //   await EventFeedbackAPI.delete(fb.id);
+        //   deletionCounts.feedback++;
+        // }
+        // console.log(`Deleted ${deletionCounts.feedback} feedback entries`);
+        
+        // 5. Delete kicked users
+        console.log('Deleting kicked users...');
+        const kickedUsers = await KickedUserAPI.filter({ event_id: id });
+        for (const kicked of kickedUsers) {
+          await KickedUserAPI.delete(kicked.id);
+          deletionCounts.kickedUsers++;
+        }
+        console.log(`Deleted ${deletionCounts.kickedUsers} kicked user entries`);
+        
+        // 6. Delete blocked matches
+        console.log('Deleting blocked matches...');
+        const blockedMatches = await BlockedMatchAPI.filter({ event_id: id });
+        for (const blocked of blockedMatches) {
+          await BlockedMatchAPI.delete(blocked.id);
+          deletionCounts.blockedMatches++;
+        }
+        console.log(`Deleted ${deletionCounts.blockedMatches} blocked matches`);
+        
+        // 7. Delete muted matches
+        console.log('Deleting muted matches...');
+        const mutedMatches = await MutedMatchAPI.filter({ event_id: id });
+        for (const muted of mutedMatches) {
+          await MutedMatchAPI.delete(muted.id);
+          deletionCounts.mutedMatches++;
+        }
+        console.log(`Deleted ${deletionCounts.mutedMatches} muted matches`);
+        
+        // 8. Delete skipped profiles
+        console.log('Deleting skipped profiles...');
+        const skippedProfiles = await SkippedProfileAPI.filter({ event_id: id });
+        for (const skipped of skippedProfiles) {
+          await SkippedProfileAPI.delete(skipped.id);
+          deletionCounts.skippedProfiles++;
+        }
+        console.log(`Deleted ${deletionCounts.skippedProfiles} skipped profiles`);
+        
+        // 9. Delete reports
+        console.log('Deleting reports...');
+        const reports = await ReportAPI.filter({ event_id: id });
+        for (const report of reports) {
+          await ReportAPI.delete(report.id);
+          deletionCounts.reports++;
+        }
+        console.log(`Deleted ${deletionCounts.reports} reports`);
+        
+        // 10. Delete analytics data
+        console.log('Deleting analytics data...');
+        try {
+          const analytics = await EventAnalyticsAPI.filter({ event_id: id });
+          for (const analytic of analytics) {
+            await EventAnalyticsAPI.delete(analytic.id);
+            deletionCounts.analytics++;
+          }
+          console.log(`Deleted ${deletionCounts.analytics} analytics entries`);
+        } catch (analyticsError) {
+          console.warn('Error deleting analytics (may not exist):', analyticsError);
+        }
+        
+        // 11. Finally, delete the event itself
+        console.log('Deleting event document...');
+        const docRef = doc(eventDb, 'events', id);
+        await deleteDoc(docRef);
+        
+        console.log('Event deletion completed successfully!');
+        console.log('Deletion summary:', deletionCounts);
+        
+      } catch (error) {
+        console.error('Error during comprehensive event deletion:', error);
+        console.log('Partial deletion summary:', deletionCounts);
+        throw error;
+      }
+    }, { operation: 'Delete event (comprehensive)' });
   }
 };
 

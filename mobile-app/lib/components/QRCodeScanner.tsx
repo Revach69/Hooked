@@ -2,15 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
 import { Camera, CameraView } from 'expo-camera';
 import { X } from 'lucide-react-native';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useSharedValue, withSpring, runOnJS } from 'react-native-reanimated';
 
 interface QRCodeScannerProps {
-  onScan: (eventCode: string) => void;
+  onScan: (code: string) => void;
   onClose: () => void;
 }
 
 export default function QRCodeScanner({ onScan, onClose }: QRCodeScannerProps) {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanned, setScanned] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(0); // Zoom level from 0 to 1
+  
+  // For pinch-to-zoom gesture
+  const scale = useSharedValue(1);
+  const savedScale = useSharedValue(1);
 
   useEffect(() => {
     const getCameraPermissions = async () => {
@@ -21,7 +28,7 @@ export default function QRCodeScanner({ onScan, onClose }: QRCodeScannerProps) {
     getCameraPermissions();
   }, []);
 
-  const handleBarCodeScanned = ({ type: _type, data }: { type: string; data: string }) => {
+  const handleBarCodeScanned = ({ data }: { type: string; data: string }) => {
     setScanned(true);
     
     // Extract code from QR data
@@ -49,6 +56,31 @@ export default function QRCodeScanner({ onScan, onClose }: QRCodeScannerProps) {
     }
   };
 
+  // Update zoom level from pinch gesture
+  const updateZoomFromGesture = (newScale: number) => {
+    // Convert scale (1-3) to zoom level (0-1)
+    const newZoom = Math.min(Math.max((newScale - 1) / 2, 0), 1);
+    setZoomLevel(newZoom);
+  };
+
+  // Pinch-to-zoom gesture
+  const pinchGesture = Gesture.Pinch()
+    .onUpdate((e) => {
+      scale.value = savedScale.value * e.scale;
+    })
+    .onEnd(() => {
+      savedScale.value = scale.value;
+      // Clamp scale between 1 and 3
+      if (scale.value < 1) {
+        scale.value = withSpring(1);
+        savedScale.value = 1;
+      } else if (scale.value > 3) {
+        scale.value = withSpring(3);
+        savedScale.value = 3;
+      }
+      runOnJS(updateZoomFromGesture)(scale.value);
+    });
+
   if (hasPermission === null) {
     return (
       <View style={styles.container}>
@@ -69,45 +101,53 @@ export default function QRCodeScanner({ onScan, onClose }: QRCodeScannerProps) {
   }
 
   return (
-    <View style={styles.container}>
-      <CameraView
-        style={StyleSheet.absoluteFillObject}
-        barcodeScannerSettings={{
-          barcodeTypes: ['qr', 'ean13', 'ean8', 'code128', 'code39', 'code93', 'codabar', 'itf14', 'upc_a', 'upc_e'],
-        }}
-        onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-      />
-      
-      {/* Overlay */}
-      <View style={styles.overlay}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <X size={24} color="white" />
-          </TouchableOpacity>
+    <GestureHandlerRootView style={styles.container}>
+      <GestureDetector gesture={pinchGesture}>
+        <View style={styles.container}>
+          <CameraView
+            style={StyleSheet.absoluteFillObject}
+            zoom={zoomLevel}
+            barcodeScannerSettings={{
+              barcodeTypes: ['qr', 'ean13', 'ean8', 'code128', 'code39', 'code93', 'codabar', 'itf14', 'upc_a', 'upc_e'],
+            }}
+            onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+          />
+          
+          {/* Overlay */}
+          <View style={styles.overlay}>
+            {/* Header */}
+            <View style={styles.header}>
+              <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+                <X size={24} color="white" />
+              </TouchableOpacity>
+            </View>
+            
+            {/* Scanning area */}
+            <View style={styles.scanArea}>
+              <View style={styles.scanFrame} />
+              <Text style={styles.instructionText}>
+                Position QR code within the frame
+              </Text>
+              <Text style={styles.zoomHintText}>
+                Pinch to zoom in or out
+              </Text>
+            </View>
+            
+            {/* Bottom section */}
+            <View style={styles.bottom}>
+              {scanned && (
+                <TouchableOpacity
+                  style={styles.scanAgainButton}
+                  onPress={() => setScanned(false)}
+                >
+                  <Text style={styles.scanAgainButtonText}>Scan Again</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
         </View>
-        
-        {/* Scanning area */}
-        <View style={styles.scanArea}>
-          <View style={styles.scanFrame} />
-          <Text style={styles.instructionText}>
-            Position QR code within the frame
-          </Text>
-        </View>
-        
-        {/* Bottom section */}
-        <View style={styles.bottom}>
-          {scanned && (
-            <TouchableOpacity
-              style={styles.scanAgainButton}
-              onPress={() => setScanned(false)}
-            >
-              <Text style={styles.scanAgainButtonText}>Scan Again</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-    </View>
+      </GestureDetector>
+    </GestureHandlerRootView>
   );
 }
 
@@ -164,6 +204,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     marginTop: 20,
+    paddingHorizontal: 40,
+  },
+  zoomHintText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 10,
     paddingHorizontal: 40,
   },
   bottom: {

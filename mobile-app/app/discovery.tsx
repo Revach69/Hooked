@@ -227,6 +227,7 @@ export default function Discovery() {
     const profilePhotoUrl = await AsyncStorageUtils.getItem<string>('currentProfilePhotoUrl');
   
     if (!eventId || !sessionId) {
+      // No active session - this is correct to go home
       router.replace('/home');
       return;
     }
@@ -301,6 +302,7 @@ export default function Discovery() {
           'currentEventCountry',
           'currentEventData'
         ]);
+        // 1. Event expired - correct to go home
         router.replace('/home');
         return;
       }
@@ -339,7 +341,8 @@ export default function Discovery() {
             'currentEventCountry',
             'currentEventData'
           ]);
-          router.replace('/home');
+          // 2. Profile deleted but session exists - should go back to matches/previous page
+          router.back();
           return;
         } else {
           setCurrentUserProfile(userProfiles[0]);
@@ -634,7 +637,8 @@ export default function Discovery() {
             // User profile not found - redirect to home but keep session data
             // Homepage restoration will handle this gracefully
             console.log('User profile not found in discovery listener - redirecting to home');
-            router.replace('/home');
+            // 3. Profile listener - profile not found, should go back
+            router.back();
             return;
           }
 

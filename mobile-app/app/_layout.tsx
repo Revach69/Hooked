@@ -44,52 +44,16 @@ import { CustomMatchToast } from '../lib/components/CustomMatchToast';
 import * as Notifications from 'expo-notifications';
 // import { AppStateSyncService } from '../lib/services/AppStateSyncService'; // DEPRECATED - Client handles notification display
 import * as Linking from 'expo-linking';
-import * as Updates from 'expo-updates';
+// import * as Updates from 'expo-updates'; // Now handled by UpdateService
 import { AppState } from 'react-native';
 
 import { getSessionAndInstallationIds } from '../lib/session/sessionId';
 
 // ===== Helpers to read current context =====
 
-// ===== OTA Update Helper =====
-async function checkForOTAUpdates(): Promise<void> {
-  if (!Updates.isEnabled) {
-    console.log('_layout.tsx: Updates not enabled, skipping OTA check');
-    return;
-  }
-
-  try {
-    console.log('_layout.tsx: Checking for OTA updates...');
-    const update = await Updates.checkForUpdateAsync();
-    
-    if (update.isAvailable) {
-      console.log('_layout.tsx: OTA update available, downloading...');
-      await Updates.fetchUpdateAsync();
-      console.log('_layout.tsx: OTA update downloaded, will apply on next app launch');
-      
-      // Log to Sentry for tracking
-      Sentry.addBreadcrumb({
-        message: 'OTA update downloaded successfully',
-        level: 'info',
-        category: 'app_updates',
-        data: {
-          updateId: update.manifest?.id,
-          currentUpdateId: Updates.updateId
-        }
-      });
-    } else {
-      console.log('_layout.tsx: No OTA updates available');
-    }
-  } catch (error) {
-    console.warn('_layout.tsx: OTA update check failed:', error);
-    Sentry.captureException(error, {
-      tags: {
-        operation: 'ota_update_check',
-        source: '_layout.tsx'
-      }
-    });
-  }
-}
+// ===== Update Service Integration =====
+// Update checking is now handled by ../lib/updateService.ts
+// which checks both App Store/Play Store versions AND OTA updates
 
 
 
@@ -396,11 +360,22 @@ export default function RootLayout() {
           
           // Standard foreground policy: Let toast system handle it
           // CRITICAL: Suppress ALL system notifications when in foreground
+          if (isForeground) {
+            console.log('_layout.tsx: Suppressing foreground notification for type:', data?.type);
+            return {
+              shouldPlaySound: false,      // Disable sound - toast will handle
+              shouldSetBadge: false,       // Disable badge in foreground - toast will handle  
+              shouldShowBanner: false,     // Disable banner - toast will handle
+              shouldShowList: false,       // Disable notification list - toast will handle
+            };
+          }
+          
+          // Background: Allow all system notifications
           return {
-            shouldPlaySound: false,      // Disable sound - toast will handle
-            shouldSetBadge: false,       // Disable badge in foreground - toast will handle  
-            shouldShowBanner: false,     // Disable banner - toast will handle
-            shouldShowList: false,       // Disable notification list - toast will handle
+            shouldPlaySound: true,
+            shouldSetBadge: true,
+            shouldShowBanner: true,
+            shouldShowList: true,
           };
         },
       });
@@ -516,11 +491,12 @@ export default function RootLayout() {
           });
         }
         
-        // Check for OTA updates after app initialization
+        // Check for updates after app initialization (both store and OTA)
         try {
-          await checkForOTAUpdates();
+          const { default: UpdateService } = await import('../lib/updateService');
+          await UpdateService.checkForUpdates();
         } catch (updateError) {
-          console.warn('_layout.tsx: OTA update check failed:', updateError);
+          console.warn('_layout.tsx: Update check failed:', updateError);
         }
         
         setAppIsReady(true);
@@ -590,8 +566,10 @@ export default function RootLayout() {
     const handleAppStateChange = (nextAppState: string) => {
       if (nextAppState === 'active') {
         // Check for updates when app becomes active (resumed from background)
-        checkForOTAUpdates().catch(error => {
-          console.warn('_layout.tsx: Background OTA update check failed:', error);
+        import('../lib/updateService').then(({ default: UpdateService }) => {
+          return UpdateService.checkForUpdates();
+        }).catch(error => {
+          console.warn('_layout.tsx: Background update check failed:', error);
         });
       }
     };

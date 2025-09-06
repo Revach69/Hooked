@@ -86,7 +86,9 @@ This guide explains what changes can be deployed via Over-the-Air (OTA) updates 
 eas update --branch staging --message "Fix swipe detection sensitivity"
 
 # 4. Test on staging, then deploy to production
-eas update --branch production --message "Fix swipe detection bug"
+
+
+eas update --branch production --message "add zoom in qr scanner and updated chat page functions"
 
 # 5. Update your backend version endpoint if needed
 # 6. The UpdateService automatically checks and prompts users

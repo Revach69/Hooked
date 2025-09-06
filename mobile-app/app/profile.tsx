@@ -99,7 +99,7 @@ export default function Profile() {
           [
             {
               text: 'OK',
-              onPress: () => router.replace('/home')
+              onPress: () => router.back() // 11. Firebase connection error - go back to previous page
             }
           ]
         );
@@ -110,6 +110,7 @@ export default function Profile() {
       const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
       
       if (!eventId || !sessionId) {
+        // 12. No active session - correct to go home
         router.replace('/home');
         return;
       }
@@ -147,6 +148,7 @@ export default function Profile() {
               'currentProfileColor',
               'currentProfilePhotoUrl'
             ]);
+            // 13. Event not found - expired or deleted, correct to go home
             router.replace('/home');
             return;
           }
@@ -205,6 +207,7 @@ export default function Profile() {
             'currentProfileColor',
             'currentProfilePhotoUrl'
           ]);
+          // 14. Profile deleted - must go home as profile cannot be recovered
           router.replace('/home');
           return;
         }
@@ -816,6 +819,8 @@ export default function Profile() {
           style: "destructive",
           onPress: async () => {
             try {
+              // Set flag to indicate profile deletion is in progress
+              await AsyncStorageUtils.setItem('profileDeletionInProgress', true);
               const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
               const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
               
@@ -899,9 +904,12 @@ export default function Profile() {
                 await SessionCleanupService.forceCleanupAll();
               }
               
+              // 15. Profile deletion complete - must go home
               router.replace('/home');
               return;
             } catch (error) {
+              // Clear the deletion flag on error
+              await AsyncStorageUtils.removeItem('profileDeletionInProgress');
               console.error('Error during profile deletion:', error);
               Sentry.captureException(error);
               // Error deleting profile - use Alert for critical errors

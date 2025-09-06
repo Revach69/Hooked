@@ -14,29 +14,47 @@ interface VersionInfo {
 
 class UpdateService {
   private readonly APP_STORE_URL = {
-    ios: 'https://apps.apple.com/app/hooked/id6748921014', // Replace with your actual App Store ID
+    ios: 'https://apps.apple.com/app/hooked/id6748921014',
     android: 'https://play.google.com/store/apps/details?id=com.hookedapp.app'
   };
 
-  private readonly API_BASE = process.env.EXPO_PUBLIC_FUNCTION_NOTIFY_URL?.replace('/notify', '') || 'https://your-api.com';
+  private readonly APP_ID = {
+    ios: '6748921014',
+    android: 'com.hookedapp.app'
+  };
 
   /**
    * Check for updates on app launch
+   * 1. First check for store updates - if found, show alert and stop
+   * 2. If no store update, check for OTA updates and install silently
    */
   async checkForUpdates(): Promise<void> {
     try {
-      // First check for over-the-air updates
-      await this.checkOTAUpdates();
+      console.log('🔍 Starting update check...');
       
-      // Then check for store updates
-      await this.checkStoreUpdates();
+      // Step 1: Check for store updates first
+      const versionInfo = await this.getVersionInfo();
+      
+      if (this.needsStoreUpdate(versionInfo)) {
+        console.log('📱 Store update available, showing alert...');
+        this.showStoreUpdateAlert(versionInfo);
+        // Stop here - don't check OTA if store update is needed
+        return;
+      }
+      
+      console.log('✅ No store update needed, checking OTA...');
+      
+      // Step 2: Only check OTA if no store update is needed
+      await this.checkOTAUpdatesSilently();
+      
     } catch (error) {
       console.log('Update check failed:', error);
     }
   }
 
   /**
-   * Check for over-the-air updates (JavaScript/content updates)
+   * Check for over-the-air updates (JavaScript/content updates) with user prompts
+   * DEPRECATED - Use checkOTAUpdatesSilently() instead for automatic updates
    */
   private async checkOTAUpdates(): Promise<void> {
     if (!Updates.isEnabled) {
@@ -81,6 +99,66 @@ class UpdateService {
   }
 
   /**
+   * Check for OTA updates and install them silently without user interaction
+   * This provides the best user experience for minor updates
+   */
+  private async checkOTAUpdatesSilently(): Promise<void> {
+    if (!Updates.isEnabled) {
+      console.log('❌ OTA updates are not enabled in this environment');
+      return;
+    }
+
+    try {
+      console.log('🔍 Checking for OTA updates...');
+      console.log('Current update ID:', Updates.updateId);
+      
+      const update = await Updates.checkForUpdateAsync();
+      
+      if (update.isAvailable) {
+        console.log('✨ OTA update available! Downloading silently...');
+        
+        try {
+          // Download the update silently
+          await Updates.fetchUpdateAsync();
+          console.log('✅ OTA update downloaded successfully');
+          
+          // Show a subtle notification that update will be applied
+          Alert.alert(
+            '✨ Update Downloaded',
+            'The app has been updated with the latest improvements. The update will be applied when you restart the app.',
+            [
+              {
+                text: 'Restart Now',
+                onPress: () => {
+                  console.log('🔄 Restarting app with new update...');
+                  Updates.reloadAsync();
+                }
+              },
+              {
+                text: 'Later',
+                style: 'cancel',
+                onPress: () => {
+                  console.log('⏰ User chose to restart later - update will apply on next app launch');
+                }
+              }
+            ],
+            { cancelable: true }
+          );
+          
+        } catch (fetchError) {
+          console.error('❌ Failed to download OTA update:', fetchError);
+          // Silently fail - don't bother the user with technical errors
+        }
+      } else {
+        console.log('✅ App is up to date (OTA)');
+      }
+    } catch (error) {
+      console.error('❌ OTA update check failed:', error);
+      // Silently fail - don't interrupt user experience
+    }
+  }
+
+  /**
    * Check for store updates (native code/major version updates)
    */
   private async checkStoreUpdates(): Promise<void> {
@@ -96,37 +174,59 @@ class UpdateService {
   }
 
   /**
-   * Get version information from your API/Firebase
+   * Get version information directly from App Store/Play Store
    */
   private async getVersionInfo(): Promise<VersionInfo> {
+    const currentVersion = Constants.expoConfig?.version || '1.0.0';
+    
     try {
-      const response = await fetch(`${this.API_BASE}/version`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      let latestVersion = currentVersion;
+      
+      if (Platform.OS === 'ios') {
+        // Use iTunes Search API to get App Store version
+        const response = await fetch(
+          `https://itunes.apple.com/lookup?id=${this.APP_ID.ios}&country=US`,
+          {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          }
+        );
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch version info');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.results && data.results.length > 0) {
+            latestVersion = data.results[0].version;
+          }
+        }
+      } else if (Platform.OS === 'android') {
+        // For Android, we'll use a fallback approach since Google Play Store doesn't have a public API
+        // You can implement one of these solutions:
+        // 1. Create a Firebase Function that scrapes Play Store
+        // 2. Use a third-party service like app-store-scraper
+        // 3. Manually update a JSON file with version info
+        
+        console.log('Android version check: Play Store has no public API, using current version');
+        // For now, assume Android is always up to date unless you implement a custom solution
+        latestVersion = currentVersion;
       }
-
-      const data = await response.json();
       
       return {
-        currentVersion: Constants.expoConfig?.version || '1.0.0',
-        latestVersion: data.latestVersion || '1.0.0',
-        minRequiredVersion: data.minRequiredVersion || '1.0.0',
-        forceUpdate: data.forceUpdate || false,
-        updateMessage: data.updateMessage || 'A new version is available with improvements and bug fixes.',
-        hasOTAUpdate: data.hasOTAUpdate || false
+        currentVersion,
+        latestVersion,
+        minRequiredVersion: currentVersion, // For simplicity, assume no minimum version requirement
+        forceUpdate: false, // Never force update unless specified otherwise
+        updateMessage: 'A new version is available with improvements and bug fixes.',
+        hasOTAUpdate: false
       };
     } catch (error) {
+      console.log('Store version check failed:', error);
       // Fallback to default values if API fails
       return {
-        currentVersion: Constants.expoConfig?.version || '1.0.0',
-        latestVersion: Constants.expoConfig?.version || '1.0.0',
-        minRequiredVersion: '1.0.0',
+        currentVersion,
+        latestVersion: currentVersion,
+        minRequiredVersion: currentVersion,
         forceUpdate: false,
         updateMessage: 'Update available',
         hasOTAUpdate: false
@@ -223,6 +323,7 @@ class UpdateService {
 
   /**
    * Force check for updates (can be triggered by user)
+   * This uses the old flow with user prompts for manual checks
    */
   async forceCheckForUpdates(): Promise<void> {
     Alert.alert(
@@ -232,7 +333,34 @@ class UpdateService {
       { cancelable: false }
     );
 
-    await this.checkForUpdates();
+    try {
+      // For manual checks, use the prompt-based OTA update
+      const versionInfo = await this.getVersionInfo();
+      
+      if (this.needsStoreUpdate(versionInfo)) {
+        this.showStoreUpdateAlert(versionInfo);
+      } else {
+        // Check OTA with prompts for manual checks
+        await this.checkOTAUpdates();
+        
+        // If no OTA update was found, show success message
+        const update = await Updates.checkForUpdateAsync();
+        if (!update.isAvailable) {
+          Alert.alert(
+            '✅ You\'re up to date!',
+            `You have the latest version (${versionInfo.currentVersion}) installed.`,
+            [{ text: 'OK' }]
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Force update check failed:', error);
+      Alert.alert(
+        'Error',
+        'Failed to check for updates. Please try again later.',
+        [{ text: 'OK' }]
+      );
+    }
   }
 
   /**

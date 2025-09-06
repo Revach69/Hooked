@@ -127,6 +127,7 @@ export default function Consent() {
           autoHide: true,
           topOffset: 0,
         });
+        // Firebase connection error - must go home to avoid loop
         router.replace('/home');
         return;
       }
@@ -153,6 +154,7 @@ export default function Consent() {
       
       if (!eventId) {
         Sentry.captureException(new Error('No event ID found in AsyncStorage'));
+        // No event ID in storage - must go home to avoid loop
         router.replace('/home');
         return;
       }
@@ -173,6 +175,7 @@ export default function Consent() {
             autoHide: true,
             topOffset: 0,
           });
+          // Event not found in database - must go home to avoid loop
           router.replace('/home');
         }
       } catch (error) {
@@ -186,6 +189,7 @@ export default function Consent() {
           autoHide: true,
           topOffset: 0,
         });
+        // General error loading event - must go home to avoid loop
         router.replace('/home');
       }
     };
@@ -1045,7 +1049,7 @@ export default function Consent() {
           {/* Back Button */}
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.replace('/home')}
+            onPress={() => router.replace('/home')} // Processing step back button - home to avoid loop
             accessibilityLabel="Back to Home"
             accessibilityHint="Tap to return to the home screen"
           >
@@ -1069,7 +1073,7 @@ export default function Consent() {
           {/* Back Button */}
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.replace('/home')}
+            onPress={() => router.replace('/home')} // Error step back button - home to avoid loop
             accessibilityLabel="Back to Home"
             accessibilityHint="Tap to return to the home screen"
           >
@@ -1094,7 +1098,7 @@ export default function Consent() {
             {/* Back Button */}
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => router.replace('/home')}
+              onPress={() => router.replace('/home')} // Main consent form back button - home to avoid loop
               accessibilityLabel="Back to Home"
               accessibilityHint="Tap to return to the home screen"
             >

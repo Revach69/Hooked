@@ -1104,6 +1104,10 @@ async function enqueueNotificationJob(job: Omit<NotificationJob, 'attempts' | 's
 }
 
 async function processNotificationJobs(): Promise<void> {
+  console.error('🔄🔄🔄 PROCESSING NOTIFICATION JOBS - START', {
+    timestamp: new Date().toISOString()
+  });
+  
   const MAX_JOBS_PER_RUN = 10;
   const MAX_ATTEMPTS = 5;
   const STALENESS_CUTOFF_HOURS = 24; // Skip jobs older than 24 hours
@@ -1127,6 +1131,17 @@ async function processNotificationJobs(): Promise<void> {
           .orderBy('createdAt', 'asc')
           .limit(MAX_JOBS_PER_RUN)
           .get();
+    
+        console.error('📊 FOUND JOBS TO PROCESS:', {
+          database: dbId,
+          count: jobsSnapshot.size,
+          jobs: jobsSnapshot.docs.map(d => ({
+            id: d.id.substring(0, 10) + '...',
+            type: d.data().type,
+            status: d.data().status,
+            createdAt: d.data().createdAt
+          }))
+        });
     
         if (jobsSnapshot.empty) {
           console.log(`📊 Database ${dbId}: No queued notification jobs to process`);
@@ -1379,11 +1394,19 @@ export const notify = onRequest({
 // Trigger: Mutual Match (likes)
 // Shared handler for mutual likes
 const mutualLikeHandler = async (event: any) => {
-  const change = event.data;
-  if (!change) {
-    console.log('onMutualLike: No change data, returning early');
-    return;
-  }
+  // EMERGENCY LOGGING: Track every function call
+  console.error('🚨🚨🚨 MUTUAL LIKE HANDLER CALLED', {
+    eventId: event.params?.likeId,
+    timestamp: new Date().toISOString(),
+    region: process.env.FUNCTION_REGION || 'unknown'
+  });
+  
+  try {
+    const change = event.data;
+    if (!change) {
+      console.error('💥 No change data provided');
+      return;
+    }
   
   // Use the trigger's bound database to ensure same-db operations
   const db = change.after?.ref?.firestore || change.before?.ref?.firestore;
@@ -1594,6 +1617,16 @@ const mutualLikeHandler = async (event: any) => {
       secondLiker: likerSession.substring(0, 8) + '...',
       timestamp: new Date().toISOString()
     });
+    
+  } catch (error) {
+    console.error('💥💥💥 MUTUAL LIKE HANDLER CRASHED:', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : 'No stack trace',
+      eventParams: event.params,
+      timestamp: new Date().toISOString()
+    });
+    throw error; // Re-throw to ensure Firebase logs it
+  }
 };
 
 // Multi-region Firestore triggers for onMutualLike - FIXED VERSION
@@ -1637,21 +1670,56 @@ export const onMutualLikeSA = onDocumentWritten({
 // Trigger: New Message (messages)
 // Shared handler for new messages
 const messageCreateHandler = async (event: any) => {
-  const snap = event.data;
-  if (!snap) {
-    console.log('onMessageCreate: No snap data, returning early');
-    return;
-  }
+  const messageId = event.params?.messageId;
+  console.error('📨📨📨 MESSAGE HANDLER CALLED', {
+    messageId: messageId?.substring(0, 10) + '...',
+    timestamp: new Date().toISOString()
+  });
   
-  // Use the trigger's bound database to ensure same-db operations
-  const db = snap.ref?.firestore;
-  if (!db) {
-    console.error('onMessageCreate: No database reference found in trigger event');
-    return;
-  }
+  try {
+    const snap = event.data;
+    if (!snap) {
+      console.error('💥 No snap data, returning early');
+      return;
+    }
+    
+    // Use the trigger's bound database to ensure same-db operations
+    const db = snap.ref?.firestore;
+    if (!db) {
+      console.error('💥 No database reference found in trigger event');
+      return;
+    }
+
+    // TRANSACTION DEDUPLICATION: Prevent duplicate message notifications
+    const messageKey = `message:${messageId}`;
+    const processedRef = db.collection('_system_locks').doc(messageKey);
+    
+    try {
+      const processed = await db.runTransaction(async (transaction: any) => {
+        const doc = await transaction.get(processedRef);
+        if (doc.exists && doc.data()?.processed === true) {
+          return false; // Already processed
+        }
+        transaction.set(processedRef, {
+          processed: true,
+          processedBy: messageId,
+          timestamp: admin.firestore.FieldValue.serverTimestamp()
+        });
+        return true; // We got the lock
+      });
+      
+      if (!processed) {
+        console.log('🛑 Message already processed by another trigger');
+        return;
+      }
+      
+      console.log('🎯 MESSAGE PROCESSING - transaction lock acquired');
+    } catch (transactionError) {
+      console.log('🛑 Message transaction failed, another instance processing');
+      return;
+    }
   
   const d = snap.data() as any;
-  const messageId = d?.id || event.params.messageId;
     const eventId = d?.event_id;
     const fromProfile = d?.from_profile_id;
     const toProfile = d?.to_profile_id;
@@ -1756,6 +1824,17 @@ const messageCreateHandler = async (event: any) => {
         },
         aggregationKey: `message:${eventId}:${toProfile}`
       }, db);
+      
+      console.log('✅ Message notification job created successfully');
+      
+  } catch (error) {
+    console.error('💥💥💥 MESSAGE HANDLER CRASHED:', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      messageId: event.params?.messageId?.substring(0, 10) + '...',
+      timestamp: new Date().toISOString()
+    });
+    throw error; // Re-throw to ensure Firebase logs it
+  }
 };
 
 // Multi-region Firestore triggers for onMessageCreate
@@ -2893,6 +2972,24 @@ export const debugNotifications = onRequest({
     
     const duplicateEntries = Object.entries(duplicates).filter(([_, count]) => count > 1);
     
+    // ENHANCED: Check push tokens for this user
+    const pushTokensSnapshot = await db.collection('push_tokens')
+      .where('sessionId', '==', sessionId)
+      .get();
+    
+    const pushTokens = pushTokensSnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        sessionId: data.sessionId,
+        platform: data.platform,
+        tokenPreview: data.token?.substring(0, 20) + '...',
+        ageMinutes: data.updatedAt ? Math.floor((Date.now() - data.updatedAt.toMillis()) / 60000) : 'unknown',
+        hasToken: !!data.token,
+        updatedAt: data.updatedAt
+      };
+    });
+
     res.json({
       sessionId,
       eventId: eventId || 'default',
@@ -2900,11 +2997,14 @@ export const debugNotifications = onRequest({
         totalPending: jobs.length,
         totalProcessedLastHour: processedJobs.length,
         duplicateKeys: duplicateEntries.length,
-        hasDuplicates: duplicateEntries.length > 0
+        hasDuplicates: duplicateEntries.length > 0,
+        pushTokensFound: pushTokens.length,
+        validTokens: pushTokens.filter(t => t.hasToken && typeof t.ageMinutes === 'number' && t.ageMinutes < 1440).length // Valid if updated in last 24h
       },
       duplicates: duplicateEntries.map(([key, count]) => ({ key, count })),
       pendingJobs: jobs,
-      recentProcessed: processedJobs
+      recentProcessed: processedJobs,
+      pushTokens: pushTokens
     });
     
   } catch (error) {

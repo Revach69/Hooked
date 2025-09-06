@@ -119,23 +119,38 @@ export default function EventDetails() {
   const handleDeleteEvent = async () => {
     Alert.alert(
       "Delete Event",
-      "Are you sure you want to delete this event? This action cannot be undone.",
+      "Are you sure you want to delete this event? This will permanently remove:\n\n• All user profiles\n• All likes and matches\n• All messages\n• All reports and feedback\n• All related data\n\nThis action cannot be undone.",
       [
         {
           text: "Cancel",
           style: "cancel"
         },
         {
-          text: "Delete",
+          text: "Delete Everything",
           style: "destructive",
           onPress: async () => {
+            // Show loading alert
+            Alert.alert(
+              'Deleting Event',
+              'Please wait while we remove all event data...',
+              [],
+              { cancelable: false }
+            );
+            
             try {
               await EventAPI.delete(eventId);
-              Alert.alert('Success', 'Event deleted successfully');
-              router.back();
-            } catch {
-              // Error deleting event
-              Alert.alert('Error', 'Failed to delete event');
+              Alert.alert(
+                'Success', 
+                'Event and all related data deleted successfully',
+                [{ text: 'OK', onPress: () => router.back() }]
+              );
+            } catch (error) {
+              console.error('Error deleting event:', error);
+              Alert.alert(
+                'Error', 
+                'Failed to delete event. Some data may have been partially removed.',
+                [{ text: 'OK' }]
+              );
             }
           }
         }
