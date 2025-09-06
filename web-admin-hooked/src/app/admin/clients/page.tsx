@@ -114,6 +114,82 @@ export default function ClientsPage() {
     loadClients();
   };
 
+  // Event management handlers
+  const handleMergeClient = async (fromClientId: string, toClientId: string) => {
+    try {
+      const fromClient = clients.find(c => c.id === fromClientId);
+      const toClient = clients.find(c => c.id === toClientId);
+      
+      if (!fromClient || !toClient) {
+        console.error('Client not found for merge');
+        return;
+      }
+
+      // Merge events from fromClient to toClient
+      const mergedEvents = [...(toClient.events || []), ...(fromClient.events || [])];
+      
+      // Update the target client with merged events
+      await AdminClientAPI.update(toClientId, { events: mergedEvents });
+      
+      // Delete the source client
+      await AdminClientAPI.delete(fromClientId);
+      
+      // Reload clients
+      await loadClients();
+    } catch (error) {
+      console.error('Failed to merge clients:', error);
+    }
+  };
+
+  const handleAddEvent = (clientId: string) => {
+    // TODO: Implement add event functionality
+    console.log('Add event for client:', clientId);
+  };
+
+  const handleEditEvent = (clientId: string, event: any) => {
+    // TODO: Implement edit event functionality
+    console.log('Edit event:', event, 'for client:', clientId);
+  };
+
+  const handleDeleteEvent = async (clientId: string, eventId: string) => {
+    try {
+      const client = clients.find(c => c.id === clientId);
+      if (!client) return;
+
+      const updatedEvents = client.events?.filter(e => e.id !== eventId) || [];
+      await AdminClientAPI.update(clientId, { events: updatedEvents });
+      
+      // Update local state
+      setClients(prev => prev.map(c => 
+        c.id === clientId ? { ...c, events: updatedEvents } : c
+      ));
+    } catch (error) {
+      console.error('Failed to delete event:', error);
+      await loadClients();
+    }
+  };
+
+  const handleUpdateEvent = async (clientId: string, eventId: string, field: string, value: unknown) => {
+    try {
+      const client = clients.find(c => c.id === clientId);
+      if (!client) return;
+
+      const updatedEvents = client.events?.map(e => 
+        e.id === eventId ? { ...e, [field]: value } : e
+      ) || [];
+      
+      await AdminClientAPI.update(clientId, { events: updatedEvents });
+      
+      // Update local state
+      setClients(prev => prev.map(c => 
+        c.id === clientId ? { ...c, events: updatedEvents } : c
+      ));
+    } catch (error) {
+      console.error('Failed to update event:', error);
+      await loadClients();
+    }
+  };
+
 
 
   if (isLoading) {
@@ -220,6 +296,11 @@ export default function ClientsPage() {
         onEdit={handleEditClient}
         onDelete={handleDeleteClient}
         onUpdate={handleUpdateClient}
+        onMergeClient={handleMergeClient}
+        onAddEvent={handleAddEvent}
+        onEditEvent={handleEditEvent}
+        onDeleteEvent={handleDeleteEvent}
+        onUpdateEvent={handleUpdateEvent}
         onViewForm={handleViewForm}
         onViewEvent={handleViewEvent}
         searchQuery={searchQuery}

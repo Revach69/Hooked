@@ -1,21 +1,28 @@
+export type ClientEvent = {
+  id: string;                      // Unique event ID for this client
+  expectedAttendees?: number | null;
+  eventDate?: string | null;       // ISO date (yyyy-mm-dd) or null
+  organizerFormSent?: 'Yes' | 'No';
+  eventCardCreated?: 'Yes' | 'No';
+  description?: string | null;
+  linkedFormId?: string | null;    // Reference to linked event form
+  linkedEventId?: string | null;   // Reference to linked event
+  eventKind?: string;              // Event type for this specific event
+  createdAt?: unknown;             // Firestore Timestamp
+  updatedAt?: unknown;             // Firestore Timestamp
+};
+
 export type AdminClient = {
   id: string;                  // Firestore doc id
-  name: string;                // Name
+  name: string;                // Client/Organization name
   type: 'Company' | 'Wedding Organizer' | 'Club / Bar' | 'Restaurant' | 'Personal Host' | 'Other Organization';
-  eventKind: 'House Party' | 'Club' | 'Wedding' | 'Meetup' | 'High Tech Event' | 'Retreat' | 'Party' | 'Conference' | string;
   pocName: string;             // Name of POC
   phone?: string | null;
   email?: string | null;
   country?: string | null;
-  expectedAttendees?: number | null;
-  eventDate?: string | null;   // ISO date (yyyy-mm-dd) or null
-  organizerFormSent?: 'Yes' | 'No';
-  eventCardCreated?: 'Yes' | 'No'; // New field for event card linking
   status: 'Initial Discussion' | 'Negotiation' | 'Won' | 'Lost' | 'Pre-Discussion';
   source?: 'Personal Connect' | 'Instagram Inbound' | 'Email' | 'Other' | 'Olim in TLV' | 'Contact Form';
-  description?: string | null;
-  linkedFormId?: string | null; // Reference to linked event form
-  linkedEventId?: string | null; // Reference to linked event
+  events?: ClientEvent[];      // Array of events for this client
 
   // system fields
   createdAt: unknown;              // Firestore Timestamp

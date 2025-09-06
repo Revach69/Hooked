@@ -643,7 +643,7 @@ export const EventAPI = {
       
       // 4. Delete kicked users
       console.log('Deleting kicked users...');
-      const kickedUsers = await KickedUserAPI.filter({ event_id: id }, country);
+      const kickedUsers = await KickedUserAPI.filter({ event_id: id });
       for (const kicked of kickedUsers) {
         await KickedUserAPI.deleteFromRegion(kicked.id, country, databaseId);
         deletionCounts.kickedUsers++;

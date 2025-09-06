@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { Event } from '@/lib/firebaseApi';
+import { Event, EventAPI } from '@/lib/firebaseApi';
 import { X, Save, Plus, Upload, Edit3 } from 'lucide-react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getStorageInstance } from '@/lib/firebaseConfig';
@@ -25,6 +25,7 @@ import {
 interface EventFormProps {
   event?: Event | null;
   isOpen: boolean;
+  isDuplicating?: boolean;
   onClose: () => void;
   onSave: (eventData: Partial<Event>) => Promise<void>;
 }
@@ -32,6 +33,7 @@ interface EventFormProps {
 export default function EventForm({
   event,
   isOpen,
+  isDuplicating = false,
   onClose,
   onSave
 }: EventFormProps) {
@@ -61,7 +63,7 @@ export default function EventForm({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [cropData, setCropData] = useState<any>(null);
 
-  const isEditing = !!event;
+  const isEditing = !!event && !isDuplicating;
 
   useEffect(() => {
     // Reset all image-related state first
@@ -85,21 +87,101 @@ export default function EventForm({
         }
       }
       
+      // Convert timestamps to local event time strings for display
+      let startsAtString = '';
+      let startDateString = '';
+      let expiresAtString = '';
+
+      if (event.starts_at) {
+        // Handle various timestamp formats from Firestore
+        if (typeof event.starts_at === 'object' && 'toDate' in event.starts_at) {
+          startsAtString = utcTimestampToLocalEventTimeString(event.starts_at, eventTimezone);
+        } else if (typeof event.starts_at === 'object' && ('seconds' in event.starts_at || '_seconds' in event.starts_at)) {
+          // Handle raw timestamp object from Cloud Functions
+          const timestampObj = event.starts_at as { seconds?: number; _seconds?: number };
+          const seconds = timestampObj.seconds || timestampObj._seconds || 0;
+          const date = new Date(seconds * 1000);
+          const formatter = new Intl.DateTimeFormat('en-CA', {
+            timeZone: eventTimezone,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+          });
+          const parts = formatter.formatToParts(date);
+          const values: Record<string, string> = {};
+          parts.forEach(part => { 
+            if (part.type !== 'literal') values[part.type] = part.value; 
+          });
+          startsAtString = `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
+        }
+      }
+
+      if (event.start_date) {
+        if (typeof event.start_date === 'object' && 'toDate' in event.start_date) {
+          startDateString = utcTimestampToLocalEventTimeString(event.start_date, eventTimezone);
+        } else if (typeof event.start_date === 'object' && ('seconds' in event.start_date || '_seconds' in event.start_date)) {
+          const timestampObj = event.start_date as { seconds?: number; _seconds?: number };
+          const seconds = timestampObj.seconds || timestampObj._seconds || 0;
+          const date = new Date(seconds * 1000);
+          const formatter = new Intl.DateTimeFormat('en-CA', {
+            timeZone: eventTimezone,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+          });
+          const parts = formatter.formatToParts(date);
+          const values: Record<string, string> = {};
+          parts.forEach(part => { 
+            if (part.type !== 'literal') values[part.type] = part.value; 
+          });
+          startDateString = `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
+        }
+      } else if (startsAtString) {
+        // Fall back to starts_at if start_date is not set
+        startDateString = startsAtString;
+      }
+
+      if (event.expires_at) {
+        if (typeof event.expires_at === 'object' && 'toDate' in event.expires_at) {
+          expiresAtString = utcTimestampToLocalEventTimeString(event.expires_at, eventTimezone);
+        } else if (typeof event.expires_at === 'object' && ('seconds' in event.expires_at || '_seconds' in event.expires_at)) {
+          const timestampObj = event.expires_at as { seconds?: number; _seconds?: number };
+          const seconds = timestampObj.seconds || timestampObj._seconds || 0;
+          const date = new Date(seconds * 1000);
+          const formatter = new Intl.DateTimeFormat('en-CA', {
+            timeZone: eventTimezone,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+          });
+          const parts = formatter.formatToParts(date);
+          const values: Record<string, string> = {};
+          parts.forEach(part => { 
+            if (part.type !== 'literal') values[part.type] = part.value; 
+          });
+          expiresAtString = `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
+        }
+      }
+
+      // Generate a new event code for duplication (random 6 character string)
+      const generateEventCode = () => Math.random().toString(36).substring(2, 8).toUpperCase();
+      
       setFormData({
-        name: event.name || '',
-        event_code: event.event_code || '',
+        name: isDuplicating ? `${event.name} (Copy)` : (event.name || ''),
+        event_code: isDuplicating ? generateEventCode() : (event.event_code || ''),
         location: event.location || '',
-        starts_at: (event.starts_at && typeof event.starts_at === 'object' && 'toDate' in event.starts_at)
-          ? utcTimestampToLocalEventTimeString(event.starts_at, eventTimezone)
-          : '',
-        start_date: (event.start_date && typeof event.start_date === 'object' && 'toDate' in event.start_date)
-          ? utcTimestampToLocalEventTimeString(event.start_date, eventTimezone)
-          : (event.starts_at && typeof event.starts_at === 'object' && 'toDate' in event.starts_at)
-            ? utcTimestampToLocalEventTimeString(event.starts_at, eventTimezone)
-            : '',
-        expires_at: (event.expires_at && typeof event.expires_at === 'object' && 'toDate' in event.expires_at)
-          ? utcTimestampToLocalEventTimeString(event.expires_at, eventTimezone)
-          : '',
+        starts_at: startsAtString,
+        start_date: startDateString,
+        expires_at: expiresAtString,
         description: event.description || '',
         event_type: event.event_type || '',
         event_link: event.event_link || '',
@@ -109,8 +191,8 @@ export default function EventForm({
         region: event.region || ''
       });
       
-      // Load existing image if available
-      if (event.image_url) {
+      // Load existing image if available (but not when duplicating)
+      if (event.image_url && !isDuplicating) {
         setExistingImageUrl(event.image_url);
         setImagePreview(event.image_url);
       }
@@ -132,7 +214,7 @@ export default function EventForm({
       });
     }
     setErrors({});
-  }, [event, isOpen]);
+  }, [event, isOpen, isDuplicating]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -288,10 +370,112 @@ export default function EventForm({
     return Object.keys(newErrors).length === 0;
   };
 
+  // Helper function to safely convert timestamp to Date
+  const toDate = (timestamp: string | Date | { toDate?: () => Date; seconds?: number } | null | undefined): Date => {
+    if (!timestamp) return new Date();
+    if (timestamp instanceof Date) return timestamp;
+    if (typeof timestamp === 'string') return new Date(timestamp);
+    if (typeof timestamp === 'object' && timestamp !== null) {
+      if ('toDate' in timestamp && typeof timestamp.toDate === 'function') {
+        return timestamp.toDate(); // Firestore Timestamp
+      }
+      if ('seconds' in timestamp && typeof timestamp.seconds === 'number') {
+        return new Date(timestamp.seconds * 1000); // Raw timestamp object
+      }
+    }
+    return new Date(timestamp);
+  };
+
+  const categorizeEventsByStatus = (events: Event[]): {
+    upcoming: Event[];
+    active: Event[];
+    past: Event[];
+  } => {
+    const now = new Date();
+    const categorized = {
+      upcoming: [] as Event[],
+      active: [] as Event[],
+      past: [] as Event[]
+    };
+
+    events.forEach(event => {
+      const accessStartDate = toDate(event.starts_at);
+      const endDate = toDate(event.expires_at);
+      
+      if (now >= accessStartDate && now <= endDate) {
+        categorized.active.push(event);
+      } else if (now < accessStartDate) {
+        categorized.upcoming.push(event);
+      } else {
+        categorized.past.push(event);
+      }
+    });
+
+    return categorized;
+  };
+
+  const validateEventCodeUniqueness = async (): Promise<boolean> => {
+    if (!formData.event_code.trim()) {
+      return true; // Skip if code not provided - other validation will catch this
+    }
+
+    try {
+      // Get all events and filter by event code
+      const allEvents = await EventAPI.filter({ event_code: formData.event_code });
+      
+      // Filter to find events with the same code (excluding current event if editing)
+      const eventsWithSameCode = allEvents.filter(existingEvent => {
+        // Skip checking against the current event if we're editing
+        if (event && existingEvent.id === event.id) {
+          return false;
+        }
+        
+        return existingEvent.event_code === formData.event_code;
+      });
+
+      // If we find any events with the same code, check if any are active or upcoming
+      if (eventsWithSameCode.length > 0) {
+        const categorizedEvents = categorizeEventsByStatus(eventsWithSameCode);
+        const activeOrUpcomingEvents = [
+          ...categorizedEvents.active,
+          ...categorizedEvents.upcoming
+        ];
+        
+        if (activeOrUpcomingEvents.length > 0) {
+          // Found active/upcoming events with same code
+          setErrors(prev => ({
+            ...prev,
+            event_code: 'Code is already in use for active/upcoming event. Choose different code'
+          }));
+          return false;
+        }
+      }
+      
+      // No conflicts found - clear any existing error
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors.event_code;
+        return newErrors;
+      });
+      return true;
+    } catch (error) {
+      console.error('Error validating event code uniqueness:', error);
+      // If validation fails due to error, allow the submission to proceed
+      // The backend can handle the validation as well
+      return true;
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!validateForm()) {
+      return;
+    }
+
+    // Validate event code uniqueness
+    const isCodeUnique = await validateEventCodeUniqueness();
+    if (!isCodeUnique) {
       return;
     }
 
@@ -548,7 +732,7 @@ export default function EventForm({
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-            {isEditing ? 'Edit Event' : 'Create Event'}
+            {isEditing ? 'Edit Event' : isDuplicating ? 'Duplicate Event' : 'Create Event'}
           </h2>
           <button
             onClick={handleClose}

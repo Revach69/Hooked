@@ -17,7 +17,8 @@ import {
   Clock,
   Copy,
   Filter,
-  ChevronDown
+  ChevronDown,
+  Files
 } from 'lucide-react';
 import * as QRCode from 'qrcode';
 import dynamic from 'next/dynamic';
@@ -97,12 +98,14 @@ export default function EventsPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [events, setEvents] = useState<Event[]>([]);
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['active', 'upcoming', 'past']));
   const [selectedRegions, setSelectedRegions] = useState<Set<string>>(new Set(REGIONS.map(r => r.id)));
   const [showRegionFilter, setShowRegionFilter] = useState(false);
   
   // Modal states
   const [showEventForm, setShowEventForm] = useState(false);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
+  const [duplicatingEvent, setDuplicatingEvent] = useState<Event | null>(null);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [analyticsEvent, setAnalyticsEvent] = useState<{ id: string; name: string; country?: string } | null>(null);
   const [showReports, setShowReports] = useState(false);
@@ -198,6 +201,12 @@ export default function EventsPage() {
     setShowEventForm(true);
   };
 
+  const handleDuplicateEvent = (event: Event) => {
+    setDuplicatingEvent(event);
+    setEditingEvent(null); // Clear editing event to ensure we're in create mode
+    setShowEventForm(true);
+  };
+
   const handleSaveEvent = async (eventData: Partial<Event>) => {
     setSaveError(null);
     try {
@@ -231,6 +240,7 @@ export default function EventsPage() {
       }
       setShowEventForm(false);
       setEditingEvent(null);
+      setDuplicatingEvent(null);
       await loadEvents();
     } catch (error) {
       console.error('Failed to save event:', error);
@@ -459,6 +469,18 @@ export default function EventsPage() {
       }
     });
 
+    // Sort each category by starts_at date ascending (earliest first)
+    const sortByDateAscending = (a: Event, b: Event) => {
+      const dateA = toDate(a.starts_at);
+      const dateB = toDate(b.starts_at);
+      if (!dateA || !dateB) return 0;
+      return dateA.getTime() - dateB.getTime();
+    };
+
+    active.sort(sortByDateAscending);
+    future.sort(sortByDateAscending);
+    past.sort(sortByDateAscending);
+
     return { active, future, past };
   };
 
@@ -665,6 +687,14 @@ export default function EventsPage() {
                   </button>
                   
                   <button
+                    onClick={() => handleDuplicateEvent(event)}
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm"
+                  >
+                    <Files className="h-4 w-4" />
+                    Duplicate
+                  </button>
+                  
+                  <button
                     onClick={() => handleDownloadData(event.id)}
                     className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
                   >
@@ -696,21 +726,41 @@ export default function EventsPage() {
     );
   };
 
-  const renderEventCategory = (title: string, events: Event[], color: string) => {
+  const toggleSectionExpansion = (sectionKey: string) => {
+    const newExpanded = new Set(expandedSections);
+    if (newExpanded.has(sectionKey)) {
+      newExpanded.delete(sectionKey);
+    } else {
+      newExpanded.add(sectionKey);
+    }
+    setExpandedSections(newExpanded);
+  };
+
+  const renderEventCategory = (title: string, events: Event[], color: string, sectionKey: string) => {
     if (events.length === 0) return null;
+
+    const isExpanded = expandedSections.has(sectionKey);
 
     return (
       <div key={title} className="mb-8">
-        <div className="flex items-center space-x-2 mb-4">
-          <div className={`w-4 h-4 rounded-full ${color}`}></div>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-            {title}
-          </h2>
-          <span className="text-lg text-gray-600 dark:text-gray-400 font-medium">({events.length})</span>
+        <div 
+          className="flex items-center justify-between mb-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 p-2 rounded-lg transition-colors"
+          onClick={() => toggleSectionExpansion(sectionKey)}
+        >
+          <div className="flex items-center space-x-2">
+            <ChevronDown className={`h-5 w-5 text-gray-600 dark:text-gray-400 transition-transform ${isExpanded ? 'rotate-0' : '-rotate-90'}`} />
+            <div className={`w-4 h-4 rounded-full ${color}`}></div>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+              {title}
+            </h2>
+            <span className="text-lg text-gray-600 dark:text-gray-400 font-medium">({events.length})</span>
+          </div>
         </div>
-        <div className="space-y-4">
-          {events.map(renderEventCard)}
-        </div>
+        {isExpanded && (
+          <div className="space-y-4">
+            {events.map(renderEventCard)}
+          </div>
+        )}
       </div>
     );
   };
@@ -843,9 +893,9 @@ export default function EventsPage() {
         </div>
       ) : (
         <div>
-          {renderEventCategory('Active Events', categorizedEvents.active, 'bg-green-500')}
-          {renderEventCategory('Future Events', categorizedEvents.future, 'bg-blue-500')}
-          {renderEventCategory('Past Events', categorizedEvents.past, 'bg-gray-500')}
+          {renderEventCategory('Active Events', categorizedEvents.active, 'bg-green-500', 'active')}
+          {renderEventCategory('Upcoming Events', categorizedEvents.future, 'bg-blue-500', 'upcoming')}
+          {renderEventCategory('Past Events', categorizedEvents.past, 'bg-gray-500', 'past')}
         </div>
       )}
 
@@ -853,11 +903,13 @@ export default function EventsPage() {
       {showEventForm && (
         <>
           <EventForm
-            event={editingEvent}
+            event={editingEvent || duplicatingEvent}
             isOpen={showEventForm}
+            isDuplicating={!!duplicatingEvent}
             onClose={() => {
               setShowEventForm(false);
               setEditingEvent(null);
+              setDuplicatingEvent(null);
             }}
             onSave={handleSaveEvent}
           />
