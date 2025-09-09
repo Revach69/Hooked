@@ -490,24 +490,25 @@ export default function Discovery() {
     return () => clearInterval(activityInterval);
   }, [currentSessionId, isAppActive]);
 
-  // Check for unseen messages
+  // Periodic refresh for red dot status (Fix 2: handles cases where messages are deleted by other users)
   useEffect(() => {
     if (!currentEvent?.id || !currentSessionId) return;
 
-    const checkUnseenMessages = async () => {
+    const refreshUnreadStatus = async () => {
       try {
         const { hasUnseenMessages } = await import('../lib/messageNotificationHelper');
         const hasUnseen = await hasUnseenMessages(currentEvent.id, currentSessionId);
         setHasUnreadMessages(hasUnseen);
       } catch (error) {
-        console.error('Discovery error:', error);
+        console.error('Error refreshing unread status:', error);
       }
     };
 
-    checkUnseenMessages();
+    // Initial check
+    refreshUnreadStatus();
     
-    // Check every 5 seconds instead of 30 for faster updates
-    const interval = setInterval(checkUnseenMessages, 5000);
+    // Periodic refresh every 30 seconds to catch edge cases like message deletions
+    const interval = setInterval(refreshUnreadStatus, 30000);
     return () => clearInterval(interval);
   }, [currentEvent?.id, currentSessionId]);
 

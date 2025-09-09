@@ -308,13 +308,26 @@ export default function Chat() {
       // Screen is focused - set current chat session
       if (matchId) {
         setCurrentChatSession(matchId as string);
+        
+        // Re-mark messages as seen when returning to chat (fixes background/foreground issue)
+        if (currentEventId && currentSessionId && !isLoading) {
+          const markMessagesOnFocus = async () => {
+            try {
+              const { markMessagesAsSeen } = await import('../lib/messageNotificationHelper');
+              await markMessagesAsSeen(currentEventId, matchId as string, currentSessionId);
+            } catch (error) {
+              console.error('Error marking messages as seen on focus:', error);
+            }
+          };
+          markMessagesOnFocus();
+        }
       }
       
       return () => {
         // Screen is unfocused - clear current chat session
         setCurrentChatSession(null);
       };
-    }, [matchId])
+    }, [matchId, currentEventId, currentSessionId, isLoading])
   );
 
   // Mark messages as seen when entering chat and set current chat session

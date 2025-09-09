@@ -243,25 +243,25 @@ export default function Profile() {
     ImageCacheService.initialize();
   }, []);
 
-  // Check for unseen messages
+  // Periodic refresh for red dot status (Fix 2: handles cases where messages are deleted by other users)
   useEffect(() => {
     if (!currentEvent?.id || !profile?.session_id) return;
 
-    const checkUnseenMessages = async () => {
+    const refreshUnreadStatus = async () => {
       try {
         const { hasUnseenMessages } = await import('../lib/messageNotificationHelper');
         const hasUnseen = await hasUnseenMessages(currentEvent.id, profile.session_id);
         setHasUnreadMessages(hasUnseen);
       } catch (error) {
-      console.error('Profile error:', error);
-        // Error checking unseen messages in profile
+        console.error('Error refreshing unread status:', error);
       }
     };
 
-    checkUnseenMessages();
+    // Initial check
+    refreshUnreadStatus();
     
-    // Check every 5 seconds for updates
-    const interval = setInterval(checkUnseenMessages, 5000);
+    // Periodic refresh every 30 seconds to catch edge cases like message deletions
+    const interval = setInterval(refreshUnreadStatus, 30000);
     return () => clearInterval(interval);
   }, [currentEvent?.id, profile?.session_id]);
 
