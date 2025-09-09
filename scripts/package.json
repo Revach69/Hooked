@@ -1,0 +1,15 @@
+{
+  "name": "hooked-scripts",
+  "version": "1.0.0",
+  "description": "Utility scripts for Hooked development",
+  "scripts": {
+    "setup-test-event": "node setup-test-event.js",
+    "cleanup-test-event": "node cleanup-test-event.js",
+    "recreate-profiles": "node recreate-profiles.js",
+    "fix-profiles-collection": "node fix-profiles-collection.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.0.0",
+    "uuid": "^9.0.0"
+  }
+}

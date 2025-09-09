@@ -35,6 +35,14 @@ const initializeFirebaseApp = () => {
       projectId: firebaseConfig.projectId
     });
     
+    // Log environment to verify correct configuration is loaded
+    console.log('🔧 Environment check:', {
+      NODE_ENV: process.env.NODE_ENV,
+      projectId: firebaseConfig.projectId,
+      isDevelopment: firebaseConfig.projectId === 'hooked-development',
+      isProduction: firebaseConfig.projectId === 'hooked-69'
+    });
+    
     return { app, auth, db, storage };
   } catch (error: unknown) {
     console.error('❌ Failed to initialize Firebase app:', error);

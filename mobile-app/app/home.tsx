@@ -26,7 +26,7 @@ import { MemoryManager } from '../lib/utils';
 import { useKickedUserCheck } from '../lib/hooks/useKickedUserCheck';
 import KickedUserModal from './KickedUserModal';
 import Toast from 'react-native-toast-message';
-import * as Sentry from '@sentry/react-native';
+// Sentry removed
 
 
 
@@ -35,9 +35,9 @@ export default function Home() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const [activeModal, setActiveModal] = useState<string | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false); // eslint-disable-line @typescript-eslint/no-unused-vars
+  const [isProcessing, setIsProcessing] = useState(false);  
   const [manualCode, setManualCode] = useState('');
-  const [isInitialized, setIsInitialized] = useState(false); // eslint-disable-line @typescript-eslint/no-unused-vars
+  const [isInitialized, setIsInitialized] = useState(false);  
   const [isCheckingResume, setIsCheckingResume] = useState(true); // <-- NEW
 
 
@@ -186,7 +186,7 @@ export default function Home() {
         await requestNotificationPermission();
       }
     } catch (error) {
-      Sentry.captureException(error);
+      console.error('Home page error:', error);
     }
   }
 

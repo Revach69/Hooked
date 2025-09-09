@@ -1,6 +1,6 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
-import { onDocumentCreated, onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { onDocumentCreated, onDocumentWritten, onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import * as path from 'path';
@@ -813,13 +813,24 @@ async function sendExpoPush(toTokens: string[], payload: { title: string; body?:
       await new Promise(resolve => setTimeout(resolve, 50)); // 50ms delay between batches
     }
     
+    // Fix iOS message notification grouping - each message should be individual
+    // Generate unique collapseId for messages to prevent grouping, keep threadId for conversation grouping
+    const generateCollapseId = () => {
+      if (notificationType === 'message') {
+        // Each message gets unique collapseId to show individually on iOS
+        return `${agg}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+      }
+      // For matches, keep current behavior (prevent duplicates)
+      return agg;
+    };
+
     const messages = chunk.map(to => ({
       to,
       sound: 'default',
       priority: 'high',
       ...payload,
-      collapseId: agg,       // Expo dedupe key
-      threadId: agg,         // iOS grouping in Notification Center
+      collapseId: generateCollapseId(),       // Unique for each message, same for matches
+      threadId: notificationType === 'message' ? agg : agg,         // Conversation grouping for messages, same for matches
       channelId: androidChannelId,  // Android notification channel
       // Add unique notification ID and timestamp for client-side deduplication
       data: {
@@ -1408,10 +1419,13 @@ const mutualLikeHandler = async (event: any) => {
       return;
     }
   
-  // Use the trigger's bound database to ensure same-db operations
-  const db = change.after?.ref?.firestore || change.before?.ref?.firestore;
+  // For v2 functions, get database from the event's database parameter or use default
+  // The database is already bound to the function based on the trigger configuration
+  const dbId = event.database || '(default)';
+  const db = getFirestore(admin.app(), dbId);
+  
   if (!db) {
-    console.error('onMutualLike: No database reference found in trigger event');
+    console.error('onMutualLike: Could not get Firestore instance for database:', dbId);
     return;
   }
   
@@ -1454,7 +1468,7 @@ const mutualLikeHandler = async (event: any) => {
       return;
     }
 
-    // FIX 1: STRONGER DEDUPLICATION - Transaction-based processing with document ID check
+    // FIX 1: STRONGER DEDUPLICATION - Transaction-based processing
     const likeDocId = event.params.likeId;
     const [firstUser, secondUser] = [likerSession, likedSession].sort();
     
@@ -1465,13 +1479,8 @@ const mutualLikeHandler = async (event: any) => {
       documentDirection: `${likerSession.substring(0, 8)} → ${likedSession.substring(0, 8)}`
     });
     
-    // Only process if this document ID follows canonical pattern
-    const expectedDocPattern = new RegExp(`${firstUser}.*${secondUser}|${eventId}.*${firstUser}.*${secondUser}`);
-    
-    if (!expectedDocPattern.test(likeDocId)) {
-      console.log('🛑 SKIP: Non-canonical document ID pattern:', likeDocId);
-      return;
-    }
+    // FIXED: Removed faulty document ID pattern validation - Firestore auto-generates random IDs
+    // The actual deduplication happens via transaction locks below
     
     // Transaction-based processing with stronger key
     const matchKey = `match_v2:${eventId}:${[likerSession, likedSession].sort().join('_')}`;
@@ -1667,6 +1676,45 @@ export const onMutualLikeSA = onDocumentWritten({
   database: 'southamerica-east1',
 }, mutualLikeHandler);
 
+// CRITICAL FIX: Add onDocumentUpdated triggers to catch field updates
+// When like documents are created first and then updated with is_mutual: true,
+// onDocumentWritten doesn't fire, but onDocumentUpdated will
+export const onMutualLikeUpdateILV2 = onDocumentUpdated({
+  document: 'likes/{likeId}',
+  region: 'me-west1',
+  database: '(default)',
+}, mutualLikeHandler);
+
+export const onMutualLikeUpdateAU = onDocumentUpdated({
+  document: 'likes/{likeId}',
+  region: 'australia-southeast2',
+  database: 'au-southeast2',
+}, mutualLikeHandler);
+
+export const onMutualLikeUpdateUS = onDocumentUpdated({
+  document: 'likes/{likeId}',
+  region: 'us-central1',
+  database: 'us-nam5',
+}, mutualLikeHandler);
+
+export const onMutualLikeUpdateEU = onDocumentUpdated({
+  document: 'likes/{likeId}',
+  region: 'europe-west3',
+  database: 'eu-eur3',
+}, mutualLikeHandler);
+
+export const onMutualLikeUpdateASIA = onDocumentUpdated({
+  document: 'likes/{likeId}',
+  region: 'asia-northeast1',
+  database: 'asia-ne1',
+}, mutualLikeHandler);
+
+export const onMutualLikeUpdateSA = onDocumentUpdated({
+  document: 'likes/{likeId}',
+  region: 'southamerica-east1',
+  database: 'southamerica-east1',
+}, mutualLikeHandler);
+
 // Trigger: New Message (messages)
 // Shared handler for new messages
 const messageCreateHandler = async (event: any) => {
@@ -1683,10 +1731,13 @@ const messageCreateHandler = async (event: any) => {
       return;
     }
     
-    // Use the trigger's bound database to ensure same-db operations
-    const db = snap.ref?.firestore;
+    // For v2 functions, get database from the event's database parameter or use default
+    // The database is already bound to the function based on the trigger configuration
+    const dbId = event.database || '(default)';
+    const db = getFirestore(admin.app(), dbId);
+    
     if (!db) {
-      console.error('💥 No database reference found in trigger event');
+      console.error('💥 Could not get Firestore instance for database:', dbId);
       return;
     }
 
@@ -2207,8 +2258,9 @@ export const deleteEventInRegion = onRequest({
 
 export const savePushToken = onCall({
   region: ALL_FUNCTION_REGIONS, // Deploy to all regions for better performance
+  enforceAppCheck: true, // Reject requests with missing or invalid App Check tokens
 }, async (request) => {
-  console.log('savePushToken: Called with data (NO APP CHECK):', {
+  console.log('savePushToken: Called with data (WITH APP CHECK ENFORCEMENT):', {
     hasToken: !!request.data?.token,
     tokenLength: request.data?.token?.length,
     platform: request.data?.platform,

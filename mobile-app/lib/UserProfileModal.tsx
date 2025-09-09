@@ -4,15 +4,16 @@ import {
   Text,
   Modal,
   TouchableOpacity,
-  Image,
   ScrollView,
   StyleSheet,
   useColorScheme,
   Dimensions,
   PanResponder,
   Animated,
+  Image,
 } from 'react-native';
-import { X, MapPin, Heart } from 'lucide-react-native';
+import { X, MapPin, Heart, Instagram } from 'lucide-react-native';
+import * as Linking from 'expo-linking';
 
 const { width, height } = Dimensions.get('window');
 
@@ -262,6 +263,19 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
       color: isDark ? '#9ca3af' : '#6b7280',
       fontStyle: 'italic',
     },
+    instagramContainer: {
+      alignItems: 'center',
+      marginTop: 12,
+      paddingVertical: 8,
+    },
+    instagramButton: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: 'rgba(228, 64, 95, 0.1)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
   });
 
   const handleLikePress = () => {
@@ -281,6 +295,25 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
       setTimeout(() => {
         onClose();
       }, 500);
+    }
+  };
+
+  const handleInstagramPress = () => {
+    if (profile.instagram_handle) {
+      const instagramUrl = `instagram://user?username=${profile.instagram_handle}`;
+      const webUrl = `https://instagram.com/${profile.instagram_handle}`;
+      
+      Linking.canOpenURL(instagramUrl)
+        .then((supported) => {
+          if (supported) {
+            Linking.openURL(instagramUrl);
+          } else {
+            Linking.openURL(webUrl);
+          }
+        })
+        .catch(() => {
+          Linking.openURL(webUrl);
+        });
     }
   };
 
@@ -387,6 +420,15 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
                       </Text>
                     </TouchableOpacity>
                   )}
+                </View>
+              )}
+              
+              {/* Instagram - Optional - Positioned after buttons */}
+              {profile.instagram_handle && (
+                <View style={styles.instagramContainer}>
+                  <TouchableOpacity style={styles.instagramButton} onPress={handleInstagramPress}>
+                    <Instagram size={32} color="#E4405F" />
+                  </TouchableOpacity>
                 </View>
               )}
             </View>

@@ -1,6 +1,6 @@
 import { db, auth } from './firebaseConfig';
 import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, query, collection, orderBy, getDocs, doc, getDoc } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { signInAnonymously } from 'firebase/auth';
 
@@ -76,13 +76,12 @@ export const EventAPI = {
         
         if (responseData.success && responseData.events) {
           return responseData.events.map(event => ({
-            id: event.id,
             ...event,
-            starts_at: event.starts_at?.toDate ? event.starts_at.toDate() : new Date(event.starts_at),
-            start_date: event.start_date?.toDate ? event.start_date.toDate() : new Date(event.start_date || event.starts_at),
-            expires_at: event.expires_at?.toDate ? event.expires_at.toDate() : new Date(event.expires_at),
-            created_at: event.created_at?.toDate ? event.created_at.toDate().toISOString() : new Date(event.created_at).toISOString(),
-            updated_at: event.updated_at?.toDate ? event.updated_at.toDate().toISOString() : new Date(event.updated_at).toISOString()
+            starts_at: toDate(event.starts_at),
+            start_date: toDate(event.start_date || event.starts_at),
+            expires_at: toDate(event.expires_at),
+            created_at: toDate(event.created_at).toISOString(),
+            updated_at: toDate(event.updated_at).toISOString()
           })) as FirestoreEvent[];
         }
       } catch (cloudError) {
@@ -125,13 +124,12 @@ export const EventAPI = {
           const event = responseData.events.find(e => e.id === id);
           if (event) {
             return {
-              id: event.id,
               ...event,
-              starts_at: event.starts_at?.toDate ? event.starts_at.toDate() : new Date(event.starts_at),
-              start_date: event.start_date?.toDate ? event.start_date.toDate() : new Date(event.start_date || event.starts_at),
-              expires_at: event.expires_at?.toDate ? event.expires_at.toDate() : new Date(event.expires_at),
-              created_at: event.created_at?.toDate ? event.created_at.toDate().toISOString() : new Date(event.created_at).toISOString(),
-              updated_at: event.updated_at?.toDate ? event.updated_at.toDate().toISOString() : new Date(event.updated_at).toISOString()
+              starts_at: toDate(event.starts_at),
+              start_date: toDate(event.start_date || event.starts_at),
+              expires_at: toDate(event.expires_at),
+              created_at: toDate(event.created_at).toISOString(),
+              updated_at: toDate(event.updated_at).toISOString()
             } as FirestoreEvent;
           }
         }

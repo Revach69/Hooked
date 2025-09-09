@@ -1,5 +1,5 @@
 import { getToken } from 'firebase/app-check';
-import * as Sentry from '@sentry/react-native';
+
 
 let appCheckInitialized = false;
 let appCheckInstance: any = null;
@@ -40,7 +40,7 @@ export async function getAppCheckToken(): Promise<string | null> {
     return appCheckTokenResponse.token;
   } catch (error) {
     console.error('Failed to get App Check token:', error);
-    Sentry.captureException(error);
+    console.error(error);
     return null;
   }
 }

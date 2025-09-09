@@ -10,7 +10,7 @@ import { Firestore, initializeFirestore, connectFirestoreEmulator } from 'fireba
 import { getStorage, FirebaseStorage, connectStorageEmulator } from 'firebase/storage';
 import { getFunctions, Functions, connectFunctionsEmulator } from 'firebase/functions';
 import { getRegionForCountry, RegionConfig, DEFAULT_REGION } from './regionUtils';
-import * as Sentry from '@sentry/react-native';
+// App Check is handled by the main app, not needed for regional apps
 
 // Cache for Firebase app instances to avoid recreation
 const firebaseAppCache = new Map<string, FirebaseApp>();
@@ -69,6 +69,9 @@ export function getFirebaseAppForRegion(region: RegionConfig): FirebaseApp {
       const config = getFirebaseConfigForRegion(region);
       const app = initializeApp(config, appName);
       
+      // Skip App Check for regional apps - not needed for client operations
+      // App Check is only initialized for the main Firebase app
+      
       firebaseAppCache.set(appName, app);
       
       if (__DEV__) {
@@ -81,7 +84,7 @@ export function getFirebaseAppForRegion(region: RegionConfig): FirebaseApp {
         });
       }
       
-      Sentry.addBreadcrumb({
+      console.log({
         message: 'Created Firebase app for region',
         level: 'info',
         category: 'firebase_region',
@@ -96,7 +99,7 @@ export function getFirebaseAppForRegion(region: RegionConfig): FirebaseApp {
     } catch (error) {
       console.error(`Failed to create Firebase app for region ${region.database}:`, error);
       
-      Sentry.captureException(error, {
+      console.error(error, {
         tags: {
           operation: 'firebase_app_creation',
           region: region.database
@@ -191,7 +194,7 @@ export function getEventSpecificFirestore(eventCountry?: string | null): Firesto
       });
     }
     
-    Sentry.addBreadcrumb({
+    console.log({
       message: 'Created Firestore instance for region',
       level: 'info',
       category: 'firebase_region',
@@ -206,7 +209,7 @@ export function getEventSpecificFirestore(eventCountry?: string | null): Firesto
   } catch (error) {
     console.error(`Failed to create Firestore for region ${region.database}:`, error);
     
-    Sentry.captureException(error, {
+    console.error(error, {
       tags: {
         operation: 'firestore_creation',
         region: region.database
@@ -272,7 +275,7 @@ export function getEventSpecificStorage(eventCountry?: string | null): FirebaseS
   } catch (error) {
     console.error(`Failed to create Storage for region ${region.storage}:`, error);
     
-    Sentry.captureException(error, {
+    console.error(error, {
       tags: {
         operation: 'storage_creation',
         region: region.storage
@@ -338,7 +341,7 @@ export function getEventSpecificFunctions(eventCountry?: string | null): Functio
   } catch (error) {
     console.error(`Failed to create Functions for region ${region.functions}:`, error);
     
-    Sentry.captureException(error, {
+    console.error(error, {
       tags: {
         operation: 'functions_creation',
         region: region.functions

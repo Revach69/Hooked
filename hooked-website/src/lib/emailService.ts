@@ -16,17 +16,21 @@ export interface EventFormData {
   fullName: string;
   email: string;
   phone: string;
-  eventDetails: string;
+  eventDescription: string;
   eventAddress: string;
   venueName: string;
   eventType: string;
-  otherEventType: string;
+  otherEventType?: string;
   expectedAttendees: string;
   eventName: string;
-  eventDate: string;
+  accessTime: string;
+  startTime: string;
+  endTime: string;
+  eventLink?: string;
+  eventImage?: string;
   posterPreference: string;
   eventVisibility: string;
-  socialMedia: string;
+  socialMedia?: string;
   eventTimezone?: string; // Added for timezone
 }
 
@@ -79,11 +83,11 @@ export class EmailService {
   }
 
   async sendEventFormEmail(data: EventFormData): Promise<void> {
-    const { fullName, email, phone, eventAddress, venueName, eventType, otherEventType, expectedAttendees, eventName, eventDate, posterPreference, eventVisibility } = data;
+    const { fullName, email, phone, eventAddress, venueName, eventType, otherEventType, expectedAttendees, eventName, accessTime, startTime, endTime, posterPreference, eventVisibility } = data;
 
     // Validate required fields
-    if (!fullName || !email || !phone || !eventAddress || !venueName || !eventType || !expectedAttendees || !eventName || !eventDate || !posterPreference || !eventVisibility) {
-      throw new Error('Missing required fields: fullName, email, phone, eventAddress, venueName, eventType, expectedAttendees, eventName, eventDate, posterPreference, and eventVisibility are required');
+    if (!fullName || !email || !phone || !eventAddress || !venueName || !eventType || !expectedAttendees || !eventName || !accessTime || !startTime || !endTime || !posterPreference || !eventVisibility) {
+      throw new Error('Missing required fields: fullName, email, phone, eventAddress, venueName, eventType, expectedAttendees, eventName, accessTime, startTime, endTime, posterPreference, and eventVisibility are required');
     }
 
     // Validate that if eventType is "Other", otherEventType must be provided
@@ -164,13 +168,15 @@ export class EmailService {
   }
 
   private generateEventFormEmailContent(data: EventFormData): string {
-    const { fullName, email, phone, eventDetails, eventAddress, venueName, eventType, otherEventType, expectedAttendees, eventName, eventDate, posterPreference, eventVisibility, socialMedia } = data;
+    const { fullName, email, phone, eventDescription, eventAddress, venueName, eventType, otherEventType, expectedAttendees, eventName, accessTime, startTime, endTime, eventLink, eventImage, posterPreference, eventVisibility, socialMedia } = data;
 
     const finalEventType = eventType === 'Other' ? otherEventType : eventType;
 
-    // Format the event date for display
+    // Format the event dates for display
     const eventTimezone = data.eventTimezone || 'Asia/Jerusalem';
-    const formattedEventDate = eventDate ? utcTimestampToLocalEventTimeString(localEventTimeStringToUTCTimestamp(eventDate, eventTimezone), eventTimezone) : 'Not specified';
+    const formattedAccessTime = accessTime ? utcTimestampToLocalEventTimeString(localEventTimeStringToUTCTimestamp(accessTime, eventTimezone), eventTimezone) : 'Not specified';
+    const formattedStartTime = startTime ? utcTimestampToLocalEventTimeString(localEventTimeStringToUTCTimestamp(startTime, eventTimezone), eventTimezone) : 'Not specified';
+    const formattedEndTime = endTime ? utcTimestampToLocalEventTimeString(localEventTimeStringToUTCTimestamp(endTime, eventTimezone), eventTimezone) : 'Not specified';
 
     const content = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -188,15 +194,19 @@ export class EmailService {
         <div style="background-color: #fef3c7; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f59e0b;">
           <h3 style="color: #92400e; margin-top: 0;">Event Details</h3>
           <p><strong>Event Name:</strong> ${eventName}</p>
-          <p><strong>Event Date & Time:</strong> ${formattedEventDate}</p>
+          <p><strong>Access Time:</strong> ${formattedAccessTime}</p>
+          <p><strong>Start Time:</strong> ${formattedStartTime}</p>
+          <p><strong>End Time:</strong> ${formattedEndTime}</p>
           <p><strong>Event Type:</strong> ${finalEventType}</p>
           <p><strong>Venue Name:</strong> ${venueName}</p>
           <p><strong>Event Address:</strong> ${eventAddress}</p>
           <p><strong>Expected Attendees:</strong> ${expectedAttendees}</p>
           <p><strong>Poster Preference:</strong> ${posterPreference}</p>
           <p><strong>Event Visibility:</strong> ${eventVisibility}</p>
-          <p><strong>Social Media:</strong> ${socialMedia}</p>
-          ${eventDetails ? `<p><strong>Event Details:</strong> ${eventDetails}</p>` : ''}
+          ${eventLink ? `<p><strong>Event Link:</strong> <a href="${eventLink}">${eventLink}</a></p>` : ''}
+          ${eventImage ? `<p><strong>Event Image:</strong> ${eventImage}</p>` : ''}
+          ${socialMedia ? `<p><strong>Social Media:</strong> ${socialMedia}</p>` : ''}
+          ${eventDescription ? `<p><strong>Event Description:</strong> ${eventDescription}</p>` : ''}
         </div>
 
         <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; color: #6b7280; font-size: 14px;">

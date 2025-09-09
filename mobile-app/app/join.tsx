@@ -48,7 +48,10 @@ export default function JoinPage() {
           
           // Get the appropriate regional functions instance
           // Use automatic region selection for optimal performance
-          const functions = getFunctions(app);
+          const { getEventSpecificFunctions } = await import('../lib/firebaseRegionConfig');
+          
+          // Use default region for event search since we don't know the event country yet
+          const functions = getEventSpecificFunctions(null);
           const searchEventByCode = httpsCallable(functions, 'searchEventByCode');
           
           try {

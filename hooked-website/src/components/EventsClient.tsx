@@ -55,7 +55,16 @@ export default function EventsClient() {
       const eventsData = await EventAPI.getAllEvents();
       // Filter out private events - they should not be displayed on the IRL page
       const publicEvents = eventsData.filter(event => !event.is_private);
-      setEvents(publicEvents);
+      
+      // Use the EventAPI categorization to filter out past events
+      const categorizedEvents = EventAPI.categorizeEvents(publicEvents);
+      // Only show active and upcoming events (exclude past events)
+      const activeAndUpcomingEvents = [
+        ...categorizedEvents.active,
+        ...categorizedEvents.upcoming
+      ];
+      
+      setEvents(activeAndUpcomingEvents);
     } catch {
       // Error loading events
     } finally {

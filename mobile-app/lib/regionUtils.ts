@@ -30,11 +30,33 @@ export interface CountryRegionMapping {
  * - Storage: hooked-69.firebasestorage.app, hooked-australia, hooked-eu, hooked-us-nam5, hooked-asia
  * - Functions: Regional deployment to match database regions
  */
+
+// Check if we're in development environment
+const isDevelopment = process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID === 'hooked-development';
+
+// Map production buckets to development buckets
+const BUCKET_MAPPING: { [key: string]: string } = {
+  'hooked-69.firebasestorage.app': 'hooked-development.firebasestorage.app',
+  'hooked-australia': 'hooked-australia-dev',
+  'hooked-eu': 'hooked-eu-dev',
+  'hooked-us-nam5': 'hooked-us-nam5-dev',
+  'hooked-asia': 'hooked-asia-dev',
+  'hooked-southamerica-east1': 'hooked-southamerica-east1-dev'
+};
+
+// Use development storage bucket for all regions in development environment
+const getStorageBucket = (productionBucket: string) => {
+  if (isDevelopment) {
+    return BUCKET_MAPPING[productionBucket] || 'hooked-development.firebasestorage.app';
+  }
+  return productionBucket;
+};
+
 export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   // Phase 1: Active Regions (Israel + Australia)
   'Israel': {
     database: '(default)', // me-west1 default database
-    storage: 'hooked-69.firebasestorage.app', // me-west1 default storage
+    storage: getStorageBucket('hooked-69.firebasestorage.app'), // me-west1 default storage
     functions: 'me-west1',
     isActive: true,
     displayName: 'Middle East (Israel)',
@@ -42,7 +64,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   },
   'Australia': {
     database: 'au-southeast2',
-    storage: 'hooked-australia', // australia-southeast2 dual-region
+    storage: getStorageBucket('hooked-australia'), // australia-southeast2 dual-region
     functions: 'australia-southeast2', 
     isActive: true,
     displayName: 'Australia (Sydney)',
@@ -52,7 +74,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   // Phase 2: Active Multi-Region Support
   'United States': {
     database: 'us-nam5',
-    storage: 'hooked-us-nam5', // nam5 multi-region
+    storage: getStorageBucket('hooked-us-nam5'), // nam5 multi-region
     functions: 'us-central1', // Primary US functions region
     isActive: true,
     displayName: 'US Multi-Region (NAM5)',
@@ -60,7 +82,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   },
   'United Kingdom': {
     database: 'eu-eur3',
-    storage: 'hooked-eu', // eur3 multi-region 
+    storage: getStorageBucket('hooked-eu'), // eur3 multi-region 
     functions: 'europe-west3', // Consolidated EU functions region
     isActive: true,
     displayName: 'Europe Multi-Region (EUR3)',
@@ -68,7 +90,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   },
   'Germany': {
     database: 'eu-eur3',
-    storage: 'hooked-eu',
+    storage: getStorageBucket('hooked-eu'),
     functions: 'europe-west3',
     isActive: true,
     displayName: 'Europe Multi-Region (EUR3)',
@@ -76,7 +98,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   },
   'France': {
     database: 'eu-eur3',
-    storage: 'hooked-eu',
+    storage: getStorageBucket('hooked-eu'),
     functions: 'europe-west3',
     isActive: true,
     displayName: 'Europe Multi-Region (EUR3)',
@@ -84,7 +106,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   },
   'Spain': {
     database: 'eu-eur3',
-    storage: 'hooked-eu',
+    storage: getStorageBucket('hooked-eu'),
     functions: 'europe-west3',
     isActive: true,
     displayName: 'Europe Multi-Region (EUR3)',
@@ -92,7 +114,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   },
   'Italy': {
     database: 'eu-eur3',
-    storage: 'hooked-eu',
+    storage: getStorageBucket('hooked-eu'),
     functions: 'europe-west3',
     isActive: true,
     displayName: 'Europe Multi-Region (EUR3)',
@@ -102,7 +124,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   // Phase 3: Active Asia Region Support
   'Japan': {
     database: 'asia-ne1', // asia-northeast1 single-region database
-    storage: 'hooked-asia', // asia multi-region storage
+    storage: getStorageBucket('hooked-asia'), // asia multi-region storage
     functions: 'asia-northeast1',
     isActive: true, // Asia database now available
     displayName: 'Asia (Tokyo)',
@@ -110,7 +132,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   },
   'Singapore': {
     database: 'asia-ne1', // All Asia countries use same database
-    storage: 'hooked-asia',
+    storage: getStorageBucket('hooked-asia'),
     functions: 'asia-northeast1', // Consolidated to single Asia functions region
     isActive: true,
     displayName: 'Asia (Tokyo)',
@@ -118,7 +140,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   },
   'South Korea': {
     database: 'asia-ne1',
-    storage: 'hooked-asia',
+    storage: getStorageBucket('hooked-asia'),
     functions: 'asia-northeast1',
     isActive: true,
     displayName: 'Asia (Tokyo)',
@@ -126,7 +148,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   },
   'Thailand': {
     database: 'asia-ne1',
-    storage: 'hooked-asia',
+    storage: getStorageBucket('hooked-asia'),
     functions: 'asia-northeast1',
     isActive: true,
     displayName: 'Asia (Tokyo)',
@@ -134,7 +156,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   },
   'Malaysia': {
     database: 'asia-ne1',
-    storage: 'hooked-asia',
+    storage: getStorageBucket('hooked-asia'),
     functions: 'asia-northeast1',
     isActive: true,
     displayName: 'Asia (Tokyo)',
@@ -142,7 +164,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   },
   'Indonesia': {
     database: 'asia-ne1',
-    storage: 'hooked-asia',
+    storage: getStorageBucket('hooked-asia'),
     functions: 'asia-northeast1',
     isActive: true,
     displayName: 'Asia (Tokyo)',
@@ -152,7 +174,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   // Additional countries mapped to nearest active regions
   'New Zealand': {
     database: 'au-southeast2',
-    storage: 'hooked-australia',
+    storage: getStorageBucket('hooked-australia'),
     functions: 'australia-southeast2',
     isActive: true,
     displayName: 'Australia Dual-Region - Optimized for NZ',
@@ -160,7 +182,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   },
   'Canada': {
     database: 'us-nam5',
-    storage: 'hooked-us-nam5',
+    storage: getStorageBucket('hooked-us-nam5'),
     functions: 'us-central1', // Use US central for Canada
     isActive: true,
     displayName: 'US Multi-Region (NAM5) - Optimized for Canada',
@@ -168,7 +190,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   },
   'Netherlands': {
     database: 'eu-eur3',
-    storage: 'hooked-eu',
+    storage: getStorageBucket('hooked-eu'),
     functions: 'europe-west3',
     isActive: true,
     displayName: 'Europe Multi-Region (EUR3)',
@@ -176,7 +198,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   },
   'Belgium': {
     database: 'eu-eur3',
-    storage: 'hooked-eu',
+    storage: getStorageBucket('hooked-eu'),
     functions: 'europe-west3',
     isActive: true,
     displayName: 'Europe Multi-Region (EUR3)',
@@ -184,7 +206,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   },
   'Portugal': {
     database: 'eu-eur3',
-    storage: 'hooked-eu',
+    storage: getStorageBucket('hooked-eu'),
     functions: 'europe-west3',
     isActive: true,
     displayName: 'Europe Multi-Region (EUR3)',
@@ -192,7 +214,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   },
   'Austria': {
     database: 'eu-eur3',
-    storage: 'hooked-eu',
+    storage: getStorageBucket('hooked-eu'),
     functions: 'europe-west3',
     isActive: true,
     displayName: 'Europe Multi-Region (EUR3)',
@@ -200,7 +222,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   },
   'Switzerland': {
     database: 'eu-eur3',
-    storage: 'hooked-eu',
+    storage: getStorageBucket('hooked-eu'),
     functions: 'europe-west3',
     isActive: true,
     displayName: 'Europe Multi-Region (EUR3)',
@@ -208,7 +230,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   },
   'Ireland': {
     database: 'eu-eur3',
-    storage: 'hooked-eu',
+    storage: getStorageBucket('hooked-eu'),
     functions: 'europe-west3',
     isActive: true,
     displayName: 'Europe Multi-Region (EUR3)',
@@ -216,7 +238,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   },
   'Poland': {
     database: 'eu-eur3',
-    storage: 'hooked-eu',
+    storage: getStorageBucket('hooked-eu'),
     functions: 'europe-west3',
     isActive: true,
     displayName: 'Europe Multi-Region (EUR3)',
@@ -224,7 +246,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   },
   'Czech Republic': {
     database: 'eu-eur3',
-    storage: 'hooked-eu',
+    storage: getStorageBucket('hooked-eu'),
     functions: 'europe-west3',
     isActive: true,
     displayName: 'Europe Multi-Region (EUR3)',
@@ -232,7 +254,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   },
   'Sweden': {
     database: 'eu-eur3',
-    storage: 'hooked-eu',
+    storage: getStorageBucket('hooked-eu'),
     functions: 'europe-west3',
     isActive: true,
     displayName: 'Europe Multi-Region (EUR3)',
@@ -240,7 +262,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   },
   'Norway': {
     database: 'eu-eur3',
-    storage: 'hooked-eu',
+    storage: getStorageBucket('hooked-eu'),
     functions: 'europe-west3',
     isActive: true,
     displayName: 'Europe Multi-Region (EUR3)',
@@ -248,7 +270,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   },
   'Denmark': {
     database: 'eu-eur3',
-    storage: 'hooked-eu',
+    storage: getStorageBucket('hooked-eu'),
     functions: 'europe-west3',
     isActive: true,
     displayName: 'Europe Multi-Region (EUR3)',
@@ -258,7 +280,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   // Phase 4: Active South America Region Support
   'Brazil': {
     database: 'southamerica-east1',
-    storage: 'hooked-southamerica-east1',
+    storage: getStorageBucket('hooked-southamerica-east1'),
     functions: 'southamerica-east1',
     isActive: true,
     displayName: 'South America (São Paulo)',
@@ -266,7 +288,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   },
   'Argentina': {
     database: 'southamerica-east1',
-    storage: 'hooked-southamerica-east1',
+    storage: getStorageBucket('hooked-southamerica-east1'),
     functions: 'southamerica-east1',
     isActive: true,
     displayName: 'South America (São Paulo)',
@@ -274,7 +296,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   },
   'Chile': {
     database: 'southamerica-east1',
-    storage: 'hooked-southamerica-east1',
+    storage: getStorageBucket('hooked-southamerica-east1'),
     functions: 'southamerica-east1',
     isActive: true,
     displayName: 'South America (São Paulo)',
@@ -282,7 +304,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   },
   'Colombia': {
     database: 'southamerica-east1',
-    storage: 'hooked-southamerica-east1',
+    storage: getStorageBucket('hooked-southamerica-east1'),
     functions: 'southamerica-east1',
     isActive: true,
     displayName: 'South America (São Paulo)',
@@ -290,7 +312,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   },
   'Peru': {
     database: 'southamerica-east1',
-    storage: 'hooked-southamerica-east1',
+    storage: getStorageBucket('hooked-southamerica-east1'),
     functions: 'southamerica-east1',
     isActive: true,
     displayName: 'South America (São Paulo)',
@@ -298,7 +320,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   },
   'Venezuela': {
     database: 'southamerica-east1',
-    storage: 'hooked-southamerica-east1',
+    storage: getStorageBucket('hooked-southamerica-east1'),
     functions: 'southamerica-east1',
     isActive: true,
     displayName: 'South America (São Paulo)',
@@ -306,7 +328,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   },
   'Uruguay': {
     database: 'southamerica-east1',
-    storage: 'hooked-southamerica-east1',
+    storage: getStorageBucket('hooked-southamerica-east1'),
     functions: 'southamerica-east1',
     isActive: true,
     displayName: 'South America (São Paulo)',
@@ -314,7 +336,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   },
   'Paraguay': {
     database: 'southamerica-east1',
-    storage: 'hooked-southamerica-east1',
+    storage: getStorageBucket('hooked-southamerica-east1'),
     functions: 'southamerica-east1',
     isActive: true,
     displayName: 'South America (São Paulo)',
@@ -322,7 +344,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   },
   'Bolivia': {
     database: 'southamerica-east1',
-    storage: 'hooked-southamerica-east1',
+    storage: getStorageBucket('hooked-southamerica-east1'),
     functions: 'southamerica-east1',
     isActive: true,
     displayName: 'South America (São Paulo)',
@@ -330,7 +352,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
   },
   'Ecuador': {
     database: 'southamerica-east1',
-    storage: 'hooked-southamerica-east1',
+    storage: getStorageBucket('hooked-southamerica-east1'),
     functions: 'southamerica-east1',
     isActive: true,
     displayName: 'South America (São Paulo)',
@@ -344,7 +366,7 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
  */
 export const DEFAULT_REGION: RegionConfig = {
   database: '(default)',
-  storage: 'hooked-69.firebasestorage.app',
+  storage: getStorageBucket('hooked-69.firebasestorage.app'),
   functions: 'me-west1',
   isActive: true,
   displayName: 'Default (Middle East - Israel)',

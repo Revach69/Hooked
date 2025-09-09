@@ -1,4 +1,4 @@
-import { db } from './firebaseConfig';
+import { getDb } from './firebaseConfig';
 import { enableNetwork, disableNetwork, doc, getDoc } from 'firebase/firestore';
 import NetInfo from '@react-native-community/netinfo';
 import { AsyncStorageUtils } from './asyncStorageUtils';
@@ -50,9 +50,9 @@ class FirebaseRecoveryManager {
 
       // Step 2: Disable and re-enable Firebase network
       // Resetting Firebase network connection
-      await disableNetwork(db);
+      await disableNetwork(getDb());
       await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
-      await enableNetwork(db);
+      await enableNetwork(getDb());
 
       // Step 3: Test connection
       // Testing Firebase connection
@@ -81,7 +81,7 @@ class FirebaseRecoveryManager {
   // Test Firebase connection with a simple operation
   private async testConnection(): Promise<boolean> {
     try {
-      const testDoc = doc(db, '_connection_test', 'test');
+      const testDoc = doc(getDb(), '_connection_test', 'test');
       await getDoc(testDoc);
       return true;
     } catch {

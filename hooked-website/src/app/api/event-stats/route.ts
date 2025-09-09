@@ -106,12 +106,8 @@ export async function POST(request: NextRequest) {
           // Try to get existing app for this region
           const regionalApp = initializeApp(regionalConfig, `region-${regionInfo}-${Date.now()}`);
           
-          // Initialize Firestore with the specific database
-          if (databaseName === '(default)') {
-            regionalDb = getFirestore(regionalApp);
-          } else {
-            regionalDb = initializeFirestore(regionalApp, { databaseId: databaseName });
-          }
+          // Initialize Firestore - use default for now due to API limitations
+          regionalDb = getFirestore(regionalApp);
         } catch (error) {
           console.warn('Failed to initialize regional database, using default:', error);
           regionalDb = getFirestore(app);

@@ -20,18 +20,19 @@ import {
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { router, useFocusEffect } from 'expo-router';
-import { Clock, Users, LogOut, Edit, User, AlertCircle, MessageCircle } from 'lucide-react-native';
+import { Clock, Users, LogOut, Edit, User, AlertCircle, MessageCircle, Instagram } from 'lucide-react-native';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { ensureFirebaseReady } from '../lib/firebaseReady';
 import { EventProfileAPI, EventAPI, ReportAPI, StorageAPI, LikeAPI, MessageAPI } from '../lib/firebaseApi';
 import * as ImagePicker from 'expo-image-picker';
+import * as Linking from 'expo-linking';
 import { ImageCacheService } from '../lib/services/ImageCacheService';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { checkSimpleNetworkConnectivity } from '../lib/utils';
-import * as Sentry from '@sentry/react-native';
+// Sentry removed
 import { GlobalDataCache, CacheKeys } from '../lib/cache/GlobalDataCache';
-import { AsyncStorageCacheManager } from '../lib/cache/AsyncStorageCacheManager';
-import ProgressiveImage from '../lib/components/ProgressiveImage';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { getDbForEvent } from '../lib/firebaseConfig';
 
 
 export default function Profile() {
@@ -70,6 +71,8 @@ export default function Profile() {
   const [cachedProfileImageUri, setCachedProfileImageUri] = useState<string | null>(null);
   const [cachedUserImageUris, setCachedUserImageUris] = useState<Map<string, string>>(new Map());
   const [showImagePreview, setShowImagePreview] = useState(false);
+  const [instagramHandle, setInstagramHandle] = useState(profile?.instagram_handle || '');
+  const [editingInstagram, setEditingInstagram] = useState(false);
 
   // Load cached image URI immediately on mount to prevent flash
   useEffect(() => {
@@ -168,10 +171,13 @@ export default function Profile() {
         const profiles = await Promise.race([profilePromise, profileTimeoutPromise]);
         
         if (profiles.length > 0) {
-          setProfile(profiles[0]);
+          const userProfile = profiles[0];
+          setProfile(userProfile);
+          
+          // Initialize instagram handle state
+          setInstagramHandle(userProfile.instagram_handle || '');
           
           // Load cached profile image URI immediately to prevent placeholder flash
-          const userProfile = profiles[0];
           const imageCacheKey = `profile_image_${sessionId}`;
           const cachedImageUri = GlobalDataCache.get<string>(imageCacheKey);
           
@@ -215,7 +221,7 @@ export default function Profile() {
         }
       } catch (error) {
         console.error('Error initializing profile session:', error);
-        Sentry.captureException(error);
+        console.error('Profile error:', error);
         
         // Don't clear session data on network/timeout errors
         // And don't redirect - let user stay on profile page
@@ -237,27 +243,63 @@ export default function Profile() {
     ImageCacheService.initialize();
   }, []);
 
-  // Check for unseen messages
+  // Periodic refresh for red dot status (Fix 2: handles cases where messages are deleted by other users)
   useEffect(() => {
     if (!currentEvent?.id || !profile?.session_id) return;
 
-    const checkUnseenMessages = async () => {
+    const refreshUnreadStatus = async () => {
       try {
         const { hasUnseenMessages } = await import('../lib/messageNotificationHelper');
         const hasUnseen = await hasUnseenMessages(currentEvent.id, profile.session_id);
         setHasUnreadMessages(hasUnseen);
       } catch (error) {
-      Sentry.captureException(error);
-        // Error checking unseen messages in profile
+        console.error('Error refreshing unread status:', error);
       }
     };
 
-    checkUnseenMessages();
+    // Initial check
+    refreshUnreadStatus();
     
-    // Check every 5 seconds for updates
-    const interval = setInterval(checkUnseenMessages, 5000);
+    // Periodic refresh every 30 seconds to catch edge cases like message deletions
+    const interval = setInterval(refreshUnreadStatus, 30000);
     return () => clearInterval(interval);
   }, [currentEvent?.id, profile?.session_id]);
+
+  // Real-time message listener for immediate unseen status updates
+  useEffect(() => {
+    if (!currentEvent?.id || !profile?.session_id || !profile?.id) return;
+
+    const setupMessageListener = async () => {
+      try {
+        // Get event-specific database
+        const eventCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+        const eventDb = getDbForEvent(eventCountry);
+      
+        const messagesQuery = query(
+          collection(eventDb, 'messages'),
+          where('event_id', '==', currentEvent.id),
+          where('to_profile_id', '==', profile.id)
+        );
+
+        const unsubscribe = onSnapshot(messagesQuery, async () => {
+          // When messages change, immediately check unseen status
+          try {
+            const { hasUnseenMessages } = await import('../lib/messageNotificationHelper');
+            const hasUnseen = await hasUnseenMessages(currentEvent.id, profile.session_id);
+            setHasUnreadMessages(hasUnseen);
+          } catch (error) {
+            console.error('Profile error:', error);
+          }
+        });
+
+        return () => unsubscribe();
+      } catch (error) {
+        console.error('Profile error:', error);
+      }
+    };
+
+    setupMessageListener();
+  }, [currentEvent?.id, profile?.session_id, profile?.id]);
 
   // Synchronize eventVisible state with profile data
   useEffect(() => {
@@ -406,11 +448,11 @@ export default function Profile() {
   const processImageAsset = async (asset: any) => {
     // Consistent 5MB file size limit
     if (asset.fileSize && asset.fileSize > 5 * 1024 * 1024) {
-      Sentry.captureException(new Error(`File too large: ${asset.fileSize}`));
+      console.error('Profile error:', new Error(`File too large: ${asset.fileSize}`));
       Toast.show({
         type: 'warning',
         text1: 'File Too Large',
-        text2: 'Image must be smaller than 5MB. Please choose a smaller image.',
+        text2: 'Image must be smaller than 5MB.',
         position: 'top',
         visibilityTime: 3500,
         autoHide: true,
@@ -458,6 +500,9 @@ export default function Profile() {
           setProfile((prev: any) => ({ ...prev, profile_photo_url: file_url }));
           await AsyncStorageUtils.setItem('currentProfilePhotoUrl', file_url);
           
+          // Update cached image URI to show the new photo immediately
+          setCachedProfileImageUri(file_url);
+          
           // Clear temp photo and success - break out of retry loop
           setTempPhotoUri(null);
           break;
@@ -474,7 +519,7 @@ export default function Profile() {
         }
       }
     } catch (err) {
-      Sentry.captureException(err);
+      console.error('Profile error:', err);
       
       // Enhanced error logging
       let errorMessage = 'Unknown upload error';
@@ -541,12 +586,12 @@ export default function Profile() {
 
         // Mutual Gender Interest Check - based on user's profile preferences
         const iAmInterestedInOther =
-          (currentUserProfile.interested_in === 'everybody') ||
+          (currentUserProfile.interested_in === 'everyone') ||
           (currentUserProfile.interested_in === 'men' && otherUser.gender_identity === 'man') ||
           (currentUserProfile.interested_in === 'women' && otherUser.gender_identity === 'woman');
 
         const otherIsInterestedInMe =
-          (otherUser.interested_in === 'everybody') ||
+          (otherUser.interested_in === 'everyone') ||
           (otherUser.interested_in === 'men' && currentUserProfile.gender_identity === 'man') ||
           (otherUser.interested_in === 'women' && currentUserProfile.gender_identity === 'woman');
         
@@ -615,7 +660,7 @@ export default function Profile() {
         cacheUserImages();
       }
     } catch (error) {
-      Sentry.captureException(error);
+      console.error('Profile error:', error);
               // Error loading users for report
       // Handle error silently
     }
@@ -658,7 +703,7 @@ export default function Profile() {
         isConnected = await checkSimpleNetworkConnectivity();
 
       } catch (error) {
-      Sentry.captureException(error);
+      console.error('Profile error:', error);
         
         isConnected = true; // Proceed even if network check fails
       }
@@ -717,45 +762,41 @@ export default function Profile() {
         throw new Error('Report creation failed - no ID returned');
       }
 
-      // Auto-unmatch after successful report
+      // Auto-unmatch and auto-skip after successful report
       try {
-        // Import LikeAPI if not already imported
-        const { LikeAPI } = await import('../lib/firebaseApi');
+        // Import necessary APIs
+        const { LikeAPI, SkippedProfileAPI } = await import('../lib/firebaseApi');
         
-        // Find the like record between reporter and reported user
-        const mutualLikes = await LikeAPI.filter({
-          event_id: eventId,
-          is_mutual: true
+        // 1. Auto-unmatch: Find and delete ALL likes between the two users
+        const allLikes = await LikeAPI.filter({
+          event_id: eventId
         });
         
-        const likeToDelete = mutualLikes.find(like => 
+        const likesToDelete = allLikes.filter(like => 
           (like.liker_session_id === sessionId && like.liked_session_id === selectedUserToReport.session_id) ||
           (like.liker_session_id === selectedUserToReport.session_id && like.liked_session_id === sessionId)
         );
         
-        if (likeToDelete) {
-          // Delete the like to unmatch
-          await LikeAPI.delete(likeToDelete.id);
-          
-          // Update the other user's like to set is_mutual to false
-          const otherLikes = await LikeAPI.filter({
-            event_id: eventId,
-            liker_session_id: selectedUserToReport.session_id,
-            liked_session_id: sessionId
-          });
-          
-          if (otherLikes.length > 0) {
-            await LikeAPI.update(otherLikes[0].id, { is_mutual: false });
-          }
+        // Delete all like records between the two users
+        for (const like of likesToDelete) {
+          await LikeAPI.delete(like.id);
         }
+        
+        // 2. Auto-skip: Create a skip record from reporter to reported user
+        await SkippedProfileAPI.create({
+          event_id: eventId,
+          skipper_session_id: sessionId,
+          skipped_session_id: selectedUserToReport.session_id
+        });
+        
       } catch (unmatchError) {
-        console.error('Error unmatching after report:', unmatchError);
-        // Continue even if unmatch fails - report is more important
+        console.error('Error unmatching/skipping after report:', unmatchError);
+        // Continue even if unmatch/skip fails - report is more important
       }
       
       Alert.alert(
         "Report Submitted",
-        `Thank you for your report. We will review the information about ${selectedUserToReport.first_name}. This user has been unmatched.`,
+        `Thank you for your report. We will review the information about ${selectedUserToReport.first_name}. This user has been automatically unmatched and skipped, so they won't appear in your discovery again.`,
         [
           {
             text: "OK",
@@ -770,7 +811,7 @@ export default function Profile() {
         ]
       );
     } catch (error) {
-      Sentry.captureException(error);
+      console.error('Profile error:', error);
       // Report submission error details
       
       let errorMessage = "Failed to submit report. Please try again.";
@@ -809,7 +850,7 @@ export default function Profile() {
 
   const handleLogout = async () => {
     Alert.alert(
-      "Leave Event & Delete Profile",
+      "Leave Event",
       "Are you sure you want to leave this event and delete your profile? This action cannot be undone.",
       [
         {
@@ -913,7 +954,7 @@ export default function Profile() {
               // Clear the deletion flag on error
               await AsyncStorageUtils.removeItem('profileDeletionInProgress');
               console.error('Error during profile deletion:', error);
-              Sentry.captureException(error);
+              console.error('Profile error:', error);
               // Error deleting profile - use Alert for critical errors
               Alert.alert(
                 'Error',
@@ -928,11 +969,35 @@ export default function Profile() {
   };
 
   const handleSaveAboutMe = async () => {
-    setSaving(true);
-    await EventProfileAPI.update(profile.id, { about_me: aboutMe });
-    setProfile((prev: any) => ({ ...prev, about_me: aboutMe }));
-    setEditingAboutMe(false);
-    setSaving(false);
+    try {
+      setSaving(true);
+      await EventProfileAPI.update(profile.id, { about_me: aboutMe });
+      setProfile((prev: any) => ({ ...prev, about_me: aboutMe }));
+      setEditingAboutMe(false);
+      
+      Toast.show({
+        type: 'success',
+        text1: 'About Me Updated!',
+        text2: 'Your about me section has been saved.',
+        position: 'top',
+        visibilityTime: 2000,
+        autoHide: true,
+        topOffset: 0,
+      });
+    } catch (error) {
+      console.error('Error saving about me:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Save Failed',
+        text2: 'Failed to save about me. Please try again.',
+        position: 'top',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 0,
+      });
+    } finally {
+      setSaving(false);
+    }
   };
   // Convert feet/inches to cm
   const feetInchesToCm = (feet: number, inches: number): number => {
@@ -942,19 +1007,43 @@ export default function Profile() {
 
 
   const handleSaveHeight = async () => {
-    setSaving(true);
-    let heightInCm: number;
-    
-    if (heightUnit === 'cm') {
-      heightInCm = parseInt(height);
-    } else {
-      heightInCm = feetInchesToCm(parseInt(feet), parseInt(inches));
+    try {
+      setSaving(true);
+      let heightInCm: number;
+      
+      if (heightUnit === 'cm') {
+        heightInCm = parseInt(height);
+      } else {
+        heightInCm = feetInchesToCm(parseInt(feet), parseInt(inches));
+      }
+      
+      await EventProfileAPI.update(profile.id, { height_cm: heightInCm });
+      setProfile((prev: any) => ({ ...prev, height_cm: heightInCm }));
+      setEditingHeight(false);
+      
+      Toast.show({
+        type: 'success',
+        text1: 'Height Updated!',
+        text2: 'Your height has been saved.',
+        position: 'top',
+        visibilityTime: 2000,
+        autoHide: true,
+        topOffset: 0,
+      });
+    } catch (error) {
+      console.error('Error saving height:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Save Failed',
+        text2: 'Failed to save height. Please try again.',
+        position: 'top',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 0,
+      });
+    } finally {
+      setSaving(false);
     }
-    
-    await EventProfileAPI.update(profile.id, { height_cm: heightInCm });
-    setProfile((prev: any) => ({ ...prev, height_cm: heightInCm }));
-    setEditingHeight(false);
-    setSaving(false);
   };
   const handleToggleInterest = (interest: string) => {
     let newInterests = [...interests];
@@ -966,11 +1055,35 @@ export default function Profile() {
     setInterests(newInterests);
   };
   const handleSaveInterests = async () => {
-    setSaving(true);
-    await EventProfileAPI.update(profile.id, { interests });
-    setProfile((prev: any) => ({ ...prev, interests }));
-    setShowInterests(false);
-    setSaving(false);
+    try {
+      setSaving(true);
+      await EventProfileAPI.update(profile.id, { interests });
+      setProfile((prev: any) => ({ ...prev, interests }));
+      setShowInterests(false);
+      
+      Toast.show({
+        type: 'success',
+        text1: 'Interests Updated!',
+        text2: 'Your interests have been saved.',
+        position: 'top',
+        visibilityTime: 2000,
+        autoHide: true,
+        topOffset: 0,
+      });
+    } catch (error) {
+      console.error('Error saving interests:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Save Failed',
+        text2: 'Failed to save interests. Please try again.',
+        position: 'top',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 0,
+      });
+    } finally {
+      setSaving(false);
+    }
   };
   const handleToggleVisibility = async (value: boolean) => {
     try {
@@ -984,8 +1097,8 @@ export default function Profile() {
         type: 'success',
         text1: value ? 'Profile Visible' : 'Profile Hidden',
         text2: value 
-          ? 'Your profile is now visible to other users. You can see and be seen by other users in discovery.' 
-          : 'Your profile is now hidden. You won\'t see other users in discovery, but you can still access your matches and chat with them.',
+          ? 'You can now see and be seen by other users.' 
+          : 'You won\'t see other users, but can still chat with matches.',
         position: 'top',
         visibilityTime: 3500,
         autoHide: true,
@@ -993,7 +1106,7 @@ export default function Profile() {
       });
       
     } catch (error) {
-      Sentry.captureException(error);
+      console.error('Profile error:', error);
       Toast.show({
         type: 'error',
         text1: 'Error',
@@ -1020,6 +1133,130 @@ export default function Profile() {
     await EventProfileAPI.update(profile.id, { interested_in: interestedIn });
     setProfile((prev: any) => ({ ...prev, interested_in: interestedIn }));
     setSaving(false);
+  };
+
+  const handleSaveInstagram = async () => {
+    const trimmedHandle = instagramHandle.trim();
+    if (!trimmedHandle) {
+      Toast.show({
+        type: 'error',
+        text1: 'Invalid Handle',
+        text2: 'Please enter a valid Instagram handle.',
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
+      return;
+    }
+    
+    try {
+      setSaving(true);
+      // Accept both @username and username formats - just use the username part
+      const cleanHandle = trimmedHandle.startsWith('@') ? trimmedHandle.slice(1) : trimmedHandle;
+      await EventProfileAPI.update(profile.id, { instagram_handle: cleanHandle });
+      setProfile((prev: any) => ({ ...prev, instagram_handle: cleanHandle }));
+      setInstagramHandle(cleanHandle);
+      setEditingInstagram(false);
+
+      Toast.show({
+        type: 'success',
+        text1: 'Instagram Connected!',
+        text2: 'Instagram handle added to profile.',
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
+    } catch (error) {
+      console.error('Error saving Instagram handle:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to save Instagram handle.',
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleOpenInstagramProfile = async () => {
+    if (profile?.instagram_handle) {
+      const instagramUrl = `instagram://user?username=${profile.instagram_handle}`;
+      const webUrl = `https://instagram.com/${profile.instagram_handle}`;
+      
+      try {
+        const canOpenApp = await Linking.canOpenURL(instagramUrl);
+        if (canOpenApp) {
+          await Linking.openURL(instagramUrl);
+        } else {
+          await Linking.openURL(webUrl);
+        }
+      } catch (error) {
+        console.error('Error opening Instagram:', error);
+        // Fallback to web URL
+        try {
+          await Linking.openURL(webUrl);
+        } catch (fallbackError) {
+          console.error('Error opening Instagram web URL:', fallbackError);
+        }
+      }
+    }
+  };
+
+
+  const handleDisconnectInstagram = () => {
+    Alert.alert(
+      "Disconnect Instagram",
+      "Are you sure you want to remove your Instagram from your profile?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setSaving(true);
+              // Remove instagram_handle field completely from Firebase
+              await EventProfileAPI.update(profile.id, { instagram_handle: undefined });
+              setProfile((prev: any) => ({ ...prev, instagram_handle: undefined }));
+              setInstagramHandle('');
+              setEditingInstagram(false);
+
+              Toast.show({
+                type: 'success',
+                text1: 'Instagram Disconnected',
+                text2: 'Instagram removed from profile.',
+                position: 'top',
+                visibilityTime: 3500,
+                autoHide: true,
+                topOffset: 0,
+              });
+            } catch (error) {
+              console.error('Error disconnecting Instagram:', error);
+              Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: 'Failed to remove Instagram handle.',
+                position: 'top',
+                visibilityTime: 3500,
+                autoHide: true,
+                topOffset: 0,
+              });
+            } finally {
+              setSaving(false);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const styles = StyleSheet.create({
@@ -1681,14 +1918,14 @@ export default function Profile() {
                   <TouchableOpacity
                     style={[
                       styles.genderOption,
-                      profile.interested_in === 'everybody' && styles.genderOptionSelected
+                      profile.interested_in === 'everyone' && styles.genderOptionSelected
                     ]}
-                    onPress={() => handleUpdateInterestedIn('everybody')}
+                    onPress={() => handleUpdateInterestedIn('everyone')}
                   >
                     <Text style={[
                       styles.genderOptionText,
-                      profile.interested_in === 'everybody' && styles.genderOptionTextSelected
-                    ]}>Everybody</Text>
+                      profile.interested_in === 'everyone' && styles.genderOptionTextSelected
+                    ]}>Everyone</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -1707,7 +1944,7 @@ export default function Profile() {
                 <Text style={styles.detailValue}>
                   {profile?.interested_in === 'men' ? 'Men' : 
                    profile?.interested_in === 'women' ? 'Women' : 
-                   profile?.interested_in === 'everybody' ? 'Everybody' : 'Not set'}
+                   profile?.interested_in === 'everyone' ? 'Everyone' : 'Not set'}
                 </Text>
               </View>
             </View>
@@ -1908,6 +2145,77 @@ export default function Profile() {
           )}
         </View>
 
+        {/* Instagram */}
+        <View style={styles.card}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={{ fontWeight: 'bold', fontSize: 16, color: isDark ? '#ffffff' : '#1f2937' }}>Instagram</Text>
+            <TouchableOpacity 
+              onPress={() => setEditingInstagram(!editingInstagram)}
+              disabled={saving}
+            >
+              <Edit size={18} color={isDark ? '#9ca3af' : '#6b7280'} />
+            </TouchableOpacity>
+          </View>
+          {editingInstagram ? (
+            <View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+                <Instagram size={20} color="#E4405F" style={{ marginRight: 8 }} />
+                <TextInput
+                  style={[styles.input, { flex: 1, minHeight: 45, paddingVertical: 12 }]}
+                  value={instagramHandle}
+                  onChangeText={setInstagramHandle}
+                  placeholder="@username"
+                  placeholderTextColor={isDark ? '#6b7280' : '#9ca3af'}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 8 }}>
+                <TouchableOpacity onPress={handleSaveInstagram} disabled={saving} style={styles.saveButton}>
+                  <Text style={styles.saveButtonText}>Save</Text>
+                </TouchableOpacity>
+                {profile?.instagram_handle && (
+                  <TouchableOpacity onPress={handleDisconnectInstagram} disabled={saving} style={[styles.cancelButton, { backgroundColor: '#ef4444' }]}>
+                    <Text style={[styles.cancelButtonText, { color: '#ffffff' }]}>Remove</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity onPress={() => { 
+                  setEditingInstagram(false); 
+                  setInstagramHandle(profile?.instagram_handle || ''); 
+                }} style={styles.cancelButton}>
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <View>
+              {profile?.instagram_handle ? (
+                <TouchableOpacity 
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    marginTop: 8,
+                    paddingVertical: 12,
+                    paddingHorizontal: 16,
+                    backgroundColor: isDark ? '#374151' : '#f9fafb',
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    borderColor: '#E4405F'
+                  }}
+                  onPress={handleOpenInstagramProfile}
+                >
+                  <Instagram size={20} color="#E4405F" style={{ marginRight: 8 }} />
+                  <Text style={{ color: '#E4405F', fontSize: 16, fontWeight: '500' }}>
+                    @{profile.instagram_handle}
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <Text style={{ color: isDark ? '#9ca3af' : '#6b7280', marginTop: 8 }}>No Instagram handle added yet</Text>
+              )}
+            </View>
+          )}
+        </View>
+
         {/* Info Cards */}
         <View style={styles.card}>
           <View style={styles.infoCardHeader}>
@@ -1946,7 +2254,7 @@ export default function Profile() {
             onPress={handleLogout}
           >
             <LogOut size={20} color="#ef4444" />
-            <Text style={[styles.actionText, styles.logoutText]}>Leave Event & Delete Profile</Text>
+            <Text style={[styles.actionText, styles.logoutText]}>Leave Event</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

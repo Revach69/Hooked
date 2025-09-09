@@ -1,5 +1,5 @@
 import { AsyncStorageUtils } from './asyncStorageUtils';
-import * as Sentry from '@sentry/react-native';
+
 
 export async function getCurrentSessionId(): Promise<string | null> {
   try {
@@ -7,7 +7,7 @@ export async function getCurrentSessionId(): Promise<string | null> {
     const sessionId = await AsyncStorageUtils.getItemWithLegacyFallback<string>('currentSessionId');
     return sessionId;
   } catch (error) { 
-    Sentry.captureException(error, {
+    console.error(error, {
         tags: {
             source: 'getCurrentSessionId',
             operation: 'storage_read'
@@ -29,7 +29,7 @@ export async function getCurrentEventId(): Promise<string | null> {
     const eventId = await AsyncStorageUtils.getItemWithLegacyFallback<string>('currentEventId');
     return eventId;
   } catch (error) {
-    Sentry.captureException(error, {
+    console.error(error, {
         tags: {
             source: 'getCurrentEventId',
             operation: 'storage_read'
@@ -67,7 +67,7 @@ async function getMyProfileId(): Promise<string | null> {
     
     return null;
   } catch (error) {
-    Sentry.captureException(error, {
+    console.error(error, {
       tags: {
         source: 'getMyProfileId',
         operation: 'profile_lookup'

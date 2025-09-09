@@ -35,11 +35,6 @@ function JoinInstantContent() {
     }
   }, [code, userAgent]);
 
-  const handleOpenApp = () => {
-    const appSchemeUrl = `hooked://join?code=${code}`;
-    window.location.href = appSchemeUrl;
-  };
-
   const handleAppStore = () => {
     const isIOS = /iPhone|iPad|iPod/i.test(userAgent);
     
@@ -79,22 +74,11 @@ function JoinInstantContent() {
                 >
                   📱 Download from App Store
                 </button>
-                
-                <p className="text-sm text-gray-500">
-                  Already have the app? Open it directly:
-                </p>
-                
-                <button
-                  onClick={handleOpenApp}
-                  className="w-full bg-gray-900 text-white font-semibold py-3 px-6 rounded-xl hover:bg-gray-800 transition-colors"
-                >
-                  🚀 Open in The Hooked App
-                </button>
               </div>
               
               <div className="bg-gray-50 rounded-lg p-4">
                 <p className="text-xs text-gray-600">
-                  Having trouble? Make sure you have the latest version of The Hooked App installed.
+                  Download the Hooked app to join events and connect with people nearby.
                 </p>
               </div>
             </>

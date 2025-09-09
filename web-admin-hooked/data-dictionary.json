@@ -1,0 +1,472 @@
+{
+  "entities": {
+    "Event": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique event identifier" },
+        "name": { "type": "string", "description": "Event name" },
+        "eventCode": { "type": "string", "description": "Event code for joining" },
+        "accessStartsAt": { 
+          "type": "object", 
+          "$ref": "#/definitions/Timestamp",
+          "description": "When users can access the event" 
+        },
+        "eventStartsAt": { 
+          "type": "object", 
+          "$ref": "#/definitions/Timestamp",
+          "description": "Real event start time" 
+        },
+        "expiresAt": { 
+          "type": "object", 
+          "$ref": "#/definitions/Timestamp",
+          "description": "When event expires and content is removed" 
+        },
+        "location": { "type": "string", "description": "Event location" },
+        "eventType": { 
+          "type": "string", 
+          "enum": ["parties", "conferences", "weddings", "private", "bars"],
+          "description": "Type of event" 
+        },
+        "description": { "type": "string", "description": "Event description" },
+        "imageUrl": { "type": "string", "description": "Event image URL" },
+        "eventLink": { "type": "string", "description": "External event link" },
+        "isPrivate": { "type": "boolean", "description": "Whether event is private" },
+        "isActive": { "type": "boolean", "description": "Whether event is active" },
+        "expired": { "type": "boolean", "description": "Whether event has been processed as expired" },
+        "timezone": { "type": "string", "description": "IANA timezone identifier" },
+        "country": { "type": "string", "description": "ISO country code" },
+        "region": { "type": "string", "description": "Database region identifier" },
+        "clientId": { "type": "string", "description": "Reference to AdminClient" },
+        "analyticsId": { "type": "string", "description": "Reference to analytics data" },
+        "organizerEmail": { "type": "string", "description": "Event organizer email" },
+        "organizerPassword": { "type": "string", "description": "Password for stats access" },
+        "createdAt": { "type": "object", "$ref": "#/definitions/Timestamp" },
+        "updatedAt": { "type": "object", "$ref": "#/definitions/Timestamp" },
+        "createdByUid": { "type": "string", "description": "UID of creator" }
+      },
+      "required": ["id", "name", "eventCode", "accessStartsAt", "eventStartsAt", "expiresAt", "location", "eventType", "isPrivate", "isActive", "expired", "timezone", "country", "createdAt", "updatedAt"]
+    },
+    "AdminClient": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique client identifier" },
+        "name": { "type": "string", "description": "Client/Organization name" },
+        "type": { 
+          "type": "string", 
+          "enum": ["Company", "Wedding Organizer", "Club / Bar", "Restaurant", "Personal Host", "Other Organization"] 
+        },
+        "status": { 
+          "type": "string", 
+          "enum": ["Initial Discussion", "Negotiation", "Won", "Lost", "Pre-Discussion"] 
+        },
+        "source": { 
+          "type": "string", 
+          "enum": ["Personal Connect", "Instagram Inbound", "Email", "Other", "Olim in TLV", "Contact Form"] 
+        },
+        "pocName": { "type": "string", "description": "Point of contact name" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "alternateEmails": { 
+          "type": "array", 
+          "items": { "type": "string" },
+          "description": "Additional email addresses" 
+        },
+        "alternatePhones": { 
+          "type": "array", 
+          "items": { "type": "string" },
+          "description": "Additional phone numbers" 
+        },
+        "country": { "type": "string" },
+        "events": { 
+          "type": "array", 
+          "items": { "$ref": "#/definitions/ClientEvent" } 
+        },
+        "audit": { 
+          "type": "object",
+          "properties": {
+            "lastContactedAt": { "type": "object", "$ref": "#/definitions/Timestamp" },
+            "lastStatusChangeAt": { "type": "object", "$ref": "#/definitions/Timestamp" },
+            "statusHistory": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "status": { "type": "string" },
+                  "changedAt": { "type": "object", "$ref": "#/definitions/Timestamp" },
+                  "changedBy": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "mergedFrom": { 
+          "type": "array", 
+          "items": { "type": "string" },
+          "description": "IDs of clients merged into this one" 
+        },
+        "createdAt": { "type": "object", "$ref": "#/definitions/Timestamp" },
+        "updatedAt": { "type": "object", "$ref": "#/definitions/Timestamp" },
+        "createdByUid": { "type": "string" }
+      },
+      "required": ["id", "name", "type", "status", "pocName", "events", "createdAt", "updatedAt"]
+    },
+    "EventForm": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique form identifier" },
+        "fullName": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "eventName": { "type": "string" },
+        "eventType": { "type": "string" },
+        "otherEventType": { "type": "string", "description": "Used when eventType is Other" },
+        "accessStartsAt": { "type": "object", "$ref": "#/definitions/Timestamp" },
+        "eventStartsAt": { "type": "object", "$ref": "#/definitions/Timestamp" },
+        "expiresAt": { "type": "object", "$ref": "#/definitions/Timestamp" },
+        "venueName": { "type": "string" },
+        "eventAddress": { "type": "string" },
+        "country": { "type": "string" },
+        "expectedAttendees": { "type": "number" },
+        "eventDescription": { "type": "string" },
+        "eventLink": { "type": "string" },
+        "eventImage": { "type": "string" },
+        "posterPreference": { "type": "string" },
+        "eventVisibility": { "type": "string" },
+        "socialMedia": { "type": "string" },
+        "status": { 
+          "type": "string", 
+          "enum": ["New", "Reviewed", "Contacted", "Converted", "Rejected"] 
+        },
+        "adminNotes": { "type": "string" },
+        "linkedClientId": { "type": "string", "description": "Reference to AdminClient" },
+        "linkedEventId": { "type": "string", "description": "Reference to Event" },
+        "createdAt": { "type": "object", "$ref": "#/definitions/Timestamp" },
+        "updatedAt": { "type": "object", "$ref": "#/definitions/Timestamp" }
+      },
+      "required": ["id", "fullName", "email", "phone", "eventName", "eventType", "venueName", "eventAddress", "expectedAttendees", "posterPreference", "eventVisibility", "status", "createdAt", "updatedAt"]
+    }
+  },
+  "definitions": {
+    "Timestamp": {
+      "type": "object",
+      "description": "Firestore Timestamp object",
+      "properties": {
+        "seconds": { "type": "number" },
+        "nanoseconds": { "type": "number" }
+      }
+    },
+    "ClientEvent": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "accessStartsAt": { "type": "object", "$ref": "#/definitions/Timestamp" },
+        "eventStartsAt": { "type": "object", "$ref": "#/definitions/Timestamp" },
+        "expiresAt": { "type": "object", "$ref": "#/definitions/Timestamp" },
+        "expectedAttendees": { "type": "number" },
+        "description": { "type": "string" },
+        "eventType": { "type": "string" },
+        "eventLink": { "type": "string" },
+        "eventImage": { "type": "string" },
+        "organizerFormSent": { "type": "boolean" },
+        "eventCardCreated": { "type": "boolean" },
+        "linkedFormId": { "type": "string" },
+        "linkedEventId": { "type": "string" },
+        "createdAt": { "type": "object", "$ref": "#/definitions/Timestamp" },
+        "updatedAt": { "type": "object", "$ref": "#/definitions/Timestamp" }
+      },
+      "required": ["id", "organizerFormSent", "eventCardCreated", "createdAt", "updatedAt"]
+    }
+  },
+  "mappings": [
+    {
+      "file": "lib/firebaseApi.ts",
+      "fromField": "starts_at",
+      "fromType": "Date | Timestamp | string",
+      "toField": "accessStartsAt",
+      "toType": "Timestamp",
+      "transform": "toTimestamp()"
+    },
+    {
+      "file": "lib/firebaseApi.ts",
+      "fromField": "start_date",
+      "fromType": "Date | Timestamp | string",
+      "toField": "eventStartsAt",
+      "toType": "Timestamp",
+      "transform": "toTimestamp()"
+    },
+    {
+      "file": "lib/firebaseApi.ts",
+      "fromField": "expires_at",
+      "fromType": "Date | Timestamp | string",
+      "toField": "expiresAt",
+      "toType": "Timestamp",
+      "transform": "toTimestamp()"
+    },
+    {
+      "file": "lib/firebaseApi.ts",
+      "fromField": "event_code",
+      "fromType": "string",
+      "toField": "eventCode",
+      "toType": "string",
+      "transform": "rename"
+    },
+    {
+      "file": "lib/firebaseApi.ts",
+      "fromField": "event_type",
+      "fromType": "string",
+      "toField": "eventType",
+      "toType": "enum",
+      "transform": "validateEnum()"
+    },
+    {
+      "file": "lib/firebaseApi.ts",
+      "fromField": "image_url",
+      "fromType": "string",
+      "toField": "imageUrl",
+      "toType": "string",
+      "transform": "rename"
+    },
+    {
+      "file": "lib/firebaseApi.ts",
+      "fromField": "is_private",
+      "fromType": "boolean",
+      "toField": "isPrivate",
+      "toType": "boolean",
+      "transform": "rename"
+    },
+    {
+      "file": "lib/firebaseApi.ts",
+      "fromField": "is_active",
+      "fromType": "boolean",
+      "toField": "isActive",
+      "toType": "boolean",
+      "transform": "rename"
+    },
+    {
+      "file": "lib/firebaseApi.ts",
+      "fromField": "organizer_email",
+      "fromType": "string",
+      "toField": "organizerEmail",
+      "toType": "string",
+      "transform": "rename"
+    },
+    {
+      "file": "types/admin.ts",
+      "fromField": "linkedClientId",
+      "fromType": "string",
+      "toField": "clientId",
+      "toType": "string",
+      "transform": "rename"
+    },
+    {
+      "file": "types/admin.ts",
+      "fromField": "eventDate",
+      "fromType": "string",
+      "toField": null,
+      "toType": null,
+      "transform": "remove (legacy)"
+    },
+    {
+      "file": "types/admin.ts",
+      "fromField": "accessTime",
+      "fromType": "string",
+      "toField": "accessStartsAt",
+      "toType": "Timestamp",
+      "transform": "parseToTimestamp()"
+    },
+    {
+      "file": "types/admin.ts",
+      "fromField": "startTime",
+      "fromType": "string",
+      "toField": "eventStartsAt",
+      "toType": "Timestamp",
+      "transform": "parseToTimestamp()"
+    },
+    {
+      "file": "types/admin.ts",
+      "fromField": "endTime",
+      "fromType": "string",
+      "toField": "expiresAt",
+      "toType": "Timestamp",
+      "transform": "parseToTimestamp()"
+    },
+    {
+      "file": "types/admin.ts",
+      "fromField": "eventDetails",
+      "fromType": "string",
+      "toField": "eventDescription",
+      "toType": "string",
+      "transform": "rename"
+    },
+    {
+      "file": "types/admin.ts",
+      "fromField": "expectedAttendees",
+      "fromType": "string",
+      "toField": "expectedAttendees",
+      "toType": "number",
+      "transform": "parseInt()"
+    },
+    {
+      "file": "types/admin.ts",
+      "fromField": null,
+      "fromType": null,
+      "toField": "linkedEventId",
+      "toType": "string",
+      "transform": "addField"
+    },
+    {
+      "file": "types/admin.ts",
+      "fromField": null,
+      "fromType": null,
+      "toField": "alternateEmails",
+      "toType": "string[]",
+      "transform": "addField"
+    },
+    {
+      "file": "types/admin.ts",
+      "fromField": null,
+      "fromType": null,
+      "toField": "alternatePhones",
+      "toType": "string[]",
+      "transform": "addField"
+    },
+    {
+      "file": "types/admin.ts",
+      "fromField": null,
+      "fromType": null,
+      "toField": "audit",
+      "toType": "object",
+      "transform": "addStructure"
+    },
+    {
+      "file": "types/admin.ts",
+      "fromField": null,
+      "fromType": null,
+      "toField": "mergedFrom",
+      "toType": "string[]",
+      "transform": "addField"
+    },
+    {
+      "file": "types/admin.ts",
+      "fromField": "eventKind",
+      "fromType": "string",
+      "toField": "eventType",
+      "toType": "string",
+      "transform": "rename"
+    },
+    {
+      "file": "types/admin.ts",
+      "fromField": "organizerFormSent",
+      "fromType": "'Yes' | 'No'",
+      "toField": "organizerFormSent",
+      "toType": "boolean",
+      "transform": "toBool()"
+    },
+    {
+      "file": "types/admin.ts",
+      "fromField": "eventCardCreated",
+      "fromType": "'Yes' | 'No'",
+      "toField": "eventCardCreated",
+      "toType": "boolean",
+      "transform": "toBool()"
+    }
+  ],
+  "todos": [
+    {
+      "task": "Create converter utilities module",
+      "file": "lib/converters.ts",
+      "priority": "high",
+      "description": "Implement toTimestamp, localToUTC, timestampToLocal, toBool, parseAttendees, and field normalizers"
+    },
+    {
+      "task": "Update Event type definition",
+      "file": "types/admin.ts",
+      "priority": "high",
+      "description": "Add missing fields: start_date, timezone, country, isPrivate, isActive, expired, etc."
+    },
+    {
+      "task": "Add audit fields to AdminClient",
+      "file": "types/admin.ts",
+      "priority": "medium",
+      "description": "Add alternateEmails, alternatePhones, audit object, and mergedFrom array"
+    },
+    {
+      "task": "Add linkedEventId to EventForm",
+      "file": "types/admin.ts",
+      "priority": "medium",
+      "description": "Add bidirectional linking support between EventForm and Event"
+    },
+    {
+      "task": "Update EventCard component",
+      "file": "components/EventCard.tsx",
+      "priority": "medium",
+      "description": "Use canonical field names and converter utilities"
+    },
+    {
+      "task": "Update EventForm component",
+      "file": "components/EventForm.tsx",
+      "priority": "high",
+      "description": "Map form fields to canonical names, use converter utilities for dates"
+    },
+    {
+      "task": "Update EventFormCard component",
+      "file": "components/EventFormCard.tsx",
+      "priority": "low",
+      "description": "Update field references to canonical names"
+    },
+    {
+      "task": "Update EventFormModal component",
+      "file": "components/EventFormModal.tsx",
+      "priority": "low",
+      "description": "Update field references to canonical names"
+    },
+    {
+      "task": "Update ClientsTable component",
+      "file": "components/clients/ClientsTable.tsx",
+      "priority": "medium",
+      "description": "Update ClientEvent field references, convert Yes/No to booleans"
+    },
+    {
+      "task": "Add normalization to firebaseApi",
+      "file": "lib/firebaseApi.ts",
+      "priority": "high",
+      "description": "Add field normalization on read, denormalization on write, maintain backward compatibility"
+    },
+    {
+      "task": "Update AdminClientAPI",
+      "file": "lib/firestore/clients.ts",
+      "priority": "medium",
+      "description": "Handle new audit fields, implement merge tracking, update ClientEvent mapping"
+    },
+    {
+      "task": "Update EventFormAPI",
+      "file": "lib/firestore/eventForms.ts",
+      "priority": "medium",
+      "description": "Add linkedEventId support, convert expectedAttendees to number"
+    },
+    {
+      "task": "Create database migration script",
+      "file": "scripts/migrate-data.ts",
+      "priority": "high",
+      "description": "Backfill new fields, convert timestamps, rename fields, convert Yes/No to booleans"
+    },
+    {
+      "task": "Update Firestore indexes",
+      "file": "firestore.indexes.json",
+      "priority": "medium",
+      "description": "Add composite indexes for new field names and relationships"
+    },
+    {
+      "task": "Create backward compatibility layer",
+      "file": "lib/compatibility.ts",
+      "priority": "high",
+      "description": "Implement dual-read/write for transition period"
+    },
+    {
+      "task": "Document breaking changes",
+      "file": "MIGRATION.md",
+      "priority": "medium",
+      "description": "Document all breaking changes and migration steps for developers"
+    }
+  ]
+}

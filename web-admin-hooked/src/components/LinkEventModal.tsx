@@ -36,7 +36,7 @@ export function LinkEventModal({ event, clients, isOpen, onClose, onLink }: Link
       client.name.toLowerCase().includes(searchLower) ||
       client.pocName.toLowerCase().includes(searchLower) ||
       (client.email && client.email.toLowerCase().includes(searchLower)) ||
-      (client.description && client.description.toLowerCase().includes(searchLower))
+      (client.events?.some(event => event.description && event.description.toLowerCase().includes(searchLower)))
     );
   });
 
@@ -139,15 +139,10 @@ export function LinkEventModal({ event, clients, isOpen, onClose, onLink }: Link
                             <span>{client.phone}</span>
                           </div>
                         )}
-                        {client.eventDate && (
+                        {client.events && client.events.length > 0 && (
                           <div className="flex items-center gap-1">
                             <Calendar className="h-3 w-3" />
-                            <span>{new Date(client.eventDate).toLocaleDateString()}</span>
-                          </div>
-                        )}
-                        {client.description && (
-                          <div className="text-xs text-gray-500 mt-1 truncate">
-                            {client.description}
+                            <span>{client.events.length} event{client.events.length !== 1 ? 's' : ''}</span>
                           </div>
                         )}
                       </div>

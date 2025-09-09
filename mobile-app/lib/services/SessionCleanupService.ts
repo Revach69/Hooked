@@ -3,7 +3,7 @@ import { GlobalNotificationService } from './GlobalNotificationService';
 import { setCurrentSessionIdForDedup } from '../notifications/NotificationRouter';
 import { AppStateSyncService } from './AppStateSyncService';
 import { ImageCacheService } from './ImageCacheService';
-import * as Sentry from '@sentry/react-native';
+
 
 /**
  * Service to handle proper session cleanup when user leaves event or deletes profile
@@ -18,7 +18,7 @@ class SessionCleanupServiceClass {
     try {
       console.log(`SessionCleanupService: Starting session cleanup (reason: ${reason})`);
       
-      Sentry.addBreadcrumb({
+      console.log({
         message: 'SessionCleanupService: Starting session cleanup',
         level: 'info',
         category: 'session_cleanup',
@@ -67,7 +67,7 @@ class SessionCleanupServiceClass {
       
       console.log('SessionCleanupService: Session cleanup complete');
       
-      Sentry.addBreadcrumb({
+      console.log({
         message: 'SessionCleanupService: Session cleanup completed',
         level: 'info',
         category: 'session_cleanup',
@@ -80,7 +80,7 @@ class SessionCleanupServiceClass {
       
     } catch (error) {
       console.error('SessionCleanupService: Failed to clear session:', error);
-      Sentry.captureException(error, {
+      console.error(error, {
         tags: {
           operation: 'session_cleanup',
           reason,
@@ -219,7 +219,7 @@ class SessionCleanupServiceClass {
       
       console.log('SessionCleanupService: Force cleanup complete');
       
-      Sentry.addBreadcrumb({
+      console.log({
         message: 'SessionCleanupService: Force cleanup completed',
         level: 'info', 
         category: 'session_cleanup',
@@ -228,7 +228,7 @@ class SessionCleanupServiceClass {
       
     } catch (error) {
       console.error('SessionCleanupService: Force cleanup failed:', error);
-      Sentry.captureException(error);
+      console.error(error);
       throw error;
     }
   }

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Edit, Trash2, Link, Calendar, MapPin, Users, Mail, Phone, UserPlus } from 'lucide-react';
+import { Edit, Trash2, Link, Unlink, Calendar, MapPin, Users, Mail, Phone, UserPlus } from 'lucide-react';
 import type { EventForm } from '@/types/admin';
 
 interface EventFormCardProps {
@@ -12,6 +12,7 @@ interface EventFormCardProps {
   onEdit: (form: EventForm) => void;
   onDelete: (formId: string) => void;
   onLink: (form: EventForm) => void;
+  onUnlink: (formId: string) => void;
   onCreateClient: (form: EventForm) => Promise<void>;
   linkedClientName?: string;
 }
@@ -33,19 +34,34 @@ const getStatusColor = (status: string) => {
   }
 };
 
-export function EventFormCard({ form, onEdit, onDelete, onLink, onCreateClient, linkedClientName }: EventFormCardProps) {
+export function EventFormCard({ form, onEdit, onDelete, onLink, onUnlink, onCreateClient, linkedClientName }: EventFormCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isCreatingClient, setIsCreatingClient] = useState(false);
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    if (!dateString) return 'Not set';
+    
+    try {
+      const date = new Date(dateString);
+      
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date string:', dateString);
+        return 'Invalid date';
+      }
+      
+      return date.toLocaleDateString('en-US', {
+        weekday: 'short',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      console.error('Error formatting date:', error, dateString);
+      return 'Invalid date';
+    }
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -97,7 +113,7 @@ export function EventFormCard({ form, onEdit, onDelete, onLink, onCreateClient, 
             >
               <Edit className="h-4 w-4" />
             </Button>
-            {!form.linkedClientId && (
+            {!form.linkedClientId ? (
               <>
                 <Button
                   variant="ghost"
@@ -117,6 +133,15 @@ export function EventFormCard({ form, onEdit, onDelete, onLink, onCreateClient, 
                   <UserPlus className="h-4 w-4" />
                 </Button>
               </>
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onUnlink(form.id)}
+                title="Unlink from client"
+              >
+                <Unlink className="h-4 w-4" />
+              </Button>
             )}
             <Button
               variant="ghost"
@@ -141,11 +166,35 @@ export function EventFormCard({ form, onEdit, onDelete, onLink, onCreateClient, 
             <span>{form.phone}</span>
           </div>
           
-          {/* Event Details */}
-          <div className="flex items-center gap-2 text-sm text-gray-600">
-            <Calendar className="h-4 w-4" />
-            <span>{formatDate(form.eventDate)}</span>
-          </div>
+          {/* Event Details - Three separate times */}
+          {form.accessTime && (
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <Calendar className="h-4 w-4" />
+              <span className="font-medium">Access:</span>
+              <span>{formatDate(form.accessTime)}</span>
+            </div>
+          )}
+          {form.startTime && (
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <Calendar className="h-4 w-4" />
+              <span className="font-medium">Start:</span>
+              <span>{formatDate(form.startTime)}</span>
+            </div>
+          )}
+          {form.endTime && (
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <Calendar className="h-4 w-4" />
+              <span className="font-medium">End:</span>
+              <span>{formatDate(form.endTime)}</span>
+            </div>
+          )}
+          {/* Fallback to legacy eventDate if new fields don't exist */}
+          {!form.accessTime && !form.startTime && !form.endTime && form.eventDate && (
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <Calendar className="h-4 w-4" />
+              <span>{formatDate(form.eventDate)}</span>
+            </div>
+          )}
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <MapPin className="h-4 w-4" />
             <span>{form.venueName}</span>

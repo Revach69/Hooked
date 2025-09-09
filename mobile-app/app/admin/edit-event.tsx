@@ -25,7 +25,7 @@ import {
 import { EventAPI } from '../../lib/firebaseApi';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
-import { storage } from '../../lib/firebaseConfig';
+import { getStorage } from '../../lib/firebaseConfig';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Timestamp } from 'firebase/firestore';
 import { 
@@ -138,7 +138,7 @@ export default function EditEvent() {
       
       // Create unique filename
       const filename = `events/${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
-      const storageRef = ref(storage, filename);
+      const storageRef = ref(getStorage(), filename);
       
       // Upload to Firebase Storage with timeout
       const uploadPromise = uploadBytes(storageRef, blob);

@@ -1,12 +1,13 @@
 import { Alert } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { AnyEvent } from './types';
-import * as Sentry from '@sentry/react-native';
+// Sentry removed
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type InitArgs = {
   getIsForeground: () => boolean;
   navigateToMatches: () => void; // router.push('/matches')
+  showMatchModal?: (partnerName: string, partnerSessionId: string, partnerImage?: string) => void;
 };
 
 const seen = new Map<string, number>();
@@ -46,6 +47,7 @@ setInterval(cleanupMemoryCache, 5 * 60 * 1000);
 
 // Helper to get current session (will be set by _layout.tsx)
 let currentSessionIdForDedup: string | null = null;
+let showMatchModal: ((partnerName: string, partnerSessionId: string, partnerImage?: string) => void) | null = null;
 
 function getCurrentSessionId(): string {
   return currentSessionIdForDedup || 'unknown';
@@ -105,7 +107,7 @@ export async function clearMatchNotificationCache(sessionId1: string, sessionId2
     console.log(`Cleared match notification from AsyncStorage for sessions ${sessions[0]} and ${sessions[1]}`);
   } catch (error) {
     console.warn('Failed to clear from AsyncStorage, will clear from memory caches:', error);
-    Sentry.captureException(error, {
+    console.error('NotificationRouter error:', error); console.log('Context:', {
       tags: {
         operation: 'notification_cache_clear',
         source: 'NotificationRouter',
@@ -120,7 +122,7 @@ export async function clearMatchNotificationCache(sessionId1: string, sessionId2
   
   console.log(`Cleared match notification cache for sessions ${sessions[0]} and ${sessions[1]} (AsyncStorage: ${asyncStorageCleared ? 'success' : 'failed'}, Memory: cleared)`);
   
-  Sentry.addBreadcrumb({
+  console.log('NotificationRouter:', {
     message: 'Cleared match notification cache for re-match',
     level: 'info',
     category: 'notification',
@@ -161,8 +163,9 @@ export const NotificationRouter = {
   init(args: InitArgs) {
     getFg = args.getIsForeground;
     gotoMatches = args.navigateToMatches;
+    showMatchModal = args.showMatchModal || null;
     isInitialized = true;
-    console.log('NotificationRouter initialized');
+    console.log('NotificationRouter initialized with modal support:', !!showMatchModal);
     
     // Process any pending notifications
     if (pendingNotifications.length > 0) {
@@ -196,7 +199,8 @@ export const NotificationRouter = {
       isReady: this.isReady(),
       hasSessionId: !!sessionId,
       currentSessionId: sessionId,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      platform: require('react-native').Platform.OS
     });
     
     // Additional safety check: Ensure this event is relevant to current session
@@ -215,7 +219,7 @@ export const NotificationRouter = {
       }
     }
 
-    Sentry.addBreadcrumb({
+    console.log('NotificationRouter:', {
       message: 'NotificationRouter.handleIncoming called',
       level: 'info',
       category: 'notification',
@@ -237,7 +241,7 @@ export const NotificationRouter = {
     
     if (!this.isReady()) {
       console.warn('NotificationRouter: not fully initialized, queueing notification');
-      Sentry.addBreadcrumb({
+      console.log('NotificationRouter:', {
         message: 'NotificationRouter: not fully initialized, queueing notification',
         level: 'info',
         category: 'notification',
@@ -261,7 +265,7 @@ export const NotificationRouter = {
         eventType: ev.type,
         dedupeKey: dedupeKey(ev)
       });
-      Sentry.addBreadcrumb({
+      console.log('NotificationRouter:', {
         message: 'NotificationRouter: event is cooling down, skipping',
         level: 'debug',
         category: 'notification',
@@ -274,7 +278,7 @@ export const NotificationRouter = {
     if (ev.type === 'match') {
       console.log('Handling match event:', { isCreator: ev.isCreator, eventId: ev.id });
       
-      Sentry.addBreadcrumb({
+      console.log('NotificationRouter:', {
         message: 'NotificationRouter: handling match event',
         level: 'info',
         category: 'notification',
@@ -317,7 +321,7 @@ export const NotificationRouter = {
         // Storage not working, using memory fallback
         
         // Log to Sentry for monitoring
-        Sentry.captureException(error, {
+        console.error('NotificationRouter error:', error); console.log('Context:', {
           tags: {
             operation: 'notification_deduplication',
             fallback: 'memory_cache'
@@ -351,7 +355,7 @@ export const NotificationRouter = {
       // Use shorter cooldown for memory deduplication to handle rapid-fire events
       if (lastShown && now - lastShown < 10000) { // 10 seconds memory cooldown
         console.log(`Already processed this match recently in memory, skipping`);
-        Sentry.addBreadcrumb({
+        console.log('NotificationRouter:', {
           message: 'NotificationRouter: Duplicate match notification blocked by memory cache',
           level: 'info',
           category: 'notification_deduplication',
@@ -372,48 +376,59 @@ export const NotificationRouter = {
       const randomDelay = Math.random() * 100; // 0-100ms
       await new Promise(resolve => setTimeout(resolve, randomDelay));
 
+      // Check if user is in foreground - both creators and recipients get custom modal when in app
+      const isForeground = getFg?.() ?? false;
+      
       if (ev.isCreator) {
-        // BUSINESS RULE: Second liker (creator) - always in foreground → single alert
-        // Creator is always in-app (must be to create match), show Alert
-        console.log('Showing alert for match creator');
+        // BUSINESS RULE: Second liker (creator) - always in foreground → custom modal
+        // Creator is always in-app (must be to create match), show custom modal
+        console.log('Showing custom modal for match creator');
         
-        Sentry.addBreadcrumb({
-          message: 'NotificationRouter: showing alert for match creator',
+        console.log('NotificationRouter:', {
+          message: 'NotificationRouter: showing custom modal for match creator',
           level: 'info',
           category: 'notification'
         });
-        Alert.alert(
-          "You got Hooked!", // NO emoji for client fallback identification
-          `Start chatting with ${ev.otherName || 'your match'}!`,
-          [
-            { text: 'Dismiss', style: 'cancel' },
-            { 
-              text: 'Start Chat', 
-              onPress: () => {
-                try {
-                  const { router } = require('expo-router');
-                  router.push({
-                    pathname: '/chat',
-                    params: {
-                      matchId: ev.otherSessionId,
-                      matchName: ev.otherName || 'Someone'
-                    }
-                  });
-                } catch (navError) {
-                  console.warn('Failed to navigate to chat from alert, falling back to matches:', navError);
-                  gotoMatches?.();
+        
+        const otherName = ev.otherName || 'Someone';
+        
+        if (showMatchModal) {
+          console.log('Showing match modal for creator (new system)');
+          showMatchModal(otherName, ev.otherSessionId || '', ev.otherImage);
+        } else {
+          // Fallback to native alert if modal not available
+          console.log('Fallback to alert for match creator (modal not available)');
+          Alert.alert(
+            "You got Hooked!", // NO emoji for client fallback identification
+            `Start chatting with ${otherName}!`,
+            [
+              { text: 'Dismiss', style: 'cancel' },
+              { 
+                text: 'Start Chat', 
+                onPress: () => {
+                  try {
+                    const { router } = require('expo-router');
+                    router.push({
+                      pathname: '/chat',
+                      params: {
+                        matchId: ev.otherSessionId,
+                        matchName: otherName
+                      }
+                    });
+                  } catch (navError) {
+                    console.warn('Failed to navigate to chat from alert, falling back to matches:', navError);
+                    gotoMatches?.();
+                  }
                 }
-              }
-            },
-          ],
-          { cancelable: true }
-        );
+              },
+            ],
+            { cancelable: true }
+          );
+        }
         return;
       } else {
-        // BUSINESS RULE: First liker (counterpart/non-creator) - foreground → toast; background → push  
-        // First liker (recipient) - check if in foreground for client-side notification
-        const isForeground = getFg?.() ?? false;
-        Sentry.addBreadcrumb({
+        // BUSINESS RULE: First liker (recipient) - foreground → custom modal; background → push
+        console.log('NotificationRouter:', {
           message: 'NotificationRouter: match recipient processing',
           level: 'info',
           category: 'notification',
@@ -425,53 +440,67 @@ export const NotificationRouter = {
         });
         
         if (isForeground) {
-          // Show client-side toast for foreground users
-          console.log('Showing toast for match recipient (foreground)');
+          // Show match modal if available, fallback to toast
+          const otherName = ev.otherName || 'Someone';
           
-          Sentry.addBreadcrumb({
-            message: 'NotificationRouter: showing toast for match recipient',
-            level: 'info',
-            category: 'notification'
-          });
-          try {
-            // Get the other user's name for the toast
-            const otherName = ev.otherName || 'Someone';
-            Toast.show({ 
-              type: 'matchSuccess', 
-              text1: `You got Hooked with ${otherName}!`, // NO emoji for client fallback identification
-              text2: 'Tap to start chatting',
-              position: 'top',
-              visibilityTime: 3500,
-              autoHide: true,
-              topOffset: 0,
-              onPress: () => {
-                Toast.hide();
-                try {
-                  const { router } = require('expo-router');
-                  router.push({
-                    pathname: '/chat',
-                    params: {
-                      matchId: ev.otherSessionId,
-                      matchName: otherName
-                    }
-                  });
-                } catch (navError) {
-                  console.warn('Failed to navigate to chat, falling back to matches:', navError);
-                  gotoMatches?.();
+          if (showMatchModal) {
+            console.log('Showing match modal for foreground match (new system)');
+            
+            console.log('NotificationRouter:', {
+              message: 'NotificationRouter: showing match modal',
+              level: 'info',
+              category: 'notification'
+            });
+            
+            showMatchModal(otherName, ev.otherSessionId || '', ev.otherImage);
+          } else {
+            // Fallback to legacy toast system
+            console.log('Showing toast for match recipient (legacy fallback)');
+            
+            console.log('NotificationRouter:', {
+              message: 'NotificationRouter: showing toast for match recipient (fallback)',
+              level: 'info',
+              category: 'notification'
+            });
+            
+            try {
+              Toast.show({ 
+                type: 'matchSuccess', 
+                text1: `You got Hooked with ${otherName}!`, // NO emoji for client fallback identification
+                text2: 'Tap to start chatting',
+                position: 'top',
+                visibilityTime: 3500,
+                autoHide: true,
+                topOffset: 0,
+                onPress: () => {
+                  Toast.hide();
+                  try {
+                    const { router } = require('expo-router');
+                    router.push({
+                      pathname: '/chat',
+                      params: {
+                        matchId: ev.otherSessionId,
+                        matchName: otherName
+                      }
+                    });
+                  } catch (navError) {
+                    console.warn('Failed to navigate to chat, falling back to matches:', navError);
+                    gotoMatches?.();
+                  }
                 }
-              }
-            });
-          } catch (error) {
-            Sentry.captureException(error, {
-              tags: {
-                operation: 'notification_display',
-                type: 'match_toast'
-              },
-              extra: {
-                eventId: ev.id,
-                otherSessionId: ev.otherSessionId
-              }
-            });
+              });
+            } catch (error) {
+              console.error('NotificationRouter error:', error); console.log('Context:', {
+                tags: {
+                  operation: 'notification_display',
+                  type: 'match_toast'
+                },
+                extra: {
+                  eventId: ev.id,
+                  otherSessionId: ev.otherSessionId
+                }
+              });
+            }
           }
         } else {
           console.log('Match recipient not in foreground - server will handle push notification');
@@ -479,9 +508,28 @@ export const NotificationRouter = {
           // Schedule local notification fallback in case push fails
           try {
             const { LocalNotificationFallback } = await import('./LocalNotificationFallback');
-            await LocalNotificationFallback.scheduleLocalFallback(ev);
+            // Use Android aggressive fallback if on Android platform
+            if (require('react-native').Platform.OS === 'android') {
+              console.log('🤖 Triggering Android aggressive fallback for match');
+              await LocalNotificationFallback.enableAndroidAggressiveFallback(ev);
+            } else {
+              console.log('📱 Triggering iOS fallback for match');
+              await LocalNotificationFallback.scheduleLocalFallback(ev);
+            }
           } catch (error) {
             console.warn('NotificationRouter: Failed to schedule local fallback for match:', error);
+            
+            console.error('NotificationRouter error:', error); console.log('Context:', {
+              tags: {
+                operation: 'notification_fallback',
+                type: 'match',
+                platform: require('react-native').Platform.OS
+              },
+              extra: {
+                eventId: ev.id,
+                otherSessionId: ev.otherSessionId
+              }
+            });
           }
         }
         return;
@@ -506,7 +554,7 @@ export const NotificationRouter = {
           console.log('NotificationRouter: mute check result:', { senderSessionId: ev.senderSessionId, isMuted });
           if (isMuted) {
             console.log('NotificationRouter: sender is muted, skipping notification');
-            Sentry.addBreadcrumb({
+            console.log('NotificationRouter:', {
               message: 'NotificationRouter: sender is muted, skipping notification',
               level: 'info',
               category: 'notification',
@@ -518,7 +566,7 @@ export const NotificationRouter = {
         } catch (error) {
           // If error checking mute status, continue with notification (fail safe)
           console.log('NotificationRouter: error checking mute status, continuing with notification:', error);
-          Sentry.addBreadcrumb({
+          console.log('NotificationRouter:', {
             message: 'NotificationRouter: error checking mute status, continuing with notification',
             level: 'warning',
             category: 'notification',
@@ -540,7 +588,7 @@ export const NotificationRouter = {
         // This handles server-side duplicate processing, not legitimate consecutive messages
         if (lastMessageTime && now - lastMessageTime < 30000) {
           console.log('NotificationRouter: Exact same message content detected, skipping duplicate');
-          Sentry.addBreadcrumb({
+          console.log('NotificationRouter:', {
             message: 'NotificationRouter: Duplicate message content blocked',
             level: 'info',
             category: 'notification_deduplication',
@@ -557,7 +605,7 @@ export const NotificationRouter = {
       }
 
       const isForeground = getFg?.() ?? false;
-      Sentry.addBreadcrumb({
+      console.log('NotificationRouter:', {
         message: 'NotificationRouter: handling message event',
         level: 'info',
         category: 'notification',
@@ -576,7 +624,7 @@ export const NotificationRouter = {
         
         console.log('NotificationRouter: showing toast for message to foreground user');
         
-        Sentry.addBreadcrumb({
+        console.log('NotificationRouter:', {
           message: 'NotificationRouter: showing toast for message',
           level: 'info',
           category: 'notification',
@@ -635,7 +683,7 @@ export const NotificationRouter = {
                   });
                 } catch (navError) {
                   console.warn('Failed to navigate to chat:', navError);
-                Sentry.captureException(navError, {
+                console.error(navError, {
                   tags: {
                     operation: 'navigation',
                     type: 'message_toast'
@@ -646,7 +694,7 @@ export const NotificationRouter = {
           });
           } catch (error) {
             console.error('Error showing message toast:', error);
-            Sentry.captureException(error, {
+            console.error('NotificationRouter error:', error); console.log('Context:', {
               tags: {
                 operation: 'notification_display',
                 type: 'message_toast'
@@ -665,9 +713,29 @@ export const NotificationRouter = {
         // Schedule local notification fallback in case push fails
         try {
           const { LocalNotificationFallback } = await import('./LocalNotificationFallback');
-          await LocalNotificationFallback.scheduleLocalFallback(ev);
+          // Use Android aggressive fallback if on Android platform
+          if (require('react-native').Platform.OS === 'android') {
+            console.log('🤖 Triggering Android aggressive fallback for message');
+            await LocalNotificationFallback.enableAndroidAggressiveFallback(ev);
+          } else {
+            console.log('📱 Triggering iOS fallback for message');
+            await LocalNotificationFallback.scheduleLocalFallback(ev);
+          }
         } catch (error) {
           console.warn('NotificationRouter: Failed to schedule local fallback for message:', error);
+          
+          console.error('NotificationRouter error:', error); console.log('Context:', {
+            tags: {
+              operation: 'notification_fallback',
+              type: 'message',
+              platform: require('react-native').Platform.OS
+            },
+            extra: {
+              eventId: ev.id,
+              senderSessionId: ev.senderSessionId,
+              senderName: ev.senderName
+            }
+          });
         }
       }
       return;

@@ -10,13 +10,13 @@ import { attemptFirebaseRecovery, shouldAttemptFirebaseRecovery } from './fireba
 if (!(global as any).eventEmitter) {
   (global as any).eventEmitter = {
     listeners: new Map(),
-    on: function(event: string, callback: Function) {
+    on: function(event: string, callback: (...args: unknown[]) => void) {
       if (!this.listeners.has(event)) {
         this.listeners.set(event, []);
       }
       this.listeners.get(event).push(callback);
     },
-    off: function(event: string, callback: Function) {
+    off: function(event: string, callback: (...args: unknown[]) => void) {
       if (this.listeners.has(event)) {
         const callbacks = this.listeners.get(event);
         const index = callbacks.indexOf(callback);
@@ -30,7 +30,7 @@ if (!(global as any).eventEmitter) {
         const callbacks = this.listeners.get(event);
         // Use setTimeout to prevent blocking the main thread
         setTimeout(() => {
-          callbacks.forEach((callback: Function) => {
+          callbacks.forEach((callback: (...args: unknown[]) => void) => {
             try {
               callback(...args);
             } catch {

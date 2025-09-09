@@ -35,7 +35,7 @@ export function LinkFormModal({ form, clients, isOpen, onClose, onLink }: LinkFo
       client.name.toLowerCase().includes(searchLower) ||
       client.pocName.toLowerCase().includes(searchLower) ||
       (client.email && client.email.toLowerCase().includes(searchLower)) ||
-      (client.description && client.description.toLowerCase().includes(searchLower))
+      (client.events?.some(event => event.description && event.description.toLowerCase().includes(searchLower)))
     );
   });
 
@@ -69,7 +69,13 @@ export function LinkFormModal({ form, clients, isOpen, onClose, onLink }: LinkFo
             <div className="text-sm space-y-1">
               <div><strong>Event:</strong> {form.eventName}</div>
               <div><strong>Contact:</strong> {form.fullName} ({form.email})</div>
-              <div><strong>Date:</strong> {new Date(form.eventDate).toLocaleDateString()}</div>
+              <div>
+                <strong>Times:</strong>
+                {form.accessTime && <span> Access: {new Date(form.accessTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>}
+                {form.startTime && <span> | Start: {new Date(form.startTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>}
+                {form.endTime && <span> | End: {new Date(form.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>}
+                {!form.accessTime && !form.startTime && !form.endTime && form.eventDate && <span> {new Date(form.eventDate).toLocaleDateString()}</span>}
+              </div>
             </div>
           </div>
 
@@ -131,9 +137,9 @@ export function LinkFormModal({ form, clients, isOpen, onClose, onLink }: LinkFo
                             <span>{client.phone}</span>
                           </div>
                         )}
-                        {client.description && (
-                          <div className="text-xs text-gray-500 mt-1 truncate">
-                            {client.description}
+                        {client.events && client.events.length > 0 && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            {client.events.length} event{client.events.length !== 1 ? 's' : ''}
                           </div>
                         )}
                       </div>

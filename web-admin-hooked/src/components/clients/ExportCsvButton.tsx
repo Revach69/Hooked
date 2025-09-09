@@ -43,38 +43,35 @@ export function ExportCsvButton({ clients, disabled = false }: ExportCsvButtonPr
     const headers = [
       'Name',
       'Type',
-      'Event',
+      'Event Types',
       'Name of POC',
       'Phone',
       'Email',
       'Country',
-      '# of Expected Attendees',
-      'Date of Event',
-      'Event Organizer Form Sent?',
       'Status',
       'Source',
-      'Description',
+      'Number of Events',
       'Created At',
       'Updated At'
     ];
 
-    const rows = data.map(client => [
-      client.name,
-      client.type,
-      client.eventKind,
-      client.pocName,
-      client.phone || '',
-      client.email || '',
-      client.country || '',
-      client.expectedAttendees || '',
-      client.eventDate || '',
-      client.organizerFormSent || '',
-      client.status,
-      client.source || '',
-      client.description || '',
-      formatTimestamp(client.createdAt),
-      formatTimestamp(client.updatedAt)
-    ]);
+    const rows = data.map(client => {
+      const eventTypes = client.events?.map(e => e.eventKind).filter(Boolean).join('; ') || '';
+      return [
+        client.name,
+        client.type,
+        eventTypes,
+        client.pocName,
+        client.phone || '',
+        client.email || '',
+        client.country || '',
+        client.status,
+        client.source || '',
+        client.events?.length || 0,
+        formatTimestamp(client.createdAt),
+        formatTimestamp(client.updatedAt)
+      ];
+    });
 
     const csvContent = [
       headers.join(','),

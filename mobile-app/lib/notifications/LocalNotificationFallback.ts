@@ -9,7 +9,8 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { AndroidChannels } from './AndroidChannels';
 import { AnyEvent } from './types';
-import * as Sentry from '@sentry/react-native';
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface ScheduledNotification {
   id: string;
@@ -90,7 +91,7 @@ class LocalNotificationFallbackService {
       
       console.log(`LocalNotificationFallback: Scheduled fallback notification ${notificationId} for ${event.type}`);
       
-      Sentry.addBreadcrumb({
+      console.log({
         message: 'Local notification fallback scheduled',
         level: 'info',
         category: 'notification_fallback',
@@ -106,7 +107,7 @@ class LocalNotificationFallbackService {
       
     } catch (error) {
       console.error('LocalNotificationFallback: Failed to schedule notification:', error);
-      Sentry.captureException(error, {
+      console.error(error, {
         tags: {
           operation: 'local_notification_fallback',
           source: 'scheduleLocalFallback'
@@ -143,7 +144,7 @@ class LocalNotificationFallbackService {
         
         console.log(`LocalNotificationFallback: Cancelled fallback notification ${notification.id} (push arrived)`);
         
-        Sentry.addBreadcrumb({
+        console.log({
           message: 'Local notification fallback cancelled - push arrived',
           level: 'info',
           category: 'notification_fallback',
@@ -157,7 +158,7 @@ class LocalNotificationFallbackService {
       
     } catch (error) {
       console.error('LocalNotificationFallback: Failed to cancel notifications:', error);
-      Sentry.captureException(error, {
+      console.error(error, {
         tags: {
           operation: 'cancel_local_fallback',
           source: 'cancelLocalFallback'
@@ -225,6 +226,133 @@ class LocalNotificationFallbackService {
   }
   
   /**
+   * Android-specific aggressive fallback for push notification failures
+   * Uses immediate local notifications when push seems to be failing
+   */
+  async enableAndroidAggressiveFallback(event: AnyEvent): Promise<void> {
+    if (Platform.OS !== 'android') {
+      return;
+    }
+
+    try {
+      console.log('LocalNotificationFallback: Android aggressive fallback triggered for:', event.type);
+      
+      // Check if push notifications have been consistently failing
+      const failureHistory = await this.getAndroidPushFailureHistory();
+      const shouldUseAggressive = failureHistory.recentFailures > 2;
+      
+      if (shouldUseAggressive) {
+        console.log('LocalNotificationFallback: Using immediate Android notification (push failing consistently)');
+        
+        // Schedule immediate notification (no delay)
+        await this.scheduleImmediateAndroidNotification(event);
+        
+        // Track this as aggressive fallback usage
+        await this.recordAndroidAggressiveFallbackUsage();
+        
+        console.log({
+          message: 'Android aggressive fallback used - push notifications failing',
+          level: 'warning',
+          category: 'android_notification_fallback',
+          data: { 
+            eventType: event.type,
+            failureHistory,
+            eventId: event.id
+          }
+        });
+      } else {
+        // Use normal fallback with delay
+        await this.scheduleLocalFallback(event);
+      }
+      
+    } catch (error) {
+      console.error('LocalNotificationFallback: Android aggressive fallback failed:', error);
+      console.error(error, {
+        tags: {
+          operation: 'android_aggressive_fallback',
+          platform: 'android'
+        }
+      });
+    }
+  }
+  
+  /**
+   * Schedule immediate Android notification with proper channels
+   */
+  private async scheduleImmediateAndroidNotification(event: AnyEvent): Promise<void> {
+    let title: string;
+    let body: string;
+    let channelId: string;
+    
+    if (event.type === 'match') {
+      title = "🎯 Android Fallback: You got Hooked!"; // Mark as Android fallback
+      body = `Start chatting with ${event.otherName || 'your match'}!`;
+      channelId = AndroidChannels.getChannelId('match');
+    } else if (event.type === 'message') {
+      title = `📱 Android Fallback: ${event.senderName || 'Someone'}`;
+      body = event.preview || 'New message';
+      channelId = AndroidChannels.getChannelId('message');
+    } else {
+      return;
+    }
+
+    await Notifications.scheduleNotificationAsync({
+      identifier: `android_immediate_${event.id}_${Date.now()}`,
+      content: {
+        title,
+        body,
+        data: {
+          eventId: event.id,
+          source: 'android_aggressive_fallback',
+          ...event,
+          type: event.type
+        },
+        sound: true,
+        priority: Notifications.AndroidNotificationPriority.MAX, // Maximum priority for Android
+        ...(Platform.OS === 'android' && { channelId }),
+        sticky: false,
+        autoDismiss: true
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: 0.1 // Almost immediate
+      }
+    });
+  }
+  
+  /**
+   * Get Android push failure history
+   */
+  private async getAndroidPushFailureHistory(): Promise<{recentFailures: number, lastSuccess?: number}> {
+    try {
+      const history = await AsyncStorage.getItem('android_push_failure_history');
+      if (!history) {
+        return { recentFailures: 0 };
+      }
+      return JSON.parse(history);
+    } catch (_error) {
+      return { recentFailures: 0 };
+    }
+  }
+  
+  /**
+   * Record Android aggressive fallback usage
+   */
+  private async recordAndroidAggressiveFallbackUsage(): Promise<void> {
+    try {
+      const usage = await AsyncStorage.getItem('android_aggressive_fallback_usage');
+      const currentUsage = usage ? JSON.parse(usage) : { count: 0, lastUsed: 0 };
+      
+      currentUsage.count += 1;
+      currentUsage.lastUsed = Date.now();
+      
+      await AsyncStorage.setItem('android_aggressive_fallback_usage', JSON.stringify(currentUsage));
+    } catch (error) {
+      console.warn('Failed to record Android aggressive fallback usage:', error);
+    }
+  }
+
+  /**
    * Initialize service (call once)
    */
   initialize(): void {
@@ -232,6 +360,18 @@ class LocalNotificationFallbackService {
     setInterval(() => {
       this.cleanupExpiredNotifications();
     }, 2 * 60 * 1000); // Every 2 minutes
+    
+    // Android-specific: Clean up failure history periodically
+    if (Platform.OS === 'android') {
+      setInterval(async () => {
+        try {
+          // Reset failure history every hour to give push notifications a chance
+          await AsyncStorage.removeItem('android_push_failure_history');
+        } catch (_error) {
+          // Ignore cleanup errors
+        }
+      }, 60 * 60 * 1000); // Every hour
+    }
     
     console.log('LocalNotificationFallback: Service initialized with periodic cleanup');
   }

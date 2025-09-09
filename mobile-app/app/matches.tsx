@@ -17,7 +17,7 @@ import {
 import { router, useFocusEffect } from 'expo-router';
 import { Heart, MessageCircle, Users, User, UserX, VolumeX, Volume2, Flag } from 'lucide-react-native';
 import { EventProfileAPI, LikeAPI, EventAPI, MessageAPI, MutedMatchAPI, ReportAPI } from '../lib/firebaseApi';
-import * as Sentry from '@sentry/react-native';
+// Sentry removed
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { ImageCacheService } from '../lib/services/ImageCacheService';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -332,7 +332,7 @@ export default function Matches() {
         }
       } catch (error) {
         console.error('Failed to initialize session:', error);
-        Sentry.captureException(error);
+        console.error('Matches error:', error);
         
         // Don't clear session data or redirect on timeout/network errors
         if (error instanceof Error && error.message.includes('timeout')) {
@@ -468,49 +468,28 @@ export default function Matches() {
     };
   }, []);
 
-  // Check for unseen messages - now handled when matches are loaded
-  /*
+  // Periodic refresh for red dot status (Fix 2: handles cases where messages are deleted by other users)
   useEffect(() => {
     if (!currentEvent?.id || !currentSessionId) return;
 
-    const checkUnseenMessages = async () => {
+    const refreshUnreadStatus = async () => {
       try {
         const { hasUnseenMessages } = await import('../lib/messageNotificationHelper');
         const hasUnseen = await hasUnseenMessages(currentEvent.id, currentSessionId);
-        
-        if (hasUnseen) {
-          // Get all messages sent TO the current user
-          const { MessageAPI, EventProfileAPI } = await import('../lib/firebaseApi');
-          const allMessages = await MessageAPI.filter({
-            event_id: currentEvent.id,
-            to_profile_id: currentUserProfile?.id
-          });
-          
-          // Find unseen messages and their senders
-          const unseenMessages = allMessages.filter(message => !message.seen);
-          const unseenSessionIds = new Set<string>();
-          
-          for (const message of unseenMessages) {
-            const senderProfiles = await EventProfileAPI.filter({
-              event_id: currentEvent.id,
-              id: message.from_profile_id
-            });
-            
-            if (senderProfiles.length > 0) {
-              unseenSessionIds.add(senderProfiles[0].session_id);
-            }
-          }
-          
-          setUnreadMessages(unseenSessionIds);
-        }
-              } catch (error) {
-        // Error checking unseen messages
+        setHasUnreadMessages(hasUnseen);
+      } catch (error) {
+        console.error('Error refreshing unread status:', error);
       }
     };
 
-    checkUnseenMessages();
-  }, [currentEvent?.id, currentSessionId, currentUserProfile?.id]);
-  */
+    // Initial check
+    refreshUnreadStatus();
+    
+    // Periodic refresh every 30 seconds to catch edge cases like message deletions
+    const interval = setInterval(refreshUnreadStatus, 30000);
+
+    return () => clearInterval(interval);
+  }, [currentEvent?.id, currentSessionId]);
 
   // Real-time message listener for unread indicators only (no toasts)
   // This listener automatically updates match card highlighting when new messages arrive
@@ -1299,7 +1278,21 @@ export default function Matches() {
                 console.warn('Failed to clear image cache for unmatched user:', cacheError);
               }
 
-              // Note: Unmatched user will be removed from UI when ViewState refreshes
+              // Create skip record to prevent this user from showing up in discovery
+              try {
+                const { SkippedProfileAPI } = await import('../lib/firebaseApi');
+                await SkippedProfileAPI.create({
+                  event_id: currentEvent.id,
+                  skipper_session_id: currentSessionId,
+                  skipped_session_id: matchSessionId
+                });
+                console.log('Created skip record for unmatched user');
+              } catch (skipError) {
+                console.warn('Failed to create skip record for unmatched user:', skipError);
+              }
+
+              // Immediately remove the unmatched user from the UI
+              setMatches(prevMatches => prevMatches.filter(m => m.session_id !== matchSessionId));
               
               // Also remove from unread messages to clear the red dot
               setUnreadMessages(prev => {
@@ -1310,7 +1303,7 @@ export default function Matches() {
 
               Alert.alert(
                 'Match Removed',
-                'You have unmatched with this person. You can see them again in discovery.',
+                'You have unmatched with this person. They will be automatically skipped and won\'t appear in your discovery again.',
                 [{ text: 'OK' }]
               );
             } catch (error) {

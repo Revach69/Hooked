@@ -1,6 +1,4 @@
 import { AsyncStorageUtils } from '../asyncStorageUtils';
-import * as Sentry from '@sentry/react-native';
-import { Platform } from 'react-native';
 
 /**
  * Service for caching profile picture thumbnails to prevent reloading
@@ -64,7 +62,7 @@ class ImageCacheServiceClass {
       
     } catch (error) {
       console.error('ImageCacheService: Failed to initialize:', error);
-      Sentry.captureException(error, {
+      console.error(error, {
         tags: {
           operation: 'image_cache_init',
           source: 'ImageCacheService'
@@ -185,7 +183,7 @@ class ImageCacheServiceClass {
       
       console.log(`ImageCacheService: Removed ${removedCount} cached items for event ${eventId}`);
       
-      Sentry.addBreadcrumb({
+      console.log({
         message: 'ImageCacheService: Event cache cleared',
         level: 'info',
         category: 'cache_management',
@@ -194,7 +192,7 @@ class ImageCacheServiceClass {
       
     } catch (error) {
       console.error('ImageCacheService: Failed to clear event cache:', error);
-      Sentry.captureException(error);
+      console.error(error);
     }
   }
 
@@ -229,7 +227,7 @@ class ImageCacheServiceClass {
       
     } catch (error) {
       console.error('ImageCacheService: Failed to clear profile cache:', error);
-      Sentry.captureException(error);
+      console.error(error);
     }
   }
 
@@ -315,7 +313,7 @@ class ImageCacheServiceClass {
       
     } catch (error) {
       console.error('ImageCacheService: Failed to clear all cache:', error);
-      Sentry.captureException(error);
+      console.error(error);
     }
   }
 

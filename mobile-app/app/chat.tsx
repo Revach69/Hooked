@@ -230,7 +230,7 @@ export default function Chat() {
 
     Alert.alert(
       'Unmatch',
-      `Are you sure you want to unmatch with ${matchName}? This action cannot be undone.`,
+      `Are you sure you want to unmatch with ${matchName}? They will be automatically skipped and won't appear in your discovery again. This action cannot be undone.`,
       [
         {
           text: 'Cancel',
@@ -271,7 +271,7 @@ export default function Chat() {
                 Toast.show({
                   type: 'success',
                   text1: 'Unmatched',
-                  text2: `You have unmatched with ${matchName}.`,
+                  text2: `You have unmatched with ${matchName}. They won't appear in your discovery again.`,
                   position: 'top',
                   visibilityTime: 3500,
                   autoHide: true,
@@ -308,13 +308,26 @@ export default function Chat() {
       // Screen is focused - set current chat session
       if (matchId) {
         setCurrentChatSession(matchId as string);
+        
+        // Re-mark messages as seen when returning to chat (fixes background/foreground issue)
+        if (currentEventId && currentSessionId && !isLoading) {
+          const markMessagesOnFocus = async () => {
+            try {
+              const { markMessagesAsSeen } = await import('../lib/messageNotificationHelper');
+              await markMessagesAsSeen(currentEventId, matchId as string, currentSessionId);
+            } catch (error) {
+              console.error('Error marking messages as seen on focus:', error);
+            }
+          };
+          markMessagesOnFocus();
+        }
       }
       
       return () => {
         // Screen is unfocused - clear current chat session
         setCurrentChatSession(null);
       };
-    }, [matchId])
+    }, [matchId, currentEventId, currentSessionId, isLoading])
   );
 
   // Mark messages as seen when entering chat and set current chat session

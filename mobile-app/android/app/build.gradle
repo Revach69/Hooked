@@ -93,8 +93,8 @@ android {
         applicationId "com.hookedapp.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 9
-        versionName "1.1.9"
+        versionCode 12
+        versionName "1.2.0"
     }
     signingConfigs {
         debug {

@@ -17,7 +17,8 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.hookedapp.app",
-      "buildNumber": "1.2.0",
+      "buildNumber": "12",
+      "googleServicesFile": "./ios/GoogleService-Info.plist",
       "splash": {
         "image": "./assets/icon-rounded.png",
         "resizeMode": "contain",
@@ -62,7 +63,7 @@
         }
       },
       "package": "com.hookedapp.app",
-      "versionCode": 10,
+      "versionCode": 12,
       "googleServicesFile": "./android/app/google-services.json",
       "intentFilters": [
         {
@@ -96,14 +97,6 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      [
-        "@sentry/react-native/expo",
-        {
-          "organization": "hooked",
-          "project": "hooked",
-          "url": "https://sentry.io/"
-        }
-      ],
       "expo-router",
       [
         "expo-notifications",
@@ -126,11 +119,18 @@
         {
           "ios": {
             "useFrameworks": "static",
-            "useModularHeaders": false,
+            "useModularHeaders": true,
             "newArchEnabled": false
+          },
+          "android": {
+            "compileSdkVersion": 34,
+            "targetSdkVersion": 34,
+            "buildToolsVersion": "34.0.0"
           }
         }
-      ]
+      ],
+      "@react-native-firebase/app",
+      "@react-native-firebase/app-check"
     ],
     "scheme": "hooked",
     "extra": {
@@ -151,7 +151,7 @@
         "url": "https://u.expo.dev/7a1de260-e3cb-4cbb-863c-1557213d69f0"
       }
     },
-    "runtimeVersion": "1.1.9",
+    "runtimeVersion": "1.2.0",
     "updates": {
       "url": "https://u.expo.dev/7a1de260-e3cb-4cbb-863c-1557213d69f0"
     }

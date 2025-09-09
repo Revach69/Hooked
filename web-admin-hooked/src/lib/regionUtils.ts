@@ -35,7 +35,9 @@ export const REGIONAL_FUNCTIONS_CONFIG: RegionalFunctionsConfig = {
   'me-west1': {
     deploymentRegion: 'me-west1',
     databaseId: '(default)',
-    storageBucket: 'hooked-69.firebasestorage.app'
+    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID === 'hooked-development' 
+      ? 'hooked-development.firebasestorage.app' 
+      : 'hooked-69.firebasestorage.app'
   },
   'australia-southeast2': {
     deploymentRegion: 'australia-southeast2', 
@@ -394,10 +396,13 @@ export const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
 /**
  * Default Region Configuration (Israel - me-west1)
  * Used as fallback when country is not mapped or region is inactive
+ * Respects environment configuration for development/production
  */
 export const DEFAULT_REGION: RegionConfig = {
   database: '(default)',
-  storage: 'hooked-69.firebasestorage.app',
+  storage: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID === 'hooked-development' 
+    ? 'hooked-development.firebasestorage.app' 
+    : 'hooked-69.firebasestorage.app',
   functions: 'me-west1',
   isActive: true,
   displayName: 'Default (Middle East - Israel)',

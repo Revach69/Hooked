@@ -2,7 +2,7 @@ import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestor
 import { getDbForEvent } from '../firebaseConfig';
 import { AsyncStorageUtils } from '../asyncStorageUtils';
 import { NotificationRouter } from '../notifications/NotificationRouter';
-import * as Sentry from '@sentry/react-native';
+
 
 interface GlobalNotificationListeners {
   matches?: () => void;
@@ -70,7 +70,7 @@ class GlobalNotificationServiceClass {
       this.isInitialized = true;
       console.log('GlobalNotificationService: Initialization complete');
       
-      Sentry.addBreadcrumb({
+      console.log({
         message: 'GlobalNotificationService initialized successfully',
         level: 'info',
         category: 'notification_service',
@@ -79,7 +79,7 @@ class GlobalNotificationServiceClass {
       
     } catch (error) {
       console.error('GlobalNotificationService: Initialization failed:', error);
-      Sentry.captureException(error, {
+      console.error(error, {
         tags: {
           operation: 'global_notification_service_init',
           source: 'GlobalNotificationService'
@@ -170,23 +170,24 @@ class GlobalNotificationServiceClass {
               const isCreator = matchData.liker_session_id === this.currentSessionId;
               const isRecipient = matchData.liked_session_id === this.currentSessionId;
               
-              // BUSINESS RULE: Only the recipient (first liker) gets notifications
-              // The creator (second liker) should not receive match notifications
-              if (!isRecipient) {
-                console.log('GlobalNotificationService: Skipping notification - this user is the creator, not recipient:', {
+              // BUSINESS RULE UPDATED: Both likers should receive match notifications
+              if (!isCreator && !isRecipient) {
+                console.log('GlobalNotificationService: Skipping notification - this user is not involved in the match:', {
                   currentSessionId: this.currentSessionId,
                   likerSessionId: matchData.liker_session_id,
-                  likedSessionId: matchData.liked_session_id,
-                  isCreator,
-                  isRecipient
+                  likedSessionId: matchData.liked_session_id
                 });
                 continue;
               }
               
-              const otherSessionId = matchData.liker_session_id; // The one who initiated the match
+              // Get the other user's session ID
+              const otherSessionId = isCreator 
+                ? matchData.liked_session_id  // If I'm the creator, other is the recipient
+                : matchData.liker_session_id; // If I'm the recipient, other is the creator
               
-              // Get the other user's profile for their name
+              // Get the other user's profile for their name and image
               let otherName = 'Someone';
+              let otherImage: string | undefined;
               try {
                 const { EventProfileAPI } = await import('../firebaseApi');
                 const otherProfiles = await EventProfileAPI.filter({
@@ -195,6 +196,7 @@ class GlobalNotificationServiceClass {
                 });
                 if (otherProfiles.length > 0) {
                   otherName = otherProfiles[0].first_name || 'Someone';
+                  otherImage = otherProfiles[0].profile_photo_url;
                 }
               } catch (profileError) {
                 console.warn('Failed to get other user profile for match notification:', profileError);
@@ -207,20 +209,21 @@ class GlobalNotificationServiceClass {
                 matchId: change.doc.id
               });
               
-              // Trigger match notification - recipient gets push notification
+              // Trigger match notification for both creators and recipients
               await NotificationRouter.handleIncoming({
                 type: 'match',
                 id: change.doc.id,
                 createdAt: matchTime.getTime(),
-                isCreator: false, // Recipient is never the creator
+                isCreator: isCreator,
                 otherSessionId: otherSessionId,
-                otherName: otherName
+                otherName: otherName,
+                otherImage: otherImage
               });
             }
           }
         } catch (error) {
           console.error('GlobalNotificationService: Error processing match snapshot:', error);
-          Sentry.captureException(error, {
+          console.error(error, {
             tags: {
               operation: 'match_listener_processing',
               source: 'GlobalNotificationService'
@@ -237,7 +240,7 @@ class GlobalNotificationServiceClass {
           console.log('Firestore temporarily unavailable for match listener');
         }
         
-        Sentry.captureException(error, {
+        console.error(error, {
           tags: {
             operation: 'match_listener_error',
             source: 'GlobalNotificationService'
@@ -358,7 +361,7 @@ class GlobalNotificationServiceClass {
           }
         } catch (error) {
           console.error('GlobalNotificationService: Error processing message snapshot:', error);
-          Sentry.captureException(error, {
+          console.error(error, {
             tags: {
               operation: 'message_listener_processing',
               source: 'GlobalNotificationService'
@@ -373,7 +376,7 @@ class GlobalNotificationServiceClass {
           console.log('Firestore temporarily unavailable for message listener');
         }
         
-        Sentry.captureException(error, {
+        console.error(error, {
           tags: {
             operation: 'message_listener_error',
             source: 'GlobalNotificationService'

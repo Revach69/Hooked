@@ -14,10 +14,10 @@ import {
   StatusBar,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
-import { router } from 'expo-router';
-import { Filter, Users, User, MessageCircle, X } from 'lucide-react-native';
+import { router, useFocusEffect } from 'expo-router';
+import { Heart, Filter, Users, User, MessageCircle, X } from 'lucide-react-native';
 import { EventProfileAPI, LikeAPI, EventAPI, BlockedMatchAPI, SkippedProfileAPI } from '../lib/firebaseApi';
-import * as Sentry from '@sentry/react-native';
+// Sentry removed
 
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { ImageCacheService } from '../lib/services/ImageCacheService';
@@ -246,7 +246,7 @@ export default function Discovery() {
   });
   const [showFilters, setShowFilters] = useState(false);
   const [likedProfiles, setLikedProfiles] = useState(new Set<string>());
-  const [blockedProfiles, setBlockedProfiles] = useState(new Set<string>()); // eslint-disable-line @typescript-eslint/no-unused-vars
+  const [blockedProfiles, setBlockedProfiles] = useState(new Set<string>());  
   const [skippedProfiles, setSkippedProfiles] = useState(new Set<string>());
   const [selectedProfileForDetail, setSelectedProfileForDetail] = useState<any>(null);
   const [viewedProfiles, setViewedProfiles] = useState(new Set<string>());
@@ -305,25 +305,40 @@ export default function Discovery() {
           console.log('Discovery: Using stored event data');
         } else {
           // Fallback to database query with regional support
-          // Add timeout to prevent hanging indefinitely
+          // Add timeout to prevent hanging indefinitely - but make it more lenient in dev
+          const timeoutDuration = __DEV__ ? 45000 : 30000; // 45s in dev, 30s in production
           const eventTimeoutPromise = new Promise<never>((_, reject) => {
-            setTimeout(() => reject(new Error('Event loading timeout')), 30000); // 30 second timeout - give more time
+            setTimeout(() => reject(new Error('Event loading timeout')), timeoutDuration);
           });
           
-          // Get event country for regional database targeting
-          const eventCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
-          const eventPromise = eventCountry 
-            ? EventAPI.get(eventId, eventCountry)
-            : EventAPI.filter({ id: eventId });
-          
-          const result = await Promise.race([eventPromise, eventTimeoutPromise]);
-          const events = Array.isArray(result) ? result : (result ? [result] : []);
-          
-          if (events.length > 0) {
-            eventData = events[0];
-            setCurrentEvent(eventData);
-            GlobalDataCache.set(CacheKeys.DISCOVERY_EVENT, eventData, 10 * 60 * 1000); // Cache for 10 minutes
-            console.log('Discovery: Loaded and cached event data from database');
+          try {
+            // Get event country for regional database targeting
+            const eventCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+            const eventPromise = eventCountry 
+              ? EventAPI.get(eventId, eventCountry)
+              : EventAPI.filter({ id: eventId });
+            
+            const result = await Promise.race([eventPromise, eventTimeoutPromise]);
+            const events = Array.isArray(result) ? result : (result ? [result] : []);
+            
+            if (events.length > 0) {
+              eventData = events[0];
+              setCurrentEvent(eventData);
+              GlobalDataCache.set(CacheKeys.DISCOVERY_EVENT, eventData, 10 * 60 * 1000); // Cache for 10 minutes
+              console.log('Discovery: Loaded and cached event data from database');
+            }
+          } catch (databaseError) {
+            console.warn('Discovery: Failed to load event from database:', databaseError);
+            
+            // In development, don't immediately clear session data on network errors
+            if (__DEV__) {
+              console.log('Discovery: Development mode - not clearing session data on network error');
+              // Try to continue with minimal functionality
+              return;
+            }
+            
+            // In production, still clear on actual network failures after some attempts
+            eventData = null;
           }
         }
       }
@@ -333,9 +348,10 @@ export default function Discovery() {
         await loadBlockedProfiles(eventId, sessionId);
         await loadSkippedProfiles(eventId, sessionId);
         await loadViewedProfiles(eventId);
-      } else {
-        // Event doesn't exist - clear only after confirmation
-        console.log('Event not found in discovery, clearing session data');
+      } else if (!__DEV__) {
+        // Only clear session data and redirect in production builds
+        // In development, network issues are common and shouldn't reset the session
+        console.log('Event not found, clearing session data');
         await AsyncStorageUtils.multiRemove([
           'currentEventId',
           'currentSessionId',
@@ -345,9 +361,10 @@ export default function Discovery() {
           'currentEventCountry',
           'currentEventData'
         ]);
-        // 1. Event expired - correct to go home
         router.replace('/home');
         return;
+      } else {
+        console.log('Discovery: Development mode - event not found but keeping session for debugging');
       }
 
       // Verify that the user's profile actually exists in the database
@@ -404,7 +421,7 @@ export default function Discovery() {
       
       // All checks passed - session is valid
     } catch (error) {
-      Sentry.captureException(error);
+      console.error('Discovery error:', error);
       
       // Handle errors gracefully without losing user session
       if (error instanceof Error && error.message === 'Event loading timeout') {
@@ -448,6 +465,33 @@ export default function Discovery() {
     ImageCacheService.initialize();
   }, [initializeSession]);
 
+  // Force refresh user profile data when page gains focus (e.g., after visibility toggle on profile page)
+  useFocusEffect(
+    useCallback(() => {
+      const refreshUserProfile = async () => {
+        if (currentSessionId && currentEvent?.id) {
+          try {
+            const eventCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+            const profiles = await EventProfileAPI.filter({
+              event_id: currentEvent.id,
+              session_id: currentSessionId
+            });
+            
+            if (profiles.length > 0) {
+              const updatedProfile = profiles[0];
+              setCurrentUserProfile(updatedProfile);
+              console.log('Discovery: Refreshed user profile on focus, is_visible:', updatedProfile.is_visible);
+            }
+          } catch (error) {
+            console.error('Error refreshing user profile on focus:', error);
+          }
+        }
+      };
+
+      refreshUserProfile();
+    }, [currentSessionId, currentEvent?.id])
+  );
+
   // Check and show How It Works modal after event and profile are loaded
   useEffect(() => {
     if (currentEvent?.id && currentUserProfile?.id) {
@@ -489,24 +533,25 @@ export default function Discovery() {
     return () => clearInterval(activityInterval);
   }, [currentSessionId, isAppActive]);
 
-  // Check for unseen messages
+  // Periodic refresh for red dot status (Fix 2: handles cases where messages are deleted by other users)
   useEffect(() => {
     if (!currentEvent?.id || !currentSessionId) return;
 
-    const checkUnseenMessages = async () => {
+    const refreshUnreadStatus = async () => {
       try {
         const { hasUnseenMessages } = await import('../lib/messageNotificationHelper');
         const hasUnseen = await hasUnseenMessages(currentEvent.id, currentSessionId);
         setHasUnreadMessages(hasUnseen);
       } catch (error) {
-        Sentry.captureException(error);
+        console.error('Error refreshing unread status:', error);
       }
     };
 
-    checkUnseenMessages();
+    // Initial check
+    refreshUnreadStatus();
     
-    // Check every 5 seconds instead of 30 for faster updates
-    const interval = setInterval(checkUnseenMessages, 5000);
+    // Periodic refresh every 30 seconds to catch edge cases like message deletions
+    const interval = setInterval(refreshUnreadStatus, 30000);
     return () => clearInterval(interval);
   }, [currentEvent?.id, currentSessionId]);
 
@@ -514,10 +559,11 @@ export default function Discovery() {
   useEffect(() => {
     if (!currentEvent?.id || !currentSessionId || !currentUserProfile?.id) return;
 
-    try {
-      // Get event-specific database
-      const eventCountry = currentEvent?.location;
-      const eventDb = getDbForEvent(eventCountry);
+    const setupMessageListener = async () => {
+      try {
+        // Get event-specific database
+        const eventCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+        const eventDb = getDbForEvent(eventCountry);
       
       const messagesQuery = query(
         collection(eventDb, 'messages'),
@@ -532,18 +578,21 @@ export default function Discovery() {
           const hasUnseen = await hasUnseenMessages(currentEvent.id, currentSessionId);
           setHasUnreadMessages(hasUnseen);
         } catch (error) {
-          Sentry.captureException(error);
+          console.error('Discovery error:', error);
         }
       });
 
-      return () => unsubscribe();
-    } catch (error) {
-      Sentry.captureException(error);
-    }
+        return () => unsubscribe();
+      } catch (error) {
+        console.error('Discovery error:', error);
+      }
+    };
+
+    setupMessageListener();
   }, [currentEvent?.id, currentSessionId, currentUserProfile?.id]);
 
   // Define setupOtherListeners before it's used
-  const setupOtherListeners = useCallback(() => {
+  const setupOtherListeners = useCallback(async () => {
     if (!currentEvent?.id || !currentSessionId) return;
 
     // Prevent multiple listener creation
@@ -553,7 +602,7 @@ export default function Discovery() {
 
     try {
       // Get event-specific database
-      const eventCountry = currentEvent?.location;
+      const eventCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
       const eventDb = getDbForEvent(eventCountry);
       
       // 2. Other visible profiles listener
@@ -596,11 +645,11 @@ export default function Discovery() {
           // Trigger ViewState refresh
           refreshProfiles();
         } catch (error) {
-          Sentry.captureException(error);
+          console.error('Discovery error:', error);
         }
-      }, (error) => {
-        Sentry.captureException(error);
-      });
+              }, (error) => {
+          console.error('Discovery error:', error);
+        });
 
       listenersRef.current.otherProfiles = otherProfilesUnsubscribe;
 
@@ -620,10 +669,10 @@ export default function Discovery() {
           
           setLikedProfiles(new Set(likes.map(like => like.liked_session_id)));
         } catch (error) {
-          Sentry.captureException(error);
+          console.error('Discovery error:', error);
         }
               }, (error) => {
-          Sentry.captureException(error);
+          console.error('Discovery error:', error);
         });
 
       listenersRef.current.likes = likesUnsubscribe;
@@ -639,13 +688,13 @@ export default function Discovery() {
         // Match notifications are now handled globally in _layout.tsx
         // This listener is kept for any future local match-related functionality
       }, (error) => {
-        Sentry.captureException(error);
+        console.error('Discovery error:', error);
       });
 
       listenersRef.current.mutualMatches = mutualMatchesUnsubscribe;
 
     } catch (error) {
-      Sentry.captureException(error);
+      console.error('Discovery error:', error);
     }
   }, [currentEvent?.id, currentSessionId]);
 
@@ -659,10 +708,11 @@ export default function Discovery() {
     // Clean up existing listeners before creating new ones
     cleanupAllListeners();
 
-    try {
-      // Get event-specific database
-      const eventCountry = currentEvent?.location;
-      const eventDb = getDbForEvent(eventCountry);
+    const setupConsolidatedListeners = async () => {
+      try {
+        // Get event-specific database
+        const eventCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+        const eventDb = getDbForEvent(eventCountry);
       
       // 1. User profile listener
       const userProfileQuery = query(
@@ -708,17 +758,20 @@ export default function Discovery() {
             }
           }
         } catch (error) {
-          Sentry.captureException(error);
+          console.error('Discovery error:', error);
         }
       }, (error) => {
-        Sentry.captureException(error);
+        console.error('Discovery error:', error);
       });
 
-      listenersRef.current.userProfile = userProfileUnsubscribe;
+        listenersRef.current.userProfile = userProfileUnsubscribe;
 
-    } catch (error) {
-      Sentry.captureException(error);
-    }
+      } catch (error) {
+        console.error('Discovery error:', error);
+      }
+    };
+
+    setupConsolidatedListeners();
 
     return () => {
       cleanupAllListeners();
@@ -733,7 +786,7 @@ export default function Discovery() {
         try {
           listenersRef.current.userProfile();
         } catch (error) {
-          Sentry.captureException(error);
+          console.error('Discovery error:', error);
         }
         listenersRef.current.userProfile = undefined;
       }
@@ -743,7 +796,7 @@ export default function Discovery() {
         try {
           listenersRef.current.otherProfiles();
         } catch (error) {
-          Sentry.captureException(error);
+          console.error('Discovery error:', error);
         }
         listenersRef.current.otherProfiles = undefined;
       }
@@ -753,7 +806,7 @@ export default function Discovery() {
         try {
           listenersRef.current.likes();
         } catch (error) {
-          Sentry.captureException(error);
+          console.error('Discovery error:', error);
         }
         listenersRef.current.likes = undefined;
       }
@@ -763,12 +816,12 @@ export default function Discovery() {
         try {
           listenersRef.current.mutualMatches();
         } catch (error) {
-          Sentry.captureException(error);
+          console.error('Discovery error:', error);
         }
         listenersRef.current.mutualMatches = undefined;
       }
     } catch (error) {
-      Sentry.captureException(error);
+      console.error('Discovery error:', error);
     }
   };
 
@@ -780,7 +833,7 @@ export default function Discovery() {
       });
       setBlockedProfiles(new Set(blocked.map(b => b.blocked_session_id)));
     } catch (error) {
-      Sentry.captureException(error);
+      console.error('Discovery error:', error);
     }
   };
 
@@ -792,7 +845,7 @@ export default function Discovery() {
       });
       setSkippedProfiles(new Set(skipped.map(s => s.skipped_session_id)));
     } catch (error) {
-      Sentry.captureException(error);
+      console.error('Discovery error:', error);
     }
   };
 
@@ -986,7 +1039,7 @@ export default function Discovery() {
       Toast.show({
         type: 'warning',
         text1: 'Profile Not Visible',
-        text2: 'Both profiles must be visible to like someone. Please make sure your profile is visible in settings.',
+        text2: 'Make your profile visible in settings to like others.',
         position: 'top',
         visibilityTime: 3500,
         autoHide: true,
@@ -1031,7 +1084,7 @@ export default function Discovery() {
         const theirLikeRecord = theirLikesToMe[0];
 
         // Update both records for mutual match
-        const eventCountry = currentEvent?.location;
+        const eventCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry') || undefined;
         await trackAsyncOperation('update_like_mutual', async () => {
           await Promise.all([
             LikeAPI.update(newLike.id, { 
@@ -1059,7 +1112,7 @@ export default function Discovery() {
         // The listener will determine who gets toast vs alert based on liker/liked roles
       }
     } catch (error) {
-      Sentry.captureException(error);
+      console.error('Discovery error:', error);
       // Revert optimistic update on error
       setLikedProfiles(prev => {
         const newSet = new Set(prev);
@@ -1116,7 +1169,7 @@ export default function Discovery() {
       setSelectedProfileForDetail(null);
 
     } catch (error) {
-      Sentry.captureException(error);
+      console.error('Discovery error:', error);
       // Revert optimistic update on error
       setSkippedProfiles(prev => {
         const newSet = new Set(prev);
@@ -1601,14 +1654,14 @@ export default function Discovery() {
         {/* Bottom Navigation */}
         <View style={styles.bottomNavigation}>
           <TouchableOpacity
-            style={styles.navButton}
+            style={[styles.navButton, styles.navButtonActive]}
             onPress={() => {}} // Already on discovery page but hidden
             accessibilityRole="button"
             accessibilityLabel="Discover"
             accessibilityHint="Currently on discovery page"
           >
-            <Users size={24} color="#9ca3af" />
-            <Text style={styles.navButtonText}>Discover</Text>
+            <Users size={24} color="#8b5cf6" />
+            <Text style={[styles.navButtonText, styles.navButtonTextActive]}>Discover</Text>
           </TouchableOpacity>
           
           <TouchableOpacity
@@ -1623,14 +1676,14 @@ export default function Discovery() {
           </TouchableOpacity>
           
           <TouchableOpacity
-            style={[styles.navButton, styles.navButtonActive]}
+            style={styles.navButton}
             onPress={() => router.push('/profile')}
             accessibilityRole="button"
             accessibilityLabel="Profile Tab"
             accessibilityHint="Navigate to your profile settings"
           >
-            <User size={24} color="#8b5cf6" />
-            <Text style={[styles.navButtonText, styles.navButtonTextActive]}>Profile</Text>
+            <User size={24} color="#9ca3af" />
+            <Text style={styles.navButtonText}>Profile</Text>
           </TouchableOpacity>
         </View>
 

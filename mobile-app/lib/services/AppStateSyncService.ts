@@ -1,7 +1,7 @@
 import { AppState, AppStateStatus } from 'react-native';
 import { app, getDbForEvent } from '../firebaseConfig';
 import { getFirestore, doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import * as Sentry from '@sentry/react-native';
+
 import { getInstallationId } from '../session/sessionId';
 import { AsyncStorageUtils } from '../asyncStorageUtils';
 
@@ -46,7 +46,7 @@ class AppStateSyncServiceClass {
     
     this.isRunning = true;
 
-    Sentry.addBreadcrumb({
+    console.log({
       message: 'AppStateSyncService: Starting app state sync',
       level: 'info',
       category: 'app_state',
@@ -60,7 +60,7 @@ class AppStateSyncServiceClass {
     this.appStateListener = (nextAppState: AppStateStatus) => {
       const isForeground = nextAppState === 'active';
       
-      Sentry.addBreadcrumb({
+      console.log({
         message: 'AppStateSyncService: App state changed',
         level: 'info',
         category: 'app_state',
@@ -93,7 +93,7 @@ class AppStateSyncServiceClass {
       return;
     }
 
-    Sentry.addBreadcrumb({
+    console.log({
       message: 'AppStateSyncService: Stopping app state sync',
       level: 'info',
       category: 'app_state',
@@ -180,7 +180,7 @@ class AppStateSyncServiceClass {
         isRegional: !!this.eventCountry
       });
 
-      Sentry.addBreadcrumb({
+      console.log({
         message: 'AppStateSyncService: App state written to regional database',
         level: 'info',
         category: 'app_state',
@@ -202,7 +202,7 @@ class AppStateSyncServiceClass {
         isRegional: !!this.eventCountry
       });
       
-      Sentry.captureException(error, {
+      console.error(error, {
         tags: {
           operation: 'app_state_sync',
           source: 'writeAppState_direct'
@@ -253,7 +253,7 @@ class AppStateSyncServiceClass {
         callback();
       } catch (error) {
         console.error('AppStateSyncService: Error in foreground callback:', error);
-        Sentry.captureException(error, {
+        console.error(error, {
           tags: { operation: 'foreground_callback' }
         });
       }
