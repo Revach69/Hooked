@@ -813,13 +813,24 @@ async function sendExpoPush(toTokens: string[], payload: { title: string; body?:
       await new Promise(resolve => setTimeout(resolve, 50)); // 50ms delay between batches
     }
     
+    // Fix iOS message notification grouping - each message should be individual
+    // Generate unique collapseId for messages to prevent grouping, keep threadId for conversation grouping
+    const generateCollapseId = () => {
+      if (notificationType === 'message') {
+        // Each message gets unique collapseId to show individually on iOS
+        return `${agg}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+      }
+      // For matches, keep current behavior (prevent duplicates)
+      return agg;
+    };
+
     const messages = chunk.map(to => ({
       to,
       sound: 'default',
       priority: 'high',
       ...payload,
-      collapseId: agg,       // Expo dedupe key
-      threadId: agg,         // iOS grouping in Notification Center
+      collapseId: generateCollapseId(),       // Unique for each message, same for matches
+      threadId: notificationType === 'message' ? agg : agg,         // Conversation grouping for messages, same for matches
       channelId: androidChannelId,  // Android notification channel
       // Add unique notification ID and timestamp for client-side deduplication
       data: {

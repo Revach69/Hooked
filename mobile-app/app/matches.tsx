@@ -1250,7 +1250,7 @@ export default function Matches() {
 
               Alert.alert(
                 'Match Removed',
-                'You have unmatched with this person. You can see them again in discovery.',
+                'You have unmatched with this person. They will be automatically skipped and won\'t appear in your discovery again.',
                 [{ text: 'OK' }]
               );
             } catch (error) {

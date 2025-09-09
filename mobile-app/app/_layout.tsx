@@ -164,15 +164,19 @@ export default function RootLayout() {
               hasPartnerImage: !!data.partnerImage
             });
             
-            // Show custom match alert modal instead of toast
-            setMatchModalData({
-              partnerName: data.partnerName || 'Your match',
-              partnerImage: data.partnerImage, // If available in notification data
-              partnerSessionId: data.partnerSessionId || ''
-            });
-            setMatchModalVisible(true);
-            
-            console.log('🎯 MATCH MODAL - State updated, visible should be true');
+            // Only show modal if not already visible to prevent duplicates
+            if (!matchModalVisible) {
+              setMatchModalData({
+                partnerName: data.partnerName || 'Your match',
+                partnerImage: data.partnerImage, // If available in notification data
+                partnerSessionId: data.partnerSessionId || ''
+              });
+              setMatchModalVisible(true);
+              
+              console.log('🎯 MATCH MODAL - State updated, visible should be true');
+            } else {
+              console.log('🎯 MATCH MODAL - Already visible, skipping duplicate');
+            }
           } else if (data?.type === 'message') {
             Toast.show({
               type: 'info',
@@ -249,6 +253,13 @@ export default function RootLayout() {
         });
         
         if (data?.type === 'match') {
+          // Close any open match modal first to prevent duplicates
+          if (matchModalVisible) {
+            setMatchModalVisible(false);
+            setMatchModalData(null);
+            console.log('🎯 MATCH MODAL - Closed due to notification tap');
+          }
+          
           // Route to specific chat with the matched user if we have their session ID
           if (data?.partnerSessionId) {
             router.push({

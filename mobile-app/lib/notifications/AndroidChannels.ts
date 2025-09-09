@@ -22,7 +22,7 @@ export interface NotificationChannel {
 // Stable channel definitions - NEVER change IDs once published
 const CHANNELS: NotificationChannel[] = [
   {
-    id: 'hooked_matches',
+    id: 'matches',
     name: 'Matches',
     description: 'Notifications when you get matched with someone',
     importance: Notifications.AndroidImportance.HIGH,
@@ -31,7 +31,7 @@ const CHANNELS: NotificationChannel[] = [
     lightColor: '#8b5cf6' // Purple theme color
   },
   {
-    id: 'hooked_messages', 
+    id: 'messages', 
     name: 'Messages',
     description: 'New chat messages from your matches',
     importance: Notifications.AndroidImportance.HIGH,
@@ -40,7 +40,7 @@ const CHANNELS: NotificationChannel[] = [
     lightColor: '#8b5cf6'
   },
   {
-    id: 'hooked_general',
+    id: 'general',
     name: 'General',
     description: 'General app notifications and updates',
     importance: Notifications.AndroidImportance.DEFAULT,
@@ -157,12 +157,12 @@ class AndroidChannelsService {
   getChannelId(type: 'match' | 'message' | 'general'): string {
     switch (type) {
       case 'match':
-        return 'hooked_matches';
+        return 'matches';
       case 'message':
-        return 'hooked_messages';
+        return 'messages';
       case 'general':
       default:
-        return 'hooked_general';
+        return 'general';
     }
   }
   

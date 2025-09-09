@@ -796,7 +796,7 @@ export default function Profile() {
       
       Alert.alert(
         "Report Submitted",
-        `Thank you for your report. We will review the information about ${selectedUserToReport.first_name}. This user has been unmatched and will no longer appear in your discovery.`,
+        `Thank you for your report. We will review the information about ${selectedUserToReport.first_name}. This user has been automatically unmatched and skipped, so they won't appear in your discovery again.`,
         [
           {
             text: "OK",
