@@ -1,6 +1,6 @@
 // Comprehensive timezone utilities for the Hooked app
 import { Platform } from 'react-native';
-import * as Sentry from '@sentry/react-native';
+
 
 // Common timezone mappings by country
 export const COUNTRY_TIMEZONES: Record<string, string[]> = {
@@ -190,7 +190,7 @@ export const convertTimezone = (
         parseInt(targetValues.second)
       );
     } catch (error) {
-      Sentry.captureException(error);
+      console.error(error);
     }
   }
   
@@ -209,7 +209,7 @@ export const convertTimezone = (
     
     return adjustedTime;
   } catch (error) {
-    Sentry.captureException(error);
+    console.error(error);
     // Fallback to original date
     return dateObj;
   }
@@ -237,7 +237,7 @@ export const formatDateInTimezone = (
       
       return dateObj.toLocaleDateString('en-US', { ...defaultOptions, ...options });
     } catch (error) {
-      Sentry.captureException(error);
+      console.error(error);
     }
   }
   
@@ -284,7 +284,7 @@ export const getTimezoneAbbreviation = (timezone: string): string => {
       const timezonePart = parts.find(part => part.type === 'timeZoneName');
       return timezonePart?.value || timezone;
     } catch (error) {
-      Sentry.captureException(error);
+      console.error(error);
     }
   }
   
@@ -328,7 +328,7 @@ export const utcToLocalDateTimeString = (
     
     return `${year}-${month}-${day}T${hours}:${minutes}`;
   } catch (error) {
-    Sentry.captureException(error);
+    console.error(error);
     return '';
   }
 };
@@ -345,7 +345,7 @@ export const localDateTimeStringToUTC = (
     const utcDate = convertTimezone(localDate, sourceTimezone, 'UTC');
     return utcDate.toISOString();
   } catch (error) {
-    Sentry.captureException(error);
+    console.error(error);
     return '';
   }
 };
@@ -386,7 +386,7 @@ export const getTimezoneOffset = (timezone: string): number => {
       
       return (targetDate.getTime() - date.getTime()) / 60000;
     } catch (error) {
-      Sentry.captureException(error);
+      console.error(error);
     }
   }
   

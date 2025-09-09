@@ -18,7 +18,7 @@ import {
 import { router, useFocusEffect } from 'expo-router';
 import { Heart, MessageCircle, Users, User, UserX, VolumeX, Volume2, Flag } from 'lucide-react-native';
 import { EventProfileAPI, LikeAPI, EventAPI, MessageAPI, MutedMatchAPI, ReportAPI } from '../lib/firebaseApi';
-import * as Sentry from '@sentry/react-native';
+// Sentry removed
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { ImageCacheService } from '../lib/services/ImageCacheService';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -257,7 +257,7 @@ export default function Matches() {
         }
       } catch (error) {
         console.error('Failed to initialize session:', error);
-        Sentry.captureException(error);
+        console.error('Matches error:', error);
         
         // Don't clear session data or redirect on timeout/network errors
         if (error instanceof Error && error.message.includes('timeout')) {
@@ -1223,6 +1223,19 @@ export default function Matches() {
                 }
               } catch (cacheError) {
                 console.warn('Failed to clear image cache for unmatched user:', cacheError);
+              }
+
+              // Create skip record to prevent this user from showing up in discovery
+              try {
+                const { SkippedProfileAPI } = await import('../lib/firebaseApi');
+                await SkippedProfileAPI.create({
+                  event_id: currentEvent.id,
+                  skipper_session_id: currentSessionId,
+                  skipped_session_id: matchSessionId
+                });
+                console.log('Created skip record for unmatched user');
+              } catch (skipError) {
+                console.warn('Failed to create skip record for unmatched user:', skipError);
               }
 
               // Immediately remove the unmatched user from the UI

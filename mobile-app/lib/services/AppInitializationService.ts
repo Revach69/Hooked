@@ -1,8 +1,7 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
-import * as Sentry from '@sentry/react-native';
 import { AsyncStorageUtils } from '../asyncStorageUtils';
-import { initializeAppCheck } from '../firebaseAppCheck';
+// App Check is now initialized in firebaseConfig.ts
 import { setCurrentSessionIdForDedup } from '../notifications/NotificationRouter';
 import { FirebaseNotificationService } from './FirebaseNotificationService';
 import { GlobalNotificationService } from './GlobalNotificationService';
@@ -13,7 +12,7 @@ interface InitializationStep {
   endTime?: number;
   duration?: number;
   success: boolean;
-  error?: any;
+  error?: Error;
   retryCount: number;
 }
 
@@ -55,7 +54,7 @@ class AppInitializationServiceClass {
   /**
    * Initialize the entire app with retry logic and health checks
    */
-  async initializeApp(maxRetries: number = 3): Promise<boolean> {
+  async initializeApp(maxRetries: number = 1): Promise<boolean> {
     this.diagnostics.startTime = Date.now();
     console.log('AppInitializationService: Starting app initialization');
 
@@ -87,7 +86,7 @@ class AppInitializationServiceClass {
       } catch (error) {
         console.error(`AppInitializationService: Attempt ${attempt} failed:`, error);
         
-        Sentry.captureException(error, {
+        console.error(error, {
           tags: {
             operation: 'app_initialization',
             attempt: attempt.toString(),
@@ -119,38 +118,34 @@ class AppInitializationServiceClass {
    * Run the complete initialization sequence
    */
   private async runInitializationSequence(): Promise<void> {
-    // Step 1: Initial delay for JS thread readiness
-    await this.executeStep('initial_delay', async () => {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    });
+    // Step 1: Remove initial delay - JS thread should be ready
+    // Removed artificial 1000ms delay for faster startup
 
-    // Step 2: Initialize Firebase native config
-    await this.executeStep('firebase_native_config', async () => {
-      await import('../firebaseNativeConfig');
-    });
-
-    // Step 3: Initialize Firebase connection monitoring
-    await this.executeStep('connection_monitoring', async () => {
-      const { initializeConnectionMonitoring } = await import('../firebaseConfig');
-      initializeConnectionMonitoring();
-    });
-
-    // Step 4: Initialize Firebase App Check
-    await this.executeStep('app_check', async () => {
-      await initializeAppCheck();
-    });
-
-    // Step 5: Initialize Firebase Auth
-    await this.executeStep('firebase_auth', async () => {
-      const { AuthService } = await import('./AuthService');
-      await AuthService.initialize();
-      this.diagnostics.healthCheck.firebaseAuth = true;
-    });
-
-    // Step 6: Test Firestore connection
-    await this.executeStep('firestore_connection', async () => {
-      await this.testFirestoreConnection();
-      this.diagnostics.healthCheck.firestoreConnection = true;
+    // Steps 2-6: Parallelize core Firebase initialization
+    await this.executeStep('firebase_parallel_init', async () => {
+      await Promise.all([
+        // Firebase native config
+        import('../firebaseNativeConfig'),
+        
+        // Connection monitoring and auth in parallel
+        Promise.all([
+          import('../firebaseConfig').then(({ initializeConnectionMonitoring }) => 
+            initializeConnectionMonitoring()
+          ),
+          import('./AuthService').then(({ AuthService }) => {
+            return AuthService.initialize().then(() => {
+              this.diagnostics.healthCheck.firebaseAuth = true;
+            });
+          })
+        ]),
+        
+        // Firestore connection test
+        this.testFirestoreConnection().then(() => {
+          this.diagnostics.healthCheck.firestoreConnection = true;
+        })
+      ]);
+      
+      console.log('App Check initialization handled by firebaseConfig.ts');
     });
 
     // Step 7: Notification channels will be initialized by FirebaseNotificationService
@@ -192,56 +187,28 @@ class AppInitializationServiceClass {
       });
     });
 
-    // Step 10: Ensure push setup with idempotent service (BEFORE notification services)
-    await this.executeStep('push_setup_idempotent', async () => {
-      const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
-      const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
-      
-      if (sessionId && eventId) {
-        try {
-          const { ensurePushSetupFunction } = await import('../notifications/ensurePushSetup');
-          const success = await ensurePushSetupFunction({ sessionId });
-          console.log('AppInitializationService: Idempotent push setup result:', { success });
-          
-          // Critical: Set up token refresh handler for app updates  
-          if (success) {
-            this.setupTokenRefreshHandler(sessionId);
-          }
-          
-          // Set up AppState integration for push token refresh
-          this.setupAppStatePushTokenRefresh();
-        } catch (error) {
-          console.warn('AppInitializationService: Push setup failed:', error);
-          // Don't fail initialization for push token issues
-        }
-      } else {
-        console.log('AppInitializationService: Skipping push setup (no session)');
-      }
-    });
-
-    // Step 11: Initialize Firebase notification service
+    // Step 10: Initialize Firebase notification service (critical for push notifications)
     await this.executeStep('firebase_notification_service', async () => {
       await FirebaseNotificationService.initialize();
     });
 
-    // Step 12: Initialize NotificationRouter (will be initialized by _layout.tsx)
+    // Step 11: Initialize NotificationRouter (will be initialized by _layout.tsx)
     await this.executeStep('notification_router_ready', async () => {
       // NotificationRouter will be initialized by _layout.tsx with proper dependencies
       // We just mark this step as ready for the health check
       console.log('AppInitializationService: NotificationRouter initialization step ready (will be handled by _layout.tsx)');
     });
 
-    // Step 13: Initialize global notification listeners (with retry if no session)
+    // Step 12: Initialize global notification listeners (CRITICAL for event notifications)
     await this.executeStep('global_notification_listeners', async () => {
       try {
-        // Try to initialize global listeners
+        // Initialize global listeners - critical for real-time event notifications
         await GlobalNotificationService.initialize();
         
         // If no session, set up retry mechanism
         const status = GlobalNotificationService.getStatus();
         if (!status.sessionId || !status.eventId) {
-          console.log('AppInitializationService: GlobalNotificationService has no session, setting up retry');
-          // Will be retried when session becomes available
+          console.log('AppInitializationService: GlobalNotificationService has no session, will retry when available');
         }
         
         this.diagnostics.healthCheck.globalListeners = status.initialized;
@@ -252,10 +219,11 @@ class AppInitializationServiceClass {
       }
     });
 
-    // Step 14: Final stabilization delay
-    await this.executeStep('final_delay', async () => {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    });
+    // Move only non-critical services to background initialization
+    this.initializeBackgroundServices();
+
+    // Step 13: Remove final delay - app is ready to use immediately
+    // Removed artificial 1000ms final delay for faster startup
   }
 
   /**
@@ -283,7 +251,7 @@ class AppInitializationServiceClass {
       step.endTime = Date.now();
       step.duration = step.endTime - step.startTime;
       step.success = false;
-      step.error = error;
+      step.error = error instanceof Error ? error : new Error(String(error));
       
       console.error(`AppInitializationService: Step ${stepName} failed after ${step.duration}ms:`, error);
       throw error;
@@ -299,10 +267,10 @@ class AppInitializationServiceClass {
   private async testFirestoreConnection(): Promise<void> {
     try {
       const { collection, getDocs, query, limit } = await import('firebase/firestore');
-      const { db } = await import('../firebaseConfig');
+      const { getDb } = await import('../firebaseConfig');
       
       // Try to read a small amount of data from a collection
-      const testQuery = query(collection(db, 'events'), limit(1));
+      const testQuery = query(collection(getDb(), 'events'), limit(1));
       await getDocs(testQuery);
       
       console.log('AppInitializationService: Firestore connection test successful');
@@ -355,9 +323,12 @@ class AppInitializationServiceClass {
       },
       optional: {
         notificationPermissions: healthCheck.notificationPermissions,
-        globalListeners: healthCheck.globalListeners,
         sessionData: healthCheck.sessionData,
         passed: `${optionalPassed}/${optionalChecks.length}`
+      },
+      background: {
+        pushTokenSetup: 'Push token registration moved to background',
+        note: 'Non-critical services initialize after UI ready'
       },
       deferred: {
         notificationRouter: 'Will be initialized by _layout.tsx'
@@ -409,6 +380,53 @@ class AppInitializationServiceClass {
   }
 
   /**
+   * Initialize non-critical services in background after main app is ready
+   */
+  private initializeBackgroundServices(): void {
+    // Use setTimeout to defer to next tick, allowing UI to render first
+    setTimeout(async () => {
+      console.log('AppInitializationService: Starting background service initialization');
+      
+      try {
+        // Background Step 1: Push token setup (non-blocking)
+        const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
+        const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
+        
+        if (sessionId && eventId) {
+          try {
+            const { ensurePushSetupFunction } = await import('../notifications/ensurePushSetup');
+            const success = await ensurePushSetupFunction({ sessionId });
+            console.log('AppInitializationService: Background push setup result:', { success });
+            
+            // Set up token refresh handler for app updates  
+            if (success) {
+              this.setupTokenRefreshHandler(sessionId);
+            }
+          } catch (error) {
+            console.warn('AppInitializationService: Background push setup failed:', error);
+          }
+        }
+        
+        // Background Step 2: Additional analytics/monitoring (truly non-critical)
+        try {
+          // Placeholder for future non-critical services like analytics, crash reporting setup, etc.
+          console.log('AppInitializationService: Background analytics/monitoring setup placeholder');
+        } catch (error) {
+          console.warn('AppInitializationService: Background analytics setup failed:', error);
+        }
+        
+        // Background Step 3: AppState integration (non-blocking)
+        this.setupAppStatePushTokenRefresh();
+        
+        console.log('AppInitializationService: Background service initialization completed');
+        
+      } catch (error) {
+        console.warn('AppInitializationService: Background service initialization failed:', error);
+      }
+    }, 0);
+  }
+
+  /**
    * Get initialization diagnostics
    */
   getDiagnostics() {
@@ -435,7 +453,7 @@ class AppInitializationServiceClass {
             
             console.log('AppInitializationService: Foreground push setup result:', { success });
             
-            Sentry.addBreadcrumb({
+            console.log({
               message: 'Push setup ensured on app foreground',
               level: 'info',
               category: 'push_notification',
@@ -444,7 +462,7 @@ class AppInitializationServiceClass {
             
           } catch (error) {
             console.warn('AppInitializationService: Failed to ensure push setup on foreground:', error);
-            Sentry.captureException(error, {
+            console.error(error, {
               tags: {
                 operation: 'foreground_push_setup_ensure',
                 source: 'app_initialization_service'
@@ -483,7 +501,7 @@ class AppInitializationServiceClass {
     });
     
     // Send diagnostics to Sentry for monitoring
-    Sentry.addBreadcrumb({
+    console.log({
       message: 'App initialization completed',
       level: 'info',
       category: 'app_initialization',
@@ -502,16 +520,29 @@ class AppInitializationServiceClass {
    */
   private setupTokenRefreshHandler(sessionId: string): void {
     try {
+      // Rate limiting to prevent infinite loops in dev environment
+      let lastRefreshAttempt = 0;
+      const REFRESH_COOLDOWN = 10000; // 10 seconds between attempts
+      
       // For Expo apps, we need to use Notifications.addPushTokenListener
       import('expo-notifications').then(({ addPushTokenListener }) => {
-        console.log('AppInitializationService: Setting up token refresh handler');
+        console.log('AppInitializationService: Setting up token refresh handler with rate limiting');
         
         const subscription = addPushTokenListener(async (tokenData) => {
           try {
+            const now = Date.now();
+            
+            // Rate limiting: Skip if too soon after last attempt
+            if (now - lastRefreshAttempt < REFRESH_COOLDOWN) {
+              console.log('AppInitializationService: Skipping token refresh (rate limited)');
+              return;
+            }
+            
+            lastRefreshAttempt = now;
             const newToken = tokenData.data;
             console.log('AppInitializationService: Push token refreshed, updating server');
             
-            Sentry.addBreadcrumb({
+            console.log({
               message: 'Push token refreshed',
               level: 'info',
               category: 'push_notification',
@@ -528,12 +559,12 @@ class AppInitializationServiceClass {
             if (success) {
               console.log('AppInitializationService: Token refresh registration successful');
             } else {
-              console.warn('AppInitializationService: Token refresh registration failed');
+              console.warn('AppInitializationService: Token refresh registration failed (App Check disabled - using local fallbacks)');
             }
             
           } catch (error) {
             console.error('AppInitializationService: Error handling token refresh:', error);
-            Sentry.captureException(error, {
+            console.error(error, {
               tags: {
                 operation: 'push_token_refresh',
                 source: 'app_initialization_service'
@@ -542,7 +573,8 @@ class AppInitializationServiceClass {
           }
         });
         
-        // Store subscription for cleanup if needed
+        // Store subscription for cleanup if needed - could be used for future cleanup
+        void subscription; // Prevent unused variable warning
         console.log('AppInitializationService: Token refresh handler set up successfully');
         
       }).catch(error => {

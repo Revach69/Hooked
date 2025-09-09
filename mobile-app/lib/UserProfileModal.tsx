@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef } from 'react';
 import {
   View,
   Text,
@@ -10,10 +10,10 @@ import {
   Dimensions,
   PanResponder,
   Animated,
+  Image,
 } from 'react-native';
 import { X, MapPin, Heart, Instagram } from 'lucide-react-native';
 import * as Linking from 'expo-linking';
-import ZoomableImage from './components/ZoomableImage';
 
 const { width, height } = Dimensions.get('window');
 
@@ -30,7 +30,6 @@ interface UserProfileModalProps {
 export default function UserProfileModal({ visible, profile, onClose, onLike, onSkip, isLiked = false, isSkipped = false }: UserProfileModalProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const [isZooming, setIsZooming] = useState(false);
   
   // Animation values for swipe gesture
   const translateY = useRef(new Animated.Value(0)).current;
@@ -45,14 +44,11 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
     extrapolate: 'clamp',
   });
   
-  // PanResponder for swipe to dismiss (only active on image area and when not zooming)
-  const panResponder = React.useMemo(
-    () => PanResponder.create({
-      onStartShouldSetPanResponder: () => !isZooming,
+  // PanResponder for swipe to dismiss (only active on image area)
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        // Don't respond if zooming
-        if (isZooming) return false;
-        
         // Only respond to clear vertical swipes with significant movement
         // This prevents conflicts with taps and accidental gestures
         const isVerticalSwipe = Math.abs(gestureState.dy) > Math.abs(gestureState.dx);
@@ -89,9 +85,8 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
           }).start();
         }
       },
-    }),
-    [isZooming, onClose, translateY]
-  );
+    })
+  ).current;
 
   if (!profile) return null;
 
@@ -268,6 +263,19 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
       color: isDark ? '#9ca3af' : '#6b7280',
       fontStyle: 'italic',
     },
+    instagramContainer: {
+      alignItems: 'center',
+      marginTop: 12,
+      paddingVertical: 8,
+    },
+    instagramButton: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: 'rgba(228, 64, 95, 0.1)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
   });
 
   const handleLikePress = () => {
@@ -339,17 +347,13 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
             <X size={24} color="white" />
           </TouchableOpacity>
 
-          {/* Profile Image - Swipeable and Zoomable */}
+          {/* Profile Image - Swipeable */}
           <View style={styles.imageContainer} {...panResponder.panHandlers}>
             {profile.profile_photo_url ? (
-              <ZoomableImage
+              <Image
                 source={{ uri: profile.profile_photo_url }}
+                onError={() => {}}
                 style={styles.profileImage}
-                containerStyle={{ width: '100%', height: '100%' }}
-                maxZoom={5}
-                minZoom={1}
-                onZoomStart={() => setIsZooming(true)}
-                onZoomEnd={() => setIsZooming(false)}
               />
             ) : (
               <View style={styles.fallbackAvatar}>
@@ -371,13 +375,6 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
                   <MapPin size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
                   <Text style={styles.locationText}>{profile.location}</Text>
                 </View>
-              )}
-              
-              {/* Instagram - Optional */}
-              {profile.instagram_handle && (
-                <TouchableOpacity style={[styles.locationRow, { justifyContent: 'center', paddingVertical: 8 }]} onPress={handleInstagramPress}>
-                  <Instagram size={24} color="#E4405F" />
-                </TouchableOpacity>
               )}
               
               {/* Skip and Like Buttons */}
@@ -423,6 +420,15 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
                       </Text>
                     </TouchableOpacity>
                   )}
+                </View>
+              )}
+              
+              {/* Instagram - Optional - Positioned after buttons */}
+              {profile.instagram_handle && (
+                <View style={styles.instagramContainer}>
+                  <TouchableOpacity style={styles.instagramButton} onPress={handleInstagramPress}>
+                    <Instagram size={32} color="#E4405F" />
+                  </TouchableOpacity>
                 </View>
               )}
             </View>

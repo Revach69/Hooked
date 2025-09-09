@@ -96,14 +96,6 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      [
-        "@sentry/react-native/expo",
-        {
-          "organization": "hooked",
-          "project": "hooked",
-          "url": "https://sentry.io/"
-        }
-      ],
       "expo-router",
       [
         "expo-notifications",
@@ -126,7 +118,7 @@
         {
           "ios": {
             "useFrameworks": "static",
-            "useModularHeaders": false,
+            "useModularHeaders": true,
             "newArchEnabled": false
           }
         }

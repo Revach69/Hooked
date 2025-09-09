@@ -10,7 +10,7 @@ import { AlertTriangle, RefreshCw, Wifi, WifiOff } from 'lucide-react-native';
 import { attemptFirebaseRecovery } from './firebaseRecovery';
 import { getErrorMessage } from './mobileErrorHandler';
 import NetInfo from '@react-native-community/netinfo';
-import * as Sentry from '@sentry/react-native';
+
 import Toast from 'react-native-toast-message';
 
 interface Props {
@@ -52,7 +52,7 @@ class FirebaseErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: any) {
-    Sentry.captureException(error, {
+    console.error(error, {
       extra: errorInfo,
       tags: {
         component: 'FirebaseErrorBoundary'
@@ -112,7 +112,7 @@ class FirebaseErrorBoundary extends Component<Props, State> {
         this.resetErrorBoundary();
       }
     } catch (recoveryError) {
-      Sentry.captureException(recoveryError as Error, {
+      console.error(recoveryError as Error, {
         tags: {
           component: 'FirebaseErrorBoundary',
           context: 'firebaseRecovery'
@@ -178,7 +178,7 @@ class FirebaseErrorBoundary extends Component<Props, State> {
         });
       }
     } catch (error) {
-      Sentry.captureException(error as Error, {
+      console.error(error as Error, {
         tags: {
           component: 'FirebaseErrorBoundary',
           context: 'manualRetry'

@@ -1,8 +1,6 @@
 import * as Notifications from 'expo-notifications';
-import * as Sentry from '@sentry/react-native';
-import { httpsCallable } from 'firebase/functions';
-import { functions, getFunctionsForEvent } from '../firebaseConfig';
-import { getInstallationId } from '../session/sessionId';
+
+// Removed unused Firebase imports - functions moved to direct API calls
 import { AsyncStorageUtils } from '../asyncStorageUtils';
 
 export interface NotificationPermissionStatus {
@@ -23,7 +21,7 @@ export async function checkNotificationPermission(): Promise<NotificationPermiss
       status,
     };
   } catch (error) {
-    Sentry.captureException(error);
+    console.error(error);
     return {
       granted: false,
       canAskAgain: false,
@@ -44,7 +42,7 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
       status,
     };
   } catch (error) {
-    Sentry.captureException(error);
+    console.error(error);
     return {
       granted: false,
       canAskAgain: false,
@@ -57,7 +55,7 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
  * @deprecated App state tracking is no longer used - client handles notification display
  * Update app state on server (foreground/background)
  */
-export async function updateAppState(isForeground: boolean, sessionId?: string, eventId?: string): Promise<void> {
+export async function updateAppState(): Promise<void> {
   // DEPRECATED: Server no longer tracks app state
   // Notifications are always sent, client decides whether to display
   console.warn('updateAppState is deprecated - client handles notification display');
@@ -68,7 +66,7 @@ export async function updateAppState(isForeground: boolean, sessionId?: string, 
  * @deprecated App state tracking is no longer used - client handles notification display
  * Set app state using the new session-based callable (preferred)
  */
-export async function setAppState(isForeground: boolean, sessionId: string, eventId?: string): Promise<void> {
+export async function setAppState(): Promise<void> {
   // DEPRECATED: Server no longer tracks app state
   // Notifications are always sent, client decides whether to display
   console.warn('setAppState is deprecated - client handles notification display');
@@ -84,6 +82,21 @@ export async function setMuteStatus(
   mutedSessionId: string, 
   muted: boolean
 ): Promise<void> {
+  // Add timeout to prevent hanging operations
+  return Promise.race([
+    setMuteStatusInternal(eventId, muterSessionId, mutedSessionId, muted),
+    new Promise<void>((_, reject) => {
+      setTimeout(() => reject(new Error('Mute operation timed out after 10 seconds')), 10000);
+    })
+  ]);
+}
+
+async function setMuteStatusInternal(
+  eventId: string, 
+  muterSessionId: string, 
+  mutedSessionId: string, 
+  muted: boolean
+): Promise<void> {
   try {
     console.log('setMuteStatus: Using direct Firestore API with:', {
       event_id: eventId,
@@ -91,6 +104,21 @@ export async function setMuteStatus(
       muted_session_id: mutedSessionId,
       muted
     });
+    
+    // Get event country for correct database routing
+    let eventCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+    
+    // If no event country stored, try to get it from the event
+    if (!eventCountry) {
+      try {
+        const { EventAPI } = await import('../firebaseApi');
+        const event = await EventAPI.get(eventId);
+        eventCountry = event?.location || null;
+        console.log('setMuteStatus: Retrieved event country from event:', eventCountry);
+      } catch (eventError) {
+        console.warn('setMuteStatus: Could not retrieve event country:', eventError);
+      }
+    }
     
     const { MutedMatchAPI } = await import('../firebaseApi');
     
@@ -110,13 +138,13 @@ export async function setMuteStatus(
         muted_session_id: mutedSessionId
       });
       
-      await Promise.all(mutedRecords.map(record => MutedMatchAPI.delete(record.id)));
+      await Promise.all(mutedRecords.map(record => MutedMatchAPI.delete(record.id, eventCountry || undefined)));
       console.log('setMuteStatus: Successfully removed', mutedRecords.length, 'mute record(s)');
     }
     
-  } catch (error: any) {
+  } catch (error) {
     console.error('setMuteStatus: Error with direct Firestore API:', error);
-    Sentry.captureException(error);
+    console.error(error);
     // Re-throw the error so the caller knows it failed
     throw error;
   }

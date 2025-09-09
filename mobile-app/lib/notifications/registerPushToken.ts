@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { app, getFunctionsForEvent } from '../firebaseConfig';
-import * as Sentry from '@sentry/react-native';
+
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getInstallationId } from '../session/sessionId';
 import { AsyncStorageUtils } from '../asyncStorageUtils';
@@ -9,7 +9,7 @@ import { AsyncStorageUtils } from '../asyncStorageUtils';
 export async function registerPushToken(sessionId: string): Promise<boolean> {
   try {
     if (!sessionId) {
-      Sentry.addBreadcrumb({
+      console.log({
         message: 'Push token registration failed: No session ID provided',
         level: 'warning',
         category: 'push_notification'
@@ -33,7 +33,7 @@ export async function registerPushToken(sessionId: string): Promise<boolean> {
     }
     
     if (!granted) {
-      Sentry.addBreadcrumb({
+      console.log({
         message: 'Push notification permissions not granted, requesting...',
         level: 'info',
         category: 'push_notification',
@@ -73,7 +73,7 @@ export async function registerPushToken(sessionId: string): Promise<boolean> {
           
         console.warn('registerPushToken:', errorMessage);
         
-        Sentry.addBreadcrumb({
+        console.log({
           message: 'Push notification permissions permanently denied',
           level: 'warning',
           category: 'push_notification',
@@ -86,7 +86,7 @@ export async function registerPushToken(sessionId: string): Promise<boolean> {
         return false;
       }
       
-      Sentry.addBreadcrumb({
+      console.log({
         message: 'Push notification permissions granted',
         level: 'info',
         category: 'push_notification',
@@ -99,7 +99,7 @@ export async function registerPushToken(sessionId: string): Promise<boolean> {
     }
 
     // Get the Expo push token
-    Sentry.addBreadcrumb({
+    console.log({
       message: 'Requesting Expo push token',
       level: 'info',
       category: 'push_notification'
@@ -110,7 +110,7 @@ export async function registerPushToken(sessionId: string): Promise<boolean> {
     });
 
     if (!expoToken?.data) {
-      Sentry.addBreadcrumb({
+      console.log({
         message: 'Failed to obtain Expo push token',
         level: 'error',
         category: 'push_notification'
@@ -118,7 +118,7 @@ export async function registerPushToken(sessionId: string): Promise<boolean> {
       return false;
     }
 
-    Sentry.addBreadcrumb({
+    console.log({
       message: 'Expo push token obtained successfully',
       level: 'info',
       category: 'push_notification',
@@ -162,7 +162,7 @@ export async function registerPushToken(sessionId: string): Promise<boolean> {
       
       if (!eventId) {
         console.log('Push token registration: No event ID, will use default database');
-        Sentry.addBreadcrumb({
+        console.log({
           message: 'Push token registration: No event ID, using default database',
           level: 'info',
           category: 'push_notification'
@@ -181,7 +181,7 @@ export async function registerPushToken(sessionId: string): Promise<boolean> {
       
       console.log('savePushToken result:', result);
       
-      Sentry.addBreadcrumb({
+      console.log({
         message: 'Push token registered successfully',
         level: 'info',
         category: 'push_notification',
@@ -193,13 +193,21 @@ export async function registerPushToken(sessionId: string): Promise<boolean> {
       // Log the error but don't treat it as critical since push notifications are optional
       if (callableError.code === 'functions/unauthenticated') {
         console.log('savePushToken: Skipping due to authentication requirements (App Check disabled)');
+        console.log('ℹ️  Push notifications will work via local fallback system when needed');
         
-        // Don't send to Sentry for expected auth errors
-        Sentry.addBreadcrumb({
-          message: 'Push token registration skipped - authentication required',
+        // Don't send to Sentry for expected auth errors - this is a known configuration issue
+        console.log({
+          message: 'Push token registration skipped - App Check disabled, using local fallbacks',
           level: 'info',
-          category: 'push_notification'
+          category: 'push_notification',
+          data: {
+            fallbackAvailable: true,
+            reason: 'app_check_disabled'
+          }
         });
+        
+        // Return false to indicate server registration failed (local fallbacks will still work)
+        return false;
       } else {
         console.error('savePushToken error:', {
           code: callableError.code,
@@ -207,7 +215,7 @@ export async function registerPushToken(sessionId: string): Promise<boolean> {
           details: callableError.details
         });
         
-        Sentry.captureException(callableError, {
+        console.error(callableError, {
           tags: {
             operation: 'push_token_registration',
             source: 'savePushToken_callable'
@@ -226,7 +234,7 @@ export async function registerPushToken(sessionId: string): Promise<boolean> {
     }
     
   } catch (error) {
-    Sentry.captureException(error);
+    console.error(error);
     return false;
   }
 }

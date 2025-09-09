@@ -1744,7 +1744,7 @@ PODS:
     - ReactCommon/turbomodule/core
   - react-native-get-random-values (1.11.0):
     - React-Core
-  - react-native-mmkv (3.3.0):
+  - react-native-mmkv (3.3.1):
     - DoubleConversion
     - glog
     - hermes-engine
@@ -2808,7 +2808,7 @@ SPEC CHECKSUMS:
   React-Mapbuffer: 4141a0d94d47529afb85341b9c02baa3cc2a1fd5
   React-microtasksnativemodule: 4b0f5a344ca5ce6692650fae4fb67f7672bbd1b6
   react-native-get-random-values: d16467cf726c618e9c7a8c3c39c31faa2244bbba
-  react-native-mmkv: fdb11060b855b55bd06f93a457ebdc3a0ad581ce
+  react-native-mmkv: 5f45db358c7694d6ca5266a16545219af88cd8ac
   react-native-netinfo: cec9c4e86083cb5b6aba0e0711f563e2fbbff187
   react-native-safe-area-context: 9d72abf6d8473da73033b597090a80b709c0b2f1
   react-native-slider: 9e9ab1e601041d94cbdb826b534c1f6331ded01e

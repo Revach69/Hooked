@@ -3,7 +3,6 @@ import { AsyncStorageUtils } from '../asyncStorageUtils';
 import * as Application from 'expo-application';
 import { Platform } from 'react-native';
 import { v4 as uuidv4 } from 'uuid';
-import * as Sentry from '@sentry/react-native';
 
 const SESSION_ID_KEY = 'currentSessionId';
 const INSTALLATION_ID_KEY = 'installationId';
@@ -18,7 +17,7 @@ export async function getOrCreateSessionId(): Promise<string> {
     const existingSessionId = await AsyncStorageUtils.getItemWithLegacyFallback<string>(SESSION_ID_KEY);
     
     if (existingSessionId) {
-      Sentry.addBreadcrumb({
+      console.log({
         message: 'Retrieved existing session ID',
         level: 'info',
         category: 'session',
@@ -33,7 +32,7 @@ export async function getOrCreateSessionId(): Promise<string> {
     // Store the session ID using AsyncStorageUtils for consistency
     await AsyncStorageUtils.setItem(SESSION_ID_KEY, newSessionId);
     
-    Sentry.addBreadcrumb({
+    console.log({
       message: 'Generated new session ID',
       level: 'info',
       category: 'session',
@@ -42,7 +41,7 @@ export async function getOrCreateSessionId(): Promise<string> {
     
     return newSessionId;
   } catch (error) {
-    Sentry.captureException(error, {
+    console.error(error, {
       tags: {
         operation: 'session_management',
         source: 'getOrCreateSessionId'
@@ -88,7 +87,7 @@ export async function getInstallationId(): Promise<string> {
       await AsyncStorage.setItem(INSTALLATION_ID_KEY, installationId);
     }
     
-    Sentry.addBreadcrumb({
+    console.log({
       message: 'Retrieved installation ID',
       level: 'info',
       category: 'session',
@@ -100,7 +99,7 @@ export async function getInstallationId(): Promise<string> {
     
     return installationId;
   } catch (error) {
-    Sentry.captureException(error, {
+    console.error(error, {
       tags: {
         operation: 'session_management',
         source: 'getInstallationId'
@@ -136,13 +135,13 @@ export async function getSessionAndInstallationIds(): Promise<{
 export async function clearSessionId(): Promise<void> {
   try {
     await AsyncStorageUtils.removeItem(SESSION_ID_KEY);
-    Sentry.addBreadcrumb({
+    console.log({
       message: 'Session ID cleared',
       level: 'info',
       category: 'session'
     });
   } catch (error) {
-    Sentry.captureException(error, {
+    console.error(error, {
       tags: {
         operation: 'session_management',
         source: 'clearSessionId'
@@ -165,27 +164,3 @@ export function validateSessionId(sessionId: string): boolean {
   return uuidV4Pattern.test(sessionId);
 }
 
-/**
- * Parse stored value from AsyncStorage
- * Handles different storage formats that might exist
- */
-function parseStoredValue(rawValue: string | null): string | null {
-  if (!rawValue) return null;
-  
-  try {
-    // Try to parse as JSON first
-    const parsed = JSON.parse(rawValue);
-    
-    // Handle different storage formats
-    if (typeof parsed === 'object' && parsed !== null) {
-      return parsed.value || parsed.sessionId || null;
-    } else if (typeof parsed === 'string') {
-      return parsed;
-    }
-    
-    return null;
-  } catch {
-    // If JSON parsing fails, treat as plain string
-    return typeof rawValue === 'string' && rawValue.trim() ? rawValue.trim() : null;
-  }
-}

@@ -1,6 +1,6 @@
 import { AppState, AppStateStatus } from 'react-native';
 import { useEffect, useState } from 'react';
-import * as Sentry from '@sentry/react-native';
+
 
 export function useAppState() {
   const [isForeground, setIsForeground] = useState(true);
@@ -10,7 +10,7 @@ export function useAppState() {
       const isActive = state === 'active';
       setIsForeground(isActive);
       
-      Sentry.addBreadcrumb({
+      console.log({
         message: 'App state changed',
         level: 'info',
         category: 'app_state',

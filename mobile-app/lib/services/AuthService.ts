@@ -1,6 +1,5 @@
 import { signInAnonymously, onAuthStateChanged, type User } from 'firebase/auth';
 import { auth } from '../firebaseAuth';
-import * as Sentry from '@sentry/react-native';
 
 class AuthServiceClass {
   private currentUser: User | null = null;
@@ -21,7 +20,7 @@ class AuthServiceClass {
         this.currentUser = user;
         
         if (user) {
-          Sentry.addBreadcrumb({
+          console.log({
             message: 'User authenticated successfully',
             level: 'info',
             category: 'auth',
@@ -33,7 +32,7 @@ class AuthServiceClass {
           // No user, attempt anonymous sign in
           this.isSigningIn = true;
           try {
-            Sentry.addBreadcrumb({
+            console.log({
               message: 'Attempting anonymous sign in',
               level: 'info',
               category: 'auth'
@@ -42,7 +41,7 @@ class AuthServiceClass {
             const credential = await signInAnonymously(auth);
             this.currentUser = credential.user;
             
-            Sentry.addBreadcrumb({
+            console.log({
               message: 'Anonymous sign in successful',
               level: 'info',
               category: 'auth',
@@ -52,7 +51,7 @@ class AuthServiceClass {
             unsubscribe();
             resolve(credential.user);
           } catch (error) {
-            Sentry.captureException(error, {
+            console.error(error, {
               tags: {
                 operation: 'auth',
                 source: 'anonymous_signin'

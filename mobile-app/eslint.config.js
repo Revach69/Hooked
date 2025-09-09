@@ -53,7 +53,7 @@ export default [
     },
     rules: {
       ...js.configs.recommended.rules,
-      ...tseslint.configs['flat/recommended'].rules,
+      ...tseslint.configs.recommended.rules,
       ...react.configs.recommended.rules,
       ...react.configs['jsx-runtime'].rules,
       ...reactHooks.configs.recommended.rules,
@@ -63,9 +63,13 @@ export default [
         { allowConstantExport: true },
       ],
       // Relax some rules for development
-      'no-unused-vars': 'warn',
+      'no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': 'warn',
+      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-require-imports': 'warn',
       'react-hooks/exhaustive-deps': 'warn',
       'react/no-unescaped-entities': 'warn',
+      'react/prop-types': 'off',
       'no-undef': 'warn',
       'no-empty': 'warn',
       'no-useless-catch': 'warn',

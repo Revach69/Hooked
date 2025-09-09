@@ -182,24 +182,23 @@ export default function MatchAlertModal({
 
               {/* Match celebration content */}
               <View style={styles.contentContainer}>
-                {/* Hearts animation area */}
-                <View style={styles.celebrationContainer}>
-                  <Heart color="#FF6B6B" size={60} fill="#FF6B6B" />
-                  <Text style={[styles.itsAMatchText, isDark && styles.itsAMatchTextDark]}>
-                    It's a Match!
+                {/* Title */}
+                <View style={styles.titleContainer}>
+                  <Text style={[styles.hookedText, isDark && styles.hookedTextDark]}>
+                    You got Hooked!
                   </Text>
                   <Text style={[styles.partnerNameText, isDark && styles.partnerNameTextDark]}>
                     {partnerName}
                   </Text>
                 </View>
 
-                {/* Partner image (if available) */}
+                {/* Partner image (full size like profile modal) */}
                 {partnerImage && (
-                  <View style={styles.imageContainer}>
+                  <View style={styles.fullImageContainer}>
                     <ImageBackground
                       source={{ uri: partnerImage }}
-                      style={styles.partnerImage}
-                      imageStyle={styles.partnerImageStyle}
+                      style={styles.fullPartnerImage}
+                      imageStyle={styles.fullPartnerImageStyle}
                     />
                   </View>
                 )}
@@ -282,20 +281,19 @@ const styles = StyleSheet.create({
     paddingTop: 60, // Account for close button
     alignItems: 'center',
   },
-  celebrationContainer: {
+  titleContainer: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 32,
   },
-  itsAMatchText: {
-    fontSize: 28,
+  hookedText: {
+    fontSize: 32,
     fontWeight: 'bold',
-    color: '#FF6B6B',
-    marginTop: 16,
+    color: '#8b5cf6',
     marginBottom: 8,
     textAlign: 'center',
   },
-  itsAMatchTextDark: {
-    color: '#FF6B6B', // Keep same color in dark mode for brand consistency
+  hookedTextDark: {
+    color: '#8b5cf6', // Keep same color in dark mode for brand consistency
   },
   partnerNameText: {
     fontSize: 20,
@@ -306,40 +304,40 @@ const styles = StyleSheet.create({
   partnerNameTextDark: {
     color: '#ffffff',
   },
-  imageContainer: {
-    width: 120,
-    height: 120,
+  fullImageContainer: {
+    width: 280,
+    height: 360,
     marginBottom: 32,
-    borderRadius: 60,
+    borderRadius: 20,
     overflow: 'hidden',
     shadowColor: '#000000',
     shadowOffset: {
       width: 0,
-      height: 4,
+      height: 8,
     },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 16,
   },
-  partnerImage: {
+  fullPartnerImage: {
     width: '100%',
     height: '100%',
   },
-  partnerImageStyle: {
-    borderRadius: 60,
+  fullPartnerImageStyle: {
+    borderRadius: 20,
   },
   actionContainer: {
     width: '100%',
   },
   startChattingButton: {
     flexDirection: 'row',
-    backgroundColor: '#FF6B6B',
+    backgroundColor: '#8b5cf6',
     paddingVertical: 16,
     paddingHorizontal: 32,
     borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#FF6B6B',
+    shadowColor: '#8b5cf6',
     shadowOffset: {
       width: 0,
       height: 4,
@@ -349,7 +347,7 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   startChattingButtonDark: {
-    backgroundColor: '#FF6B6B', // Keep brand color in dark mode
+    backgroundColor: '#8b5cf6', // Keep brand color in dark mode
   },
   buttonIcon: {
     marginRight: 8,

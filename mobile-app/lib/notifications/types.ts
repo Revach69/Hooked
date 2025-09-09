@@ -9,6 +9,7 @@ export type MatchEvent = BaseEvent & {
   isCreator: boolean;       // true = I am the second liker (I just liked and created match)
   otherSessionId: string;   // the other person's session_id
   otherName?: string;
+  otherImage?: string;      // the other person's profile image URL
 };
 
 export type MessageEvent = BaseEvent & {

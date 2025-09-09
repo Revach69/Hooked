@@ -29,8 +29,10 @@ import * as Linking from 'expo-linking';
 import { ImageCacheService } from '../lib/services/ImageCacheService';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { checkSimpleNetworkConnectivity } from '../lib/utils';
-import * as Sentry from '@sentry/react-native';
+// Sentry removed
 import { GlobalDataCache, CacheKeys } from '../lib/cache/GlobalDataCache';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { getDbForEvent } from '../lib/firebaseConfig';
 
 
 export default function Profile() {
@@ -219,7 +221,7 @@ export default function Profile() {
         }
       } catch (error) {
         console.error('Error initializing profile session:', error);
-        Sentry.captureException(error);
+        console.error('Profile error:', error);
         
         // Don't clear session data on network/timeout errors
         // And don't redirect - let user stay on profile page
@@ -251,7 +253,7 @@ export default function Profile() {
         const hasUnseen = await hasUnseenMessages(currentEvent.id, profile.session_id);
         setHasUnreadMessages(hasUnseen);
       } catch (error) {
-      Sentry.captureException(error);
+      console.error('Profile error:', error);
         // Error checking unseen messages in profile
       }
     };
@@ -262,6 +264,42 @@ export default function Profile() {
     const interval = setInterval(checkUnseenMessages, 5000);
     return () => clearInterval(interval);
   }, [currentEvent?.id, profile?.session_id]);
+
+  // Real-time message listener for immediate unseen status updates
+  useEffect(() => {
+    if (!currentEvent?.id || !profile?.session_id || !profile?.id) return;
+
+    const setupMessageListener = async () => {
+      try {
+        // Get event-specific database
+        const eventCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+        const eventDb = getDbForEvent(eventCountry);
+      
+        const messagesQuery = query(
+          collection(eventDb, 'messages'),
+          where('event_id', '==', currentEvent.id),
+          where('to_profile_id', '==', profile.id)
+        );
+
+        const unsubscribe = onSnapshot(messagesQuery, async () => {
+          // When messages change, immediately check unseen status
+          try {
+            const { hasUnseenMessages } = await import('../lib/messageNotificationHelper');
+            const hasUnseen = await hasUnseenMessages(currentEvent.id, profile.session_id);
+            setHasUnreadMessages(hasUnseen);
+          } catch (error) {
+            console.error('Profile error:', error);
+          }
+        });
+
+        return () => unsubscribe();
+      } catch (error) {
+        console.error('Profile error:', error);
+      }
+    };
+
+    setupMessageListener();
+  }, [currentEvent?.id, profile?.session_id, profile?.id]);
 
   // Synchronize eventVisible state with profile data
   useEffect(() => {
@@ -410,7 +448,7 @@ export default function Profile() {
   const processImageAsset = async (asset: any) => {
     // Consistent 5MB file size limit
     if (asset.fileSize && asset.fileSize > 5 * 1024 * 1024) {
-      Sentry.captureException(new Error(`File too large: ${asset.fileSize}`));
+      console.error('Profile error:', new Error(`File too large: ${asset.fileSize}`));
       Toast.show({
         type: 'warning',
         text1: 'File Too Large',
@@ -462,6 +500,9 @@ export default function Profile() {
           setProfile((prev: any) => ({ ...prev, profile_photo_url: file_url }));
           await AsyncStorageUtils.setItem('currentProfilePhotoUrl', file_url);
           
+          // Update cached image URI to show the new photo immediately
+          setCachedProfileImageUri(file_url);
+          
           // Clear temp photo and success - break out of retry loop
           setTempPhotoUri(null);
           break;
@@ -478,7 +519,7 @@ export default function Profile() {
         }
       }
     } catch (err) {
-      Sentry.captureException(err);
+      console.error('Profile error:', err);
       
       // Enhanced error logging
       let errorMessage = 'Unknown upload error';
@@ -545,12 +586,12 @@ export default function Profile() {
 
         // Mutual Gender Interest Check - based on user's profile preferences
         const iAmInterestedInOther =
-          (currentUserProfile.interested_in === 'everybody') ||
+          (currentUserProfile.interested_in === 'everyone') ||
           (currentUserProfile.interested_in === 'men' && otherUser.gender_identity === 'man') ||
           (currentUserProfile.interested_in === 'women' && otherUser.gender_identity === 'woman');
 
         const otherIsInterestedInMe =
-          (otherUser.interested_in === 'everybody') ||
+          (otherUser.interested_in === 'everyone') ||
           (otherUser.interested_in === 'men' && currentUserProfile.gender_identity === 'man') ||
           (otherUser.interested_in === 'women' && currentUserProfile.gender_identity === 'woman');
         
@@ -619,7 +660,7 @@ export default function Profile() {
         cacheUserImages();
       }
     } catch (error) {
-      Sentry.captureException(error);
+      console.error('Profile error:', error);
               // Error loading users for report
       // Handle error silently
     }
@@ -662,7 +703,7 @@ export default function Profile() {
         isConnected = await checkSimpleNetworkConnectivity();
 
       } catch (error) {
-      Sentry.captureException(error);
+      console.error('Profile error:', error);
         
         isConnected = true; // Proceed even if network check fails
       }
@@ -721,45 +762,41 @@ export default function Profile() {
         throw new Error('Report creation failed - no ID returned');
       }
 
-      // Auto-unmatch after successful report
+      // Auto-unmatch and auto-skip after successful report
       try {
-        // Import LikeAPI if not already imported
-        const { LikeAPI } = await import('../lib/firebaseApi');
+        // Import necessary APIs
+        const { LikeAPI, SkippedProfileAPI } = await import('../lib/firebaseApi');
         
-        // Find the like record between reporter and reported user
-        const mutualLikes = await LikeAPI.filter({
-          event_id: eventId,
-          is_mutual: true
+        // 1. Auto-unmatch: Find and delete ALL likes between the two users
+        const allLikes = await LikeAPI.filter({
+          event_id: eventId
         });
         
-        const likeToDelete = mutualLikes.find(like => 
+        const likesToDelete = allLikes.filter(like => 
           (like.liker_session_id === sessionId && like.liked_session_id === selectedUserToReport.session_id) ||
           (like.liker_session_id === selectedUserToReport.session_id && like.liked_session_id === sessionId)
         );
         
-        if (likeToDelete) {
-          // Delete the like to unmatch
-          await LikeAPI.delete(likeToDelete.id);
-          
-          // Update the other user's like to set is_mutual to false
-          const otherLikes = await LikeAPI.filter({
-            event_id: eventId,
-            liker_session_id: selectedUserToReport.session_id,
-            liked_session_id: sessionId
-          });
-          
-          if (otherLikes.length > 0) {
-            await LikeAPI.update(otherLikes[0].id, { is_mutual: false });
-          }
+        // Delete all like records between the two users
+        for (const like of likesToDelete) {
+          await LikeAPI.delete(like.id);
         }
+        
+        // 2. Auto-skip: Create a skip record from reporter to reported user
+        await SkippedProfileAPI.create({
+          event_id: eventId,
+          skipper_session_id: sessionId,
+          skipped_session_id: selectedUserToReport.session_id
+        });
+        
       } catch (unmatchError) {
-        console.error('Error unmatching after report:', unmatchError);
-        // Continue even if unmatch fails - report is more important
+        console.error('Error unmatching/skipping after report:', unmatchError);
+        // Continue even if unmatch/skip fails - report is more important
       }
       
       Alert.alert(
         "Report Submitted",
-        `Thank you for your report. We will review the information about ${selectedUserToReport.first_name}. This user has been unmatched.`,
+        `Thank you for your report. We will review the information about ${selectedUserToReport.first_name}. This user has been unmatched and will no longer appear in your discovery.`,
         [
           {
             text: "OK",
@@ -774,7 +811,7 @@ export default function Profile() {
         ]
       );
     } catch (error) {
-      Sentry.captureException(error);
+      console.error('Profile error:', error);
       // Report submission error details
       
       let errorMessage = "Failed to submit report. Please try again.";
@@ -813,7 +850,7 @@ export default function Profile() {
 
   const handleLogout = async () => {
     Alert.alert(
-      "Leave Event & Delete Profile",
+      "Leave Event",
       "Are you sure you want to leave this event and delete your profile? This action cannot be undone.",
       [
         {
@@ -917,7 +954,7 @@ export default function Profile() {
               // Clear the deletion flag on error
               await AsyncStorageUtils.removeItem('profileDeletionInProgress');
               console.error('Error during profile deletion:', error);
-              Sentry.captureException(error);
+              console.error('Profile error:', error);
               // Error deleting profile - use Alert for critical errors
               Alert.alert(
                 'Error',
@@ -1069,7 +1106,7 @@ export default function Profile() {
       });
       
     } catch (error) {
-      Sentry.captureException(error);
+      console.error('Profile error:', error);
       Toast.show({
         type: 'error',
         text1: 'Error',
@@ -1112,24 +1149,39 @@ export default function Profile() {
       });
       return;
     }
-    setSaving(true);
-    // Accept both @username and username formats - just use the username part
-    const cleanHandle = trimmedHandle.startsWith('@') ? trimmedHandle.slice(1) : trimmedHandle;
-    await EventProfileAPI.update(profile.id, { instagram_handle: cleanHandle });
-    setProfile((prev: any) => ({ ...prev, instagram_handle: cleanHandle }));
-    setInstagramHandle(cleanHandle);
-    setEditingInstagram(false);
-    setSaving(false);
+    
+    try {
+      setSaving(true);
+      // Accept both @username and username formats - just use the username part
+      const cleanHandle = trimmedHandle.startsWith('@') ? trimmedHandle.slice(1) : trimmedHandle;
+      await EventProfileAPI.update(profile.id, { instagram_handle: cleanHandle });
+      setProfile((prev: any) => ({ ...prev, instagram_handle: cleanHandle }));
+      setInstagramHandle(cleanHandle);
+      setEditingInstagram(false);
 
-    Toast.show({
-      type: 'success',
-      text1: 'Instagram Connected!',
-      text2: 'Instagram handle added to profile.',
-      position: 'top',
-      visibilityTime: 3500,
-      autoHide: true,
-      topOffset: 0,
-    });
+      Toast.show({
+        type: 'success',
+        text1: 'Instagram Connected!',
+        text2: 'Instagram handle added to profile.',
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
+    } catch (error) {
+      console.error('Error saving Instagram handle:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to save Instagram handle.',
+        position: 'top',
+        visibilityTime: 3500,
+        autoHide: true,
+        topOffset: 0,
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleOpenInstagramProfile = async () => {
@@ -1170,22 +1222,37 @@ export default function Profile() {
           text: "Remove",
           style: "destructive",
           onPress: async () => {
-            setSaving(true);
-            await EventProfileAPI.update(profile.id, { instagram_handle: undefined });
-            setProfile((prev: any) => ({ ...prev, instagram_handle: undefined }));
-            setInstagramHandle('');
-            setEditingInstagram(false);
-            setSaving(false);
+            try {
+              setSaving(true);
+              // Remove instagram_handle field completely from Firebase
+              await EventProfileAPI.update(profile.id, { instagram_handle: undefined });
+              setProfile((prev: any) => ({ ...prev, instagram_handle: undefined }));
+              setInstagramHandle('');
+              setEditingInstagram(false);
 
-            Toast.show({
-              type: 'success',
-              text1: 'Instagram Disconnected',
-              text2: 'Instagram removed from profile.',
-              position: 'top',
-              visibilityTime: 3500,
-              autoHide: true,
-              topOffset: 0,
-            });
+              Toast.show({
+                type: 'success',
+                text1: 'Instagram Disconnected',
+                text2: 'Instagram removed from profile.',
+                position: 'top',
+                visibilityTime: 3500,
+                autoHide: true,
+                topOffset: 0,
+              });
+            } catch (error) {
+              console.error('Error disconnecting Instagram:', error);
+              Toast.show({
+                type: 'error',
+                text1: 'Error',
+                text2: 'Failed to remove Instagram handle.',
+                position: 'top',
+                visibilityTime: 3500,
+                autoHide: true,
+                topOffset: 0,
+              });
+            } finally {
+              setSaving(false);
+            }
           }
         }
       ]
@@ -1851,14 +1918,14 @@ export default function Profile() {
                   <TouchableOpacity
                     style={[
                       styles.genderOption,
-                      profile.interested_in === 'everybody' && styles.genderOptionSelected
+                      profile.interested_in === 'everyone' && styles.genderOptionSelected
                     ]}
-                    onPress={() => handleUpdateInterestedIn('everybody')}
+                    onPress={() => handleUpdateInterestedIn('everyone')}
                   >
                     <Text style={[
                       styles.genderOptionText,
-                      profile.interested_in === 'everybody' && styles.genderOptionTextSelected
-                    ]}>Everybody</Text>
+                      profile.interested_in === 'everyone' && styles.genderOptionTextSelected
+                    ]}>Everyone</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -1877,7 +1944,7 @@ export default function Profile() {
                 <Text style={styles.detailValue}>
                   {profile?.interested_in === 'men' ? 'Men' : 
                    profile?.interested_in === 'women' ? 'Women' : 
-                   profile?.interested_in === 'everybody' ? 'Everybody' : 'Not set'}
+                   profile?.interested_in === 'everyone' ? 'Everyone' : 'Not set'}
                 </Text>
               </View>
             </View>
@@ -2187,7 +2254,7 @@ export default function Profile() {
             onPress={handleLogout}
           >
             <LogOut size={20} color="#ef4444" />
-            <Text style={[styles.actionText, styles.logoutText]}>Leave Event & Delete Profile</Text>
+            <Text style={[styles.actionText, styles.logoutText]}>Leave Event</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

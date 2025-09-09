@@ -73,6 +73,19 @@ export default function ZoomableImage({
       // Adjust focal point for pinch center to zoom towards finger position
       focalX.value = event.focalX - screenWidth / 2;
       focalY.value = event.focalY - 140; // Approximate image center height
+      
+      // Notify parent when we're significantly zoomed (threshold > 1.1)
+      if (newScale > 1.1 && !isZoomed.value) {
+        isZoomed.value = true;
+        if (onZoomStart) {
+          runOnJS(onZoomStart)();
+        }
+      } else if (newScale <= 1.1 && isZoomed.value) {
+        isZoomed.value = false;
+        if (onZoomEnd) {
+          runOnJS(onZoomEnd)();
+        }
+      }
     },
     onEnd: () => {
       'worklet';
@@ -102,10 +115,17 @@ export default function ZoomableImage({
         stiffness: 150,
         mass: 0.8,
       });
-      isZoomed.value = false;
       
-      if (onZoomEnd) {
-        runOnJS(onZoomEnd)();
+      // Notify parent that zoom ended after a slight delay to ensure animations complete
+      if (isZoomed.value) {
+        isZoomed.value = false;
+        if (onZoomEnd) {
+          runOnJS(() => {
+            setTimeout(() => {
+              if (onZoomEnd) onZoomEnd();
+            }, 100);
+          })();
+        }
       }
     },
   });
@@ -165,42 +185,40 @@ export default function ZoomableImage({
   // Double-tap functionality removed - zoom always resets on release
   
   return (
-    <GestureHandlerRootView style={[styles.container, containerStyle]}>
-      <PanGestureHandler
-        ref={panRef}
-        simultaneousHandlers={pinchRef}
-        shouldCancelWhenOutside={false}
-        onGestureEvent={panHandler}
-        minPointers={1}
-        maxPointers={2}
-      >
-        <Animated.View style={styles.imageWrapper}>
-          <PinchGestureHandler
-            ref={pinchRef}
-            simultaneousHandlers={panRef}
-            onGestureEvent={pinchHandler}
-            shouldCancelWhenOutside={false}
-          >
-            <Animated.View style={[styles.imageWrapper, animatedStyle]}>
-              <Image
-                source={source}
-                style={[styles.image, style]}
-                resizeMode="contain"
-                onError={(error) => {
-                  console.log('ZoomableImage: Failed to load image:', source.uri, error.nativeEvent.error);
-                }}
-                onLoad={() => {
-                  console.log('ZoomableImage: Successfully loaded image:', source.uri);
-                }}
-                onLoadStart={() => {
-                  console.log('ZoomableImage: Started loading image:', source.uri);
-                }}
-              />
-            </Animated.View>
-          </PinchGestureHandler>
-        </Animated.View>
-      </PanGestureHandler>
-    </GestureHandlerRootView>
+    <PanGestureHandler
+      ref={panRef}
+      simultaneousHandlers={pinchRef}
+      shouldCancelWhenOutside={false}
+      onGestureEvent={panHandler}
+      minPointers={1}
+      maxPointers={2}
+    >
+      <Animated.View style={[styles.container, containerStyle]}>
+        <PinchGestureHandler
+          ref={pinchRef}
+          simultaneousHandlers={panRef}
+          onGestureEvent={pinchHandler}
+          shouldCancelWhenOutside={false}
+        >
+          <Animated.View style={[styles.imageWrapper, animatedStyle]}>
+            <Image
+              source={source}
+              style={[styles.image, style]}
+              resizeMode="contain"
+              onError={(error) => {
+                console.log('ZoomableImage: Failed to load image:', source.uri, error.nativeEvent.error);
+              }}
+              onLoad={() => {
+                console.log('ZoomableImage: Successfully loaded image:', source.uri);
+              }}
+              onLoadStart={() => {
+                console.log('ZoomableImage: Started loading image:', source.uri);
+              }}
+            />
+          </Animated.View>
+        </PinchGestureHandler>
+      </Animated.View>
+    </PanGestureHandler>
   );
 }
 

@@ -177,7 +177,7 @@ class UpdateService {
    * Get version information directly from App Store/Play Store
    */
   private async getVersionInfo(): Promise<VersionInfo> {
-    const currentVersion = Constants.expoConfig?.version || '1.0.0';
+    const currentVersion = Constants.expoConfig?.version || '1.2.0';
     
     try {
       let latestVersion = currentVersion;

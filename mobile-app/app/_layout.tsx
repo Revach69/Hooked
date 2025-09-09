@@ -1,30 +1,5 @@
 import 'react-native-get-random-values';
-import * as Sentry from '@sentry/react-native';
-
-// Only initialize Sentry if DSN is available
-if (process.env.EXPO_PUBLIC_SENTRY_DSN) {
-  Sentry.init({
-    dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
-    enableAutoPerformanceTracing: true,
-    tracesSampleRate: __DEV__ ? 1.0 : 0.2, // Lower sample rate in production
-    enableAutoSessionTracking: true,
-    debug: __DEV__, // Enable debug in development for troubleshooting
-    environment: process.env.EXPO_PUBLIC_ENV || (__DEV__ ? 'development' : 'production'),
-    release: `${process.env.EXPO_PUBLIC_APP_ID ?? 'hooked'}@${process.env.EXPO_PUBLIC_APP_VERSION ?? '1.0.0'}`,
-    beforeSend(event) {
-      // Add extra context for physical device debugging
-      if (event.contexts) {
-        event.contexts.device = {
-          ...event.contexts.device,
-          simulator: __DEV__,
-        };
-      }
-      return event;
-    },
-  });
-} else {
-  console.warn('Sentry DSN not configured - error reporting disabled');
-}
+// Sentry removed for faster startup
 
 // Initialize React Native Firebase - but only after app is ready
 // import '../lib/firebaseNativeConfig';
@@ -46,7 +21,7 @@ import * as Notifications from 'expo-notifications';
 // import { AppStateSyncService } from '../lib/services/AppStateSyncService'; // DEPRECATED - Client handles notification display
 import * as Linking from 'expo-linking';
 // import * as Updates from 'expo-updates'; // Now handled by UpdateService
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import { getSessionAndInstallationIds } from '../lib/session/sessionId';
 
@@ -85,8 +60,17 @@ export default function RootLayout() {
     console.log('_layout.tsx: Initializing notification system');
     
     // Initialize Android notification channels first
-    import('../lib/notifications/AndroidChannels').then(({ AndroidChannels }) => {
-      AndroidChannels.initialize();
+    import('../lib/notifications/AndroidChannels').then(async ({ AndroidChannels }) => {
+      await AndroidChannels.initialize();
+      
+      // Run Android notification diagnostic after channel initialization
+      if (Platform.OS === 'android') {
+        import('../lib/notifications/AndroidNotificationDebugger').then(({ AndroidNotificationDebugger }) => {
+          AndroidNotificationDebugger.runDiagnostic().catch(error => {
+            console.warn('Failed to run Android notification diagnostic:', error);
+          });
+        });
+      }
     }).catch(error => {
       console.warn('Failed to initialize Android channels:', error);
     });
@@ -98,10 +82,21 @@ export default function RootLayout() {
       console.warn('Failed to initialize Local Notification Fallback:', error);
     });
     
-    // Initialize NotificationRouter
+    // Initialize NotificationRouter with modal trigger
+    const showMatchModal = (partnerName: string, partnerSessionId: string, partnerImage?: string) => {
+      console.log('🎯 Triggering match modal from NotificationRouter:', { partnerName, partnerSessionId });
+      setMatchModalData({
+        partnerName,
+        partnerImage,
+        partnerSessionId
+      });
+      setMatchModalVisible(true);
+    };
+
     NotificationRouter.init({
       getIsForeground,
       navigateToMatches: () => router.push('/matches'),
+      showMatchModal,
     });
     
     console.log('_layout.tsx: Notification system initialization complete');
@@ -146,11 +141,29 @@ export default function RootLayout() {
           source: data?.source,
           notificationId: notifId?.substring(0, 10) + '...'
         });
+
+        // EMERGENCY DEBUG: Log full notification data for debugging
+        console.log('🔔 FULL NOTIFICATION DEBUG:', {
+          isForeground,
+          type: data?.type,
+          hasPartnerName: !!data?.partnerName,
+          hasPartnerSessionId: !!data?.partnerSessionId,
+          partnerName: data?.partnerName,
+          partnerSessionId: data?.partnerSessionId?.substring(0, 10) + '...',
+          allDataKeys: Object.keys(data || {}),
+          willShowModal: isForeground && data?.type === 'match'
+        });
         
         // CLIENT-SIDE DECISION: Show in-app notification if foreground
         if (isForeground && data?.source !== 'local_fallback') {
           // Show in-app alert for foreground notifications
           if (data?.type === 'match') {
+            console.log('🎯 MATCH NOTIFICATION - Setting modal data:', {
+              partnerName: data.partnerName || 'Your match',
+              partnerSessionId: data.partnerSessionId || '',
+              hasPartnerImage: !!data.partnerImage
+            });
+            
             // Show custom match alert modal instead of toast
             setMatchModalData({
               partnerName: data.partnerName || 'Your match',
@@ -158,6 +171,8 @@ export default function RootLayout() {
               partnerSessionId: data.partnerSessionId || ''
             });
             setMatchModalVisible(true);
+            
+            console.log('🎯 MATCH MODAL - State updated, visible should be true');
           } else if (data?.type === 'message') {
             Toast.show({
               type: 'info',
@@ -189,16 +204,7 @@ export default function RootLayout() {
         }
       } catch (error) {
         console.error('_layout.tsx: Error handling received notification:', error);
-        Sentry.captureException(error, {
-          tags: {
-            operation: 'notification_received_handler',
-            source: '_layout.tsx'
-          },
-          extra: {
-            notificationType: notification.request.content.data?.type,
-            notificationId: notification.request.content.data?.notificationId
-          }
-        });
+        console.error('Notification received handler error:', error);
         // Continue app execution - don't crash
       }
     });
@@ -235,16 +241,7 @@ export default function RootLayout() {
         const data = (response?.notification?.request?.content?.data || {}) as any;
         
         // Track notification interaction analytics
-        Sentry.addBreadcrumb({
-          message: 'Notification tapped',
-          level: 'info',
-          category: 'notification_interaction',
-          data: {
-            type: data?.type,
-            source: 'notification_tap',
-            notificationId: data?.notificationId?.substring(0, 10) + '...'
-          }
-        });
+        console.log('Notification tapped:', { type: data?.type, notificationId: data?.notificationId?.substring(0, 10) + '...' });
         
         console.log('_layout.tsx: Notification tapped:', {
           type: data?.type,
@@ -282,16 +279,7 @@ export default function RootLayout() {
         }
       } catch (e) {
         console.error('_layout.tsx: Error handling notification tap:', e);
-        Sentry.captureException(e, {
-          tags: {
-            operation: 'notification_tap_handler',
-            source: '_layout.tsx'
-          },
-          extra: {
-            notificationType: response?.notification?.request?.content?.data?.type,
-            notificationId: response?.notification?.request?.content?.data?.notificationId
-          }
-        });
+        console.error('Notification tap handler error:', e);
         // Continue app execution - don't crash
         // Fallback to matches page on error
         try {
@@ -320,7 +308,7 @@ export default function RootLayout() {
         }
       } catch (error) {
         console.error('Error handling deep link:', error);
-        Sentry.captureException(error);
+        console.error('Deep link error:', error);
       }
     };
 
@@ -415,16 +403,7 @@ export default function RootLayout() {
             notificationId: data?.notificationId?.substring(0, 10) + '...'
           });
           
-          Sentry.addBreadcrumb({
-            message: 'App opened from killed state by notification tap',
-            level: 'info',
-            category: 'notification_interaction',
-            data: {
-              type: data?.type,
-              source: 'killed_state',
-              notificationId: data?.notificationId?.substring(0, 10) + '...'
-            }
-          });
+          console.log('App opened from killed state by notification:', { type: data?.type, notificationId: data?.notificationId?.substring(0, 10) + '...' });
           
           // CRITICAL: Wait for navigation to be ready before navigating
           // Navigation might not be initialized immediately from killed state
@@ -465,12 +444,7 @@ export default function RootLayout() {
         
       } catch (error) {
         console.error('_layout.tsx: Error checking initial notification:', error);
-        Sentry.captureException(error, {
-          tags: {
-            operation: 'initial_notification_check',
-            source: '_layout.tsx'
-          }
-        });
+        console.error('Initial notification check error:', error);
         // Continue app initialization - don't crash
       }
     };
@@ -486,7 +460,7 @@ export default function RootLayout() {
         
         // Use the robust initialization service with retry logic
         const { AppInitializationService } = await import('../lib/services/AppInitializationService');
-        const initSuccess = await AppInitializationService.initializeApp(3); // 3 retry attempts
+        const initSuccess = await AppInitializationService.initializeApp(1); // 1 retry attempt for faster startup
         
         if (initSuccess) {
           console.log('_layout.tsx: App initialization successful');
@@ -500,11 +474,7 @@ export default function RootLayout() {
           
         } else {
           console.error('_layout.tsx: App initialization failed after all retries');
-          Sentry.addBreadcrumb({
-            message: 'App initialization failed after all retries',
-            level: 'error',
-            category: 'app_initialization'
-          });
+          console.error('App initialization failed after all retries');
         }
         
         // Check for updates after app initialization (both store and OTA)
@@ -519,12 +489,7 @@ export default function RootLayout() {
         
       } catch (error) {
         console.error('_layout.tsx: Critical app initialization error:', error);
-        Sentry.captureException(error, {
-          tags: {
-            operation: 'app_initialization',
-            source: '_layout.tsx'
-          }
-        });
+        console.error('Critical app initialization error:', error);
         setAppIsReady(true); // Still set ready to prevent infinite loading
       }
     };
@@ -544,14 +509,9 @@ export default function RootLayout() {
         
         if (!sessionId || cancelled) return;
         
-        Sentry.addBreadcrumb({
-          message: 'App initialization with session IDs',
-          level: 'info',
-          category: 'session',
-          data: { 
-            sessionId: sessionId.substring(0, 8) + '...',
-            installationId: installationId.substring(0, 8) + '...'
-          }
+        console.log('App initialization with session IDs:', { 
+          sessionId: sessionId.substring(0, 8) + '...',
+          installationId: installationId.substring(0, 8) + '...'
         });
         
         // Push token registration is now handled in AppInitializationService
@@ -561,12 +521,7 @@ export default function RootLayout() {
         // await AppStateSyncService.startAppStateSync(sessionId);
         
       } catch (error) {
-        Sentry.captureException(error, {
-          tags: {
-            operation: 'session_initialization',
-            source: 'layout'
-          }
-        });
+        console.error('Session initialization error:', error);
       }
     })();
     return () => { 
@@ -618,7 +573,6 @@ export default function RootLayout() {
           />
         <Toast 
           config={{
-          /* eslint-disable react/prop-types */
           matchSuccess: (props) => (
             <CustomMatchToast
               text1={props.text1 || ''}
@@ -667,7 +621,6 @@ export default function RootLayout() {
               onHide={props.hide}
             />
           ),
-          /* eslint-enable react/prop-types */
         }}
         />
         

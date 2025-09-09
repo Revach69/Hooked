@@ -1,4 +1,4 @@
-import * as Sentry from '@sentry/react-native';
+
 import * as ImageManipulator from 'expo-image-manipulator';
 
 // Fallback handling for native module issues
@@ -6,7 +6,7 @@ try {
   require('expo-image-manipulator');
 } catch (error) {
   console.warn('ImageOptimizationService: expo-image-manipulator not available:', error);
-  Sentry.captureException(error, {
+  console.error(error, {
     tags: { operation: 'image_manipulator_import' }
   });
 }
@@ -35,7 +35,7 @@ class ImageOptimizationServiceClass {
         format = 'jpeg'
       } = options || {};
 
-      Sentry.addBreadcrumb({
+      console.log({
         message: 'ImageOptimizationService: Starting image optimization',
         level: 'info',
         category: 'image_optimization',
@@ -82,7 +82,7 @@ class ImageOptimizationServiceClass {
 
       console.log(`ImageOptimizationService: Optimization complete - ${uri.substring(0, 50)}... -> ${result.uri.substring(0, 50)}...`);
       
-      Sentry.addBreadcrumb({
+      console.log({
         message: 'ImageOptimizationService: Image optimization completed',
         level: 'info',
         category: 'image_optimization',
@@ -97,7 +97,7 @@ class ImageOptimizationServiceClass {
     } catch (error) {
       console.error('ImageOptimizationService: Failed to optimize image:', error);
       
-      Sentry.captureException(error, {
+      console.error(error, {
         tags: {
           operation: 'image_optimization',
           source: 'ImageOptimizationService'
@@ -155,7 +155,7 @@ class ImageOptimizationServiceClass {
 
       console.log('ImageOptimizationService: Profile photo compression complete (crop preserved)');
       
-      Sentry.addBreadcrumb({
+      console.log({
         message: 'ImageOptimizationService: Profile photo compressed without resize',
         level: 'info',
         category: 'image_optimization',
@@ -169,7 +169,7 @@ class ImageOptimizationServiceClass {
     } catch (error) {
       console.error('ImageOptimizationService: Failed to optimize profile photo:', error);
       
-      Sentry.captureException(error, {
+      console.error(error, {
         tags: {
           operation: 'profile_photo_optimization',
           source: 'ImageOptimizationService'

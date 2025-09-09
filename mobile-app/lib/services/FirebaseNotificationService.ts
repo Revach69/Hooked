@@ -1,7 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { httpsCallable } from 'firebase/functions';
-import { functions } from '../firebaseConfig';
+import { getFunctions } from '../firebaseConfig';
 import { AsyncStorageUtils } from '../asyncStorageUtils';
 import { NotificationManager } from './NotificationManager';
 import { router } from 'expo-router';
@@ -26,7 +26,7 @@ class FirebaseNotificationServiceClass {
   private sendNotificationCallable: any;
 
   constructor() {
-    this.sendNotificationCallable = httpsCallable(functions, 'sendCrossDeviceNotification');
+    this.sendNotificationCallable = httpsCallable(getFunctions(), 'sendCrossDeviceNotification');
   }
 
   /**

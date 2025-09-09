@@ -26,7 +26,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { SurveyService } from '../lib/surveyService';
 import { ensureFirebaseReady } from '../lib/firebaseReady';
-import * as Sentry from '@sentry/react-native';
+// Sentry removed
 import InAppAlert from '../lib/components/InAppAlert';
 import { ImageOptimizationService } from '../lib/services/ImageOptimizationService';
 
@@ -87,7 +87,7 @@ export default function Consent() {
       const { file_url } = await Promise.race([uploadPromise, timeoutPromise]);
       return file_url;
     } catch (error) {
-      Sentry.captureException(error, {
+      console.error('Consent error:', error, {
         tags: {
           operation: 'profile_photo_reupload',
           type: 'timeout_or_upload_error'
@@ -153,7 +153,7 @@ export default function Consent() {
       const eventCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
       
       if (!eventId) {
-        Sentry.captureException(new Error('No event ID found in AsyncStorage'));
+        console.error('Consent error:', new Error('No event ID found in AsyncStorage'));
         // No event ID in storage - must go home to avoid loop
         router.replace('/home');
         return;
@@ -165,7 +165,7 @@ export default function Consent() {
         if (foundEvent) {
           setEvent(foundEvent);
         } else {
-          Sentry.captureException(new Error(`No event found with ID: ${eventId}`));
+          console.error('Consent error:', new Error(`No event found with ID: ${eventId}`));
           Toast.show({
             type: 'error',
             text1: 'Error',
@@ -179,7 +179,7 @@ export default function Consent() {
           router.replace('/home');
         }
       } catch (error) {
-        Sentry.captureException(error);
+        console.error('Consent error:', error);
         Toast.show({
           type: 'error',
           text1: 'Error',
@@ -237,7 +237,7 @@ export default function Consent() {
         }
       } catch (error) {
         // Error loading saved profile
-        Sentry.captureException(error);
+        console.error('Consent error:', error);
       }
     };
     loadSavedProfile();
@@ -307,7 +307,7 @@ export default function Consent() {
         await processImageAsset(result.assets[0]);
       }
     } catch (error) {
-      Sentry.captureException(error);
+      console.error('Consent error:', error);
       Alert.alert("Error", "Failed to capture photo. Please try again.");
     }
   };
@@ -342,7 +342,7 @@ export default function Consent() {
         await processImageAsset(result.assets[0]);
       }
     } catch (error) {
-      Sentry.captureException(error);
+      console.error('Consent error:', error);
       Alert.alert("Error", "Failed to pick image. Please try again.");
     }
   };
@@ -351,7 +351,7 @@ export default function Consent() {
     // Consistent 5MB file size limit across all platforms
     const maxFileSize = 5 * 1024 * 1024; // 5MB limit
     if (asset.fileSize && asset.fileSize > maxFileSize) {
-      Sentry.captureException(new Error(`File too large: ${asset.fileSize}`));
+      console.error('Consent error:', new Error(`File too large: ${asset.fileSize}`));
       Alert.alert("File Too Large", "Image must be smaller than 5MB. Please choose a smaller image or take a new photo.");
       return;
     }
@@ -394,7 +394,7 @@ export default function Consent() {
               try {
                 await AsyncStorageUtils.setItem('savedProfilePhotoUrl', file_url);
               } catch (storageError) {
-                Sentry.captureException(storageError);
+                console.error('Consent error:', storageError);
               }
             }
             
@@ -437,7 +437,7 @@ export default function Consent() {
             try {
               await AsyncStorageUtils.setItem('savedProfilePhotoUrl', placeholderUrl);
             } catch (storageError) {
-              Sentry.captureException(storageError);
+              console.error('Consent error:', storageError);
             }
           }
           
@@ -456,7 +456,7 @@ export default function Consent() {
       }
       
     } catch (err) {
-      Sentry.captureException(err);
+      console.error('Consent error:', err);
       
       // Enhanced error logging
       let errorMessage = 'Unknown upload error';
@@ -501,7 +501,7 @@ export default function Consent() {
     
     // Validate that we have the event data
     if (!event || !event.id || !event.expires_at) {
-      Sentry.captureException(new Error(`Event data is missing or invalid: ${JSON.stringify(event)}`));
+      console.error('Consent error:', new Error(`Event data is missing or invalid: ${JSON.stringify(event)}`));
       Toast.show({
         type: 'error',
         text1: 'Error',
@@ -559,7 +559,7 @@ export default function Consent() {
             console.log('No additional profile data to save or error:', additionalDataError);
           }
         } catch (error) {
-          Sentry.captureException(error);
+          console.error('Consent error:', error);
         }
       } else {
         // Clear saved profile data if not checked
@@ -568,7 +568,7 @@ export default function Consent() {
           await AsyncStorageUtils.removeItem('savedProfilePhotoUrl');
           await AsyncStorageUtils.removeItem('savedAdditionalProfileData');
         } catch (error) {
-          Sentry.captureException(error);
+          console.error('Consent error:', error);
         }
       }
 
@@ -608,7 +608,7 @@ export default function Consent() {
           event.expires_at.toDate().toISOString()
         );
       } catch (error) {
-        Sentry.captureException(error);
+        console.error('Consent error:', error);
         // Don't fail the entire process for this
       }
       
@@ -627,14 +627,14 @@ export default function Consent() {
         console.log('Notification services refreshed successfully');
       } catch (error) {
         console.error('Failed to refresh notification services:', error);
-        Sentry.captureException(error);
+        console.error('Consent error:', error);
         // Don't fail the profile creation for this
       }
       
       // Navigate to discovery page
       router.replace('/discovery');
     } catch (error) {
-      Sentry.captureException(error);
+      console.error('Consent error:', error);
       setError("Failed to create profile. Please try again.");
       setIsSubmitting(false);
     }

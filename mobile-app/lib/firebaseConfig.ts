@@ -1,10 +1,11 @@
-import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
+import { initializeApp, getApps, getApp as getDefaultApp, type FirebaseApp } from 'firebase/app';
 import { getFirestore, type Firestore } from 'firebase/firestore';
 import { getStorage as getFirebaseStorage, type FirebaseStorage } from 'firebase/storage';
 import { getFunctions as getFirebaseFunctions, type Functions } from 'firebase/functions';
 import NetInfo from '@react-native-community/netinfo';
-import * as Sentry from '@sentry/react-native';
+// Sentry removed
 import { Platform } from 'react-native';
+import { initializeFirebaseAppCheck } from './appCheckConfig';
 // Multi-region support
 import { 
   getEventSpecificFirestore, 
@@ -37,19 +38,40 @@ let _isInitialized = false;
 // Initialize Firebase app lazily
 function initializeFirebase(): FirebaseApp {
   if (!_app) {
-    _app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+    _app = getApps().length > 0 ? getDefaultApp() : initializeApp(firebaseConfig);
+    
+    // Defer App Check initialization to background for faster startup
+    if (!__DEV__) {
+      // Only initialize App Check in production
+      setTimeout(() => {
+        initializeFirebaseAppCheck(_app!).then(() => {
+          console.log('🔥 App Check initialization completed in background');
+        }).catch(error => {
+          console.warn('🔥 App Check background initialization failed:', error);
+        });
+      }, 0);
+    }
+    
     _isInitialized = true;
   }
   return _app;
 }
 
 // Get Firebase app (initializes if needed)
-export const app: FirebaseApp = initializeFirebase();
+export function getApp(): FirebaseApp {
+  if (!_app) {
+    _app = initializeFirebase();
+  }
+  return _app;
+}
+
+// Lazy app export - only initializes when accessed
+export const app: FirebaseApp = getApp();
 
 // Get Firestore instance (initializes if needed)
 export function getDb(): Firestore {
   if (!_db) {
-    _db = getFirestore(app);
+    _db = getFirestore(getApp());
   }
   return _db;
 }
@@ -57,7 +79,7 @@ export function getDb(): Firestore {
 // Get Storage instance (initializes if needed)
 export function getStorage(): FirebaseStorage {
   if (!_storage) {
-    _storage = getFirebaseStorage(app);
+    _storage = getFirebaseStorage(getApp());
   }
   return _storage;
 }
@@ -65,15 +87,13 @@ export function getStorage(): FirebaseStorage {
 // Get Functions instance (initializes if needed)
 export function getFunctions(): Functions {
   if (!_functions) {
-    _functions = getFirebaseFunctions(app);
+    _functions = getFirebaseFunctions(getApp());
   }
   return _functions;
 }
 
-// Legacy exports for backward compatibility (but they now use lazy initialization)
-export const db: Firestore = getDb();
-export const storage: FirebaseStorage = getStorage();
-export const functions: Functions = getFunctions();
+// Legacy exports removed - use getDb(), getStorage(), getFunctions() directly
+// This prevents Firebase initialization during module loading
 
 // Multi-Region System - Region-aware Firebase services
 // These functions automatically select the optimal region based on event country
@@ -119,7 +139,7 @@ class FirebaseReconnectionManager {
       const netInfo = await NetInfo.fetch();
       return netInfo.isConnected ?? false;
     } catch (error) {
-      Sentry.captureException(error);
+      console.error('Firebase config error:', error);
       return false;
     }
   }
@@ -143,7 +163,7 @@ class FirebaseReconnectionManager {
         return true;
       }
     } catch (error) {
-      Sentry.captureException(error);
+      console.error('Firebase config error:', error);
     }
 
     // Exponential backoff

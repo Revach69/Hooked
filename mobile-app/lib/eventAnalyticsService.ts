@@ -10,7 +10,7 @@ import {
   type Message,
   type EventAnalytics 
 } from './firebaseApi';
-import * as Sentry from '@sentry/react-native';
+
 
 /**
  * Generates anonymous analytics data for an event before deletion
@@ -43,7 +43,7 @@ export async function generateEventAnalytics(eventId: string): Promise<EventAnal
       totalMessages: analytics.total_messages
     });
 
-    Sentry.addBreadcrumb({
+    console.log({
       message: 'Event analytics generated successfully',
       level: 'info',
       category: 'analytics',
@@ -58,7 +58,7 @@ export async function generateEventAnalytics(eventId: string): Promise<EventAnal
     return savedAnalytics;
   } catch (error) {
     console.error(`Failed to generate analytics for event ${eventId}:`, error);
-    Sentry.captureException(error, {
+    console.error(error, {
       tags: {
         operation: 'generate_event_analytics',
         eventId
@@ -185,7 +185,7 @@ export async function deleteEventUserData(eventId: string): Promise<void> {
       messages: messages.length
     });
 
-    Sentry.addBreadcrumb({
+    console.log({
       message: 'Event user data deleted successfully',
       level: 'info',
       category: 'cleanup',
@@ -199,7 +199,7 @@ export async function deleteEventUserData(eventId: string): Promise<void> {
 
   } catch (error) {
     console.error(`Failed to delete user data for event ${eventId}:`, error);
-    Sentry.captureException(error, {
+    console.error(error, {
       tags: {
         operation: 'delete_event_user_data',
         eventId
@@ -268,7 +268,7 @@ export async function processExpiredEvent(eventId: string): Promise<boolean> {
 
   } catch (error) {
     console.error(`Failed to process expired event ${eventId}:`, error);
-    Sentry.captureException(error, {
+    console.error(error, {
       tags: {
         operation: 'process_expired_event',
         eventId

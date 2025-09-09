@@ -1,6 +1,6 @@
 // Platform import removed - not needed for current implementation
 import * as Notifications from 'expo-notifications';
-import * as Sentry from '@sentry/react-native';
+
 import { AsyncStorageUtils } from '../asyncStorageUtils';
 import { registerPushToken } from './registerPushToken';
 import { getInstallationId } from '../session/sessionId';
@@ -90,7 +90,7 @@ class EnsurePushSetupService {
 
       if (!sessionId || !eventId) {
         console.log('ensurePushSetup: No session available, skipping push setup');
-        Sentry.addBreadcrumb({
+        console.log({
           message: 'Push setup skipped - no session available',
           level: 'info',
           category: 'push_notification'
@@ -143,7 +143,7 @@ class EnsurePushSetupService {
 
         console.log('ensurePushSetup: Push setup completed successfully');
         
-        Sentry.addBreadcrumb({
+        console.log({
           message: 'Push setup completed successfully',
           level: 'info',
           category: 'push_notification',
@@ -162,7 +162,7 @@ class EnsurePushSetupService {
     } catch (error) {
       console.error('ensurePushSetup: Setup failed with error:', error);
       
-      Sentry.captureException(error, {
+      console.error(error, {
         tags: {
           operation: 'ensure_push_setup',
           source: 'ensurePushSetup'
@@ -250,7 +250,7 @@ class EnsurePushSetupService {
 
       if (!newGranted) {
         console.log('ensurePushSetup: Permissions denied by user');
-        Sentry.addBreadcrumb({
+        console.log({
           message: 'Push notification permissions denied by user',
           level: 'warning',
           category: 'push_notification',

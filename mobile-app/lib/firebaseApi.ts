@@ -6,6 +6,7 @@ import {
   addDoc, 
   updateDoc, 
   deleteDoc, 
+  deleteField,
   query, 
   where, 
   orderBy, 
@@ -18,7 +19,7 @@ import {
   signOut as firebaseSignOut, 
   updateProfile as firebaseUpdateProfile
 } from 'firebase/auth';
-import { db, storage, getDbForEvent } from './firebaseConfig';
+import { getDb, getStorage, getDbForEvent } from './firebaseConfig';
 
 // Helper function to get all regional databases for cross-region operations
 function getAllDatabases() {
@@ -35,7 +36,7 @@ function getAllDatabases() {
 }
 import { auth } from './firebaseAuth';
 import { trace } from './firebasePerformance';
-import * as Sentry from '@sentry/react-native';
+// Sentry removed
 import { AsyncStorageUtils } from './asyncStorageUtils';
 import { Platform } from 'react-native';
 
@@ -46,10 +47,12 @@ export async function firebaseRetry<T>(
     operation: string; 
     maxRetries?: number; 
     baseDelay?: number;
+    timeout?: number;
   } = { operation: 'Unknown operation' }
 ): Promise<T> {
-  const maxRetries = options.maxRetries || 3;
-  const baseDelay = options.baseDelay || 1000;
+  const maxRetries = options.maxRetries || 1; // Reduced from 3 to 1
+  const baseDelay = options.baseDelay || 500; // Reduced from 1000 to 500
+  const timeout = options.timeout || 8000; // Reduced from 30000 to 8000
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -58,7 +61,7 @@ export async function firebaseRetry<T>(
       const result = await Promise.race([
         operation(),
         new Promise<never>((_, reject) => 
-          setTimeout(() => reject(new Error('Operation timeout')), 30000)
+          setTimeout(() => reject(new Error('Operation timeout')), timeout)
         )
       ]);
       
@@ -300,7 +303,7 @@ export const EventAPI = {
         const organizerPassword = data.organizer_password || generateOrganizerPassword();
         
         // Determine which database to use - regional if location provided, default for backward compatibility
-        const targetDb = data.location ? getDbForEvent(data.location) : db;
+        const targetDb = data.location ? getDbForEvent(data.location) : getDb();
         
         const docRef = await addDoc(collection(targetDb, 'events'), {
           ...data,
@@ -375,7 +378,7 @@ export const EventAPI = {
         }
         
         // For other filters, use default database (backward compatibility)
-        let q: any = collection(db, 'events');
+        let q: any = collection(getDb(), 'events');
         
         if (filters.id) {
           q = query(q, where('__name__', '==', filters.id));
@@ -618,7 +621,7 @@ export const EventProfileAPI = {
         updated_at: new Date().toISOString()
       };
     } catch (error) {
-      Sentry.captureException(error, {
+      console.error('Firebase API error:', error, {
         tags: {
           operation: 'firebase_api',
           source: 'EventProfileAPI'
@@ -632,7 +635,7 @@ export const EventProfileAPI = {
     return firebaseRetry(async () => {
       return trace('filter_event_profiles', async () => {
         // Determine which database to use based on event_id
-        let targetDb = db; // default fallback
+        let targetDb = getDb(); // default fallback
         if (filters.event_id) {
           // Try to get the event country from AsyncStorage first (faster)
           const storedCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
@@ -686,7 +689,15 @@ export const EventProfileAPI = {
     return firebaseRetry(async () => {
       const targetDb = getDbForEvent(eventCountry);
       const docRef = doc(targetDb, 'event_profiles', id);
-      await updateDoc(docRef, { ...data, updated_at: serverTimestamp() });
+      
+      // Handle field deletion: replace undefined values with deleteField()
+      const updateData: any = { updated_at: serverTimestamp() };
+      Object.keys(data).forEach(key => {
+        const value = (data as any)[key];
+        updateData[key] = value === undefined ? deleteField() : value;
+      });
+      
+      await updateDoc(docRef, updateData);
     }, { operation: 'Update event profile' });
   },
 
@@ -747,7 +758,7 @@ export const LikeAPI = {
   async filter(filters: Partial<Like> = {}): Promise<Like[]> {
     return firebaseRetry(async () => {
       // Determine which database to use based on event_id
-      let targetDb = db; // default fallback
+      let targetDb = getDb(); // default fallback
       if (filters.event_id) {
         // Try to get the event country from AsyncStorage first (faster)
         const storedCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
@@ -854,7 +865,7 @@ export const MessageAPI = {
   async filter(filters: Partial<Message> = {}): Promise<Message[]> {
     return firebaseRetry(async () => {
       // Determine which database to use based on event_id
-      let targetDb = db; // default fallback
+      let targetDb = getDb(); // default fallback
       if (filters.event_id) {
         // Try to get the event country from AsyncStorage first (faster)
         const storedCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
@@ -940,7 +951,7 @@ export const EventFeedbackAPI = {
   async filter(filters: Partial<EventFeedback> = {}): Promise<EventFeedback[]> {
     return firebaseRetry(async () => {
       // Determine which database to use based on event_id
-      let targetDb = db; // default fallback
+      let targetDb = getDb(); // default fallback
       if (filters.event_id) {
         const storedCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
         if (storedCountry) {
@@ -1001,7 +1012,7 @@ export const KickedUserAPI = {
   async filter(filters: Partial<KickedUser> = {}): Promise<KickedUser[]> {
     return firebaseRetry(async () => {
       // Determine which database to use based on event_id
-      let targetDb = db; // default fallback
+      let targetDb = getDb(); // default fallback
       if (filters.event_id) {
         const storedCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
         if (storedCountry) {
@@ -1086,7 +1097,7 @@ export const BlockedMatchAPI = {
   async filter(filters: Partial<BlockedMatch> = {}): Promise<BlockedMatch[]> {
     return firebaseRetry(async () => {
       // Determine which database to use based on event_id
-      let targetDb = db; // default fallback
+      let targetDb = getDb(); // default fallback
       if (filters.event_id) {
         // Try to get the event country from AsyncStorage first (faster)
         const storedCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
@@ -1169,7 +1180,7 @@ export const MutedMatchAPI = {
   async filter(filters: Partial<MutedMatch> = {}): Promise<MutedMatch[]> {
     return firebaseRetry(async () => {
       // Determine which database to use based on event_id
-      let targetDb = db; // default fallback
+      let targetDb = getDb(); // default fallback
       if (filters.event_id) {
         const storedCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
         if (storedCountry) {
@@ -1243,7 +1254,7 @@ export const SkippedProfileAPI = {
   async filter(filters: Partial<SkippedProfile> = {}): Promise<SkippedProfile[]> {
     return firebaseRetry(async () => {
       // Determine which database to use based on event_id
-      let targetDb = db; // default fallback
+      let targetDb = getDb(); // default fallback
       if (filters.event_id) {
         // Try to get the event country from AsyncStorage first (faster)
         const storedCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
@@ -1359,7 +1370,7 @@ export const ReportAPI = {
       }
       
       // Determine which database to use based on event_id
-      let targetDb = db; // default fallback
+      let targetDb = getDb(); // default fallback
       if (filters.event_id) {
         const storedCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
         if (storedCountry) {
@@ -1471,7 +1482,7 @@ export const StorageAPI = {
       // Clean the file name to ensure it matches Firebase Storage rules
       const cleanFileName = file.name.replace(/[^a-zA-Z0-9_.-]/g, '_');
       const fileName = `${Date.now()}_${cleanFileName}`;
-      const storageRef = ref(storage, `uploads/${fileName}`);
+      const storageRef = ref(getStorage(), `uploads/${fileName}`);
       
       // Check if the URI is a remote URL (starts with http/https) or a local file
       if (file.uri.startsWith('http://') || file.uri.startsWith('https://')) {
@@ -1487,7 +1498,7 @@ export const StorageAPI = {
           // Upload the blob
           await uploadBytes(storageRef, blob, { contentType: file.type });
         } catch (downloadError) {
-          Sentry.captureException(downloadError);
+          console.error('Firebase API error:', downloadError);
           throw new Error(`Failed to download remote file: ${downloadError instanceof Error ? downloadError.message : 'Unknown error'}`);
         }
       } else {
@@ -1504,7 +1515,7 @@ export const StorageAPI = {
               }
               blob = await response.blob();
             } catch (fetchError) {
-              Sentry.captureException(fetchError);
+              console.error('Firebase API error:', fetchError);
               throw new Error(`Android file access failed: ${fetchError instanceof Error ? fetchError.message : 'Unknown error'}`);
             }
           } else {
@@ -1538,7 +1549,7 @@ export const StorageAPI = {
           
           await uploadBytes(storageRef, blob, { contentType: file.type });
         } catch (uploadError) {
-          Sentry.captureException(uploadError, {
+          console.error('Firebase API error:', uploadError, {
             tags: {
               operation: 'file_upload',
               platform: Platform.OS,
@@ -1559,7 +1570,7 @@ export const StorageAPI = {
       
       return { file_url: downloadURL };
     } catch (error) {
-      Sentry.captureException(error, {
+      console.error('Firebase API error:', error, {
         tags: {
           operation: 'firebase_api',
           source: 'EventProfileAPI'
@@ -1598,20 +1609,20 @@ export const SavedProfileAPI = {
     };
     
     savedProfiles.push(newProfile);
-    // Removed AsyncStorage as it's no longer needed for local storage
+    // Removed AsyncStorage as it's no longer needed for local getStorage()
     // await AsyncStorage.setItem('saved_profiles', JSON.stringify(savedProfiles));
   },
 
   async getLocalProfiles(): Promise<SavedProfile[]> {
-    // Removed AsyncStorage as it's no longer needed for local storage
+    // Removed AsyncStorage as it's no longer needed for local getStorage()
     // const saved = await AsyncStorage.getItem('saved_profiles');
     // return saved ? JSON.parse(saved) : [];
-    // getLocalProfiles operation is deprecated as local storage is no longer used
+    // getLocalProfiles operation is deprecated as local getStorage() is no longer used
     return []; // Placeholder
   },
 
   async deleteLocalProfile(): Promise<void> {
-    // Removed AsyncStorage as it's no longer needed for local storage
+    // Removed AsyncStorage as it's no longer needed for local getStorage()
     // const savedProfiles = await this.getLocalProfiles();
     // const filtered = savedProfiles.filter(p => p.id !== profileId);
     // await AsyncStorage.setItem('saved_profiles', JSON.stringify(filtered));
@@ -1620,7 +1631,7 @@ export const SavedProfileAPI = {
   async saveProfileToCloud(): Promise<string> {
     return firebaseRetry(async () => {
       // Removed addDoc as it requires authentication
-      // const docRef = await addDoc(collection(db, 'user_saved_profiles'), {
+      // const docRef = await addDoc(collection(getDb(), 'user_saved_profiles'), {
       //   user_id: auth.currentUser?.uid || 'anonymous',
       //   profile_data: profileData,
       //   created_at: serverTimestamp()
@@ -1638,7 +1649,7 @@ export const SavedProfileAPI = {
       // if (!userId) return [];
       
       // const q = query(
-      //   collection(db, 'user_saved_profiles'),
+      //   collection(getDb(), 'user_saved_profiles'),
       //   where('user_id', '==', userId)
       // );
       
@@ -1655,7 +1666,7 @@ export const SavedProfileAPI = {
   async deleteCloudProfile(): Promise<void> {
     return firebaseRetry(async () => {
       // Removed deleteDoc as it requires authentication
-      // const docRef = doc(db, 'user_saved_profiles', profileId);
+      // const docRef = doc(getDb(), 'user_saved_profiles', profileId);
       // await deleteDoc(docRef);
               // deleteCloudProfile operation is deprecated as authentication is no longer required
     }, { operation: 'Delete cloud profile' });
@@ -1671,7 +1682,7 @@ export const AdminClientAPI = {
       updatedAt: serverTimestamp(),
     };
     
-    const docRef = await addDoc(collection(db, 'adminClients'), clientData);
+    const docRef = await addDoc(collection(getDb(), 'adminClients'), clientData);
     
     return { 
       id: docRef.id, 
@@ -1682,7 +1693,7 @@ export const AdminClientAPI = {
   },
 
   async filter(filters: Partial<AdminClient> = {}): Promise<AdminClient[]> {
-    let q: any = collection(db, 'adminClients');
+    let q: any = collection(getDb(), 'adminClients');
     
     if (filters.status) {
       q = query(q, where('status', '==', filters.status));
@@ -1703,20 +1714,20 @@ export const AdminClientAPI = {
   },
 
   async get(id: string): Promise<AdminClient | null> {
-    const docSnap = await getDoc(doc(db, 'adminClients', id));
+    const docSnap = await getDoc(doc(getDb(), 'adminClients', id));
     if (!docSnap.exists) return null;
     return { id: docSnap.id, ...docSnap.data() } as AdminClient;
   },
 
   async update(id: string, data: Partial<AdminClient>): Promise<void> {
-    await updateDoc(doc(db, 'adminClients', id), { 
+    await updateDoc(doc(getDb(), 'adminClients', id), { 
       ...data, 
       updatedAt: serverTimestamp() 
     });
   },
 
   async delete(id: string): Promise<void> {
-    await deleteDoc(doc(db, 'adminClients', id));
+    await deleteDoc(doc(getDb(), 'adminClients', id));
   },
 };
 
@@ -1753,7 +1764,7 @@ export const EventAnalyticsAPI = {
   async filter(filters: Partial<EventAnalytics> = {}): Promise<EventAnalytics[]> {
     return await firebaseRetry(async () => {
       // Determine which database to use based on event_id
-      let targetDb = db; // default fallback
+      let targetDb = getDb(); // default fallback
       if (filters.event_id) {
         const storedCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
         if (storedCountry) {

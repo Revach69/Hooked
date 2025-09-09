@@ -17,7 +17,7 @@ import Toast from 'react-native-toast-message';
 import { router, useFocusEffect } from 'expo-router';
 import { Heart, Filter, Users, User, MessageCircle, X } from 'lucide-react-native';
 import { EventProfileAPI, LikeAPI, EventAPI, BlockedMatchAPI, SkippedProfileAPI } from '../lib/firebaseApi';
-import * as Sentry from '@sentry/react-native';
+// Sentry removed
 
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { ImageCacheService } from '../lib/services/ImageCacheService';
@@ -203,7 +203,7 @@ export default function Discovery() {
   });
   const [showFilters, setShowFilters] = useState(false);
   const [likedProfiles, setLikedProfiles] = useState(new Set<string>());
-  const [blockedProfiles, setBlockedProfiles] = useState(new Set<string>()); // eslint-disable-line @typescript-eslint/no-unused-vars
+  const [blockedProfiles, setBlockedProfiles] = useState(new Set<string>());  
   const [skippedProfiles, setSkippedProfiles] = useState(new Set<string>());
   const [selectedProfileForDetail, setSelectedProfileForDetail] = useState<any>(null);
   const [viewedProfiles, setViewedProfiles] = useState(new Set<string>());
@@ -378,7 +378,7 @@ export default function Discovery() {
       
       // All checks passed - session is valid
     } catch (error) {
-      Sentry.captureException(error);
+      console.error('Discovery error:', error);
       
       // Handle errors gracefully without losing user session
       if (error instanceof Error && error.message === 'Event loading timeout') {
@@ -432,7 +432,7 @@ export default function Discovery() {
             const profiles = await EventProfileAPI.filter({
               event_id: currentEvent.id,
               session_id: currentSessionId
-            }, eventCountry);
+            });
             
             if (profiles.length > 0) {
               const updatedProfile = profiles[0];
@@ -500,7 +500,7 @@ export default function Discovery() {
         const hasUnseen = await hasUnseenMessages(currentEvent.id, currentSessionId);
         setHasUnreadMessages(hasUnseen);
       } catch (error) {
-        Sentry.captureException(error);
+        console.error('Discovery error:', error);
       }
     };
 
@@ -534,13 +534,13 @@ export default function Discovery() {
           const hasUnseen = await hasUnseenMessages(currentEvent.id, currentSessionId);
           setHasUnreadMessages(hasUnseen);
         } catch (error) {
-          Sentry.captureException(error);
+          console.error('Discovery error:', error);
         }
       });
 
         return () => unsubscribe();
       } catch (error) {
-        Sentry.captureException(error);
+        console.error('Discovery error:', error);
       }
     };
 
@@ -597,10 +597,10 @@ export default function Discovery() {
           // Cache the fresh data for next time
           GlobalDataCache.set(CacheKeys.DISCOVERY_PROFILES, otherUsersProfiles, 2 * 60 * 1000); // Cache for 2 minutes
         } catch (error) {
-          Sentry.captureException(error);
+          console.error('Discovery error:', error);
         }
               }, (error) => {
-          Sentry.captureException(error);
+          console.error('Discovery error:', error);
         });
 
       listenersRef.current.otherProfiles = otherProfilesUnsubscribe;
@@ -621,10 +621,10 @@ export default function Discovery() {
           
           setLikedProfiles(new Set(likes.map(like => like.liked_session_id)));
         } catch (error) {
-          Sentry.captureException(error);
+          console.error('Discovery error:', error);
         }
               }, (error) => {
-          Sentry.captureException(error);
+          console.error('Discovery error:', error);
         });
 
       listenersRef.current.likes = likesUnsubscribe;
@@ -640,13 +640,13 @@ export default function Discovery() {
         // Match notifications are now handled globally in _layout.tsx
         // This listener is kept for any future local match-related functionality
       }, (error) => {
-        Sentry.captureException(error);
+        console.error('Discovery error:', error);
       });
 
       listenersRef.current.mutualMatches = mutualMatchesUnsubscribe;
 
     } catch (error) {
-      Sentry.captureException(error);
+      console.error('Discovery error:', error);
     }
   }, [currentEvent?.id, currentSessionId]);
 
@@ -711,16 +711,16 @@ export default function Discovery() {
             }
           }
         } catch (error) {
-          Sentry.captureException(error);
+          console.error('Discovery error:', error);
         }
       }, (error) => {
-        Sentry.captureException(error);
+        console.error('Discovery error:', error);
       });
 
         listenersRef.current.userProfile = userProfileUnsubscribe;
 
       } catch (error) {
-        Sentry.captureException(error);
+        console.error('Discovery error:', error);
       }
     };
 
@@ -739,7 +739,7 @@ export default function Discovery() {
         try {
           listenersRef.current.userProfile();
         } catch (error) {
-          Sentry.captureException(error);
+          console.error('Discovery error:', error);
         }
         listenersRef.current.userProfile = undefined;
       }
@@ -749,7 +749,7 @@ export default function Discovery() {
         try {
           listenersRef.current.otherProfiles();
         } catch (error) {
-          Sentry.captureException(error);
+          console.error('Discovery error:', error);
         }
         listenersRef.current.otherProfiles = undefined;
       }
@@ -759,7 +759,7 @@ export default function Discovery() {
         try {
           listenersRef.current.likes();
         } catch (error) {
-          Sentry.captureException(error);
+          console.error('Discovery error:', error);
         }
         listenersRef.current.likes = undefined;
       }
@@ -769,12 +769,12 @@ export default function Discovery() {
         try {
           listenersRef.current.mutualMatches();
         } catch (error) {
-          Sentry.captureException(error);
+          console.error('Discovery error:', error);
         }
         listenersRef.current.mutualMatches = undefined;
       }
     } catch (error) {
-      Sentry.captureException(error);
+      console.error('Discovery error:', error);
     }
   };
 
@@ -786,7 +786,7 @@ export default function Discovery() {
       });
       setBlockedProfiles(new Set(blocked.map(b => b.blocked_session_id)));
     } catch (error) {
-      Sentry.captureException(error);
+      console.error('Discovery error:', error);
     }
   };
 
@@ -798,7 +798,7 @@ export default function Discovery() {
       });
       setSkippedProfiles(new Set(skipped.map(s => s.skipped_session_id)));
     } catch (error) {
-      Sentry.captureException(error);
+      console.error('Discovery error:', error);
     }
   };
 
@@ -1056,7 +1056,7 @@ export default function Discovery() {
         // The listener will determine who gets toast vs alert based on liker/liked roles
       }
     } catch (error) {
-      Sentry.captureException(error);
+      console.error('Discovery error:', error);
       // Revert optimistic update on error
       setLikedProfiles(prev => {
         const newSet = new Set(prev);
@@ -1113,7 +1113,7 @@ export default function Discovery() {
       setSelectedProfileForDetail(null);
 
     } catch (error) {
-      Sentry.captureException(error);
+      console.error('Discovery error:', error);
       // Revert optimistic update on error
       setSkippedProfiles(prev => {
         const newSet = new Set(prev);
