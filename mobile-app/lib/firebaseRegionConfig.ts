@@ -11,7 +11,6 @@ import { getStorage, FirebaseStorage, connectStorageEmulator } from 'firebase/st
 import { getFunctions, Functions, connectFunctionsEmulator } from 'firebase/functions';
 import { getRegionForCountry, RegionConfig, DEFAULT_REGION } from './regionUtils';
 import { initializeFirebaseAppCheck } from './appCheckConfig';
-import * as Sentry from '@sentry/react-native';
 
 // Cache for Firebase app instances to avoid recreation
 const firebaseAppCache = new Map<string, FirebaseApp>();

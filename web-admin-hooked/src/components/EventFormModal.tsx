@@ -45,14 +45,29 @@ export function EventFormModal({ form, isOpen, onClose, onSave }: EventFormModal
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    if (!dateString) return 'Not set';
+    
+    try {
+      const date = new Date(dateString);
+      
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date string:', dateString);
+        return 'Invalid date';
+      }
+      
+      return date.toLocaleDateString('en-US', {
+        weekday: 'short',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      console.error('Error formatting date:', error, dateString);
+      return 'Invalid date';
+    }
   };
 
   if (!form) return null;
@@ -72,8 +87,22 @@ export function EventFormModal({ form, isOpen, onClose, onSave }: EventFormModal
               <div className="text-sm mt-1">{form.eventName}</div>
             </div>
             <div>
-              <Label className="text-sm font-medium text-gray-500">Event Date</Label>
-              <div className="text-sm mt-1">{formatDate(form.eventDate)}</div>
+              <Label className="text-sm font-medium text-gray-500">Event Times</Label>
+              <div className="text-sm mt-1 space-y-1">
+                {form.accessTime && (
+                  <div><span className="font-medium">Access:</span> {formatDate(form.accessTime)}</div>
+                )}
+                {form.startTime && (
+                  <div><span className="font-medium">Start:</span> {formatDate(form.startTime)}</div>
+                )}
+                {form.endTime && (
+                  <div><span className="font-medium">End:</span> {formatDate(form.endTime)}</div>
+                )}
+                {/* Fallback to legacy eventDate */}
+                {!form.accessTime && !form.startTime && !form.endTime && form.eventDate && (
+                  <div>{formatDate(form.eventDate)}</div>
+                )}
+              </div>
             </div>
             <div>
               <Label className="text-sm font-medium text-gray-500">Contact Name</Label>

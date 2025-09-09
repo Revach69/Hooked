@@ -1,0 +1,6 @@
+{
+  "projects": {
+    "default": "hooked-development",
+    "development": "hooked-development"
+  }
+}

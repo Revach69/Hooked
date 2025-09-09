@@ -3,15 +3,13 @@ import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
 import { onDocumentCreated, onDocumentWritten, onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
-import * as path from 'path';
 import fetch from 'node-fetch';
 
-// Initialize Firebase Admin with service account
-const serviceAccount = require(path.join(__dirname, '../hooked-69-firebase-adminsdk-fbsvc-c7009d8539.json'));
-
+// Initialize Firebase Admin for DEVELOPMENT environment
+// Using Application Default Credentials for hooked-development
 admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  databaseURL: 'https://hooked-69-default-rtdb.firebaseio.com'
+  projectId: 'hooked-development',
+  databaseURL: 'https://hooked-development-default-rtdb.firebaseio.com'
 });
 
 // Regional configuration mapping

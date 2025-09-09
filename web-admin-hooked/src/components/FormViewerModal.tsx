@@ -15,14 +15,29 @@ export function FormViewerModal({ form, isOpen, onClose }: FormViewerModalProps)
   if (!form) return null;
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    if (!dateString) return 'Not set';
+    
+    try {
+      const date = new Date(dateString);
+      
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date string:', dateString);
+        return 'Invalid date';
+      }
+      
+      return date.toLocaleDateString('en-US', {
+        weekday: 'short',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      console.error('Error formatting date:', error, dateString);
+      return 'Invalid date';
+    }
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -69,10 +84,41 @@ export function FormViewerModal({ form, isOpen, onClose }: FormViewerModalProps)
           <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
             <h3 className="font-medium mb-3">Event Details</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-gray-500" />
-                <span>{formatDate(form.eventDate)}</span>
-              </div>
+              {/* Event Times */}
+              {form.accessTime && (
+                <div className="col-span-2">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-gray-500" />
+                    <span className="font-medium">Access:</span>
+                    <span>{formatDate(form.accessTime)}</span>
+                  </div>
+                </div>
+              )}
+              {form.startTime && (
+                <div className="col-span-2">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-gray-500" />
+                    <span className="font-medium">Start:</span>
+                    <span>{formatDate(form.startTime)}</span>
+                  </div>
+                </div>
+              )}
+              {form.endTime && (
+                <div className="col-span-2">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-gray-500" />
+                    <span className="font-medium">End:</span>
+                    <span>{formatDate(form.endTime)}</span>
+                  </div>
+                </div>
+              )}
+              {/* Fallback to legacy eventDate */}
+              {!form.accessTime && !form.startTime && !form.endTime && form.eventDate && (
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-gray-500" />
+                  <span>{formatDate(form.eventDate)}</span>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <MapPin className="h-4 w-4 text-gray-500" />
                 <span>{form.venueName}</span>

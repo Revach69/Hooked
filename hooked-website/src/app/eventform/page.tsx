@@ -365,48 +365,6 @@ export default function EventForm() {
                 ></textarea>
               </div>
 
-              {/* Event Link */}
-              <div>
-                <label htmlFor="eventLink" className="block text-sm font-medium dark-mode-text mb-2">
-                  Event Link
-                </label>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                  This will be presented on the event card in our website as the &quot;Join event&quot; button
-                </p>
-                <input
-                  type="url"
-                  id="eventLink"
-                  name="eventLink"
-                  value={formData.eventLink}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 border dark-mode-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark-mode-bg dark-mode-text"
-                  placeholder="https://your-event-link.com"
-                />
-              </div>
-
-              {/* Event Image */}
-              <div>
-                <label htmlFor="eventImage" className="block text-sm font-medium dark-mode-text mb-2">
-                  Event Image
-                </label>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                  This will be presented on the event card in our website and in the admin dashboard
-                </p>
-                <input
-                  type="file"
-                  id="eventImage"
-                  name="eventImage"
-                  onChange={handleFileChange}
-                  accept="image/*"
-                  className="w-full px-4 py-3 border dark-mode-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark-mode-bg dark-mode-text file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 dark:file:bg-purple-900/20 dark:file:text-purple-300"
-                />
-                {formData.eventImage && (
-                  <p className="mt-2 text-sm text-green-600 dark:text-green-400">
-                    Selected: {formData.eventImage.name}
-                  </p>
-                )}
-              </div>
-
               {/* Venue Name */}
               <div>
                 <label htmlFor="venueName" className="block text-sm font-medium dark-mode-text mb-2">
@@ -547,6 +505,48 @@ export default function EventForm() {
                   className="w-full px-4 py-3 border dark-mode-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark-mode-bg dark-mode-text"
                   placeholder="@yourinstagramhandle"
                 />
+              </div>
+
+              {/* Event Link */}
+              <div>
+                <label htmlFor="eventLink" className="block text-sm font-medium dark-mode-text mb-2">
+                  Event Link
+                </label>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                  This will be presented on the event card in our website as the &quot;Join event&quot; button
+                </p>
+                <input
+                  type="url"
+                  id="eventLink"
+                  name="eventLink"
+                  value={formData.eventLink}
+                  onChange={handleChange}
+                  className="w-full px-4 py-3 border dark-mode-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark-mode-bg dark-mode-text"
+                  placeholder="https://your-event-link.com"
+                />
+              </div>
+
+              {/* Event Image */}
+              <div>
+                <label htmlFor="eventImage" className="block text-sm font-medium dark-mode-text mb-2">
+                  Event Image
+                </label>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                  This will be presented on the event card in our website and in the admin dashboard
+                </p>
+                <input
+                  type="file"
+                  id="eventImage"
+                  name="eventImage"
+                  onChange={handleFileChange}
+                  accept="image/*"
+                  className="w-full px-4 py-3 border dark-mode-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark-mode-bg dark-mode-text file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 dark:file:bg-purple-900/20 dark:file:text-purple-300"
+                />
+                {formData.eventImage && (
+                  <p className="mt-2 text-sm text-green-600 dark:text-green-400">
+                    Selected: {formData.eventImage.name}
+                  </p>
+                )}
               </div>
 
               {/* Status Messages */}

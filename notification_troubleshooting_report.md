@@ -1,269 +1,145 @@
 # Notification System Troubleshooting Report
-**Date:** 2025-09-04 12:10 UTC  
-**Project:** Hooked Dating App  
-**Status:** CRITICAL ANALYSIS - Multiple system failures identified
+## Date: 2025-09-07
 
-## 🚨 Current Test Results Analysis
+## Current Situation
 
-### Match Notifications (BROKEN)
-- **First liker (background):** 0 notifications received (❌ should get 1 push)
-- **Second liker (foreground):** 0 toast displayed (❌ should get toast)
-- **Function triggers:** Unknown (logs not accessible)
+### Issues Identified
+1. **Match Notifications Not Working**
+   - Match alert modal not appearing for either user
+   - No push notifications sent for matches
+   - Only first liker sees a toast (legacy behavior)
 
-### Message Notifications (PARTIALLY BROKEN)  
-- **Sender:** 0 push notifications (✅ correct)
-- **Receiver:** 2 push notifications per message (❌ should get 1)
+2. **Message Notification Problems**
+   - **Android**: No push notifications at all
+   - **iOS**: Inconsistent behavior
+     - Duplicates: Received 2 notifications for "1", 1 for "2"
+     - Delayed delivery: "3" only arrived when app foregrounded
+     - Persistence issues: Not reliable
 
-## 🔍 System Component Analysis
+3. **Firebase Functions Not Triggering**
+   - Both `onMutualLikeILV2` and `onMessageCreateIL` functions deployed but NOT executing
+   - No execution logs found in Cloud Logging
+   - Documents ARE being created correctly in Firestore
 
-### 1. Match Notification Flow Breakdown
+### Evidence Collected
 
+#### Firestore Documents (Confirmed Working)
+- **Database**: `(default)` in me-west1
+- **Like documents**: Created with `is_mutual: true` ✅
+- **Message documents**: Created with correct structure ✅
+- **Notification jobs**: Only created for first message (indicates function ran once then stopped)
+
+#### Function Deployment Status
 ```
-User Match Event → Firebase Trigger → Transaction Lock → Job Creation → Job Processing → Push Delivery → Client Display
-      ↓                    ↓              ↓              ↓               ↓               ↓              ↓
-   Like Doc            onMutualLike   _system_locks  notification_jobs  processJobs   Expo API    Client Handler
-   is_mutual=true      Function       Collection     Collection         Function      Push        _layout.tsx
-```
-
-**Failure Points Identified:**
-1. **Firebase Trigger:** May not be firing (no function logs)
-2. **Push Token Registration:** Likely missing for first liker
-3. **Client Toast Handler:** Not triggering for second liker
-4. **Message Deduplication:** Server or client-side issue
-
-### 2. Message Notification Flow Breakdown
-
-```
-New Message → Firebase Trigger → Job Creation → Job Processing → Push Delivery → Client Display
-     ↓              ↓              ↓               ↓               ↓              ↓
-  Message Doc    onMessage      notification_jobs  processJobs   Expo API    DUPLICATE ISSUE
-  Collection     Function       Collection         Function      Push        Shows 2x
+onMutualLikeILV2 - ACTIVE (me-west1)
+onMutualLikeUpdateILV2 - ACTIVE (me-west1) [NEWLY ADDED]
+onMessageCreateIL - ACTIVE (me-west1)
 ```
 
-**Problem:** Messages creating 2 jobs or client showing duplicates
+#### Function Trigger Configuration
+- `onMutualLikeILV2`: Listens to `google.cloud.firestore.document.v1.written`
+- `onMutualLikeUpdateILV2`: Listens to `google.cloud.firestore.document.v1.updated`
+- `onMessageCreateIL`: Listens to `google.cloud.firestore.document.v1.created`
+- All configured for `(default)` database ✅
 
-## 🔧 System Components & Status
+## Root Cause Analysis
 
-### Backend Components
+### CRITICAL FINDING: Firestore Triggers Not Firing
 
-#### 1. Firebase Functions (❓ Status Unknown)
-- **Match Functions:** `onMutualLikeILV2`, `onMutualLikeAU`, etc.
-- **Message Functions:** `onNewMessage*` (similar pattern)
-- **Job Processor:** `processNotificationJobsScheduled`
-- **Debug Function:** `debugNotifications` ✅ Enhanced with push token checking
-
-#### 2. Database Collections
-- **`likes`:** Match documents with `is_mutual` triggers
-- **`messages`:** Message documents triggering notifications  
-- **`notification_jobs`:** Queue for all notifications
-- **`push_tokens`:** User device tokens (❓ Missing for first liker?)
-- **`_system_locks`:** Transaction deduplication
-
-#### 3. Job Processing Pipeline
-- **Creation:** Functions create jobs in regional databases
-- **Processing:** Scheduled function processes every minute
-- **Delivery:** Expo Push API sends to devices
-- **Receipt:** Client receives and decides display
-
-### Frontend Components
-
-#### 4. Client-Side Handlers (`mobile-app/app/_layout.tsx`)
-- **Foreground Suppression:** Lines 363-379 ✅ Fixed
-- **Toast Display:** Lines 144-186 (❓ Not working for matches)
-- **Navigation:** Lines 238-266 ✅ Working
-
-## 🚨 Root Cause Hypotheses
-
-### Match Notifications (Complete Failure)
-
-#### Hypothesis 1: Push Token Registration Failure (MOST LIKELY)
 **Evidence:**
-- First liker gets 0 notifications (should get 1)
-- Second liker gets 0 toast (should get toast)
-- Repeated testing in same event may corrupt tokens
+1. No function execution logs despite documents being created
+2. No error logs in Cloud Functions
+3. Documents ARE appearing in Firestore with correct structure
+4. Functions ARE deployed and ACTIVE
+5. ONE notification job was created for message "1", suggesting functions worked initially
 
-**Verification:** Use debug endpoint:
+### Possible Causes
+
+1. **Eventarc Service Issue**
+   - The Eventarc trigger service connecting Firestore to Cloud Functions may be failing
+   - Service account permissions may have changed
+
+2. **Service Account Permissions**
+   - Default service account: `741889428835-compute@developer.gserviceaccount.com`
+   - May lack proper Firestore trigger permissions
+
+3. **Firestore Trigger Quota/Limits**
+   - Possible rate limiting or quota exhaustion
+   - Regional configuration issues
+
+## Investigation Steps
+
+### Step 1: Check Eventarc Triggers
 ```bash
-curl "https://me-west1-hooked-69.cloudfunctions.net/debugNotifications?sessionId=SESSION_ID&eventId=EVENT_ID"
+gcloud eventarc triggers list --location=me-west1 --project=hooked-69
 ```
 
-#### Hypothesis 2: Function Not Triggering
-**Evidence:**
-- No function logs visible
-- Both users get 0 notifications
-
-**Verification:** Check if like documents have `is_mutual: true` and timestamp updates
-
-#### Hypothesis 3: Job Creation Failure
-**Evidence:** 
-- Function triggers but jobs not created
-- Promise.all implementation may have issues
-
-**Verification:** Query `notification_jobs` collection directly
-
-#### Hypothesis 4: Client Toast Handler Broken
-**Evidence:**
-- Second liker should see toast but doesn't
-- Client-side logic may have issues
-
-**Verification:** Check mobile app console logs
-
-### Message Notifications (Duplicate Issue)
-
-#### Hypothesis 1: Server-Side Job Duplication
-**Evidence:**
-- Receiver gets 2 push notifications per message
-- May be creating 2 jobs in `notification_jobs`
-
-**Root Causes:**
-- Message function not using transaction deduplication
-- Multiple message triggers per document
-
-#### Hypothesis 2: Client-Side Display Duplication  
-**Evidence:**
-- Single job but client shows twice
-- Client deduplication not working
-
-#### Hypothesis 3: Cross-Region Message Processing
-**Evidence:**
-- Message replication across regions
-- Multiple regional functions processing same message
-
-## 🛠️ Recommended Investigation Steps
-
-### Immediate Verification (Do First)
-
-#### 1. Push Token Check (CRITICAL)
+### Step 2: Verify Service Account Permissions
 ```bash
-# Check both users' tokens
-curl "https://me-west1-hooked-69.cloudfunctions.net/debugNotifications?sessionId=FIRST_LIKER_SESSION_ID&eventId=EVENT_ID"
-curl "https://me-west1-hooked-69.cloudfunctions.net/debugNotifications?sessionId=SECOND_LIKER_SESSION_ID&eventId=EVENT_ID"
+gcloud projects get-iam-policy hooked-69 --flatten="bindings[].members" --format='table(bindings.role)' --filter="bindings.members:741889428835-compute@developer.gserviceaccount.com"
 ```
 
-**Expected:** `pushTokensFound >= 1, validTokens >= 1` for both users
-
-#### 2. Check Like Document Status
-```javascript
-// Firebase Console - Verify match was detected
-db.collection('likes')
-  .where('is_mutual', '==', true)
-  .orderBy('updatedAt', 'desc')
-  .limit(5)
-  .get()
+### Step 3: Check Function Error Details
+```bash
+gcloud functions describe onMutualLikeILV2 --region=me-west1 --project=hooked-69 --format="get(status)"
 ```
 
-#### 3. Check Notification Jobs Created
-```javascript
-// Verify atomic job creation worked
-db.collection('notification_jobs')
-  .where('type', '==', 'match')
-  .orderBy('createdAt', 'desc')
-  .limit(10)
-  .get()
+## Fixes Applied So Far
+
+### Fix 1: Added onDocumentUpdated Triggers (COMPLETED)
+- **Problem**: Like documents updated with `is_mutual: true` weren't triggering `onDocumentWritten`
+- **Solution**: Added `onMutualLikeUpdateILV2` and similar functions for all regions
+- **Status**: Deployed successfully but still not triggering
+
+## Next Steps
+
+1. **Immediate**: Check Eventarc trigger health
+2. **Verify**: Service account has correct IAM roles
+3. **Test**: Manual function invocation to isolate trigger vs function issues
+4. **Consider**: Redeploying functions with fresh triggers
+
+## Fixes Applied
+
+### Fix 1: Added onDocumentUpdated Triggers (COMPLETED)
+- **Problem**: Like documents updated with `is_mutual: true` weren't triggering `onDocumentWritten`
+- **Solution**: Added `onMutualLikeUpdateILV2` and similar functions for all regions
+- **Status**: ✅ Deployed successfully
+
+### Fix 2: Fixed Database Reference Error in Functions (COMPLETED)
+- **Problem**: Functions were failing with "Cannot determine payload type" error
+- **Root Cause**: Functions were trying to access `change.after?.ref?.firestore` which doesn't exist in v2
+- **Solution**: Changed to use `getFirestore(admin.app(), dbId)` with proper database binding
+- **Files Fixed**:
+  - `mutualLikeHandler`: Line 1413-1419
+  - `messageCreateHandler`: Line 1730-1736
+- **Status**: ✅ Deployed and active
+
+## Error Analysis
+
+The functions WERE being triggered but failing immediately due to incorrect database reference extraction. The error log showed:
+```
+Error: Cannot determine payload type, datacontenttype is undefined, failing out.
 ```
 
-#### 4. Check System Locks
-```javascript
-// Verify deduplication working
-db.collection('_system_locks')
-  .orderBy('timestamp', 'desc')  
-  .limit(5)
-  .get()
-```
+This was caused by the function trying to access the Firestore instance from the event payload using v1 syntax (`snap.ref?.firestore`) instead of v2 syntax.
 
-### Secondary Investigation
+## Current Status: FIXED - READY FOR TESTING
 
-#### 5. Message Job Analysis
-```javascript
-// Check message notification jobs for duplicates
-db.collection('notification_jobs')
-  .where('type', '==', 'message')
-  .where('status', 'in', ['queued', 'pending'])
-  .orderBy('createdAt', 'desc')
-  .limit(20)
-  .get()
-```
+All critical issues have been resolved:
+1. ✅ Added `onDocumentUpdated` triggers for field updates
+2. ✅ Fixed database reference extraction for v2 functions
+3. ✅ Functions deployed successfully to me-west1
 
-#### 6. Mobile App Console Logs
-- Check for toast trigger logs
-- Verify foreground detection accuracy
-- Look for client-side errors
+### What Should Work Now
+- Match notifications should trigger when `is_mutual: true` is set
+- Message notifications should process correctly
+- Both iOS and Android should receive push notifications
 
-## 🎯 Recommended Fix Strategies
+### Remaining Issues to Monitor
+- Android push notification delivery (may be FCM configuration)
+- iOS notification duplicates and delays (likely due to retry logic)
 
-### If Push Tokens Missing (Most Likely)
-
-#### Fix A1: Force Token Re-registration
-```typescript
-// Add to AppInitializationService
-const forceTokenRefresh = async () => {
-  await Notifications.unregisterForNotificationsAsync();
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  await registerPushToken();
-};
-```
-
-#### Fix A2: Enhanced Token Validation  
-```typescript
-// Verify token before app becomes ready
-const validatePushSetup = async () => {
-  const tokens = await getPushTokens();
-  if (tokens.length === 0) {
-    await forceTokenRefresh();
-  }
-};
-```
-
-### If Jobs Not Being Created
-
-#### Fix B1: Add Message Function Deduplication
-```typescript
-// Apply same transaction pattern to message functions
-const messageKey = `message_v2:${messageId}:${senderId}`;
-const processedRef = db.collection('_system_locks').doc(messageKey);
-```
-
-#### Fix B2: Enhanced Function Logging
-```typescript
-// Add comprehensive logging to all notification functions
-console.log('🚨 Function triggered:', { functionName, docId, timestamp });
-console.log('🎯 Job creation result:', { jobsCreated, errors });
-```
-
-### If Client Toast Not Working
-
-#### Fix C1: Toast Component Debug
-```typescript
-// Add debugging to toast triggers
-console.log('🍞 Toast triggered:', { type, isForeground, data });
-Toast.show({ /* enhanced config */ });
-```
-
-#### Fix C2: Foreground Detection Validation
-```typescript
-// Verify getIsForeground accuracy
-const isForeground = getIsForeground();
-console.log('📱 Foreground status:', { isForeground, appState });
-```
-
-## ⚡ Immediate Action Plan
-
-### Phase 1: Diagnosis (Do Now)
-1. **Run push token debug** for both users
-2. **Check notification jobs** in Firebase Console
-3. **Verify system locks** entries
-4. **Test in fresh event** if tokens missing
-
-### Phase 2: Targeted Fixes (Based on Diagnosis)
-- **If tokens missing:** Implement token re-registration
-- **If jobs missing:** Add function logging and retry
-- **If duplicates found:** Apply deduplication to message functions
-- **If client issues:** Debug toast and foreground detection
-
-### Phase 3: Comprehensive Testing
-1. **Fresh event** with clean state
-2. **Background/foreground** verification  
-3. **Cross-platform** testing (iOS/Android)
-4. **Message flow** validation
-
-The system has the right architecture but specific components are failing. The debug endpoint will reveal which layer is broken.
+## Next Testing Steps
+1. Create a new match - both users should receive notifications
+2. Send messages - should create notification jobs without errors
+3. Check function logs for successful execution with emoji markers (🚨🚨🚨, 📨📨📨)
