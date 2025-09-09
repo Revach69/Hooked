@@ -10,7 +10,7 @@ import { Firestore, initializeFirestore, connectFirestoreEmulator } from 'fireba
 import { getStorage, FirebaseStorage, connectStorageEmulator } from 'firebase/storage';
 import { getFunctions, Functions, connectFunctionsEmulator } from 'firebase/functions';
 import { getRegionForCountry, RegionConfig, DEFAULT_REGION } from './regionUtils';
-import { initializeFirebaseAppCheck } from './appCheckConfig';
+// App Check is handled by the main app, not needed for regional apps
 
 // Cache for Firebase app instances to avoid recreation
 const firebaseAppCache = new Map<string, FirebaseApp>();

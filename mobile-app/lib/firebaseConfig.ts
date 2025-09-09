@@ -5,7 +5,8 @@ import { getFunctions as getFirebaseFunctions, type Functions } from 'firebase/f
 import NetInfo from '@react-native-community/netinfo';
 // Sentry removed
 import { Platform } from 'react-native';
-import { initializeFirebaseAppCheck } from './appCheckConfig';
+// import { initializeFirebaseAppCheck } from './appCheckConfig'; // Replaced with native App Check
+import { initializeNativeAppCheck } from './appCheckNative';
 // Multi-region support
 import { 
   getEventSpecificFirestore, 
@@ -40,14 +41,15 @@ function initializeFirebase(): FirebaseApp {
   if (!_app) {
     _app = getApps().length > 0 ? getDefaultApp() : initializeApp(firebaseConfig);
     
-    // Defer App Check initialization to background for faster startup
+    // Initialize Native App Check using React Native Firebase
+    // This uses App Attest (iOS) and Play Integrity (Android) instead of web ReCaptcha
     if (!__DEV__) {
-      // Only initialize App Check in production
+      // Defer to next tick to not block app startup
       setTimeout(() => {
-        initializeFirebaseAppCheck(_app!).then(() => {
-          console.log('🔥 App Check initialization completed in background');
+        initializeNativeAppCheck().then(() => {
+          console.log('🔥 Native App Check initialization completed');
         }).catch(error => {
-          console.warn('🔥 App Check background initialization failed:', error);
+          console.warn('🔥 Native App Check initialization failed:', error);
         });
       }, 0);
     }

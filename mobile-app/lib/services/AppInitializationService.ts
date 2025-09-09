@@ -118,8 +118,12 @@ class AppInitializationServiceClass {
    * Run the complete initialization sequence
    */
   private async runInitializationSequence(): Promise<void> {
-    // Step 1: Remove initial delay - JS thread should be ready
-    // Removed artificial 1000ms delay for faster startup
+    // Step 1: Initialize React Native Firebase FIRST (required for App Check)
+    await this.executeStep('react_native_firebase_init', async () => {
+      const { initializeReactNativeFirebase } = await import('../firebaseNativeInit');
+      await initializeReactNativeFirebase();
+      console.log('React Native Firebase initialized');
+    });
 
     // Steps 2-6: Parallelize core Firebase initialization
     await this.executeStep('firebase_parallel_init', async () => {
@@ -145,7 +149,7 @@ class AppInitializationServiceClass {
         })
       ]);
       
-      console.log('App Check initialization handled by firebaseConfig.ts');
+      console.log('Native App Check will be initialized by firebaseConfig.ts');
     });
 
     // Step 7: Notification channels will be initialized by FirebaseNotificationService

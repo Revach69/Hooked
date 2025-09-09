@@ -120,9 +120,16 @@
             "useFrameworks": "static",
             "useModularHeaders": true,
             "newArchEnabled": false
+          },
+          "android": {
+            "compileSdkVersion": 34,
+            "targetSdkVersion": 34,
+            "buildToolsVersion": "34.0.0"
           }
         }
-      ]
+      ],
+      "@react-native-firebase/app",
+      "@react-native-firebase/app-check"
     ],
     "scheme": "hooked",
     "extra": {
