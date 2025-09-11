@@ -1647,3 +1647,116 @@ The Hooked dating app now features a **production-ready, enterprise-grade cachin
 **Result**: Users now experience a **premium, fluid dating app** that feels responsive, intelligent, and delightful to use, significantly improving engagement and retention metrics.
 
 The system is **immediately ready for production deployment** and will continue learning and optimizing user experience over time.
+
+---
+
+## 🔧 **Recent Implementation: ProgressiveImage Resilience Upgrade**
+
+### **Issue Resolution (December 2024)**
+
+**Problem Identified**: ProgressiveImage component was failing to display images in discovery thumbnails due to overly strict validation of `eventId` and `sessionId` parameters, causing error state when these values were empty strings or undefined during component initialization.
+
+**Root Cause**: 
+```typescript
+// Previous implementation (too strict)
+if (!source?.uri || !eventId || !sessionId) {
+  setImageState(prev => ({ ...prev, error: true, loading: false }));
+  return;
+}
+```
+
+When `currentEvent?.id || ''` evaluated to empty string, the component would enter error state instead of displaying images.
+
+### **Solution Implemented**
+
+**1. Resilient Parameter Validation**
+```typescript
+// Updated validation (only require source URI)
+if (!source?.uri) {
+  setImageState(prev => ({ ...prev, error: true, loading: false }));
+  return;
+}
+
+// Fallback values for missing context
+const safeEventId = eventId || 'default';
+const safeSessionId = sessionId || 'anonymous';
+```
+
+**2. Graceful Degradation**
+- **With Event Context**: Full progressive loading with blur hash and caching
+- **Without Event Context**: Basic image loading with fallback caching keys
+- **Network Issues**: Automatic fallback to direct image loading
+
+**3. Compatibility with Loading System**
+
+The fix maintains **full compatibility** with the existing caching architecture:
+
+✅ **ViewStateManager Integration**: Works with 5-state loading model  
+✅ **AsyncStorageCacheManager**: Maintains persistent caching with fallback keys  
+✅ **GlobalDataCache**: Uses fallback cache keys when event context missing  
+✅ **Progressive Enhancement**: Still provides blur hash → thumbnail → full image flow  
+✅ **Skeleton Loading**: Maintains skeleton states during image loading  
+✅ **Performance Monitoring**: All metrics tracking preserved  
+
+### **Implementation Details**
+
+**Cache Key Strategy**:
+```typescript
+// With event context
+cacheKey = `${eventId}_${sessionId}_${imageUrl}`
+
+// With fallbacks (our fix)
+cacheKey = `${eventId || 'default'}_${sessionId || 'anonymous'}_${imageUrl}`
+```
+
+**Progressive Loading Flow** (Enhanced):
+```typescript
+// Stage 1: Show image immediately (our fix)
+setImageState(prev => ({
+  ...prev, 
+  loading: true, 
+  error: false,
+  currentUri: source.uri  // Immediate display
+}));
+
+// Stage 2: Enhance with progressive loading if context available
+if (eventId && sessionId) {
+  // Full progressive enhancement
+} else {
+  // Basic caching with fallback keys
+}
+```
+
+### **Results Achieved**
+
+✅ **Cross-Platform Compatibility**: Images now display on both iOS and Android simulators  
+✅ **No Regression**: All existing caching benefits maintained  
+✅ **Error Resilience**: Component handles missing context gracefully  
+✅ **Performance Preserved**: Progressive loading still active when possible  
+✅ **Development Friendly**: Works in all development and testing scenarios  
+
+### **Additional Fix: Consent Error Resolution**
+
+Also resolved related error in consent flow:
+```typescript
+// Previous (fragile)
+event.expires_at.toDate().toISOString()
+
+// Fixed (resilient)
+const expiresAt = event.expires_at?.toDate ? event.expires_at.toDate() : new Date(event.expires_at);
+expiresAt.toISOString()
+```
+
+This ensures compatibility with both Firestore Timestamps and plain Date objects in development environments.
+
+### **System Integration Confirmation**
+
+The ProgressiveImage resilience upgrade **fully complies** with and **enhances** our existing data loading and caching architecture:
+
+1. **Maintains Cache Hierarchy**: Still uses GlobalDataCache → AsyncStorage → Network flow
+2. **Preserves TTL Strategy**: 24-hour image cache TTL maintained
+3. **Keeps Prefetch Logic**: PrefetchManager integration unchanged
+4. **Retains Performance Benefits**: Progressive enhancement when context available
+5. **Adds Reliability**: Component now works in edge cases and development scenarios
+
+**Impact**: Users experience **consistent image loading across all app states** while maintaining the sophisticated caching and performance benefits of the progressive loading system.
