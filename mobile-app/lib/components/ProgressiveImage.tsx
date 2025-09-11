@@ -78,7 +78,8 @@ export const ProgressiveImage: React.FC<ProgressiveImageProps> = ({
   }, []);
 
   useEffect(() => {
-    if (!source?.uri || !eventId || !sessionId) {
+    // Only require source.uri - allow missing eventId/sessionId for basic functionality
+    if (!source?.uri) {
       setImageState(prev => ({ ...prev, error: true, loading: false }));
       return;
     }
@@ -99,10 +100,14 @@ export const ProgressiveImage: React.FC<ProgressiveImageProps> = ({
       onLoadStart?.();
 
       // Create loading promise with cancellation support
+      // Use fallback values for missing eventId/sessionId to allow basic functionality
+      const safeEventId = eventId || 'default';
+      const safeSessionId = sessionId || 'anonymous';
+      
       loadingPromise.current = ProgressiveImageLoader.loadImageProgressive(
         source.uri,
-        eventId,
-        sessionId,
+        safeEventId,
+        safeSessionId,
         (progress) => {
           if (!isMounted.current) return;
           

@@ -601,11 +601,13 @@ export default function Consent() {
       
       // Add event to user's history for survey purposes
       try {
+        // Handle both Firestore Timestamp and Date objects
+        const expiresAt = event.expires_at?.toDate ? event.expires_at.toDate() : new Date(event.expires_at);
         await SurveyService.addEventToHistory(
           event.id,
           event.name,
           sessionId,
-          event.expires_at.toDate().toISOString()
+          expiresAt.toISOString()
         );
       } catch (error) {
         console.error('Consent error:', error);
