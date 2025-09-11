@@ -1,4 +1,5 @@
 import { AsyncStorageUtils } from '../asyncStorageUtils';
+import { Image } from 'react-native';
 
 /**
  * Service for caching profile picture thumbnails to prevent reloading
@@ -121,14 +122,22 @@ class ImageCacheServiceClass {
 
   /**
    * Cache an image in the background without blocking the UI
+   * ENHANCED for iOS: Force React Native to actually cache the image
    */
   private async cacheImageInBackground(uri: string, eventId: string, sessionId: string): Promise<void> {
     try {
-      // Use React Native's built-in Image caching by "pre-loading" the image
-      // This doesn't actually cache to our system, but ensures RN caches it
-      // For now, we'll just mark it as "cached" to prevent repeated attempts
-      
       const cacheKey = this.getCacheKey(uri, eventId, sessionId);
+      
+      // iOS FIX: Actually force React Native to download and cache the image
+      // by creating a hidden Image component load
+      if (typeof Image !== 'undefined') {
+        // Force RN to download the image (for iOS compatibility)
+        Image.prefetch(uri).catch(() => {
+          // Ignore prefetch errors, we'll still mark as cached
+          console.warn(`ImageCacheService: Prefetch failed for ${uri.substring(0, 50)}... but continuing`);
+        });
+      }
+      
       const cachedItem: CachedImage = {
         uri,
         cachedUri: uri, // Use original URI since RN handles caching
@@ -139,7 +148,7 @@ class ImageCacheServiceClass {
 
       this.cache.set(cacheKey, cachedItem);
       
-      // Persist to storage asynchronously
+      // CRITICAL for iOS: Ensure persistence happens immediately
       await this.persistCacheIndex();
       
       console.log(`ImageCacheService: Background cached ${uri.substring(0, 50)}...`);

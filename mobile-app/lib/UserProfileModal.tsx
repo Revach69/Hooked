@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,8 @@ import {
 } from 'react-native';
 import { X, MapPin, Heart, Instagram } from 'lucide-react-native';
 import * as Linking from 'expo-linking';
+import { ImageCacheService } from './services/ImageCacheService';
+import { AsyncStorageUtils } from './asyncStorageUtils';
 
 const { width, height } = Dimensions.get('window');
 
@@ -30,6 +32,36 @@ interface UserProfileModalProps {
 export default function UserProfileModal({ visible, profile, onClose, onLike, onSkip, isLiked = false, isSkipped = false }: UserProfileModalProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  
+  // iOS FIX: Use cached image URI for faster loading
+  const [cachedImageUri, setCachedImageUri] = useState<string | null>(null);
+  
+  useEffect(() => {
+    const loadCachedImage = async () => {
+      if (profile?.profile_photo_url) {
+        try {
+          const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
+          if (eventId) {
+            const cachedUri = await ImageCacheService.getCachedImageUri(
+              profile.profile_photo_url,
+              eventId,
+              profile.session_id || 'modal'
+            );
+            setCachedImageUri(cachedUri);
+          } else {
+            setCachedImageUri(profile.profile_photo_url);
+          }
+        } catch (error) {
+          console.warn('UserProfileModal: Failed to get cached image:', error);
+          setCachedImageUri(profile.profile_photo_url);
+        }
+      }
+    };
+    
+    if (visible && profile) {
+      loadCachedImage();
+    }
+  }, [visible, profile?.profile_photo_url, profile?.session_id]);
   
   // Animation values for swipe gesture
   const translateY = useRef(new Animated.Value(0)).current;
@@ -349,9 +381,9 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
 
           {/* Profile Image - Swipeable */}
           <View style={styles.imageContainer} {...panResponder.panHandlers}>
-            {profile.profile_photo_url ? (
+            {cachedImageUri ? (
               <Image
-                source={{ uri: profile.profile_photo_url }}
+                source={{ uri: cachedImageUri }}
                 onError={() => {}}
                 onLoadStart={() => console.log('UserProfileModal: Image load start')}
                 onLoad={() => console.log('UserProfileModal: Image loaded')}
@@ -360,7 +392,7 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
               />
             ) : (
               <View style={styles.fallbackAvatar}>
-                <Text style={styles.fallbackText}>{profile.first_name[0]}</Text>
+                <Text style={styles.fallbackText}>{profile?.first_name?.[0] || '?'}</Text>
               </View>
             )}
           </View>

@@ -239,6 +239,35 @@ export default function Discovery() {
       'profiles'
     );
     
+    // AGGRESSIVE iOS FIX: Preload ALL images immediately when profiles load
+    const profileImageUrls = otherProfiles
+      .map(p => p.profile_photo_url)
+      .filter(Boolean);
+    
+    if (profileImageUrls.length > 0) {
+      // Force aggressive preloading for iOS compatibility
+      console.log(`Discovery: Preloading ${profileImageUrls.length} profile images for smooth iOS experience`);
+      
+      // Use both systems for maximum compatibility
+      ProgressiveImageLoader.preloadImages(profileImageUrls, currentEvent.id, 'high');
+      
+      // Also use ImageCacheService for immediate caching
+      Promise.all(
+        profileImageUrls.map(async (url, index) => {
+          try {
+            const profile = otherProfiles.find(p => p.profile_photo_url === url);
+            if (profile) {
+              await ImageCacheService.getCachedImageUri(url, currentEvent.id, profile.session_id);
+            }
+          } catch (error) {
+            console.warn('Discovery: Failed to preload image:', error);
+          }
+        })
+      ).catch(error => {
+        console.warn('Discovery: Some image preloading failed:', error);
+      });
+    }
+    
     return otherProfiles;
   }, [currentEvent?.id, currentSessionId]);
   
