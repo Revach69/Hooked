@@ -5,6 +5,8 @@ import { AsyncStorageUtils } from '../asyncStorageUtils';
 import { setCurrentSessionIdForDedup } from '../notifications/NotificationRouter';
 import { FirebaseNotificationService } from './FirebaseNotificationService';
 import { GlobalNotificationService } from './GlobalNotificationService';
+import { NetworkAwareLoader } from './NetworkAwareLoader';
+import { MLPrefetchPredictor } from './MLPrefetchPredictor';
 
 interface InitializationStep {
   name: string;
@@ -23,6 +25,8 @@ interface HealthCheck {
   notificationRouter: boolean;
   globalListeners: boolean;
   sessionData: boolean;
+  networkLoader: boolean;
+  mlPredictor: boolean;
 }
 
 class AppInitializationServiceClass {
@@ -45,7 +49,9 @@ class AppInitializationServiceClass {
         notificationPermissions: false,
         notificationRouter: false,
         globalListeners: false,
-        sessionData: false
+        sessionData: false,
+        networkLoader: false,
+        mlPredictor: false
       },
       retryAttempts: 0
     };
@@ -330,6 +336,11 @@ class AppInitializationServiceClass {
         sessionData: healthCheck.sessionData,
         passed: `${optionalPassed}/${optionalChecks.length}`
       },
+      performance: {
+        networkLoader: healthCheck.networkLoader,
+        mlPredictor: healthCheck.mlPredictor,
+        note: 'Performance services initialize in background'
+      },
       background: {
         pushTokenSetup: 'Push token registration moved to background',
         note: 'Non-critical services initialize after UI ready'
@@ -411,7 +422,35 @@ class AppInitializationServiceClass {
           }
         }
         
-        // Background Step 2: Additional analytics/monitoring (truly non-critical)
+        // Background Step 2: Initialize network-aware loading and ML services
+        try {
+          console.log('AppInitializationService: Initializing network and ML services in background');
+          
+          // Initialize NetworkAwareLoader (critical for performance)
+          try {
+            await NetworkAwareLoader.initialize();
+            this.diagnostics.healthCheck.networkLoader = true;
+            console.log('AppInitializationService: NetworkAwareLoader initialized successfully');
+          } catch (error) {
+            console.warn('AppInitializationService: NetworkAwareLoader initialization failed:', error);
+            this.diagnostics.healthCheck.networkLoader = false;
+          }
+          
+          // Initialize MLPrefetchPredictor (enhances UX but not critical)
+          try {
+            await MLPrefetchPredictor.initialize();
+            this.diagnostics.healthCheck.mlPredictor = true;
+            console.log('AppInitializationService: MLPrefetchPredictor initialized successfully');
+          } catch (error) {
+            console.warn('AppInitializationService: MLPrefetchPredictor initialization failed:', error);
+            this.diagnostics.healthCheck.mlPredictor = false;
+          }
+          
+        } catch (error) {
+          console.warn('AppInitializationService: Network/ML services initialization failed:', error);
+        }
+
+        // Background Step 3: Additional analytics/monitoring (truly non-critical)
         try {
           // Placeholder for future non-critical services like analytics, crash reporting setup, etc.
           console.log('AppInitializationService: Background analytics/monitoring setup placeholder');
@@ -419,7 +458,7 @@ class AppInitializationServiceClass {
           console.warn('AppInitializationService: Background analytics setup failed:', error);
         }
         
-        // Background Step 3: AppState integration (non-blocking)
+        // Background Step 4: AppState integration (non-blocking)
         this.setupAppStatePushTokenRefresh();
         
         console.log('AppInitializationService: Background service initialization completed');

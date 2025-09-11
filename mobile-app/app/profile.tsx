@@ -31,6 +31,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { checkSimpleNetworkConnectivity } from '../lib/utils';
 // Sentry removed
 import { GlobalDataCache, CacheKeys } from '../lib/cache/GlobalDataCache';
+import { AsyncStorageCacheManager } from '../lib/cache/AsyncStorageCacheManager';
+import ProgressiveImage from '../lib/components/ProgressiveImage';
+import { NetworkAwareLoader, useNetworkStrategy } from '../lib/services/NetworkAwareLoader';
+import { MLPrefetchPredictor, useMLPredictions } from '../lib/services/MLPrefetchPredictor';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { getDbForEvent } from '../lib/firebaseConfig';
 
@@ -40,6 +44,11 @@ export default function Profile() {
   const isDark = colorScheme === 'dark';
   const [profile, setProfile] = useState<any>(null);
   const [currentEvent, setCurrentEvent] = useState<any>(null);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+
+  // Network and ML integration
+  const networkStrategy = useNetworkStrategy();
+  const mlPredictions = useMLPredictions('/profile', currentEvent?.id || '', currentSessionId || '');
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [tempPhotoUri, setTempPhotoUri] = useState<string | null>(null);
   const [aboutMe, setAboutMe] = useState(profile?.about_me || '');

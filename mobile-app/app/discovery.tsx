@@ -22,7 +22,7 @@ import { EventProfileAPI, LikeAPI, EventAPI, BlockedMatchAPI, SkippedProfileAPI 
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { ImageCacheService } from '../lib/services/ImageCacheService';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDocs } from 'firebase/firestore';
 import { getDbForEvent } from '../lib/firebaseConfig';
 import UserProfileModal from '../lib/UserProfileModal';
 import CountdownTimer from '../lib/components/CountdownTimer';
@@ -35,6 +35,8 @@ import { GlobalDataCache, CacheKeys } from '../lib/cache/GlobalDataCache';
 import { useViewState } from '../lib/cache/ViewStateManager';
 import { AsyncStorageCacheManager } from '../lib/cache/AsyncStorageCacheManager';
 import ProgressiveImage from '../lib/components/ProgressiveImage';
+import { PrefetchManager } from '../lib/cache/PrefetchManager';
+import { ProgressiveImageLoader } from '../lib/services/ProgressiveImageLoader';
 
 // Dual Handle Range Slider Component
 interface DualHandleRangeSliderProps {
@@ -181,6 +183,12 @@ export default function Discovery() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   
+  // State variables declared first
+  const [currentUserProfile, setCurrentUserProfile] = useState<any>(null);
+  const [filteredProfiles, setFilteredProfiles] = useState<any[]>([]);
+  const [currentEvent, setCurrentEvent] = useState<any>(null);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  
   // Performance monitoring
   const { 
     trackUserInteraction, 
@@ -191,8 +199,6 @@ export default function Discovery() {
     enableScreenTracking: true,
     enableUserInteractionTracking: true 
   });
-  const [currentUserProfile, setCurrentUserProfile] = useState<any>(null);
-  const [filteredProfiles, setFilteredProfiles] = useState<any[]>([]);
   
   // Use new ViewState architecture for profiles
   const {
@@ -213,15 +219,16 @@ export default function Discovery() {
     const eventCountry = currentEvent?.location;
     const eventDb = getDbForEvent(eventCountry);
     
-    const snapshot = await eventDb.collection('event_profiles')
-      .where('event_id', '==', currentEvent.id)
-      .where('is_visible', '==', true)
-      .get();
+    const snapshot = await getDocs(query(
+      collection(eventDb, 'event_profiles'),
+      where('event_id', '==', currentEvent.id),
+      where('is_visible', '==', true)
+    ));
     
-    const allProfiles = snapshot.docs.map(doc => ({
+    const allProfiles = snapshot.docs.map((doc: any) => ({
       id: doc.id,
       ...doc.data()
-    }));
+    })) as any[];
     
     const otherProfiles = allProfiles.filter(p => p.session_id !== currentSessionId);
     
@@ -234,8 +241,7 @@ export default function Discovery() {
     
     return otherProfiles;
   }, [currentEvent?.id, currentSessionId]);
-  const [currentEvent, setCurrentEvent] = useState<any>(null);
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  
   const [filters, setFilters] = useState({
     age_min: 18,
     age_max: 99
@@ -884,7 +890,7 @@ export default function Discovery() {
         filteredProfiles.length === cachedFilteredProfiles.length && 
         filteredProfiles.length > 0 &&
         currentUserProfile &&
-        profiles.length > 0 &&
+        profiles && profiles.length > 0 &&
         !hasInteractionChanges) {
       console.log('Discovery: Skipping re-filter to prevent visual reordering (no interactions yet)');
       return;
@@ -920,7 +926,7 @@ export default function Discovery() {
         return;
       }
 
-      let tempFiltered = profiles.filter(otherUser => {
+      let tempFiltered = (profiles || []).filter((otherUser: any) => {
         // Filter out skipped profiles completely
         if (skippedProfiles.has(otherUser.session_id)) {
           return false;

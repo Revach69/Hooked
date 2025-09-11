@@ -29,6 +29,9 @@ import DropdownMenu from '../components/DropdownMenu';
 import { formatTime } from '../lib/utils';
 import CountdownTimer from '../lib/components/CountdownTimer';
 import { setCurrentChatSession } from '../lib/messageNotificationHelper';
+import { useViewState } from '../lib/cache/ViewStateManager';
+import { NetworkAwareLoader } from '../lib/services/NetworkAwareLoader';
+import { MLPrefetchPredictor } from '../lib/services/MLPrefetchPredictor';
 
 interface ChatMessage {
   id: string;
@@ -65,6 +68,81 @@ export default function Chat() {
   const flatListRef = useRef<FlatList>(null);
   // Single ref to hold unsubscribe function
   const listenerRef = useRef<(() => void) | null>(null);
+
+  // ViewState integration for messages
+  const {
+    data: cachedMessages,
+    loading: messagesLoading,
+    cached: messagesAreCached,
+    stale: messagesAreStale,
+    refresh: refreshMessages
+  } = useViewState({
+    viewId: 'chat_messages',
+    cacheKey: `chat_messages_${matchId}_${currentEventId}`,
+    staleTtl: NetworkAwareLoader.getAdaptiveTTL(2 * 60 * 1000), // 2 minutes adaptive
+    maxTtl: NetworkAwareLoader.getAdaptiveTTL(10 * 60 * 1000), // 10 minutes adaptive
+  }, async () => {
+    if (!currentEventId || !currentSessionId || !matchId) return [];
+
+    try {
+      // Fetch initial messages for cache
+      const event = await AsyncStorageUtils.getItem<any>('currentEvent');
+      const eventCountry = event?.location;
+      const eventDb = getDbForEvent(eventCountry);
+      
+      const messagesSnapshot = await getDocs(query(
+        collection(eventDb, 'messages'),
+        where('event_id', '==', currentEventId),
+        orderBy('created_at', 'asc')
+      ));
+
+      const allMessages = messagesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as ChatMessage[];
+
+      // Filter and process messages
+      const [currentUserProfiles, matchProfiles] = await Promise.all([
+        EventProfileAPI.filter({ session_id: currentSessionId, event_id: currentEventId }),
+        EventProfileAPI.filter({ session_id: matchId as string, event_id: currentEventId })
+      ]);
+
+      if (currentUserProfiles.length === 0 || matchProfiles.length === 0) {
+        return [];
+      }
+
+      const currentUserProfileId = currentUserProfiles[0].id;
+      const matchProfileId = matchProfiles[0].id;
+      
+      const conversationMessages = allMessages.filter(msg => 
+        (msg.from_profile_id === currentUserProfileId && msg.to_profile_id === matchProfileId) ||
+        (msg.from_profile_id === matchProfileId && msg.to_profile_id === currentUserProfileId)
+      );
+
+      // Add sender names
+      const messagesWithNames = await Promise.all(
+        conversationMessages.map(async (msg) => {
+          if (msg.senderName) return msg;
+          const senderProfile = await EventProfileAPI.get(msg.from_profile_id);
+          return {
+            ...msg,
+            senderName: senderProfile ? senderProfile.first_name : 'Unknown'
+          };
+        })
+      );
+
+      // Record ML action for learning
+      MLPrefetchPredictor.recordAction('/chat', 'view_profile', currentEventId, currentSessionId, {
+        profileId: matchId as string,
+        timeSpent: messagesWithNames.length * 2 // Estimate based on message count
+      });
+
+      return messagesWithNames;
+    } catch (error) {
+      console.error('Chat: Failed to fetch messages:', error);
+      return [];
+    }
+  });
 
   const loadMuteStatus = useCallback(async () => {
     if (!currentEventId || !currentSessionId || !matchId) return;
@@ -301,6 +379,25 @@ export default function Chat() {
   useEffect(() => {
     initializeChat();
   }, [initializeChat]);
+
+  // Initialize services
+  useEffect(() => {
+    NetworkAwareLoader.initialize();
+    MLPrefetchPredictor.initialize();
+  }, []);
+
+  // Use cached messages if available for instant display
+  useEffect(() => {
+    if (cachedMessages && cachedMessages.length > 0 && !messagesLoading) {
+      setMessages(cachedMessages);
+      console.log('Chat: Using cached messages for instant display');
+      
+      // Scroll to bottom for cached messages
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: false });
+      }, 100);
+    }
+  }, [cachedMessages, messagesLoading]);
 
   // Handle screen focus/unfocus to set/clear current chat session
   useFocusEffect(

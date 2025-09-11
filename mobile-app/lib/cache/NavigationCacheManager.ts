@@ -156,7 +156,7 @@ class NavigationCacheManagerClass {
         case '/chat':
           // Prefetch chat partner's profile image
           if (context.params?.matchId) {
-            const chatProfile = GlobalDataCache.get(`chat_profile_${context.params.matchId}`);
+            const chatProfile = GlobalDataCache.get(`chat_profile_${context.params.matchId}`) as any;
             if (chatProfile?.profile_photo_url) {
               await ProgressiveImageLoader.preloadImages([chatProfile.profile_photo_url], eventId, 'high');
             }

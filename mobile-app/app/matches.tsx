@@ -21,7 +21,7 @@ import { EventProfileAPI, LikeAPI, EventAPI, MessageAPI, MutedMatchAPI, ReportAP
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { ImageCacheService } from '../lib/services/ImageCacheService';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDocs } from 'firebase/firestore';
 import { getDbForEvent } from '../lib/firebaseConfig';
 import CountdownTimer from '../lib/components/CountdownTimer';
 import UserProfileModal from '../lib/UserProfileModal';
@@ -44,7 +44,7 @@ export default function Matches() {
   
   // Use new ViewState architecture for matches
   const {
-    data: matches,
+    data: matchesData,
     state: matchesState,
     loading: matchesLoading,
     showSkeleton: matchesShowSkeleton,
@@ -69,16 +69,16 @@ export default function Matches() {
         where('is_mutual', '==', true)
       );
       
-      const likesSnapshot = await mutualLikesQuery.get();
-      const mutualLikes = likesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const likesSnapshot = await getDocs(mutualLikesQuery);
+      const mutualLikes = likesSnapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
       
       // Filter to get user's matches
-      const userMatches = mutualLikes.filter(like => 
+      const userMatches = mutualLikes.filter((like: any) => 
         like.liker_session_id === currentSessionId || like.liked_session_id === currentSessionId
       );
       
       // Get other session IDs
-      const otherSessionIds = userMatches.map(like => 
+      const otherSessionIds = userMatches.map((like: any) => 
         like.liker_session_id === currentSessionId ? like.liked_session_id : like.liker_session_id
       );
       
@@ -92,12 +92,12 @@ export default function Matches() {
         
         if (profiles.length > 0) {
           const profile = profiles[0];
-          const matchLike = userMatches.find(like => 
+          const matchLike = userMatches.find((like: any) => 
             (like.liker_session_id === currentSessionId && like.liked_session_id === sessionId) ||
             (like.liker_session_id === sessionId && like.liked_session_id === currentSessionId)
           );
           
-          profile.matchCreatedAt = matchLike?.created_at || new Date().toISOString();
+          (profile as any).matchCreatedAt = matchLike?.created_at || new Date().toISOString();
           matchProfiles.push(profile);
         }
       }
@@ -115,6 +115,17 @@ export default function Matches() {
       return [];
     }
   }, [currentEvent?.id, currentSessionId]);
+  
+  // Local matches state that can be modified
+  const [matches, setMatches] = useState<any[]>([]);
+  
+  // Update local matches when data changes
+  useEffect(() => {
+    if (matchesData) {
+      setMatches(matchesData);
+    }
+  }, [matchesData]);
+  
   const [selectedProfileForDetail, setSelectedProfileForDetail] = useState<any>(null);
   const [likedProfiles, setLikedProfiles] = useState<Set<string>>(new Set());
   const [unreadMessages, setUnreadMessages] = useState<Set<string>>(new Set());
@@ -1292,7 +1303,7 @@ export default function Matches() {
               }
 
               // Immediately remove the unmatched user from the UI
-              setMatches(prevMatches => prevMatches.filter(m => m.session_id !== matchSessionId));
+              setMatches(prevMatches => prevMatches?.filter(m => m.session_id !== matchSessionId) || []);
               
               // Also remove from unread messages to clear the red dot
               setUnreadMessages(prev => {
@@ -2060,7 +2071,7 @@ export default function Matches() {
                         source={{ uri: match.profile_photo_url }}
                         eventId={currentEvent?.id || ''}
                         sessionId={match.session_id}
-                        style={[styles.matchImage, mutedMatches.has(match.session_id) && { opacity: 0.5 }]}
+                        style={[styles.matchImage, mutedMatches.has(match.session_id) ? { opacity: 0.5 } : {}] as any}
                         resizeMode="cover"
                       />
                     ) : (

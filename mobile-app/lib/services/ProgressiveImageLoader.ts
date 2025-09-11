@@ -56,7 +56,8 @@ class ProgressiveImageLoaderClass {
       return result;
     } catch (error) {
       console.error('ProgressiveImageLoader: Failed to load image:', error);
-      onProgress?.({ stage: 'full', loaded: false, error: error.message });
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      onProgress?.({ stage: 'full', loaded: false, error: errorMessage });
       throw error;
     }
   }
@@ -175,7 +176,7 @@ class ProgressiveImageLoaderClass {
 
       return simulatedHash;
     } catch (error) {
-      console.warn('ProgressiveImageLoader: Failed to generate blur hash:', error);
+      console.warn('ProgressiveImageLoader: Failed to generate blur hash:', error instanceof Error ? error.message : 'Unknown error');
       return null;
     }
   }
@@ -373,7 +374,7 @@ class ProgressiveImageLoaderClass {
               }
             }
           }
-        } catch (error) {
+        } catch {
           console.warn('ProgressiveImageLoader: Failed to cleanup blur hash:', key);
         }
       }
