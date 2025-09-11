@@ -1790,12 +1790,12 @@ export default function Discovery() {
                     >
                       <View style={styles.profileImageContainer}>
                         {profile.profile_photo_url ? (
-                          <ProgressiveImage
+                          <Image
                             source={{ uri: profile.profile_photo_url }}
-                            eventId={currentEvent?.id || ''}
-                            sessionId={profile.session_id}
                             style={styles.profileImage}
                             resizeMode="cover"
+                            onError={() => console.log('Discovery thumbnail: Image failed to load')}
+                            onLoad={() => console.log('Discovery thumbnail: Image loaded successfully')}
                           />
                         ) : (
                           <View style={[styles.fallbackAvatar, { backgroundColor: profile.profile_color || '#cccccc' }]}>

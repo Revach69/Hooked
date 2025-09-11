@@ -353,7 +353,10 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
               <Image
                 source={{ uri: profile.profile_photo_url }}
                 onError={() => {}}
+                onLoadStart={() => console.log('UserProfileModal: Image load start')}
+                onLoad={() => console.log('UserProfileModal: Image loaded')}
                 style={styles.profileImage}
+                loadingIndicatorSource={require('../assets/Hooked Full Logo.png')}
               />
             ) : (
               <View style={styles.fallbackAvatar}>

@@ -80,9 +80,16 @@ export const ProgressiveImage: React.FC<ProgressiveImageProps> = ({
   useEffect(() => {
     // Only require source.uri - allow missing eventId/sessionId for basic functionality
     if (!source?.uri) {
+      console.log('ProgressiveImage: No source URI provided');
       setImageState(prev => ({ ...prev, error: true, loading: false }));
       return;
     }
+    
+    console.log('ProgressiveImage: Loading image', {
+      uri: source.uri.substring(0, 50) + '...',
+      eventId: eventId || 'undefined',
+      sessionId: sessionId || 'undefined'
+    });
     
     loadImage();
   }, [source.uri, eventId, sessionId]);
@@ -91,6 +98,7 @@ export const ProgressiveImage: React.FC<ProgressiveImageProps> = ({
     if (!isMounted.current || !source.uri) return;
 
     try {
+      console.log('ProgressiveImage: Setting immediate URI and starting load');
       setImageState(prev => ({ 
         ...prev, 
         loading: true, 
@@ -103,6 +111,8 @@ export const ProgressiveImage: React.FC<ProgressiveImageProps> = ({
       // Use fallback values for missing eventId/sessionId to allow basic functionality
       const safeEventId = eventId || 'default';
       const safeSessionId = sessionId || 'anonymous';
+      
+      console.log('ProgressiveImage: Using safe values', { safeEventId, safeSessionId });
       
       loadingPromise.current = ProgressiveImageLoader.loadImageProgressive(
         source.uri,
