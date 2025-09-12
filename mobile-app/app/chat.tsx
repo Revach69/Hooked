@@ -25,6 +25,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { collection, query, where, orderBy, onSnapshot, getDocs, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { getDbForEvent } from '../lib/firebaseConfig';
 import { EventProfileAPI, MessageAPI, ReportAPI, MutedMatchAPI, LikeAPI } from '../lib/firebaseApi';
+import { BackgroundDataPreloader } from '../lib/services/BackgroundDataPreloader';
 import UserProfileModal from '../lib/UserProfileModal';
 import DropdownMenu from '../components/DropdownMenu';
 import { formatTime } from '../lib/utils';
@@ -419,6 +420,20 @@ export default function Chat() {
 
     const setupListener = async () => {
       try {
+        // First check for preloaded conversation data for instant display
+        const preloadedConversations = BackgroundDataPreloader.getPreloadedConversations();
+        const currentConversation = preloadedConversations.find(conv => 
+          conv.sessionId === matchId
+        );
+        
+        if (currentConversation && currentConversation.messages.length > 0) {
+          console.log('Chat: Using preloaded conversation data for instant display');
+          const sortedMessages = currentConversation.messages.sort((a: any, b: any) =>
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          );
+          setMessages(sortedMessages);
+        }
+        
         // Get event data to determine correct database
         const event = await AsyncStorageUtils.getItem<any>('currentEvent');
         const eventCountry = event?.location;

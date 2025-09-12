@@ -24,6 +24,7 @@ import Consent from '../../app/consent';
 import Discovery from '../../app/discovery';
 import Matches from '../../app/matches';
 import Profile from '../../app/profile';
+import Chat from '../../app/chat';
 
 // Removed ProfileImageCacheProvider - using develop branch modal pattern
 
@@ -67,8 +68,7 @@ const ProfileWrapper: React.FC = React.memo(() => {
 
 const ChatWrapper: React.FC = React.memo(() => {
   console.log('💬 ChatWrapper: Rendering');
-  // Chat will be implemented later - for now return null
-  return null;
+  return <Chat />;
 });
 
 export const UnifiedPageContainer: React.FC = React.memo(() => {
@@ -86,7 +86,7 @@ export const UnifiedPageContainer: React.FC = React.memo(() => {
     discovery: { mounted: true, component: DiscoveryWrapper }, // Keep mounted for instant navigation
     matches: { mounted: true, component: MatchesWrapper },     // Keep mounted for instant navigation  
     profile: { mounted: true, component: ProfileWrapper },     // Keep mounted for instant navigation
-    chat: { mounted: false, component: null }
+    chat: { mounted: true, component: ChatWrapper }            // Keep mounted for instant chat access
   });
 
   const screenWidth = Dimensions.get('window').width;
