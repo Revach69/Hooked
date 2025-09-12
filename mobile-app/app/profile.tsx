@@ -25,6 +25,7 @@ import { Clock, Users, LogOut, Edit, User, AlertCircle, MessageCircle, Instagram
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { ensureFirebaseReady } from '../lib/firebaseReady';
 import { EventProfileAPI, EventAPI, ReportAPI, StorageAPI, LikeAPI, MessageAPI } from '../lib/firebaseApi';
+import { BackgroundDataPreloader } from '../lib/services/BackgroundDataPreloader';
 import * as ImagePicker from 'expo-image-picker';
 import * as Linking from 'expo-linking';
 import { ImageCacheService } from '../lib/services/ImageCacheService';
@@ -206,9 +207,23 @@ export default function Profile() {
             }
           }
         } else {
+          // Try preloaded profile data as fallback
+          const preloadedProfile = BackgroundDataPreloader.getPreloadedProfile();
+          if (preloadedProfile) {
+            console.log('Profile: Using preloaded profile as fallback');
+            setProfile(preloadedProfile);
+            setInstagramHandle(preloadedProfile.instagram_handle || '');
+            return;
+          }
+          
           // Profile doesn't exist in database (user left event and deleted profile)
           // Clear session data only after confirming profile is truly gone
           console.log('User profile not found in profile initialization - clearing session data');
+          
+          // Clear preloaded data since profile no longer exists
+          BackgroundDataPreloader.clearPreloadedData();
+          GlobalDataCache.clearAll();
+          
           await AsyncStorageUtils.multiRemove([
             'currentEventId',
             'currentSessionId',
@@ -865,6 +880,11 @@ export default function Profile() {
             try {
               // Set flag to indicate profile deletion is in progress
               await AsyncStorageUtils.setItem('profileDeletionInProgress', true);
+              
+              // Clear preloaded data since user is leaving event
+              BackgroundDataPreloader.clearPreloadedData();
+              GlobalDataCache.clearAll();
+              
               const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
               const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
               

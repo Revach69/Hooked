@@ -19,6 +19,8 @@ import { useFocusEffect } from 'expo-router';
 import { router } from '../lib/navigation/UnifiedNavigator';
 import { Heart, MessageCircle, Users, User, UserX, VolumeX, Volume2, Flag } from 'lucide-react-native';
 import { EventProfileAPI, LikeAPI, EventAPI, MessageAPI, MutedMatchAPI, ReportAPI } from '../lib/firebaseApi';
+import { BackgroundDataPreloader } from '../lib/services/BackgroundDataPreloader';
+import { GlobalDataCache, CacheKeys } from '../lib/cache/GlobalDataCache';
 // Sentry removed
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { ImageCacheService } from '../lib/services/ImageCacheService';
@@ -28,7 +30,6 @@ import { getDbForEvent } from '../lib/firebaseConfig';
 import CountdownTimer from '../lib/components/CountdownTimer';
 import UserProfileModal from '../lib/UserProfileModal';
 import DropdownMenu from '../components/DropdownMenu';
-import { GlobalDataCache, CacheKeys } from '../lib/cache/GlobalDataCache';
 
 import { updateUserActivity } from '../lib/messageNotificationHelper';
 import { setMuteStatus } from '../lib/utils/notificationUtils';
@@ -727,9 +728,18 @@ export default function Matches() {
         console.log('Matches: Using cached user profile');
       }
       
-      // Check for cached matches list to show immediately and prevent reordering
+      // Check for preloaded matches data first for instant display
+      const preloadedMatches = BackgroundDataPreloader.getPreloadedMatches();
+      const preloadedData = GlobalDataCache.get(CacheKeys.MATCHES_DATA);
       const cachedMatches = GlobalDataCache.get<any[]>(CacheKeys.MATCHES_LIST);
-      if (cachedMatches && Array.isArray(cachedMatches)) {
+      
+      if (preloadedMatches.length > 0) {
+        console.log('Matches: Using preloaded matches for instant display');
+        setMatches(preloadedMatches);
+      } else if (preloadedData && typeof preloadedData === 'object' && 'matches' in preloadedData) {
+        console.log('Matches: Using preloaded data cache for instant display');
+        setMatches((preloadedData as any).matches);
+      } else if (cachedMatches && Array.isArray(cachedMatches)) {
         setMatches(cachedMatches);
         console.log('Matches: Using cached matches list for instant display');
       }

@@ -100,14 +100,17 @@ export const CacheKeys = {
   
   // Matches page data
   MATCHES_LIST: 'matches_list',
+  MATCHES_DATA: 'matches_data', // For preloaded matches data
   MATCHES_EVENT: 'matches_event',
   MATCHES_CURRENT_USER: 'matches_current_user',
   
   // Profile page data  
   PROFILE_DATA: 'profile_data',
   PROFILE_EVENT: 'profile_event',
+  EVENT_DATA: 'event_data', // For preloaded event data
   
   // Chat data
   CHAT_MESSAGES: (matchId: string) => `chat_messages_${matchId}`,
   CHAT_PROFILE: (matchId: string) => `chat_profile_${matchId}`,
+  CONVERSATIONS_DATA: 'conversations_data', // For preloaded conversations
 } as const;

@@ -23,6 +23,7 @@ import { EventProfileAPI, LikeAPI, EventAPI, BlockedMatchAPI, SkippedProfileAPI 
 
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { ImageCacheService } from '../lib/services/ImageCacheService';
+import { BackgroundDataPreloader } from '../lib/services/BackgroundDataPreloader';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { getDbForEvent } from '../lib/firebaseConfig';
@@ -768,6 +769,15 @@ export default function Discovery() {
     };
 
     setupConsolidatedListeners();
+
+    // Trigger background data preloading for instant page transitions
+    // Only run once when both event and session are available
+    if (!BackgroundDataPreloader.getIsPreloading()) {
+      console.log('🚀 Discovery: Triggering background data preloading...');
+      BackgroundDataPreloader.preloadEventData().catch(error => {
+        console.warn('Discovery: Background preloading failed:', error);
+      });
+    }
 
     return () => {
       cleanupAllListeners();
