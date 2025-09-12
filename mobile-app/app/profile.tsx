@@ -79,11 +79,14 @@ export default function Profile() {
   // Update dependent states when profile changes (for instant display)
   useEffect(() => {
     if (profile) {
-      setAboutMe(profile.about_me || '');
-      setHeight(profile.height_cm ? String(profile.height_cm) : '');
-      setInterests(profile.interests || []);
-      setEventVisible(profile.is_visible ?? true);
-      setInstagramHandle(profile.instagram_handle || '');
+      // Batch all state updates to prevent multiple re-renders
+      React.startTransition(() => {
+        setAboutMe(profile.about_me || '');
+        setHeight(profile.height_cm ? String(profile.height_cm) : '');
+        setInterests(profile.interests || []);
+        setEventVisible(profile.is_visible ?? true);
+        setInstagramHandle(profile.instagram_handle || '');
+      });
       console.log('Profile: Updated dependent states from profile data');
     }
   }, [profile]);
