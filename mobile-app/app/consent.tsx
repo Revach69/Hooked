@@ -596,6 +596,7 @@ export default function Consent() {
 
       // Save session and profile data to AsyncStorage
       await AsyncStorageUtils.setItem('currentSessionId', sessionId);
+      await AsyncStorageUtils.setItem('currentEventId', event.id);
       await AsyncStorageUtils.setItem('currentProfilePhotoUrl', formData.profile_photo_url);
       await AsyncStorageUtils.setItem('currentProfileColor', validColor);
       
