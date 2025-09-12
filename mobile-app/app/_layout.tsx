@@ -42,7 +42,6 @@ import { getSessionAndInstallationIds } from '../lib/session/sessionId';
 
 export default function RootLayout() {
   const expoRouter = useRouter();
-  const pathname = usePathname();
   const [appIsReady, setAppIsReady] = useState(false);
   const [navigationReady, setNavigationReady] = useState(false);
   
@@ -299,35 +298,7 @@ export default function RootLayout() {
   useEffect(() => {
     if (!appIsReady) return;
 
-    // Move handleDeepLink inside useEffect to avoid dependency issues
-    const handleDeepLink = (url: string) => {
-      try {
-        console.log('_layout: Legacy deep link handler called:', url);
-        
-        // Handle https://hooked-app.com/join-instant?code=XXXXX
-        if (url.includes('hooked-app.com/join-instant')) {
-          const urlObj = new URL(url);
-          const code = urlObj.searchParams.get('code');
-          
-          if (code) {
-            console.log('_layout: Extracted code from web URL:', code);
-            unifiedNavigator.navigate('join', { code: code.toUpperCase() });
-            return;
-          }
-        }
-        
-        // Handle hooked://join?code=XXXXX (existing format)
-        const { path, queryParams } = Linking.parse(url);
-        if (path === 'join' && queryParams?.code) {
-          const code = queryParams.code as string;
-          console.log('_layout: Extracted code from hooked:// URL:', code);
-          unifiedNavigator.navigate('join', { code: code.toUpperCase() });
-        }
-      } catch (error) {
-        console.error('Error handling deep link:', error);
-        console.error('Deep link error:', error);
-      }
-    };
+    // Deep link handling is now managed by UnifiedNavigator
 
     // Handle initial URL (app was closed)
     Linking.getInitialURL().then((url) => {

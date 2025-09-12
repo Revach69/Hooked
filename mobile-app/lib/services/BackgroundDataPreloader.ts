@@ -5,7 +5,7 @@
  * so that first-time navigation to these pages is instant
  */
 
-import { EventProfileAPI, LikeAPI, EventAPI, MessageAPI, MutedMatchAPI } from '../firebaseApi';
+import { EventProfileAPI, LikeAPI, EventAPI, MessageAPI } from '../firebaseApi';
 import { AsyncStorageUtils } from '../asyncStorageUtils';
 import { GlobalDataCache, CacheKeys } from '../cache/GlobalDataCache';
 import { ImageCacheService } from './ImageCacheService';

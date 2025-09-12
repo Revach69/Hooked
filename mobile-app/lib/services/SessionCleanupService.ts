@@ -1,7 +1,7 @@
 import { AsyncStorageUtils } from '../asyncStorageUtils';
 import { GlobalNotificationService } from './GlobalNotificationService';
 import { setCurrentSessionIdForDedup } from '../notifications/NotificationRouter';
-import { AppStateSyncService } from './AppStateSyncService';
+// AppStateSyncService removed - deprecated
 import { ImageCacheService } from './ImageCacheService';
 
 
@@ -26,7 +26,7 @@ class SessionCleanupServiceClass {
       });
 
       // 1. Stop app state sync
-      AppStateSyncService.stopAppStateSync();
+      // AppStateSyncService.stopAppStateSync(); // Service deprecated
       
       // 2. Cleanup global notification listeners
       GlobalNotificationService.cleanup();
@@ -181,7 +181,7 @@ class SessionCleanupServiceClass {
     
     try {
       // Stop all services
-      AppStateSyncService.stopAppStateSync();
+      // AppStateSyncService.stopAppStateSync(); // Service deprecated
       GlobalNotificationService.cleanup();
       setCurrentSessionIdForDedup(null);
       
