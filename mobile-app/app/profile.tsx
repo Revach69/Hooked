@@ -161,79 +161,109 @@ export default function Profile() {
           }
         }
 
-        // Add timeout for profile lookup
-        const profileTimeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('Profile loading timeout')), 30000); // 30 second timeout - give more time
-        });
-        
-        const profilePromise = EventProfileAPI.filter({ 
-          session_id: sessionId,
-          event_id: eventId 
-        });
-        const profiles = await Promise.race([profilePromise, profileTimeoutPromise]);
-        
-        if (profiles.length > 0) {
-          const userProfile = profiles[0];
-          setProfile(userProfile);
+        // First check if we have preloaded profile data for instant display
+        const preloadedProfile = BackgroundDataPreloader.getPreloadedProfile();
+        if (preloadedProfile && preloadedProfile.session_id === sessionId && preloadedProfile.event_id === eventId) {
+          console.log('Profile: Using preloaded profile data for instant display');
+          setProfile(preloadedProfile);
+          setInstagramHandle(preloadedProfile.instagram_handle || '');
           
-          // Initialize instagram handle state
-          setInstagramHandle(userProfile.instagram_handle || '');
-          
-          // Load cached profile image URI immediately to prevent placeholder flash
+          // Load cached image URI for instant display
           const imageCacheKey = `profile_image_${sessionId}`;
           const cachedImageUri = GlobalDataCache.get<string>(imageCacheKey);
-          
           if (cachedImageUri) {
             setCachedProfileImageUri(cachedImageUri);
-            console.log('Profile: Using cached image URI');
+          } else if (preloadedProfile.profile_photo_url) {
+            // Use preloaded image URL as fallback
+            setCachedProfileImageUri(preloadedProfile.profile_photo_url);
           }
           
-          // Cache user's own profile image in background
-          if (userProfile.profile_photo_url && currentEventData) {
-            try {
-              const cachedUri = await ImageCacheService.getCachedImageUri(
-                userProfile.profile_photo_url,
-                currentEventData.id,
-                userProfile.session_id
-              );
-              setCachedProfileImageUri(cachedUri);
-              // Cache the URI for next time
-              GlobalDataCache.set(imageCacheKey, cachedUri, 30 * 60 * 1000); // Cache for 30 minutes
-            } catch (error) {
-              console.warn('Failed to cache profile image:', error);
-              setCachedProfileImageUri(userProfile.profile_photo_url);
-              // Cache the original URL
-              GlobalDataCache.set(imageCacheKey, userProfile.profile_photo_url, 30 * 60 * 1000);
+          // Refresh profile data in background for updates
+          EventProfileAPI.filter({ 
+            session_id: sessionId,
+            event_id: eventId 
+          }).then(profiles => {
+            if (profiles.length > 0) {
+              const freshProfile = profiles[0];
+              // Only update if different to prevent unnecessary re-renders
+              if (JSON.stringify(freshProfile) !== JSON.stringify(preloadedProfile)) {
+                console.log('Profile: Updating with fresh data from background refresh');
+                setProfile(freshProfile);
+                setInstagramHandle(freshProfile.instagram_handle || '');
+              }
             }
-          }
+          }).catch(error => {
+            console.warn('Profile: Background refresh failed:', error);
+          });
         } else {
-          // Try preloaded profile data as fallback
-          const preloadedProfile = BackgroundDataPreloader.getPreloadedProfile();
-          if (preloadedProfile) {
-            console.log('Profile: Using preloaded profile as fallback');
-            setProfile(preloadedProfile);
-            setInstagramHandle(preloadedProfile.instagram_handle || '');
+          // Fallback to regular profile lookup if no preloaded data
+          console.log('Profile: No preloaded data available, fetching from API');
+          
+          // Add timeout for profile lookup
+          const profileTimeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error('Profile loading timeout')), 30000); // 30 second timeout - give more time
+          });
+          
+          const profilePromise = EventProfileAPI.filter({ 
+            session_id: sessionId,
+            event_id: eventId 
+          });
+          const profiles = await Promise.race([profilePromise, profileTimeoutPromise]);
+          
+          if (profiles.length > 0) {
+            const userProfile = profiles[0];
+            setProfile(userProfile);
+            
+            // Initialize instagram handle state
+            setInstagramHandle(userProfile.instagram_handle || '');
+            
+            // Load cached profile image URI immediately to prevent placeholder flash
+            const imageCacheKey = `profile_image_${sessionId}`;
+            const cachedImageUri = GlobalDataCache.get<string>(imageCacheKey);
+            
+            if (cachedImageUri) {
+              setCachedProfileImageUri(cachedImageUri);
+              console.log('Profile: Using cached image URI');
+            }
+            
+            // Cache user's own profile image in background
+            if (userProfile.profile_photo_url && currentEventData) {
+              try {
+                const cachedUri = await ImageCacheService.getCachedImageUri(
+                  userProfile.profile_photo_url,
+                  currentEventData.id,
+                  userProfile.session_id
+                );
+                setCachedProfileImageUri(cachedUri);
+                // Cache the URI for next time
+                GlobalDataCache.set(imageCacheKey, cachedUri, 30 * 60 * 1000); // Cache for 30 minutes
+              } catch (error) {
+                console.warn('Failed to cache profile image:', error);
+                setCachedProfileImageUri(userProfile.profile_photo_url);
+                // Cache the original URL
+                GlobalDataCache.set(imageCacheKey, userProfile.profile_photo_url, 30 * 60 * 1000);
+              }
+            }
+          } else {
+            // Profile doesn't exist in database (user left event and deleted profile)
+            // Clear session data only after confirming profile is truly gone
+            console.log('User profile not found in profile initialization - clearing session data');
+            
+            // Clear preloaded data since profile no longer exists
+            BackgroundDataPreloader.clearPreloadedData();
+            GlobalDataCache.clearAll();
+            
+            await AsyncStorageUtils.multiRemove([
+              'currentEventId',
+              'currentSessionId',
+              'currentEventCode',
+              'currentProfileColor',
+              'currentProfilePhotoUrl'
+            ]);
+            // 14. Profile deleted - must go home as profile cannot be recovered
+            router.replace('/home');
             return;
           }
-          
-          // Profile doesn't exist in database (user left event and deleted profile)
-          // Clear session data only after confirming profile is truly gone
-          console.log('User profile not found in profile initialization - clearing session data');
-          
-          // Clear preloaded data since profile no longer exists
-          BackgroundDataPreloader.clearPreloadedData();
-          GlobalDataCache.clearAll();
-          
-          await AsyncStorageUtils.multiRemove([
-            'currentEventId',
-            'currentSessionId',
-            'currentEventCode',
-            'currentProfileColor',
-            'currentProfilePhotoUrl'
-          ]);
-          // 14. Profile deleted - must go home as profile cannot be recovered
-          router.replace('/home');
-          return;
         }
       } catch (error) {
         console.error('Error initializing profile session:', error);
