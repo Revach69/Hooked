@@ -74,12 +74,12 @@ NEW: Mount → Show → Hide → Show → Hide (forever mounted)
 
 ## 🔧 **Simplified Implementation Plan**
 
-### **⚡ Critical Day 1 Implementation Order**
-Start with absolute minimum to prove concept works:
-1. **PersistentPageContainer** - Discovery + Matches only
-2. **Transform-based visibility** - translateX/opacity (not display: none)
-3. **ListenerManager** - Prevent Firebase listener chaos
-4. **Basic state preservation** - Scroll position only
+### **⚡ Critical Day 1 Implementation Order (VALIDATED)**
+Based on codebase analysis - Discovery has 4+ Firebase listeners that MUST be managed:
+1. **PersistentPageContainer skeleton** - Discovery ONLY first
+2. **Test Discovery stays mounted** - Verify no listener duplication  
+3. **ListenerManager IMMEDIATELY** - Discovery has userProfile, otherProfiles, likes, mutualMatches listeners
+4. **Then add Matches page** - Only after ListenerManager works
 
 ### **Phase 1: Core Persistent Navigation (Week 1)**
 
@@ -252,10 +252,14 @@ export const PersistentPageContainer: React.FC = () => {
 
 #### **1.3 Create Critical Infrastructure Components**
 
-##### **Firebase ListenerManager**
+##### **Firebase ListenerManager (CRITICAL - Discovery has 4+ listeners)**
 **File**: `lib/navigation/ListenerManager.ts`
 
 ```typescript
+// CRITICAL: Discovery page has these listeners that MUST be managed:
+// - userProfile, otherProfiles, likes, mutualMatches
+// Without this, persistent pages = 4x listener multiplication!
+
 class ListenerManager {
   private activeListeners = new Map<string, () => void>();
   private pageListeners = new Map<string, Set<string>>();
@@ -263,10 +267,13 @@ class ListenerManager {
   registerListener(pageId: string, listenerId: string, unsubscribe: () => void) {
     const key = `${pageId}_${listenerId}`;
     
+    // DEBUG: Log all active listeners (critical for Day 1)
+    console.log('Active listeners before register:', Array.from(this.activeListeners.keys()));
+    
     // Prevent duplicate listeners for same page
     if (this.activeListeners.has(key)) {
+      console.error(`🔥 DUPLICATE LISTENER DETECTED: ${key}`);
       this.activeListeners.get(key)!();
-      console.log(`ListenerManager: Cleaned up duplicate listener ${key}`);
     }
     
     this.activeListeners.set(key, unsubscribe);
@@ -312,9 +319,12 @@ export const listenerManager = new ListenerManager();
 ```typescript
 import { EventEmitter } from 'events';
 
+// Based on codebase analysis - Discovery manages these states that need sync:
 type CrossPageEvents = {
-  'profileLiked': { profileId: string; eventId: string };
-  'profileSkipped': { profileId: string; eventId: string };
+  'profileLiked': { profileId: string; eventId: string };    // Updates likedProfiles Set
+  'profileSkipped': { profileId: string; eventId: string };  // Updates skippedProfiles Set  
+  'profileViewed': { profileId: string; eventId: string };   // Updates viewedProfiles Set
+  'profileBlocked': { profileId: string; eventId: string };  // Updates blockedProfiles Set
   'matchCreated': { matchId: string; partnerName: string };
   'messageReceived': { conversationId: string; message: any };
   'messageRead': { conversationId: string; messageIds: string[] };
@@ -366,10 +376,10 @@ class CrossPageEventBus {
 export const crossPageEventBus = new CrossPageEventBus();
 ```
 
-### **🚨 Critical Implementation Gotchas**
+### **🚨 Critical Implementation Gotchas (CODEBASE SPECIFIC)**
 
-#### **1. React Native VirtualizedList Warning**
-When multiple ScrollViews/FlatLists are mounted simultaneously:
+#### **1. React Native VirtualizedList Warning (Matches uses ScrollView)**
+Discovery + Matches both have ScrollViews that will conflict:
 
 ```typescript
 // Add this to each persistent page
@@ -402,8 +412,8 @@ useEffect(() => {
 }, []);
 ```
 
-#### **3. State Updates When Hidden**
-Prevent unnecessary re-renders when page is hidden:
+#### **3. State Updates When Hidden (Discovery has heavy filtering logic)**
+Discovery's filtering runs on every state change - MUST prevent when hidden:
 
 ```typescript
 const pendingUpdatesRef = useRef(null);
@@ -425,6 +435,32 @@ useEffect(() => {
     console.log(`${pageId}: Applied pending updates on activation`);
   }
 }, [isActive]);
+```
+
+#### **4. Android Transform Performance Fix**
+Standard React Native transforms may cause jank on Android:
+
+```typescript
+import { Animated } from 'react-native';
+
+// Better performance on Android (use in PersistentPageContainer)
+const translateX = useRef(new Animated.Value(0)).current;
+
+const showPage = (pageId: string) => {
+  Animated.timing(translateX, {
+    toValue: 0,
+    duration: 0, // Instant
+    useNativeDriver: true, // CRITICAL for Android performance
+  }).start();
+};
+
+const hidePage = (pageId: string) => {
+  Animated.timing(translateX, {
+    toValue: screenWidth,
+    duration: 0,
+    useNativeDriver: true,
+  }).start();
+};
 ```
 
 ### **Phase 2: Enhanced Page Components (Week 1-2)**
