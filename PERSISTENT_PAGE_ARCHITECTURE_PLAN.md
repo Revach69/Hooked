@@ -150,9 +150,9 @@ class PersistentPageManager {
     }
   }
   
-  // Clean up when event changes (only time we actually unmount)
-  cleanupOnEventChange(): void {
-    console.log('PersistentPageManager: Cleaning up for event change');
+  // Clean up when user leaves event or gets kicked out (expired)
+  cleanupOnEventExit(): void {
+    console.log('PersistentPageManager: User leaving/kicked from event - full cleanup');
     this.pages.clear();
     this.pageRegistry = {
       discovery: { mounted: true, component: DiscoveryPagePersistent },
@@ -160,6 +160,7 @@ class PersistentPageManager {
       chat: { mounted: false, component: null },
       profile: { mounted: false, component: null }
     };
+    // Note: AsyncStorage cleanup for event data handled in Phase 2
   }
 }
 ```
@@ -525,13 +526,13 @@ Replace `router.push()` calls with persistent navigation:
 <TouchableOpacity onPress={() => props.onNavigate('matches')}>
 ```
 
-##### **4. Event Change Cleanup Sequence**
-Critical order when event changes:
+##### **4. Event Exit Cleanup Sequence**
+Critical cleanup when user leaves event OR gets kicked out (expired):
 
 ```typescript
 // In PersistentPageManager
-cleanupOnEventChange(): void {
-  console.log('🔄 Event change detected - cleaning up in order');
+cleanupOnEventExit(): void {
+  console.log('🚪 User leaving/kicked from event - full cleanup');
   
   // 1. Stop all Firebase listeners FIRST
   listenerManager.cleanupAllListeners();
@@ -539,10 +540,10 @@ cleanupOnEventChange(): void {
   // 2. Clear CrossPageEventBus subscriptions
   crossPageEventBus.clearAll();
   
-  // 3. Clear cached data
+  // 3. Clear in-memory cache only (Phase 1)
   GlobalDataCache.clearAll();
   
-  // 4. THEN reset page registry
+  // 4. Reset page registry
   this.pageRegistry = {
     discovery: { mounted: true, component: DiscoveryPagePersistent },
     matches: { mounted: false, component: null },
@@ -550,8 +551,11 @@ cleanupOnEventChange(): void {
     profile: { mounted: false, component: null }
   };
   
-  // 5. Force remount Discovery with new event
-  this.forceRemountDiscovery();
+  // 5. Navigate to home/join screen
+  // User will enter new event from scratch
+  
+  // Phase 2: Clear AsyncStorage for expired event data
+  // this.cleanupEventStorageData(eventId); 
 }
 ```
 
@@ -855,6 +859,48 @@ interface PersistentNavigationConfig {
 - **Day 1-2**: Convert Chat page to persistent
 - **Day 3-4**: Convert Profile page to persistent
 - **Day 5**: Performance optimizations (VirtualizedList tuning)
+
+### **Phase 2 (Future): Event Data Cleanup**
+Handle AsyncStorage accumulation for expired/left events:
+
+```typescript
+class EventStorageCleanup {
+  // Check and clean expired event data on app startup
+  async cleanupExpiredEventData() {
+    const allKeys = await AsyncStorage.getAllKeys();
+    const eventKeys = allKeys.filter(key => key.includes('eventId'));
+    
+    for (const key of eventKeys) {
+      const eventId = this.extractEventId(key);
+      if (await this.isEventExpired(eventId)) {
+        // Clean all data for this expired event
+        await this.cleanupEventData(eventId);
+      }
+    }
+  }
+  
+  // Clean when user explicitly leaves event
+  async cleanupOnUserLeave(eventId: string) {
+    const keysToDelete = await AsyncStorage.getAllKeys();
+    const eventSpecificKeys = keysToDelete.filter(key => 
+      key.includes(eventId) || 
+      key.includes(`persistent_`) && key.includes(eventId)
+    );
+    
+    await AsyncStorage.multiRemove(eventSpecificKeys);
+    console.log(`Cleaned ${eventSpecificKeys.length} keys for event ${eventId}`);
+  }
+  
+  // Clean when kicked out (event expired)
+  async cleanupOnEventExpired(eventId: string) {
+    // Same as user leave but with expired flag
+    await this.cleanupOnUserLeave(eventId);
+    
+    // Mark as expired to prevent re-entry attempts
+    await AsyncStorage.setItem(`expired_event_${eventId}`, Date.now().toString());
+  }
+}
+```
 
 ### **Week 3: Polish & Testing**
 - **Day 1-2**: Cross-platform testing + gotcha fixes
