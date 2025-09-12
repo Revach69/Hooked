@@ -9,6 +9,7 @@ import 'react-native-get-random-values';
 
 import React, { useEffect, useState } from 'react';
 import { Stack, useRouter } from 'expo-router';
+import { PersistentPageContainer } from '../lib/components/PersistentPageContainer';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Toast from 'react-native-toast-message';
 import { NotificationRouter } from '../lib/notifications/NotificationRouter';
@@ -41,6 +42,7 @@ import { getSessionAndInstallationIds } from '../lib/session/sessionId';
 export default function RootLayout() {
   const router = useRouter();
   const [appIsReady, setAppIsReady] = useState(false);
+  const [hasActiveSession, setHasActiveSession] = useState<boolean | null>(null);
   
   // Match alert modal state
   const [matchModalVisible, setMatchModalVisible] = useState(false);
@@ -463,6 +465,35 @@ export default function RootLayout() {
     checkInitialNotification();
   }, [appIsReady, router]);
 
+  // Check for active session to determine navigation mode
+  useEffect(() => {
+    if (!appIsReady) return;
+
+    const checkActiveSession = async () => {
+      try {
+        const { AsyncStorageUtils } = await import('../lib/asyncStorageUtils');
+        const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
+        const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
+        
+        // console.log('🔄 _layout: Checking active session:', { hasEventId: !!eventId, hasSessionId: !!sessionId, eventId: eventId?.substring(0, 8), sessionId: sessionId?.substring(0, 8) });
+        
+        // Only use persistent navigation when we have both event and session
+        setHasActiveSession(!!eventId && !!sessionId);
+      } catch (error) {
+        // console.error('🔄 _layout: Error checking active session:', error);
+        setHasActiveSession(false);
+      }
+    };
+
+    // Initial check
+    checkActiveSession();
+    
+    // Periodic check in case storage updates
+    const interval = setInterval(checkActiveSession, 2000);
+    
+    return () => clearInterval(interval);
+  }, [appIsReady]);
+
   // 3) App initialization using the robust AppInitializationService
   useEffect(() => {
     const initializeApp = async () => {
@@ -564,7 +595,7 @@ export default function RootLayout() {
   // The GlobalNotificationService is initialized by AppInitializationService and provides
   // always-on listeners for matches and messages with the same filtering logic
 
-  if (!appIsReady) {
+  if (!appIsReady || hasActiveSession === null) {
     return (
       <ErrorBoundary>
         <CustomSplashScreen />
@@ -575,13 +606,26 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ErrorBoundary>
-          <Stack 
-            screenOptions={{ 
-              headerShown: false,
-              gestureEnabled: false,  // Disable swipe gestures
-              animation: 'none',      // Disable slide transitions - instant page changes
-            }} 
-          />
+          {/* CONDITIONAL NAVIGATION BASED ON SESSION STATE */}
+          {hasActiveSession ? (
+            <>
+              {/* console.log('🔄 _layout: Using PersistentPageContainer (hasActiveSession = true)') */}
+              {/* NEW: Persistent Page System (show/hide navigation) - for active sessions */}
+              <PersistentPageContainer />
+            </>
+          ) : (
+            <>
+              {/* console.log('🔄 _layout: Using Stack navigation (hasActiveSession = false)') */}
+              {/* OLD: Standard Expo Router Stack (mount/unmount navigation) - for no session */}
+              <Stack 
+                screenOptions={{ 
+                  headerShown: false,
+                  gestureEnabled: false,  // Disable swipe gestures
+                  animation: 'none',      // Disable slide transitions - instant page changes
+                }} 
+              />
+            </>
+          )}
         <Toast 
           config={{
           matchSuccess: (props) => (

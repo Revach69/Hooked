@@ -19,7 +19,11 @@ import {
   KeyboardAvoidingView
 } from 'react-native';
 import Toast from 'react-native-toast-message';
-import { router, useFocusEffect } from 'expo-router';
+import { router as expoRouter, useFocusEffect } from 'expo-router';
+import { persistentRouter } from '../lib/navigation/PersistentNavigator';
+
+// Use persistent router when available (in persistent navigation), fallback to expo router
+const router = persistentRouter || expoRouter;
 import { Clock, Users, LogOut, Edit, User, AlertCircle, MessageCircle, Instagram } from 'lucide-react-native';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { ensureFirebaseReady } from '../lib/firebaseReady';

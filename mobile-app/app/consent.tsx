@@ -605,7 +605,7 @@ export default function Consent() {
           event.id,
           event.name,
           sessionId,
-          event.expires_at.toDate().toISOString()
+          event.expires_at?.toDate ? event.expires_at.toDate().toISOString() : event.expires_at
         );
       } catch (error) {
         console.error('Consent error:', error);

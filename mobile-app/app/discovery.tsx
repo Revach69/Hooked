@@ -14,7 +14,11 @@ import {
   StatusBar,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
-import { router, useFocusEffect } from 'expo-router';
+import { router as expoRouter, useFocusEffect } from 'expo-router';
+import { persistentRouter } from '../lib/navigation/PersistentNavigator';
+
+// Use persistent router when available (in persistent navigation), fallback to expo router
+const router = persistentRouter || expoRouter;
 import { Heart, Filter, Users, User, MessageCircle, X } from 'lucide-react-native';
 import { EventProfileAPI, LikeAPI, EventAPI, BlockedMatchAPI, SkippedProfileAPI } from '../lib/firebaseApi';
 // Sentry removed
