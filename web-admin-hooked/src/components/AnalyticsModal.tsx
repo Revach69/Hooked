@@ -127,27 +127,31 @@ export default function AnalyticsModal({
         }
         
         if (savedAnalytics) {
-          // Calculate engagement rate from preserved metrics
-          const engagementRate = savedAnalytics.total_profiles > 0 
-            ? ((savedAnalytics.engagement_metrics.profiles_with_matches + savedAnalytics.engagement_metrics.profiles_with_messages) / savedAnalytics.total_profiles) * 100
-            : 0;
+          // Use the comprehensive analytics data from the updated Cloud Function
+          const engagementRate = savedAnalytics.engagement_metrics?.engagement_rate || 
+            (savedAnalytics.total_profiles > 0 
+              ? ((savedAnalytics.engagement_metrics?.active_users || 0) / savedAnalytics.total_profiles) * 100
+              : 0);
 
           setAnalytics({
             totalProfiles: savedAnalytics.total_profiles,
-            activeUsers: savedAnalytics.engagement_metrics.profiles_with_matches + savedAnalytics.engagement_metrics.profiles_with_messages,
-            totalLikes: 0, // Not preserved separately
+            activeUsers: savedAnalytics.engagement_metrics?.active_users || 
+              (savedAnalytics.engagement_metrics.profiles_with_matches + savedAnalytics.engagement_metrics.profiles_with_messages),
+            totalLikes: savedAnalytics.total_likes || 0, // Now preserved in updated analytics
             mutualMatches: savedAnalytics.total_matches,
-            uniqueMatchParticipants: savedAnalytics.engagement_metrics.profiles_with_matches || 0, // Approximation from preserved data
+            uniqueMatchParticipants: savedAnalytics.engagement_metrics?.unique_match_participants || 
+              savedAnalytics.engagement_metrics.profiles_with_matches || 0,
             messagesSent: savedAnalytics.total_messages,
-            activeMessageSenders: 0, // Not preserved separately
-            passiveMessageUsers: 0, // Not preserved separately
+            activeMessageSenders: savedAnalytics.engagement_metrics?.active_message_senders || 0,
+            passiveMessageUsers: savedAnalytics.engagement_metrics?.passive_message_users || 
+              (savedAnalytics.total_profiles - (savedAnalytics.engagement_metrics?.active_message_senders || 0)),
             engagementRate,
             averageAge: savedAnalytics.age_stats.average,
-            passiveUsers: 0, // Not preserved separately
-            averageLikesPerActiveUser: 0, // Not preserved separately
+            passiveUsers: savedAnalytics.engagement_metrics?.passive_users || 0,
+            averageLikesPerActiveUser: savedAnalytics.engagement_metrics?.average_likes_per_active_user || 0,
             genderBreakdown: savedAnalytics.gender_breakdown,
-            ageDistribution: {
-              '18-25': 0, // We don't have this granular data in preserved analytics
+            ageDistribution: savedAnalytics.age_distribution || {
+              '18-25': 0,
               '26-30': 0,
               '31-35': 0,
               '36-45': 0,

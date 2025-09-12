@@ -77,10 +77,39 @@ class UnifiedNavigatorClass {
         return 'consent';
       }
 
-      // If has session data, check if profile exists
+      // If has session data, check if event and profile still exist
       if (eventId && sessionId) {
         try {
-          const { EventProfileAPI } = await import('../firebaseApi');
+          const { EventAPI, EventProfileAPI } = await import('../firebaseApi');
+          const { BackgroundDataPreloader } = await import('../services/BackgroundDataPreloader');
+          const { GlobalDataCache } = await import('../cache/GlobalDataCache');
+          
+          // First check if event still exists
+          const events = await EventAPI.filter({ id: eventId });
+          
+          if (events.length === 0) {
+            // Event expired or deleted - clear everything
+            console.log('🚀 UnifiedNavigator: Event expired/deleted, clearing session data');
+            
+            // Clear preloaded data
+            BackgroundDataPreloader.clearPreloadedData();
+            GlobalDataCache.clearAll();
+            
+            // Clear AsyncStorage
+            await AsyncStorageUtils.multiRemove([
+              'currentEventId',
+              'currentSessionId',
+              'currentEventCode',
+              'currentProfileColor',
+              'currentProfilePhotoUrl',
+              'currentEventCountry',
+              'currentEventData',
+              'isOnConsentPage'
+            ]);
+            return 'home';
+          }
+          
+          // Event exists, now check profile
           const profiles = await EventProfileAPI.filter({
             session_id: sessionId,
             event_id: eventId
@@ -90,8 +119,13 @@ class UnifiedNavigatorClass {
             // Has valid session and profile - go to discovery
             return 'discovery';
           } else {
-            // Has session but no profile - clear invalid session and go home
-            console.log('🚀 UnifiedNavigator: Invalid session detected, clearing');
+            // Event exists but profile doesn't - clear invalid session
+            console.log('🚀 UnifiedNavigator: Profile not found for existing event, clearing session');
+            
+            // Clear preloaded data
+            BackgroundDataPreloader.clearPreloadedData();
+            GlobalDataCache.clearAll();
+            
             await AsyncStorageUtils.multiRemove([
               'currentEventId',
               'currentSessionId',
@@ -99,7 +133,8 @@ class UnifiedNavigatorClass {
               'currentProfileColor',
               'currentProfilePhotoUrl',
               'currentEventCountry',
-              'currentEventData'
+              'currentEventData',
+              'isOnConsentPage'
             ]);
             return 'home';
           }

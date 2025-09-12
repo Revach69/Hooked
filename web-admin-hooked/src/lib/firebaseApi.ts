@@ -63,6 +63,7 @@ export interface EventAnalytics {
   event_location?: string;
   event_timezone?: string;
   total_profiles: number;
+  total_likes: number; // UPDATED: Added total likes
   gender_breakdown: {
     male: number;
     female: number;
@@ -73,11 +74,25 @@ export interface EventAnalytics {
     min: number;
     max: number;
   };
+  age_distribution: { // UPDATED: Added age distribution buckets
+    '18-25': number;
+    '26-30': number;
+    '31-35': number;
+    '36-45': number;
+    '45+': number;
+  };
   total_matches: number;
   total_messages: number;
   engagement_metrics: {
     profiles_with_matches: number;
     profiles_with_messages: number;
+    active_users: number; // UPDATED: Added active users
+    passive_users: number; // UPDATED: Added passive users
+    active_message_senders: number; // UPDATED: Added active message senders
+    passive_message_users: number; // UPDATED: Added passive message users
+    engagement_rate: number; // UPDATED: Added engagement rate
+    average_likes_per_active_user: number; // UPDATED: Added average likes per active user
+    unique_match_participants: number; // UPDATED: Added unique match participants
     average_messages_per_match: number;
   };
   created_at: Timestamp;

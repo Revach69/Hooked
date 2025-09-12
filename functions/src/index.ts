@@ -208,8 +208,9 @@ async function generateEventAnalytics(eventId: string, eventData: any, db: admin
     
     // Calculate analytics
     const totalProfiles = profiles.length;
+    const totalLikes = likes.length; // FIXED: Include total likes sent (not just mutual)
     const mutualLikes = likes.filter(like => like.is_mutual);
-    const totalMatches = mutualLikes.length;
+    const totalMatches = Math.floor(mutualLikes.length / 2); // FIXED: Each match creates 2 records, so divide by 2
     const totalMessages = messages.length;
     
     // Gender breakdown using updated categories
@@ -236,25 +237,61 @@ async function generateEventAnalytics(eventId: string, eventData: any, db: admin
       max: Math.max(...validAges)
     } : { average: 0, min: 0, max: 0 };
     
+    // FIXED: Add age distribution buckets
+    const ageDistribution = {
+      '18-25': profiles.filter(p => p.age >= 18 && p.age <= 25).length,
+      '26-30': profiles.filter(p => p.age >= 26 && p.age <= 30).length,
+      '31-35': profiles.filter(p => p.age >= 31 && p.age <= 35).length,
+      '36-45': profiles.filter(p => p.age >= 36 && p.age <= 45).length,
+      '45+': profiles.filter(p => p.age > 45).length,
+    };
+    
+    // Calculate active users (users who SENT likes or messages)
+    const activeUsers = profiles.filter(profile => {
+      const userSentLikes = likes.filter(like => like.from_profile_id === profile.id);
+      const userSentMessages = messages.filter(msg => msg.from_profile_id === profile.id);
+      return userSentLikes.length > 0 || userSentMessages.length > 0;
+    }).length;
+    
+    // Calculate passive users (users who didn't send any likes)
+    const passiveUsers = profiles.filter(profile => {
+      const userSentLikes = likes.filter(like => like.from_profile_id === profile.id);
+      return userSentLikes.length === 0;
+    }).length;
+    
+    // Calculate average likes per active user
+    const usersWhoSentLikes = profiles.filter(profile => {
+      const userSentLikes = likes.filter(like => like.from_profile_id === profile.id);
+      return userSentLikes.length > 0;
+    }).length;
+    const averageLikesPerActiveUser = usersWhoSentLikes > 0 ? Math.round(totalLikes / usersWhoSentLikes) : 0;
+    
     // Engagement metrics
-    const profilesWithMatches = new Set(
-      mutualLikes.flatMap(like => [like.liker_session_id, like.liked_session_id])
-    ).size;
+    const uniqueMatchParticipants = new Set();
+    mutualLikes.forEach(like => {
+      uniqueMatchParticipants.add(like.from_profile_id);
+      uniqueMatchParticipants.add(like.to_profile_id);
+    });
+    
+    const profilesWithMatches = uniqueMatchParticipants.size;
+    
+    const activeMessageSenders = profiles.filter(profile => {
+      const userSentMessages = messages.filter(msg => msg.from_profile_id === profile.id);
+      return userSentMessages.length > 0;
+    }).length;
     
     const profilesWithMessages = new Set(
-      messages.flatMap(msg => {
-        // Get session IDs from messages
-        const fromProfile = profiles.find(p => p.id === msg.from_profile_id);
-        const toProfile = profiles.find(p => p.id === msg.to_profile_id);
-        return [fromProfile?.session_id, toProfile?.session_id].filter(Boolean);
-      })
+      messages.flatMap(msg => [msg.from_profile_id, msg.to_profile_id])
     ).size;
     
     const averageMessagesPerMatch = totalMatches > 0 
       ? Math.round((totalMessages / totalMatches) * 100) / 100 
       : 0;
     
-    // Create analytics document
+    // Calculate engagement rate
+    const engagementRate = totalProfiles > 0 ? (activeUsers / totalProfiles) * 100 : 0;
+    
+    // Create comprehensive analytics document
     const analyticsData = {
       event_id: eventId,
       event_name: eventData.name || 'Unknown Event',
@@ -262,13 +299,22 @@ async function generateEventAnalytics(eventId: string, eventData: any, db: admin
       event_location: eventData.location || null,
       event_timezone: eventData.timezone || null,
       total_profiles: totalProfiles,
+      total_likes: totalLikes, // FIXED: Added total likes
       gender_breakdown: genderBreakdown,
       age_stats: ageStats,
+      age_distribution: ageDistribution, // FIXED: Added age distribution buckets
       total_matches: totalMatches,
       total_messages: totalMessages,
       engagement_metrics: {
         profiles_with_matches: profilesWithMatches,
         profiles_with_messages: profilesWithMessages,
+        active_users: activeUsers, // FIXED: Added active users count
+        passive_users: passiveUsers, // FIXED: Added passive users count
+        active_message_senders: activeMessageSenders, // FIXED: Added active message senders
+        passive_message_users: totalProfiles - activeMessageSenders, // FIXED: Added passive message users
+        engagement_rate: engagementRate, // FIXED: Added engagement rate
+        average_likes_per_active_user: averageLikesPerActiveUser, // FIXED: Added average likes per active user
+        unique_match_participants: uniqueMatchParticipants.size, // FIXED: Added unique match participants
         average_messages_per_match: averageMessagesPerMatch
       },
       created_at: admin.firestore.FieldValue.serverTimestamp()
@@ -277,10 +323,13 @@ async function generateEventAnalytics(eventId: string, eventData: any, db: admin
     // Save to event_analytics collection
     const analyticsRef = await db.collection('event_analytics').add(analyticsData);
     
-    console.log(`Generated analytics for event ${eventId}:`, {
+    console.log(`Generated comprehensive analytics for event ${eventId}:`, {
       totalProfiles,
+      totalLikes, // FIXED: Log total likes
       totalMatches,
       totalMessages,
+      activeUsers,
+      engagementRate: Math.round(engagementRate * 10) / 10,
       analyticsId: analyticsRef.id
     });
     

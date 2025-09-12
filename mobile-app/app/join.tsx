@@ -168,6 +168,35 @@ export default function JoinPage() {
 
   const createEventProfile = async (event: any) => {
     try {
+      // Clear any existing event data before joining new event
+      // This ensures clean state when joining a new event after having old/expired data
+      try {
+        console.log('🚀 Join: Clearing old event data before joining new event');
+        const { BackgroundDataPreloader } = await import('../lib/services/BackgroundDataPreloader');
+        const { GlobalDataCache } = await import('../lib/cache/GlobalDataCache');
+        
+        // Clear preloaded data and cache
+        BackgroundDataPreloader.clearPreloadedData();
+        GlobalDataCache.clearAll();
+        
+        // Clear all existing AsyncStorage event data
+        await AsyncStorageUtils.multiRemove([
+          'currentEventId',
+          'currentSessionId',
+          'currentEventCode',
+          'currentProfileColor',
+          'currentProfilePhotoUrl',
+          'currentEventCountry',
+          'currentEventData',
+          'isOnConsentPage'
+        ]);
+        
+        console.log('✅ Join: Old event data cleared successfully');
+      } catch (clearError) {
+        console.warn('Join: Failed to clear old event data:', clearError);
+        // Continue with join process even if cleanup fails
+      }
+      
       // Generate session ID
       const sessionId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
       
