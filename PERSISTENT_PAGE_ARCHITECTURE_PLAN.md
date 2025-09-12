@@ -465,6 +465,96 @@ const hidePage = (pageId: string) => {
 
 ### **Phase 2: Enhanced Page Components (Week 1-2)**
 
+#### **🔥 Critical Migration Patterns**
+
+##### **1. Discovery's Complex Listener Cleanup**
+Discovery calls `cleanupAllListeners()` multiple times - must be adapted:
+
+```typescript
+// In DiscoveryPagePersistent
+const { isActive, registerListener } = usePersistentPage({ pageId: 'discovery' });
+
+useEffect(() => {
+  if (!isActive) {
+    // Don't setup listeners when hidden
+    return;
+  }
+  
+  // Setup listeners only when active
+  const unsubscribes = setupConsolidatedListeners();
+  
+  // Register with ListenerManager instead of local cleanup
+  unsubscribes.forEach((unsubscribe, index) => {
+    registerListener(`listener_${index}`, unsubscribe);
+  });
+  
+  // NO cleanup on unmount - page stays mounted!
+  // ListenerManager handles cleanup on event change
+}, [isActive, currentEvent?.id]);
+```
+
+##### **2. Filtering Logic Performance Fix**
+Discovery's `applyFilters()` runs on every state change - MUST prevent when hidden:
+
+```typescript
+// In DiscoveryPagePersistent
+const [pendingFilterUpdate, setPendingFilterUpdate] = useState(false);
+
+useEffect(() => {
+  if (!isActive) {
+    // Mark that filters need re-run when page becomes active
+    setPendingFilterUpdate(true);
+    return; // CRITICAL: Skip filter execution when hidden
+  }
+  
+  if (pendingFilterUpdate) {
+    applyFilters(); // Your existing filter logic
+    setPendingFilterUpdate(false);
+  }
+}, [profiles, currentUserProfile, filters, likedProfiles, skippedProfiles, viewedProfiles, isActive]);
+```
+
+##### **3. Bottom Navigation Integration**
+Replace `router.push()` calls with persistent navigation:
+
+```typescript
+// OLD: In Discovery/Matches/Profile
+<TouchableOpacity onPress={() => router.push('/matches')}>
+
+// NEW: In persistent pages
+<TouchableOpacity onPress={() => props.onNavigate('matches')}>
+```
+
+##### **4. Event Change Cleanup Sequence**
+Critical order when event changes:
+
+```typescript
+// In PersistentPageManager
+cleanupOnEventChange(): void {
+  console.log('🔄 Event change detected - cleaning up in order');
+  
+  // 1. Stop all Firebase listeners FIRST
+  listenerManager.cleanupAllListeners();
+  
+  // 2. Clear CrossPageEventBus subscriptions
+  crossPageEventBus.clearAll();
+  
+  // 3. Clear cached data
+  GlobalDataCache.clearAll();
+  
+  // 4. THEN reset page registry
+  this.pageRegistry = {
+    discovery: { mounted: true, component: DiscoveryPagePersistent },
+    matches: { mounted: false, component: null },
+    chat: { mounted: false, component: null },
+    profile: { mounted: false, component: null }
+  };
+  
+  // 5. Force remount Discovery with new event
+  this.forceRemountDiscovery();
+}
+```
+
 #### **2.1 Create Persistent Page Wrappers**
 Transform existing pages to persistent versions:
 
@@ -776,6 +866,33 @@ interface PersistentNavigationConfig {
 - ✅ **100% scroll position preservation**
 - ✅ **Zero Firebase listener leaks**  
 - ✅ **Smooth performance on mid-range devices**
+
+### **⚠️ Implementation Warnings**
+
+#### **AsyncStorage Key Collisions**
+With persistent pages, prevent key collisions:
+
+```typescript
+// Add page prefix to all AsyncStorage keys
+const viewedKey = `persistent_${pageId}_viewedProfiles_${eventId}`;
+const filterKey = `persistent_${pageId}_filters_${eventId}`;
+```
+
+#### **Initial Load State for Lazy Pages**
+Preload data for pages before they mount:
+
+```typescript
+// In PersistentPageContainer
+useEffect(() => {
+  if (currentPage === 'discovery') {
+    // Start preloading Matches data in background
+    setTimeout(() => {
+      if (!pageRegistry.matches.mounted) {
+        DataPreloadService.preloadMatchesData(eventId, sessionId);
+      }
+    }, 2000); // After Discovery settles
+  }
+}, [currentPage]);
 
 ---
 
