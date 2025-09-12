@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -75,10 +75,12 @@ export default function Profile() {
   const [showImagePreview, setShowImagePreview] = useState(false);
   const [instagramHandle, setInstagramHandle] = useState('');
   const [editingInstagram, setEditingInstagram] = useState(false);
+  const lastProfileId = useRef<string | null>(null);
 
   // Update dependent states when profile changes (for instant display)
   useEffect(() => {
-    if (profile) {
+    if (profile && profile.id !== lastProfileId.current) {
+      lastProfileId.current = profile.id;
       // Batch all state updates to prevent multiple re-renders
       React.startTransition(() => {
         setAboutMe(profile.about_me || '');
