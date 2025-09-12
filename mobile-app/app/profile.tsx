@@ -44,16 +44,16 @@ export default function Profile() {
   const [currentEvent, setCurrentEvent] = useState<any>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [tempPhotoUri, setTempPhotoUri] = useState<string | null>(null);
-  const [aboutMe, setAboutMe] = useState(profile?.about_me || '');
+  const [aboutMe, setAboutMe] = useState('');
   const [editingAboutMe, setEditingAboutMe] = useState(false);
-  const [height, setHeight] = useState(profile?.height_cm ? String(profile.height_cm) : '');
+  const [height, setHeight] = useState('');
   const [editingHeight, setEditingHeight] = useState(false);
   const [heightUnit, setHeightUnit] = useState<'cm' | 'feet'>('cm');
   const [feet, setFeet] = useState('');
   const [inches, setInches] = useState('');
-  const [interests, setInterests] = useState(profile?.interests || []);
+  const [interests, setInterests] = useState<string[]>([]);
   const [showInterests, setShowInterests] = useState(false);
-  const [eventVisible, setEventVisible] = useState(profile?.is_visible ?? true);
+  const [eventVisible, setEventVisible] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editingBasicProfile, setEditingBasicProfile] = useState(false);
   const ALL_INTERESTS = [
@@ -73,8 +73,20 @@ export default function Profile() {
   const [cachedProfileImageUri, setCachedProfileImageUri] = useState<string | null>(null);
   const [cachedUserImageUris, setCachedUserImageUris] = useState<Map<string, string>>(new Map());
   const [showImagePreview, setShowImagePreview] = useState(false);
-  const [instagramHandle, setInstagramHandle] = useState(profile?.instagram_handle || '');
+  const [instagramHandle, setInstagramHandle] = useState('');
   const [editingInstagram, setEditingInstagram] = useState(false);
+
+  // Update dependent states when profile changes (for instant display)
+  useEffect(() => {
+    if (profile) {
+      setAboutMe(profile.about_me || '');
+      setHeight(profile.height_cm ? String(profile.height_cm) : '');
+      setInterests(profile.interests || []);
+      setEventVisible(profile.is_visible ?? true);
+      setInstagramHandle(profile.instagram_handle || '');
+      console.log('Profile: Updated dependent states from profile data');
+    }
+  }, [profile]);
 
   // Load cached image URI immediately on mount to prevent flash
   useEffect(() => {
@@ -166,7 +178,6 @@ export default function Profile() {
         if (preloadedProfile && preloadedProfile.session_id === sessionId && preloadedProfile.event_id === eventId) {
           console.log('Profile: Using preloaded profile data for instant display');
           setProfile(preloadedProfile);
-          setInstagramHandle(preloadedProfile.instagram_handle || '');
           
           // Load cached image URI for instant display
           const imageCacheKey = `profile_image_${sessionId}`;
@@ -189,7 +200,6 @@ export default function Profile() {
               if (JSON.stringify(freshProfile) !== JSON.stringify(preloadedProfile)) {
                 console.log('Profile: Updating with fresh data from background refresh');
                 setProfile(freshProfile);
-                setInstagramHandle(freshProfile.instagram_handle || '');
               }
             }
           }).catch(error => {
@@ -213,9 +223,6 @@ export default function Profile() {
           if (profiles.length > 0) {
             const userProfile = profiles[0];
             setProfile(userProfile);
-            
-            // Initialize instagram handle state
-            setInstagramHandle(userProfile.instagram_handle || '');
             
             // Load cached profile image URI immediately to prevent placeholder flash
             const imageCacheKey = `profile_image_${sessionId}`;
