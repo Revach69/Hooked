@@ -8,7 +8,7 @@ import 'react-native-get-random-values';
 // No manual background handler needed for Expo apps
 
 import React, { useEffect, useState } from 'react';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, usePathname } from 'expo-router';
 import { PersistentPageContainer } from '../lib/components/PersistentPageContainer';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Toast from 'react-native-toast-message';
@@ -41,8 +41,8 @@ import { getSessionAndInstallationIds } from '../lib/session/sessionId';
 
 export default function RootLayout() {
   const router = useRouter();
+  const pathname = usePathname();
   const [appIsReady, setAppIsReady] = useState(false);
-  const [hasActiveSession, setHasActiveSession] = useState<boolean | null>(null);
   
   // Match alert modal state
   const [matchModalVisible, setMatchModalVisible] = useState(false);
@@ -465,22 +465,44 @@ export default function RootLayout() {
     checkInitialNotification();
   }, [appIsReady, router]);
 
-  // Check for active session to determine navigation mode
+  // Simple session presence check - let individual pages handle validation
+  const [hasActiveSession, setHasActiveSession] = useState<boolean | null>(null);
+  
   useEffect(() => {
     if (!appIsReady) return;
 
     const checkActiveSession = async () => {
       try {
+        // Don't check session if user is on home page - they won't have eventId there
+        if (pathname === '/home' || pathname === '/' || pathname === '/join') {
+          setHasActiveSession(false);
+          return;
+        }
+        
         const { AsyncStorageUtils } = await import('../lib/asyncStorageUtils');
         const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
         const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
         
-        // console.log('🔄 _layout: Checking active session:', { hasEventId: !!eventId, hasSessionId: !!sessionId, eventId: eventId?.substring(0, 8), sessionId: sessionId?.substring(0, 8) });
+        // Don't switch to persistent navigation if user is on consent page
+        // This prevents premature switching while profile is still being created
+        const isOnConsentPage = await AsyncStorageUtils.getItem<boolean>('isOnConsentPage');
         
-        // Only use persistent navigation when we have both event and session
-        setHasActiveSession(!!eventId && !!sessionId);
+        console.log('🔄 _layout: Checking session presence:', { 
+          pathname,
+          hasEventId: !!eventId, 
+          hasSessionId: !!sessionId,
+          isOnConsentPage: !!isOnConsentPage
+        });
+        
+        // Use persistent navigation if we have session data AND not on consent page
+        const newSessionState = !!eventId && !!sessionId && !isOnConsentPage;
+        
+        // Only update state if it actually changed to prevent unnecessary re-renders
+        if (newSessionState !== hasActiveSession) {
+          setHasActiveSession(newSessionState);
+        }
       } catch (error) {
-        // console.error('🔄 _layout: Error checking active session:', error);
+        console.error('🔄 _layout: Error checking session:', error);
         setHasActiveSession(false);
       }
     };
@@ -488,11 +510,13 @@ export default function RootLayout() {
     // Initial check
     checkActiveSession();
     
-    // Periodic check in case storage updates
-    const interval = setInterval(checkActiveSession, 2000);
+    // Check periodically for session changes - TEMPORARILY DISABLED FOR DEBUGGING
+    // const interval = setInterval(checkActiveSession, 3000);
     
-    return () => clearInterval(interval);
-  }, [appIsReady]);
+    return () => {
+      // clearInterval(interval);
+    };
+  }, [appIsReady, pathname, hasActiveSession]);
 
   // 3) App initialization using the robust AppInitializationService
   useEffect(() => {

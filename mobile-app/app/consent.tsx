@@ -115,7 +115,10 @@ export default function Consent() {
   };
 
   useEffect(() => {
-    const fetchEvent = async () => {
+    const initializeConsent = async () => {
+      // Set flag to prevent switching to persistent navigation while on consent page
+      await AsyncStorageUtils.setItem('isOnConsentPage', true);
+      
       const firebaseReady = await ensureFirebaseReady();
       if (!firebaseReady) {
         Toast.show({
@@ -193,7 +196,13 @@ export default function Consent() {
         router.replace('/home');
       }
     };
-    fetchEvent();
+    
+    initializeConsent();
+    
+    // Cleanup function to clear the flag when leaving consent page
+    return () => {
+      AsyncStorageUtils.removeItem('isOnConsentPage');
+    };
   }, []);
 
   // Load saved profile data if available
@@ -631,6 +640,9 @@ export default function Consent() {
         console.error('Consent error:', error);
         // Don't fail the profile creation for this
       }
+      
+      // Clear consent page flag before navigating to allow persistent navigation
+      await AsyncStorageUtils.removeItem('isOnConsentPage');
       
       // Navigate to discovery page
       router.replace('/discovery');

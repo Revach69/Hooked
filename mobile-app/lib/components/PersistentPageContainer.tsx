@@ -26,23 +26,25 @@ interface PersistentPageProps {
 }
 
 // Wrapper components that add persistent navigation to original pages
-const DiscoveryWrapper: React.FC<PersistentPageProps> = ({ isActive, onNavigate }) => {
-  // Props are passed for future use - original pages use global navigation system
-  // console.log('🔍 DiscoveryWrapper: isActive =', isActive, 'onNavigate available =', !!onNavigate);
+// Memoized to prevent re-mounting of pages on every render
+// Discovery wrapper - completely static since Discovery manages its own state
+const DiscoveryWrapper: React.FC = React.memo(() => {
+  // Discovery component doesn't need props - it manages its own navigation and state
+  // console.log('🔍 DiscoveryWrapper: Rendering Discovery component');
   return <Discovery />;
-};
+});
 
-const MatchesWrapper: React.FC<PersistentPageProps> = ({ isActive, onNavigate }) => {
+const MatchesWrapper: React.FC<PersistentPageProps> = React.memo(({ isActive, onNavigate }) => {
   // Props are passed for future use - original pages use global navigation system  
   // console.log('💕 MatchesWrapper: isActive =', isActive, 'onNavigate available =', !!onNavigate);
   return <Matches />;
-};
+});
 
-const ProfileWrapper: React.FC<PersistentPageProps> = ({ isActive, onNavigate }) => {
+const ProfileWrapper: React.FC<PersistentPageProps> = React.memo(({ isActive, onNavigate }) => {
   // Props are passed for future use - original pages use global navigation system
   // console.log('👤 ProfileWrapper: isActive =', isActive, 'onNavigate available =', !!onNavigate);
   return <Profile />;
-};
+});
 
 // Chat wrapper will need special handling for dynamic routes
 const ChatWrapper: React.FC<PersistentPageProps & { chatId?: string }> = ({ isActive, onNavigate, chatId }) => {
@@ -62,7 +64,7 @@ interface PageRegistry {
 
 // Note: DiscoveryPagePersistent is now imported from persistent directory
 
-export const PersistentPageContainer: React.FC = () => {
+export const PersistentPageContainer: React.FC = React.memo(() => {
   // console.log('🏠 PersistentPageContainer: Component rendered');
   const [currentPage, setCurrentPage] = useState('discovery');
   
@@ -95,7 +97,8 @@ export const PersistentPageContainer: React.FC = () => {
           component = MatchesWrapper;
           break;
         case 'discovery':
-          component = DiscoveryWrapper;
+          // Discovery wrapper doesn't take props
+          component = DiscoveryWrapper as any;
           break;
         case 'profile':
           component = ProfileWrapper;
@@ -218,12 +221,8 @@ export const PersistentPageContainer: React.FC = () => {
         width: '100%',
         height: '100%',
         transform: [{ translateX: discoveryTranslateX }],
-        opacity: currentPage === 'discovery' ? 1 : 0,
       }}>
-        <DiscoveryWrapper 
-          isActive={currentPage === 'discovery'}
-          onNavigate={navigateToPage}
-        />
+        <DiscoveryWrapper />
       </Animated.View>
       
       {/* Matches Page - Will be added in Day 2 after ListenerManager validation */}
@@ -233,7 +232,6 @@ export const PersistentPageContainer: React.FC = () => {
           width: '100%',
           height: '100%',
           transform: [{ translateX: matchesTranslateX }],
-          opacity: currentPage === 'matches' ? 1 : 0,
         }}>
           <pageRegistry.matches.component 
             isActive={currentPage === 'matches'}
@@ -249,7 +247,6 @@ export const PersistentPageContainer: React.FC = () => {
           width: '100%',
           height: '100%',
           transform: [{ translateX: profileTranslateX }],
-          opacity: currentPage === 'profile' ? 1 : 0,
         }}>
           <pageRegistry.profile.component 
             isActive={currentPage === 'profile'}
@@ -265,7 +262,6 @@ export const PersistentPageContainer: React.FC = () => {
           width: '100%',
           height: '100%',
           transform: [{ translateX: chatTranslateX }],
-          opacity: currentPage === 'chat' ? 1 : 0,
         }}>
           <pageRegistry.chat.component 
             isActive={currentPage === 'chat'}
@@ -275,4 +271,4 @@ export const PersistentPageContainer: React.FC = () => {
       )}
     </View>
   );
-};
+});
