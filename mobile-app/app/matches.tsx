@@ -15,11 +15,8 @@ import {
   TextInput,
   RefreshControl,
 } from 'react-native';
-import { router as expoRouter, useFocusEffect } from 'expo-router';
-import { persistentRouter } from '../lib/navigation/PersistentNavigator';
-
-// Use persistent router when available (in persistent navigation), fallback to expo router
-const router = persistentRouter || expoRouter;
+import { useFocusEffect } from 'expo-router';
+import { router } from '../lib/navigation/UnifiedNavigator';
 import { Heart, MessageCircle, Users, User, UserX, VolumeX, Volume2, Flag } from 'lucide-react-native';
 import { EventProfileAPI, LikeAPI, EventAPI, MessageAPI, MutedMatchAPI, ReportAPI } from '../lib/firebaseApi';
 // Sentry removed

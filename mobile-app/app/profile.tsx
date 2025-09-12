@@ -19,11 +19,8 @@ import {
   KeyboardAvoidingView
 } from 'react-native';
 import Toast from 'react-native-toast-message';
-import { router as expoRouter, useFocusEffect } from 'expo-router';
-import { persistentRouter } from '../lib/navigation/PersistentNavigator';
-
-// Use persistent router when available (in persistent navigation), fallback to expo router
-const router = persistentRouter || expoRouter;
+import { useFocusEffect } from 'expo-router';
+import { router } from '../lib/navigation/UnifiedNavigator';
 import { Clock, Users, LogOut, Edit, User, AlertCircle, MessageCircle, Instagram } from 'lucide-react-native';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { ensureFirebaseReady } from '../lib/firebaseReady';
@@ -358,7 +355,7 @@ export default function Profile() {
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: 'Failed to open photo options. Please try again.',
+        text2: 'Failed to open photo options',
         position: 'top',
         visibilityTime: 3500,
         autoHide: true,
@@ -399,7 +396,7 @@ export default function Profile() {
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: 'Failed to capture photo. Please try again.',
+        text2: 'Failed to capture photo',
         position: 'top',
         visibilityTime: 3500,
         autoHide: true,
@@ -440,7 +437,7 @@ export default function Profile() {
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: 'Failed to pick image. Please try again.',
+        text2: 'Failed to pick image',
         position: 'top',
         visibilityTime: 3500,
         autoHide: true,
@@ -456,7 +453,7 @@ export default function Profile() {
       Toast.show({
         type: 'warning',
         text1: 'File Too Large',
-        text2: 'Image must be smaller than 5MB.',
+        text2: 'Image must be smaller than 5MB',
         position: 'top',
         visibilityTime: 3500,
         autoHide: true,
@@ -543,7 +540,7 @@ export default function Profile() {
       Toast.show({
         type: 'error',
         text1: 'Upload Failed',
-        text2: `Failed to upload photo: ${errorMessage}. Please try again.`,
+        text2: 'Photo upload failed',
         position: 'top',
         visibilityTime: 3500,
         autoHide: true,
@@ -688,7 +685,7 @@ export default function Profile() {
       Toast.show({
         type: 'warning',
         text1: 'Missing Information',
-        text2: 'Please provide a report explanation.',
+        text2: 'Please provide a report explanation',
         position: 'top',
         visibilityTime: 3500,
         autoHide: true,
@@ -716,7 +713,7 @@ export default function Profile() {
         Toast.show({
           type: 'error',
           text1: 'No Internet Connection',
-          text2: 'Please check your internet connection and try again.',
+          text2: 'Check internet and try again',
           position: 'top',
           visibilityTime: 3500,
           autoHide: true,
@@ -737,7 +734,7 @@ export default function Profile() {
         Toast.show({
           type: 'error',
           text1: 'Error',
-          text2: 'Session information not found. Please try again.',
+          text2: 'Session information not found',
           position: 'top',
           visibilityTime: 3500,
           autoHide: true,
@@ -982,7 +979,7 @@ export default function Profile() {
       Toast.show({
         type: 'success',
         text1: 'About Me Updated!',
-        text2: 'Your about me section has been saved.',
+        text2: 'About me section saved',
         position: 'top',
         visibilityTime: 2000,
         autoHide: true,
@@ -993,7 +990,7 @@ export default function Profile() {
       Toast.show({
         type: 'error',
         text1: 'Save Failed',
-        text2: 'Failed to save about me. Please try again.',
+        text2: 'Failed to save about me',
         position: 'top',
         visibilityTime: 3000,
         autoHide: true,
@@ -1028,7 +1025,7 @@ export default function Profile() {
       Toast.show({
         type: 'success',
         text1: 'Height Updated!',
-        text2: 'Your height has been saved.',
+        text2: 'Your height has been saved',
         position: 'top',
         visibilityTime: 2000,
         autoHide: true,
@@ -1039,7 +1036,7 @@ export default function Profile() {
       Toast.show({
         type: 'error',
         text1: 'Save Failed',
-        text2: 'Failed to save height. Please try again.',
+        text2: 'Failed to save height',
         position: 'top',
         visibilityTime: 3000,
         autoHide: true,
@@ -1068,7 +1065,7 @@ export default function Profile() {
       Toast.show({
         type: 'success',
         text1: 'Interests Updated!',
-        text2: 'Your interests have been saved.',
+        text2: 'Your interests have been saved',
         position: 'top',
         visibilityTime: 2000,
         autoHide: true,
@@ -1079,7 +1076,7 @@ export default function Profile() {
       Toast.show({
         type: 'error',
         text1: 'Save Failed',
-        text2: 'Failed to save interests. Please try again.',
+        text2: 'Failed to save interests',
         position: 'top',
         visibilityTime: 3000,
         autoHide: true,
@@ -1101,8 +1098,8 @@ export default function Profile() {
         type: 'success',
         text1: value ? 'Profile Visible' : 'Profile Hidden',
         text2: value 
-          ? 'You can now see and be seen by other users.' 
-          : 'You won\'t see other users, but can still chat with matches.',
+          ? 'Now visible to others' 
+          : 'Hidden but can still chat',
         position: 'top',
         visibilityTime: 3500,
         autoHide: true,
@@ -1114,7 +1111,7 @@ export default function Profile() {
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: 'Failed to update visibility. Please try again.',
+        text2: 'Failed to update visibility',
         position: 'top',
         visibilityTime: 3500,
         autoHide: true,
@@ -1145,7 +1142,7 @@ export default function Profile() {
       Toast.show({
         type: 'error',
         text1: 'Invalid Handle',
-        text2: 'Please enter a valid Instagram handle.',
+        text2: 'Enter valid Instagram handle',
         position: 'top',
         visibilityTime: 3500,
         autoHide: true,
@@ -1166,7 +1163,7 @@ export default function Profile() {
       Toast.show({
         type: 'success',
         text1: 'Instagram Connected!',
-        text2: 'Instagram handle added to profile.',
+        text2: 'Instagram handle added to profile',
         position: 'top',
         visibilityTime: 3500,
         autoHide: true,
@@ -1177,7 +1174,7 @@ export default function Profile() {
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: 'Failed to save Instagram handle.',
+        text2: 'Failed to save Instagram handle',
         position: 'top',
         visibilityTime: 3500,
         autoHide: true,
@@ -1237,7 +1234,7 @@ export default function Profile() {
               Toast.show({
                 type: 'success',
                 text1: 'Instagram Disconnected',
-                text2: 'Instagram removed from profile.',
+                text2: 'Instagram removed from profile',
                 position: 'top',
                 visibilityTime: 3500,
                 autoHide: true,
@@ -1248,7 +1245,7 @@ export default function Profile() {
               Toast.show({
                 type: 'error',
                 text1: 'Error',
-                text2: 'Failed to remove Instagram handle.',
+                text2: 'Failed to remove Instagram handle',
                 position: 'top',
                 visibilityTime: 3500,
                 autoHide: true,

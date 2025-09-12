@@ -17,8 +17,9 @@ import {
   Clipboard,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
+import { unifiedNavigator } from '../lib/navigation/UnifiedNavigator';
 import { ArrowLeft, Send, Flag, X, VolumeX, Volume2, UserX } from 'lucide-react-native';
-import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { collection, query, where, orderBy, onSnapshot, getDocs, serverTimestamp, Timestamp } from 'firebase/firestore';
@@ -97,7 +98,7 @@ export default function Chat() {
           autoHide: true,
           topOffset: 0,
         });
-        router.back();
+        unifiedNavigator.navigate('matches', {}, true); // go back to matches
         return;
       }
 
@@ -136,7 +137,7 @@ export default function Chat() {
           'currentProfileColor',
           'currentProfilePhotoUrl'
         ]);
-        router.replace('/home');
+        unifiedNavigator.navigate('home', {}, true); // replace: true
         return;
       }
 
@@ -160,7 +161,7 @@ export default function Chat() {
           'This user is no longer available. Returning to discovery.',
           [{ 
             text: 'OK', 
-            onPress: () => router.replace('/discovery')
+            onPress: () => unifiedNavigator.navigate('discovery', {}, true) // replace: true
           }]
         );
         return;
@@ -180,7 +181,7 @@ export default function Chat() {
         autoHide: true,
         topOffset: 0,
       });
-      router.back();
+      unifiedNavigator.navigate('matches', {}, true); // go back to matches
     }
   }, [matchId, loadMuteStatus]);
 
@@ -216,7 +217,7 @@ export default function Chat() {
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: `Failed to ${isMuted ? 'unmute' : 'mute'} match`,
+        text2: isMuted ? 'Failed to unmute' : 'Failed to mute',
         position: 'top',
         visibilityTime: 3500,
         autoHide: true,
@@ -271,13 +272,13 @@ export default function Chat() {
                 Toast.show({
                   type: 'success',
                   text1: 'Unmatched',
-                  text2: `You have unmatched with ${matchName}. They won't appear in your discovery again.`,
+                  text2: `Unmatched with ${matchName}`,
                   position: 'top',
                   visibilityTime: 3500,
                   autoHide: true,
                   topOffset: 0,
                 });
-                router.back(); // Go back to matches
+                unifiedNavigator.navigate('matches', {}, true); // go back to matches // Go back to matches
               }
             } catch {
               // Use Toast instead of notifications to match message toast design
@@ -469,7 +470,7 @@ export default function Chat() {
                 'This user is no longer available.',
                 [{ 
                   text: 'OK', 
-                  onPress: () => router.replace('/discovery')
+                  onPress: () => unifiedNavigator.navigate('discovery', {}, true) // replace: true
                 }]
               );
             }
@@ -603,7 +604,7 @@ export default function Chat() {
               Toast.show({
                 type: 'info',
                 text1: 'Match Removed',
-                text2: 'This conversation is no longer available',
+                text2: 'This conversation is unavailable',
                 position: 'top',
                 visibilityTime: 3500,
                 autoHide: true,
@@ -612,7 +613,7 @@ export default function Chat() {
 
               // Redirect to matches page after a brief delay
               setTimeout(() => {
-                router.replace('/matches');
+                unifiedNavigator.navigate('matches', {}, true); // replace: true
               }, 1000);
             }
           } catch (error) {
@@ -664,7 +665,7 @@ export default function Chat() {
         Toast.show({
           type: 'error',
           text1: 'Match Removed',
-          text2: 'This conversation is no longer available',
+          text2: 'This conversation is unavailable',
           position: 'top',
           visibilityTime: 3500,
           autoHide: true,
@@ -673,7 +674,7 @@ export default function Chat() {
         
         // Redirect to matches page
         setTimeout(() => {
-          router.replace('/matches');
+          unifiedNavigator.navigate('matches', {}, true); // replace: true
         }, 1000);
         return;
       }
@@ -766,7 +767,7 @@ export default function Chat() {
       Toast.show({
         type: 'warning',
         text1: 'Missing Information',
-        text2: 'Please provide a reason for the report',
+        text2: 'Please provide a reason',
         position: 'top',
         visibilityTime: 3500,
         autoHide: true,
@@ -805,7 +806,7 @@ export default function Chat() {
       Toast.show({
         type: 'success',
         text1: 'Report Submitted',
-        text2: 'Thank you for your report. We will review it shortly.',
+        text2: 'Thank you for your report',
         position: 'top',
         visibilityTime: 3500,
         autoHide: true,
@@ -1201,7 +1202,7 @@ export default function Chat() {
           <View style={styles.header}>
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => router.back()}
+              onPress={() => unifiedNavigator.goBack()}
               accessibilityRole="button"
               accessibilityLabel="Go back"
               accessibilityHint="Navigate back to the previous screen"

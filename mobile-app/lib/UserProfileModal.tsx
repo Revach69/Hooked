@@ -12,6 +12,7 @@ import {
   Animated,
   Image,
 } from 'react-native';
+import FastImage from 'react-native-fast-image';
 import { X, MapPin, Heart, Instagram } from 'lucide-react-native';
 import * as Linking from 'expo-linking';
 import { ImageCacheService } from './services/ImageCacheService';
@@ -33,8 +34,10 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   
-  // Fix modal loading delays by preloading cached image
+  // iOS FIX: Use cached image URI for faster loading (develop branch pattern)
   const [cachedImageUri, setCachedImageUri] = useState<string | null>(null);
+  const [isImageLoading, setIsImageLoading] = useState(false);
+  const preloadAttempted = useRef(false);
   
   useEffect(() => {
     const loadCachedImage = async () => {
@@ -42,12 +45,26 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
         try {
           const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
           if (eventId) {
-            // Get cached image URI for instant loading
             const cachedUri = await ImageCacheService.getCachedImageUri(
               profile.profile_photo_url,
               eventId,
               profile.session_id || 'modal'
             );
+            
+            // iOS-specific: Prefetch with FastImage for better performance
+            if (cachedUri && !preloadAttempted.current) {
+              preloadAttempted.current = true;
+              try {
+                await FastImage.preload([{
+                  uri: cachedUri,
+                  priority: FastImage.priority.high,
+                  cache: FastImage.cacheControl.immutable
+                }]);
+              } catch (prefetchError) {
+                console.warn('UserProfileModal: FastImage preload failed:', prefetchError);
+              }
+            }
+            
             setCachedImageUri(cachedUri);
           } else {
             setCachedImageUri(profile.profile_photo_url);
@@ -56,16 +73,13 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
           console.warn('UserProfileModal: Failed to get cached image:', error);
           setCachedImageUri(profile.profile_photo_url);
         }
-      } else {
-        setCachedImageUri(null);
       }
     };
     
     if (visible && profile) {
+      setIsImageLoading(false); // Reset loading state when modal opens
+      preloadAttempted.current = false; // Reset preload flag for new profile
       loadCachedImage();
-    } else if (!visible) {
-      // Clear cached URI when modal closes to prevent memory leaks
-      setCachedImageUri(null);
     }
   }, [visible, profile?.profile_photo_url, profile?.session_id]);
   
@@ -359,7 +373,7 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      animationType="none"  // Remove fade animation for instant display
       onRequestClose={onClose}
       accessibilityViewIsModal={true}
     >
@@ -388,14 +402,25 @@ export default function UserProfileModal({ visible, profile, onClose, onLike, on
           {/* Profile Image - Swipeable */}
           <View style={styles.imageContainer} {...panResponder.panHandlers}>
             {cachedImageUri ? (
-              <Image
-                source={{ uri: cachedImageUri }}
-                onError={() => {
-                  console.warn('UserProfileModal: Image failed to load, falling back to avatar');
-                  setCachedImageUri(null);
+              <FastImage
+                source={{ 
+                  uri: cachedImageUri,
+                  priority: FastImage.priority.high,
+                  cache: FastImage.cacheControl.immutable
+                }}
+                onError={() => {}} // Don't clear cache on error - keep trying like develop branch
+                onLoadStart={() => {
+                  if (!isImageLoading) {
+                    setIsImageLoading(true);
+                    console.log('UserProfileModal: Image load start');
+                  }
+                }}
+                onLoad={() => {
+                  setIsImageLoading(false);
+                  console.log('UserProfileModal: Image loaded');
                 }}
                 style={styles.profileImage}
-                loadingIndicatorSource={require('../assets/Hooked Full Logo.png')}
+                resizeMode={FastImage.resizeMode.contain}
               />
             ) : (
               <View style={styles.fallbackAvatar}>

@@ -663,7 +663,7 @@ export const NotificationRouter = {
             Toast.show({
               type: 'messageSuccess',
               text1: `You got a message from ${name}`,
-              text2: ev.preview,
+              text2: ev.preview?.substring(0, 37) || '',
               position: 'top',
               visibilityTime: 3500,
               autoHide: true,

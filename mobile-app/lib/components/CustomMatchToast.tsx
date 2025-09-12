@@ -163,7 +163,7 @@ export const CustomMatchToast: React.FC<CustomMatchToastProps> = ({
               {text1}
             </Text>
             {text2 && (
-              <Text style={styles.text2} numberOfLines={1}>
+              <Text style={styles.text2} numberOfLines={1} ellipsizeMode="tail">
                 {text2}
               </Text>
             )}

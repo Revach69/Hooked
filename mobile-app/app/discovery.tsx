@@ -13,12 +13,10 @@ import {
   useColorScheme,
   StatusBar,
 } from 'react-native';
+import FastImage from 'react-native-fast-image';
 import Toast from 'react-native-toast-message';
-import { router as expoRouter, useFocusEffect } from 'expo-router';
-import { persistentRouter } from '../lib/navigation/PersistentNavigator';
-
-// Use persistent router when available (in persistent navigation), fallback to expo router
-const router = persistentRouter || expoRouter;
+import { useFocusEffect } from 'expo-router';
+import { unifiedNavigator } from '../lib/navigation/UnifiedNavigator';
 import { Heart, Filter, Users, User, MessageCircle, X } from 'lucide-react-native';
 import { EventProfileAPI, LikeAPI, EventAPI, BlockedMatchAPI, SkippedProfileAPI } from '../lib/firebaseApi';
 // Sentry removed
@@ -213,7 +211,6 @@ export default function Discovery() {
   const [viewedProfiles, setViewedProfiles] = useState(new Set<string>());
   const [isAppActive, setIsAppActive] = useState(true);
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
-  const [cachedImageUris, setCachedImageUris] = useState<Map<string, string>>(new Map());
   const [showHowItWorksModal, setShowHowItWorksModal] = useState(false);
   
   // Single ref to hold all unsubscribe functions
@@ -232,7 +229,7 @@ export default function Discovery() {
   
     if (!eventId || !sessionId) {
       // No active session - this is correct to go home
-      router.replace('/home');
+      unifiedNavigator.navigate('home', {}, true); // replace: true
       return;
     }
 
@@ -322,7 +319,7 @@ export default function Discovery() {
           'currentEventCountry',
           'currentEventData'
         ]);
-        router.replace('/home');
+        unifiedNavigator.navigate('home', {}, true); // replace: true
         return;
       } else {
         console.log('Discovery: Development mode - event not found but keeping session for debugging');
@@ -363,7 +360,7 @@ export default function Discovery() {
             'currentEventData'
           ]);
           // 2. Profile deleted but session exists - should go back to matches/previous page
-          router.back();
+          unifiedNavigator.navigate('home', {}, true); // go back to home
           return;
         } else {
           setCurrentUserProfile(userProfiles[0]);
@@ -376,7 +373,7 @@ export default function Discovery() {
       // If it's not, then the user needs to reselect their photo
       if (!profilePhotoUrl) {
         console.log('No profile photo URL found in storage, redirecting to profile setup');
-        router.replace('/profile'); // Let them select a photo again
+        unifiedNavigator.navigate('profile', {}, true); // Let them select a photo again
         return;
       }
       
@@ -599,6 +596,47 @@ export default function Discovery() {
           );
           setProfiles(otherUsersProfiles);
           
+          // AGGRESSIVE IMAGE PRELOADING - like develop branch
+          const profileImageUrls = otherUsersProfiles
+            .map(p => p.profile_photo_url)
+            .filter(Boolean);
+          
+          if (profileImageUrls.length > 0 && currentEvent?.id) {
+            console.log(`Discovery: Aggressively preloading ${profileImageUrls.length} profile images for instant modal display`);
+            
+            // Preload ALL images immediately - don't wait for UI render
+            // Combined with direct URL rendering in Discovery cards, this ensures:
+            // 1. Images are cached by ImageCacheService
+            // 2. Images are decoded into memory by React Native when Discovery cards render
+            // 3. Modal opens instantly (both cached + decoded)
+            Promise.all(
+              profileImageUrls.map(async (url, index) => {
+                try {
+                  const profile = otherUsersProfiles.find(p => p.profile_photo_url === url);
+                  if (profile) {
+                    // Force immediate caching - combined with direct rendering for instant modal
+                    const cachedUri = await ImageCacheService.getCachedImageUri(url, currentEvent.id, profile.session_id);
+                    
+                    // FastImage preloading for instant modal display
+                    try {
+                      await FastImage.preload([{
+                        uri: cachedUri,
+                        priority: FastImage.priority.high,
+                        cache: FastImage.cacheControl.immutable
+                      }]);
+                    } catch (preloadError) {
+                      console.warn('Discovery: FastImage preload failed:', preloadError);
+                    }
+                  }
+                } catch (error) {
+                  console.warn('Discovery: Failed to preload image:', error);
+                }
+              })
+            ).catch(error => {
+              console.warn('Discovery: Some image preloading failed:', error);
+            });
+          }
+          
           // Cache the fresh data for next time
           GlobalDataCache.set(CacheKeys.DISCOVERY_PROFILES, otherUsersProfiles, 2 * 60 * 1000); // Cache for 2 minutes
         } catch (error) {
@@ -692,7 +730,7 @@ export default function Discovery() {
             // Homepage restoration will handle this gracefully
             console.log('User profile not found in discovery listener - redirecting to home');
             // 3. Profile listener - profile not found, should go back
-            router.back();
+            unifiedNavigator.navigate('home', {}, true); // go back to home
             return;
           }
 
@@ -929,35 +967,7 @@ export default function Discovery() {
     applyFilters();
   }, [profiles, currentUserProfile, filters, likedProfiles, skippedProfiles, viewedProfiles, filteredProfiles.length]);
 
-  // Cache profile images when profiles change
-  useEffect(() => {
-    if (!currentEvent?.id || !currentSessionId) return;
-    
-    const cacheProfileImages = async () => {
-      const newCachedUris = new Map<string, string>();
-      
-      for (const profile of filteredProfiles) {
-        if (profile.profile_photo_url) {
-          try {
-            const cachedUri = await ImageCacheService.getCachedImageUri(
-              profile.profile_photo_url,
-              currentEvent.id,
-              profile.session_id
-            );
-            newCachedUris.set(profile.session_id, cachedUri);
-          } catch (error) {
-            console.warn('Failed to cache image for profile:', profile.session_id, error);
-            // Fallback to original URI
-            newCachedUris.set(profile.session_id, profile.profile_photo_url);
-          }
-        }
-      }
-      
-      setCachedImageUris(newCachedUris);
-    };
-    
-    cacheProfileImages();
-  }, [filteredProfiles, currentEvent?.id, currentSessionId]);
+  // Images now render directly from original URLs (like develop branch) to force React Native decoding
 
   // Duplicate initializeSession function removed - already defined above
 
@@ -988,7 +998,7 @@ export default function Discovery() {
       Toast.show({
         type: 'warning',
         text1: 'Profile Not Visible',
-        text2: 'Make your profile visible in settings to like others.',
+        text2: 'Enable visibility in settings',
         position: 'top',
         visibilityTime: 3500,
         autoHide: true,
@@ -1586,7 +1596,7 @@ export default function Discovery() {
             </Text>
             <TouchableOpacity
               style={styles.makeVisibleButton}
-              onPress={() => router.push('/profile')}
+              onPress={() => unifiedNavigator.navigate('profile')}
               accessibilityRole="button"
               accessibilityLabel="Go to Profile"
               accessibilityHint="Navigate to profile settings to make your profile visible"
@@ -1611,7 +1621,7 @@ export default function Discovery() {
           
           <TouchableOpacity
             style={styles.navButton}
-            onPress={() => router.push('/matches')}
+            onPress={() => unifiedNavigator.navigate('matches')}
             accessibilityRole="button"
             accessibilityLabel="Matches Tab"
             accessibilityHint="Navigate to your matches"
@@ -1622,7 +1632,7 @@ export default function Discovery() {
           
           <TouchableOpacity
             style={styles.navButton}
-            onPress={() => router.push('/profile')}
+            onPress={() => unifiedNavigator.navigate('profile')}
             accessibilityRole="button"
             accessibilityLabel="Profile Tab"
             accessibilityHint="Navigate to your profile settings"
@@ -1708,8 +1718,9 @@ export default function Discovery() {
                       <View style={styles.profileImageContainer}>
                         {profile.profile_photo_url ? (
                           <Image
-                            source={{ uri: cachedImageUris.get(profile.session_id) || profile.profile_photo_url }}
+                            source={{ uri: profile.profile_photo_url }}
                             onError={() => {}}
+                            onLoad={() => console.log('Discovery thumbnail: Image decoded for modal instant display')}
                             style={styles.profileImage}
                             resizeMode="cover"
                           />
@@ -1769,7 +1780,7 @@ export default function Discovery() {
         
         <TouchableOpacity
           style={styles.navButton}
-          onPress={() => router.push('/matches')}
+          onPress={() => unifiedNavigator.navigate('matches')}
           accessibilityRole="button"
           accessibilityLabel="Matches"
           accessibilityHint="Navigate to your matches page"
@@ -1802,7 +1813,7 @@ export default function Discovery() {
         
         <TouchableOpacity
           style={styles.navButton}
-          onPress={() => router.push('/profile')}
+          onPress={() => unifiedNavigator.navigate('profile')}
           accessibilityRole="button"
           accessibilityLabel="Profile"
           accessibilityHint="Navigate to your profile page"
@@ -1891,6 +1902,31 @@ export default function Discovery() {
         isLiked={selectedProfileForDetail ? likedProfiles.has(selectedProfileForDetail.session_id) : false}
         isSkipped={selectedProfileForDetail ? skippedProfiles.has(selectedProfileForDetail.session_id) : false}
       />
+
+      {/* Hidden Image Pool - Pre-renders modal-sized images for instant display */}
+      <View style={{
+        position: 'absolute',
+        top: -10000,  // Way off screen
+        left: -10000,
+        width: 350,   // Match modal width
+        height: 280,  // Match modal image height
+        pointerEvents: 'none',  // Critical: Doesn't block touches
+      }}>
+        {filteredProfiles.map(profile => (
+          profile.profile_photo_url ? (
+            <Image
+              key={profile.session_id}
+              source={{ uri: profile.profile_photo_url }}
+              style={{ 
+                width: 350,   // Match modal image size exactly
+                height: 280,  // Match modal image height exactly
+                resizeMode: 'contain'  // Match modal resizeMode
+              }}
+              onLoad={() => console.log(`Pre-rendered modal-size image: ${profile.first_name}`)}
+            />
+          ) : null
+        ))}
+      </View>
 
       {/* How It Works Modal */}
       <HowItWorksModal

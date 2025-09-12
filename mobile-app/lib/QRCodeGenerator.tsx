@@ -54,7 +54,7 @@ export default function QRCodeGenerator({ eventCode, eventName, onClose }: QRCod
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: 'Failed to download QR code. Please try again.',
+        text2: 'Failed to download QR code',
         position: 'top',
         visibilityTime: 3500,
         autoHide: true,
@@ -75,7 +75,7 @@ export default function QRCodeGenerator({ eventCode, eventName, onClose }: QRCod
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: 'Failed to share. Please try again.',
+        text2: 'Failed to share',
         position: 'top',
         visibilityTime: 3500,
         autoHide: true,

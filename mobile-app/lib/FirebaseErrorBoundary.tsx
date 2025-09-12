@@ -152,7 +152,7 @@ class FirebaseErrorBoundary extends Component<Props, State> {
         Toast.show({
           type: 'error',
           text1: 'No Internet Connection',
-          text2: 'Please check your internet connection and try again.',
+          text2: 'Check internet and try again',
           position: 'top',
           visibilityTime: 3500,
           autoHide: true,
@@ -170,7 +170,7 @@ class FirebaseErrorBoundary extends Component<Props, State> {
         Toast.show({
           type: 'error',
           text1: 'Recovery Failed',
-          text2: 'Unable to recover from the error. Please try restarting the app.',
+          text2: 'Please restart the app',
           position: 'top',
           visibilityTime: 3500,
           autoHide: true,
@@ -187,7 +187,7 @@ class FirebaseErrorBoundary extends Component<Props, State> {
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: 'An unexpected error occurred. Please try again.',
+        text2: 'An unexpected error occurred',
         position: 'top',
         visibilityTime: 3500,
         autoHide: true,
@@ -205,7 +205,7 @@ class FirebaseErrorBoundary extends Component<Props, State> {
     Toast.show({
       type: 'info',
       text1: 'Restarting App',
-      text2: 'Resetting the app to resolve the issue...',
+      text2: 'Resetting the app to resolve issue',
       position: 'top',
       visibilityTime: 2000,
       autoHide: true,

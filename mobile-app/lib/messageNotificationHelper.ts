@@ -1,6 +1,6 @@
 // Legacy sendMessageNotification removed - now handled by server-side Firebase Functions
 import Toast from 'react-native-toast-message';
-import { router } from 'expo-router';
+import { unifiedNavigator } from './navigation/UnifiedNavigator';
 import { AsyncStorageUtils } from './asyncStorageUtils';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
@@ -180,7 +180,7 @@ export function showMatchToast(matchName: string): void {
         autoHide: true,
         topOffset: config.topOffset,
         onPress: () => {
-          router.push('/matches');
+          unifiedNavigator.navigate('matches');
         }
       });
     }, config.delay);

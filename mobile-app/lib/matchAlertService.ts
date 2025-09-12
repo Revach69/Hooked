@@ -1,5 +1,5 @@
 import { Alert, AppState } from 'react-native';
-import { router } from 'expo-router';
+import { unifiedNavigator } from './navigation/UnifiedNavigator';
 import { AsyncStorageUtils } from './asyncStorageUtils';
 import Toast from 'react-native-toast-message';
 
@@ -87,7 +87,7 @@ export async function showMatchAlert(options: MatchAlertOptions): Promise<void> 
           // Remove from active alerts
           activeAlerts.delete(alertKey);
           // Navigate to matches page
-          router.push('/matches');
+          unifiedNavigator.navigate('matches');
         }
       }
     ]
@@ -128,7 +128,7 @@ export async function showMatchToast(matchedUserName: string): Promise<void> {
     topOffset: 0,
     onPress: () => {
       Toast.hide();
-      router.push('/matches');
+      unifiedNavigator.navigate('matches');
     }
   });
 }

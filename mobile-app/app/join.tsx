@@ -7,7 +7,7 @@ import {
   StyleSheet,
   useColorScheme,
 } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, unifiedNavigator } from '../lib/navigation/UnifiedNavigator';
 import { AlertCircle } from 'lucide-react-native';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { EventAPI, type Event } from '../lib/firebaseApi';
@@ -19,7 +19,13 @@ import MobileOfflineStatusBar from '../lib/components/MobileOfflineStatusBar';
 import { Timestamp } from 'firebase/firestore';
 
 export default function JoinPage() {
-  const { code } = useLocalSearchParams<{ code: string }>();
+  const [code, setCode] = useState<string | null>(null);
+  
+  // Get code from unified navigator params
+  useEffect(() => {
+    const state = unifiedNavigator.getState();
+    setCode(state.params.code as string || null);
+  }, []);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const colorScheme = useColorScheme();
@@ -37,7 +43,7 @@ export default function JoinPage() {
       // Check for admin code first
       if (code.toUpperCase() === 'ADMIN') {
         // Redirect to admin login page
-        router.replace('/adminLogin');
+        unifiedNavigator.navigate('adminLogin', {}, true); // replace: true
         return;
       }
 
@@ -146,6 +152,7 @@ export default function JoinPage() {
       }
 
       // Event is valid and active, proceed to create profile
+      setError(null); // Clear any previous errors
       await createEventProfile(foundEvent);
     } catch (error: any) {
       // Event join failed
@@ -196,7 +203,7 @@ export default function JoinPage() {
       }
 
       // Navigate to consent page
-      router.replace('/consent');
+      unifiedNavigator.navigate('consent', {}, true); // replace: true
     } catch {
       // Failed to create event profile
       setError("Failed to set up your event session. Please try again.");
@@ -206,7 +213,7 @@ export default function JoinPage() {
 
   const handleRetry = () => {
     // Navigate back to homepage instead of retrying the same code
-    router.replace('/');
+    unifiedNavigator.navigate('home', {}, true); // replace: true
   };
 
   return (

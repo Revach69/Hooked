@@ -13,7 +13,7 @@ import {
   Linking,
   StatusBar,
 } from 'react-native';
-import { router } from 'expo-router';
+import { unifiedNavigator } from '../lib/navigation/UnifiedNavigator';
 import { QrCode, X } from 'lucide-react-native';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 
@@ -59,15 +59,15 @@ export default function Home() {
           // Add delay to avoid interrupting immediate user actions
           setTimeout(() => {
             if (MemoryManager.isComponentMounted(componentId)) {
-              router.push({
-                pathname: '/survey',
-                params: {
-                  eventId: surveyData.eventId,
-                  eventName: surveyData.eventName,
-                  sessionId: surveyData.sessionId,
-                  source: 'app_load'
-                }
-              });
+              // TODO: Add survey to unified navigation system
+              console.log('Survey would be shown here:', surveyData);
+              // For now, surveys are disabled in unified navigation
+              // unifiedNavigator.navigate('survey', {
+              //   eventId: surveyData.eventId,
+              //   eventName: surveyData.eventName,
+              //   sessionId: surveyData.sessionId,
+              //   source: 'app_load'
+              // });
             }
           }, 3000);
         }
@@ -117,7 +117,7 @@ export default function Home() {
             return;
           }
           
-          router.replace('/discovery');
+          unifiedNavigator.navigate('discovery', {}, true); // replace: true
           return; // navigation will unmount, no need to set isCheckingResume
         }
         
@@ -205,7 +205,7 @@ export default function Home() {
   const handleEventAccess = (eventCode: string) => {
     // The join page will handle all validation logic.
     closeModal();
-    router.push(`/join?code=${eventCode.toUpperCase()}`);
+    unifiedNavigator.navigate('join', { code: eventCode.toUpperCase() });
   };
 
 
@@ -228,7 +228,7 @@ export default function Home() {
       Toast.show({
         type: 'warning',
         text1: 'Invalid Code',
-        text2: 'Please enter a valid event code.',
+        text2: 'Please enter a valid event code',
         position: 'top',
         visibilityTime: 3500,
         autoHide: true,

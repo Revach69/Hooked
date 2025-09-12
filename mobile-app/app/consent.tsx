@@ -18,7 +18,7 @@ import {
   Platform,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
-import { router } from 'expo-router';
+import { router } from '../lib/navigation/UnifiedNavigator';
 import { EventProfileAPI, EventAPI, StorageAPI } from '../lib/firebaseApi';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { Upload, ArrowLeft } from 'lucide-react-native';
@@ -124,7 +124,7 @@ export default function Consent() {
         Toast.show({
           type: 'error',
           text1: 'Connection Error',
-          text2: 'Please check your internet connection and try again.',
+          text2: 'Check internet and try again',
           position: 'top',
           visibilityTime: 3500,
           autoHide: true,
@@ -172,7 +172,7 @@ export default function Consent() {
           Toast.show({
             type: 'error',
             text1: 'Error',
-            text2: 'Event not found. Please try again.',
+            text2: 'Event not found',
             position: 'top',
             visibilityTime: 3500,
             autoHide: true,
@@ -186,7 +186,7 @@ export default function Consent() {
         Toast.show({
           type: 'error',
           text1: 'Error',
-          text2: 'Failed to load event information. Please try again.',
+          text2: 'Failed to load event',
           position: 'top',
           visibilityTime: 3500,
           autoHide: true,
@@ -277,7 +277,7 @@ export default function Consent() {
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: 'Failed to open photo options. Please try again.',
+        text2: 'Failed to open photo options',
         position: 'top',
         visibilityTime: 3500,
         autoHide: true,
@@ -514,7 +514,7 @@ export default function Consent() {
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: 'Event information is missing. Please try again.',
+        text2: 'Event information is missing',
         position: 'top',
         visibilityTime: 3500,
         autoHide: true,

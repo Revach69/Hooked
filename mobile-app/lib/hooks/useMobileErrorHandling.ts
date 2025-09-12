@@ -128,7 +128,7 @@ export const useMobileAsyncOperation = () => {
     Toast.show({
       type: 'error',
       text1: 'Error',
-      text2: message,
+      text2: message.substring(0, 37),
       position: 'top',
       visibilityTime: 5000, // longer visibility for persistent errors
       autoHide: true,

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AsyncStorageUtils } from '../asyncStorageUtils';
 import { KickedUserAPI } from '../firebaseApi';
-import { router } from 'expo-router';
+import { unifiedNavigator } from '../navigation/UnifiedNavigator';
 
 export const useKickedUserCheck = () => {
   const [kickedUser, setKickedUser] = useState<{
@@ -58,7 +58,7 @@ export const useKickedUserCheck = () => {
   const handleKickedUserClose = () => {
     setKickedUser(null);
     // Navigate to home page
-    router.replace('/home');
+    unifiedNavigator.navigate('home', {}, true); // replace: true
   };
 
   return {

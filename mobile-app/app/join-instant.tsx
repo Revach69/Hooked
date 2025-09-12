@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, useColorScheme, Platform, Linking, Alert } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
+import { unifiedNavigator } from '../lib/navigation/UnifiedNavigator';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Smartphone, Download, QrCode, ExternalLink } from 'lucide-react-native';
 
@@ -31,10 +32,10 @@ export default function JoinInstantPage() {
       setIsNativeApp(true);
       // Running in native app - redirect to join page immediately
       if (code) {
-        router.replace(`/join?code=${code}`);
+        unifiedNavigator.navigate('join', { code }, true); // replace: true
       } else {
         // No code provided, go back to home
-        router.replace('/');
+        unifiedNavigator.navigate('home', {}, true); // replace: true
       }
     }
   }, [code]);

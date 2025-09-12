@@ -41,7 +41,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   iconContainer: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   appIcon: {
     width: 140,
@@ -51,5 +51,6 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '600',
     textAlign: 'center',
+    marginTop: 4,
   },
 }); 

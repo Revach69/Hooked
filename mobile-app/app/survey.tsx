@@ -50,7 +50,7 @@ export default function SurveyScreen() {
           Toast.show({
             type: 'error',
             text1: 'Survey Unavailable',
-            text2: 'This survey is no longer available.',
+            text2: 'This survey is no longer available',
             position: 'top',
             visibilityTime: 3500,
             autoHide: true,
@@ -96,7 +96,7 @@ export default function SurveyScreen() {
       Toast.show({
         type: 'warning',
         text1: 'Missing Fields',
-        text2: 'Please fill in all required fields before submitting.',
+        text2: 'Please fill in all required fields',
         position: 'top',
         visibilityTime: 3500,
         autoHide: true,
@@ -135,7 +135,7 @@ export default function SurveyScreen() {
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: 'Failed to submit feedback. Please try again.',
+        text2: 'Failed to submit feedback',
         position: 'top',
         visibilityTime: 3500,
         autoHide: true,

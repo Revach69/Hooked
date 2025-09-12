@@ -8,8 +8,9 @@ import 'react-native-get-random-values';
 // No manual background handler needed for Expo apps
 
 import React, { useEffect, useState } from 'react';
-import { Stack, useRouter, usePathname } from 'expo-router';
-import { PersistentPageContainer } from '../lib/components/PersistentPageContainer';
+import { useRouter, usePathname } from 'expo-router';
+import { UnifiedPageContainer } from '../lib/components/UnifiedPageContainer';
+import { unifiedNavigator } from '../lib/navigation/UnifiedNavigator';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Toast from 'react-native-toast-message';
 import { NotificationRouter } from '../lib/notifications/NotificationRouter';
@@ -40,9 +41,10 @@ import { getSessionAndInstallationIds } from '../lib/session/sessionId';
 // Legacy mapping functions removed - now handled by GlobalNotificationService
 
 export default function RootLayout() {
-  const router = useRouter();
+  const expoRouter = useRouter();
   const pathname = usePathname();
   const [appIsReady, setAppIsReady] = useState(false);
+  const [navigationReady, setNavigationReady] = useState(false);
   
   // Match alert modal state
   const [matchModalVisible, setMatchModalVisible] = useState(false);
@@ -97,12 +99,12 @@ export default function RootLayout() {
 
     NotificationRouter.init({
       getIsForeground,
-      navigateToMatches: () => router.push('/matches'),
+      navigateToMatches: () => unifiedNavigator.navigate('matches'),
       showMatchModal,
     });
     
     console.log('_layout.tsx: Notification system initialization complete');
-  }, [appIsReady, getIsForeground, router]);
+  }, [appIsReady, getIsForeground]);
 
   // 2.4) Push notification received handler - Show in-app when foreground
   useEffect(() => {
@@ -183,20 +185,17 @@ export default function RootLayout() {
             Toast.show({
               type: 'info',
               text1: notification.request.content.title || 'New Message',
-              text2: notification.request.content.body || 'You have a new message!',
+              text2: (notification.request.content.body || 'You have a new message!').substring(0, 37),
               position: 'top',
               visibilityTime: 4000,
               onPress: () => {
                 if (data?.conversationId && data?.partnerSessionId) {
-                  router.push({
-                    pathname: '/chat',
-                    params: {
-                      matchId: data.partnerSessionId,
-                      matchName: data.partnerName || 'Your conversation'
-                    }
+                  unifiedNavigator.navigate('chat', {
+                    matchId: data.partnerSessionId,
+                    matchName: data.partnerName || 'Your conversation'
                   });
                 } else {
-                  router.push('/matches');
+                  unifiedNavigator.navigate('matches');
                 }
               }
             });
@@ -218,20 +217,17 @@ export default function RootLayout() {
     return () => {
       sub.remove();
     };
-  }, [getIsForeground, router]);
+  }, [getIsForeground]);
 
   // Match modal handlers
   const handleStartChatting = () => {
     if (matchModalData?.partnerSessionId) {
-      router.push({
-        pathname: '/chat',
-        params: {
-          matchId: matchModalData.partnerSessionId,
-          matchName: matchModalData.partnerName
-        }
+      unifiedNavigator.navigate('chat', {
+        matchId: matchModalData.partnerSessionId,
+        matchName: matchModalData.partnerName
       });
     } else {
-      router.push('/matches');
+      unifiedNavigator.navigate('matches');
     }
   };
 
@@ -264,30 +260,24 @@ export default function RootLayout() {
           
           // Route to specific chat with the matched user if we have their session ID
           if (data?.partnerSessionId) {
-            router.push({
-              pathname: '/chat',
-              params: {
-                matchId: data.partnerSessionId,
-                matchName: data.partnerName || 'Your match'
-              }
+            unifiedNavigator.navigate('chat', {
+              matchId: data.partnerSessionId,
+              matchName: data.partnerName || 'Your match'
             });
           } else {
             // Fallback to matches page if no partner info
-            router.push('/matches');
+            unifiedNavigator.navigate('matches');
           }
         } else if (data?.type === 'message') {
           // Route to specific chat with partner session ID
           if (data?.partnerSessionId) {
-            router.push({
-              pathname: '/chat',
-              params: {
-                matchId: data.partnerSessionId,
-                matchName: data.partnerName || 'Your match'
-              }
+            unifiedNavigator.navigate('chat', {
+              matchId: data.partnerSessionId,
+              matchName: data.partnerName || 'Your match'
             });
           } else {
             // Fallback to matches page if no partner info
-            router.push('/matches');
+            unifiedNavigator.navigate('matches');
           }
         }
       } catch (e) {
@@ -296,14 +286,14 @@ export default function RootLayout() {
         // Continue app execution - don't crash
         // Fallback to matches page on error
         try {
-          router.push('/matches');
+          unifiedNavigator.navigate('matches');
         } catch (navError) {
           console.error('_layout.tsx: Failed to navigate to fallback:', navError);
         }
       }
     });
     return () => sub.remove();
-  }, [router]);
+  }, []);
 
   // 2.6) Deep linking handler for QR codes from native camera
   useEffect(() => {
@@ -312,12 +302,26 @@ export default function RootLayout() {
     // Move handleDeepLink inside useEffect to avoid dependency issues
     const handleDeepLink = (url: string) => {
       try {
-        const { path, queryParams } = Linking.parse(url);
+        console.log('_layout: Legacy deep link handler called:', url);
         
-        // Handle hooked://join?code=XXXXX
+        // Handle https://hooked-app.com/join-instant?code=XXXXX
+        if (url.includes('hooked-app.com/join-instant')) {
+          const urlObj = new URL(url);
+          const code = urlObj.searchParams.get('code');
+          
+          if (code) {
+            console.log('_layout: Extracted code from web URL:', code);
+            unifiedNavigator.navigate('join', { code: code.toUpperCase() });
+            return;
+          }
+        }
+        
+        // Handle hooked://join?code=XXXXX (existing format)
+        const { path, queryParams } = Linking.parse(url);
         if (path === 'join' && queryParams?.code) {
           const code = queryParams.code as string;
-          router.push(`/join?code=${code.toUpperCase()}`);
+          console.log('_layout: Extracted code from hooked:// URL:', code);
+          unifiedNavigator.navigate('join', { code: code.toUpperCase() });
         }
       } catch (error) {
         console.error('Error handling deep link:', error);
@@ -328,19 +332,21 @@ export default function RootLayout() {
     // Handle initial URL (app was closed)
     Linking.getInitialURL().then((url) => {
       if (url) {
-        handleDeepLink(url);
+        // Let unified navigator handle initial deep links
+        unifiedNavigator.handleDeepLink(url);
       }
     });
 
     // Handle URL changes (app was in background)
     const subscription = Linking.addEventListener('url', (event) => {
-      handleDeepLink(event.url);
+      // Let unified navigator handle deep links
+      unifiedNavigator.handleDeepLink(event.url);
     });
 
     return () => {
       subscription.remove();
     };
-  }, [appIsReady, router]);
+  }, [appIsReady]);
 
 
 
@@ -424,33 +430,27 @@ export default function RootLayout() {
             try {
               if (data?.type === 'match') {
                 if (data?.partnerSessionId) {
-                  router.push({
-                    pathname: '/chat',
-                    params: {
-                      matchId: data.partnerSessionId,
-                      matchName: data.partnerName || 'Your match'
-                    }
+                  unifiedNavigator.navigate('chat', {
+                    matchId: data.partnerSessionId,
+                    matchName: data.partnerName || 'Your match'
                   });
                 } else {
-                  router.push('/matches');
+                  unifiedNavigator.navigate('matches');
                 }
               } else if (data?.type === 'message') {
                 if (data?.partnerSessionId) {
-                  router.push({
-                    pathname: '/chat',
-                    params: {
-                      matchId: data.partnerSessionId,
-                      matchName: data.partnerName || 'Your match'
-                    }
+                  unifiedNavigator.navigate('chat', {
+                    matchId: data.partnerSessionId,
+                    matchName: data.partnerName || 'Your match'
                   });
                 } else {
-                  router.push('/matches');
+                  unifiedNavigator.navigate('matches');
                 }
               }
             } catch (navError) {
               console.warn('_layout.tsx: Navigation error from killed state notification:', navError);
               // Fallback to matches page
-              router.push('/matches');
+              unifiedNavigator.navigate('matches');
             }
           }, 1500); // Give navigation 1.5 seconds to initialize
         }
@@ -463,60 +463,32 @@ export default function RootLayout() {
     };
     
     checkInitialNotification();
-  }, [appIsReady, router]);
+  }, [appIsReady]);
 
-  // Simple session presence check - let individual pages handle validation
-  const [hasActiveSession, setHasActiveSession] = useState<boolean | null>(null);
-  
+  // Initialize unified navigation system
   useEffect(() => {
     if (!appIsReady) return;
 
-    const checkActiveSession = async () => {
+    const initializeNavigation = async () => {
       try {
-        // Don't check session if user is on home page - they won't have eventId there
-        if (pathname === '/home' || pathname === '/' || pathname === '/join') {
-          setHasActiveSession(false);
-          return;
-        }
+        console.log('🚀 _layout: Initializing unified navigation system');
         
-        const { AsyncStorageUtils } = await import('../lib/asyncStorageUtils');
-        const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
-        const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
+        // Initialize the unified navigator
+        const initialPage = await unifiedNavigator.initialize();
         
-        // Don't switch to persistent navigation if user is on consent page
-        // This prevents premature switching while profile is still being created
-        const isOnConsentPage = await AsyncStorageUtils.getItem<boolean>('isOnConsentPage');
+        console.log('🚀 _layout: Unified navigation initialized, initial page:', initialPage);
+        setNavigationReady(true);
         
-        console.log('🔄 _layout: Checking session presence:', { 
-          pathname,
-          hasEventId: !!eventId, 
-          hasSessionId: !!sessionId,
-          isOnConsentPage: !!isOnConsentPage
-        });
-        
-        // Use persistent navigation if we have session data AND not on consent page
-        const newSessionState = !!eventId && !!sessionId && !isOnConsentPage;
-        
-        // Only update state if it actually changed to prevent unnecessary re-renders
-        if (newSessionState !== hasActiveSession) {
-          setHasActiveSession(newSessionState);
-        }
       } catch (error) {
-        console.error('🔄 _layout: Error checking session:', error);
-        setHasActiveSession(false);
+        console.error('🚀 _layout: Error initializing navigation:', error);
+        // Fallback to home on error
+        await unifiedNavigator.navigate('home');
+        setNavigationReady(true);
       }
     };
 
-    // Initial check
-    checkActiveSession();
-    
-    // Check periodically for session changes - TEMPORARILY DISABLED FOR DEBUGGING
-    // const interval = setInterval(checkActiveSession, 3000);
-    
-    return () => {
-      // clearInterval(interval);
-    };
-  }, [appIsReady, pathname, hasActiveSession]);
+    initializeNavigation();
+  }, [appIsReady]);
 
   // 3) App initialization using the robust AppInitializationService
   useEffect(() => {
@@ -619,7 +591,7 @@ export default function RootLayout() {
   // The GlobalNotificationService is initialized by AppInitializationService and provides
   // always-on listeners for matches and messages with the same filtering logic
 
-  if (!appIsReady || hasActiveSession === null) {
+  if (!appIsReady || !navigationReady) {
     return (
       <ErrorBoundary>
         <CustomSplashScreen />
@@ -630,26 +602,8 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ErrorBoundary>
-          {/* CONDITIONAL NAVIGATION BASED ON SESSION STATE */}
-          {hasActiveSession ? (
-            <>
-              {/* console.log('🔄 _layout: Using PersistentPageContainer (hasActiveSession = true)') */}
-              {/* NEW: Persistent Page System (show/hide navigation) - for active sessions */}
-              <PersistentPageContainer />
-            </>
-          ) : (
-            <>
-              {/* console.log('🔄 _layout: Using Stack navigation (hasActiveSession = false)') */}
-              {/* OLD: Standard Expo Router Stack (mount/unmount navigation) - for no session */}
-              <Stack 
-                screenOptions={{ 
-                  headerShown: false,
-                  gestureEnabled: false,  // Disable swipe gestures
-                  animation: 'none',      // Disable slide transitions - instant page changes
-                }} 
-              />
-            </>
-          )}
+        {/* UNIFIED NAVIGATION SYSTEM - Single container for all pages */}
+        <UnifiedPageContainer />
         <Toast 
           config={{
           matchSuccess: (props) => (
