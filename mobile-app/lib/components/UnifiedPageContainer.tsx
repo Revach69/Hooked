@@ -83,9 +83,9 @@ export const UnifiedPageContainer: React.FC = React.memo(() => {
     home: { mounted: true, component: HomeWrapper },
     join: { mounted: false, component: null },
     consent: { mounted: false, component: null },
-    discovery: { mounted: false, component: null },
-    matches: { mounted: false, component: null },
-    profile: { mounted: false, component: null },
+    discovery: { mounted: true, component: DiscoveryWrapper }, // Keep mounted for instant navigation
+    matches: { mounted: true, component: MatchesWrapper },     // Keep mounted for instant navigation  
+    profile: { mounted: true, component: ProfileWrapper },     // Keep mounted for instant navigation
     chat: { mounted: false, component: null }
   });
 
