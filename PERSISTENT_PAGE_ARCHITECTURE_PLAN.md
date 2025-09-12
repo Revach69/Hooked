@@ -71,11 +71,11 @@ NEW: Mount → Show → Hide → Show → Hide (forever mounted)
 
 ---
 
-## 🔧 **Implementation Plan**
+## 🔧 **Enhanced Implementation Plan**
 
-### **Phase 1: Core Persistent Navigation (Week 1)**
+### **Phase 1: Performance-Optimized Core Navigation (Week 1)**
 
-#### **1.1 Create PersistentPageManager**
+#### **1.1 Create Enhanced PersistentPageManager**
 **File**: `lib/navigation/PersistentPageManager.tsx`
 
 ```typescript
@@ -83,74 +83,126 @@ interface PageState {
   id: string;
   component: React.ComponentType<any>;
   isVisible: boolean;
-  isLoaded: boolean;
+  isMounted: boolean;
+  isHibernated: boolean;
   lastVisited: number;
   scrollPosition?: { x: number; y: number };
   formData?: Record<string, any>;
   uiState?: Record<string, any>;
+  transform: { translateX: number; opacity: number };
+}
+
+interface PageRegistry {
+  discovery: { mounted: true; component: DiscoveryPagePersistent };  // Always mounted
+  matches: { mounted: boolean; component: MatchesPagePersistent | null };  // Lazy mount
+  chat: { mounted: boolean; component: ChatPagePersistent | null };
+  profile: { mounted: boolean; component: ProfilePagePersistent | null };
 }
 
 class PersistentPageManager {
   private pages = new Map<string, PageState>();
   private currentPageId: string = 'discovery';
+  private screenWidth: number = Dimensions.get('window').width;
   private listeners = new Set<(pageId: string) => void>();
+  private pageRegistry: PageRegistry;
   
-  // Instagram approach: Keep all pages mounted but show/hide
-  showPage(pageId: string): void;
-  hidePage(pageId: string): void;
-  preloadPage(pageId: string): void;
-  getPageState(pageId: string): PageState;
-  preserveScrollPosition(pageId: string, position: {x: number, y: number}): void;
-  preserveFormData(pageId: string, data: Record<string, any>): void;
+  // Performance-optimized show/hide with transforms
+  showPage(pageId: string): void {
+    const page = this.pages.get(pageId);
+    if (page) {
+      page.isVisible = true;
+      page.transform = { translateX: 0, opacity: 1 };
+      page.lastVisited = Date.now();
+    }
+  }
+  
+  hidePage(pageId: string): void {
+    const page = this.pages.get(pageId);
+    if (page) {
+      page.isVisible = false;
+      page.transform = { translateX: this.screenWidth, opacity: 0 };
+      // Don't unmount - just hide with transform
+    }
+  }
+  
+  // Lazy mounting strategy
+  async mountPageOnDemand(pageId: string): Promise<void> {
+    if (!this.pageRegistry[pageId].mounted) {
+      this.pageRegistry[pageId].mounted = true;
+      this.pageRegistry[pageId].component = await this.loadPageComponent(pageId);
+    }
+  }
+  
+  // Memory management
+  hibernatePage(pageId: string): void;
+  revivePage(pageId: string): void;
 }
 ```
 
-#### **1.2 Create PersistentPageContainer**
+#### **1.2 Create Performance-Optimized PersistentPageContainer**
 **File**: `lib/components/PersistentPageContainer.tsx`
 
 ```typescript
 export const PersistentPageContainer: React.FC = () => {
   const [currentPage, setCurrentPage] = useState('discovery');
-  const [loadedPages, setLoadedPages] = useState(new Set(['discovery']));
+  const [pageRegistry, setPageRegistry] = useState<PageRegistry>({
+    discovery: { mounted: true, component: DiscoveryPagePersistent },
+    matches: { mounted: false, component: null },
+    chat: { mounted: false, component: null },
+    profile: { mounted: false, component: null }
+  });
+  const screenWidth = Dimensions.get('window').width;
   
-  // Pre-load pages on first visit for instant subsequent access
-  const preloadPage = (pageId: string) => {
-    if (!loadedPages.has(pageId)) {
-      setLoadedPages(prev => new Set([...prev, pageId]));
+  // Lazy mount pages on first visit
+  const mountPageIfNeeded = async (pageId: string) => {
+    if (!pageRegistry[pageId].mounted) {
+      const component = await import(`../persistent/${pageId}PagePersistent`);
+      setPageRegistry(prev => ({
+        ...prev,
+        [pageId]: { mounted: true, component: component.default }
+      }));
     }
+  };
+  
+  const navigateToPage = async (targetPage: string) => {
+    // Ensure target page is mounted
+    await mountPageIfNeeded(targetPage);
+    setCurrentPage(targetPage);
   };
 
   return (
-    <View style={{ flex: 1 }}>
-      {/* Discovery Page - Always mounted after first load */}
-      <DiscoveryPagePersistent 
-        style={{ 
-          display: currentPage === 'discovery' ? 'flex' : 'none',
-          flex: 1 
-        }}
-        isActive={currentPage === 'discovery'}
-        onNavigate={(page) => {
-          preloadPage(page);
-          setCurrentPage(page);
-        }}
-      />
-      
-      {/* Matches Page - Mounted after first visit */}
-      {loadedPages.has('matches') && (
-        <MatchesPagePersistent 
-          style={{ 
-            display: currentPage === 'matches' ? 'flex' : 'none',
-            flex: 1 
-          }}
-          isActive={currentPage === 'matches'}
-          onNavigate={(page) => {
-            preloadPage(page);
-            setCurrentPage(page);
-          }}
+    <View style={{ flex: 1, position: 'relative' }}>
+      {/* Discovery Page - Always mounted (entry point) */}
+      <View style={{
+        position: 'absolute',
+        width: '100%',
+        height: '100%',
+        transform: [{ translateX: currentPage === 'discovery' ? 0 : screenWidth }],
+        opacity: currentPage === 'discovery' ? 1 : 0,
+      }}>
+        <DiscoveryPagePersistent 
+          isActive={currentPage === 'discovery'}
+          onNavigate={navigateToPage}
         />
+      </View>
+      
+      {/* Matches Page - Lazy mounted */}
+      {pageRegistry.matches.mounted && (
+        <View style={{
+          position: 'absolute',
+          width: '100%',
+          height: '100%',
+          transform: [{ translateX: currentPage === 'matches' ? 0 : screenWidth }],
+          opacity: currentPage === 'matches' ? 1 : 0,
+        }}>
+          <MatchesPagePersistent 
+            isActive={currentPage === 'matches'}
+            onNavigate={navigateToPage}
+          />
+        </View>
       )}
       
-      {/* Continue for Chat, Profile, etc. */}
+      {/* Continue for Chat, Profile with lazy mounting... */}
     </View>
   );
 };
@@ -171,6 +223,201 @@ export const PersistentPageContainer: React.FC = () => {
 
 // NEW: Persistent Page System
 <PersistentPageContainer />
+```
+
+#### **1.3 Create Critical Infrastructure Components**
+
+##### **Firebase ListenerManager**
+**File**: `lib/navigation/ListenerManager.ts`
+
+```typescript
+class ListenerManager {
+  private activeListeners = new Map<string, () => void>();
+  private pageListeners = new Map<string, Set<string>>();
+  
+  registerListener(pageId: string, listenerId: string, unsubscribe: () => void) {
+    const key = `${pageId}_${listenerId}`;
+    
+    // Prevent duplicate listeners for same page
+    if (this.activeListeners.has(key)) {
+      this.activeListeners.get(key)!();
+      console.log(`ListenerManager: Cleaned up duplicate listener ${key}`);
+    }
+    
+    this.activeListeners.set(key, unsubscribe);
+    
+    // Track listeners per page
+    if (!this.pageListeners.has(pageId)) {
+      this.pageListeners.set(pageId, new Set());
+    }
+    this.pageListeners.get(pageId)!.add(listenerId);
+  }
+  
+  // Clean up page-specific listeners (not global ones)
+  cleanupPageListeners(pageId: string) {
+    const listenerIds = this.pageListeners.get(pageId);
+    if (listenerIds) {
+      listenerIds.forEach(listenerId => {
+        const key = `${pageId}_${listenerId}`;
+        const unsubscribe = this.activeListeners.get(key);
+        if (unsubscribe) {
+          unsubscribe();
+          this.activeListeners.delete(key);
+        }
+      });
+      this.pageListeners.delete(pageId);
+    }
+  }
+  
+  // Clean up ALL listeners when event changes
+  cleanupAllListeners() {
+    this.activeListeners.forEach(unsubscribe => unsubscribe());
+    this.activeListeners.clear();
+    this.pageListeners.clear();
+    console.log('ListenerManager: Cleaned up all Firebase listeners');
+  }
+}
+
+export const listenerManager = new ListenerManager();
+```
+
+##### **CrossPageEventBus**
+**File**: `lib/navigation/CrossPageEventBus.ts`
+
+```typescript
+import { EventEmitter } from 'events';
+
+type CrossPageEvents = {
+  'profileLiked': { profileId: string; eventId: string };
+  'profileSkipped': { profileId: string; eventId: string };
+  'matchCreated': { matchId: string; partnerName: string };
+  'messageReceived': { conversationId: string; message: any };
+  'messageRead': { conversationId: string; messageIds: string[] };
+  'userProfileUpdated': { userId: string; changes: any };
+};
+
+class CrossPageEventBus {
+  private events = new EventEmitter();
+  private pageSubscriptions = new Map<string, Set<string>>();
+  
+  emit<K extends keyof CrossPageEvents>(
+    event: K, 
+    data: CrossPageEvents[K]
+  ) {
+    console.log(`CrossPageEventBus: Broadcasting ${event}`, data);
+    this.events.emit(event, data);
+  }
+  
+  subscribe<K extends keyof CrossPageEvents>(
+    pageId: string,
+    event: K, 
+    handler: (data: CrossPageEvents[K]) => void
+  ) {
+    const wrappedHandler = (data: CrossPageEvents[K]) => {
+      console.log(`CrossPageEventBus: ${pageId} received ${event}`);
+      handler(data);
+    };
+    
+    this.events.on(event, wrappedHandler);
+    
+    // Track subscriptions for cleanup
+    if (!this.pageSubscriptions.has(pageId)) {
+      this.pageSubscriptions.set(pageId, new Set());
+    }
+    this.pageSubscriptions.get(pageId)!.add(event);
+    
+    return () => {
+      this.events.off(event, wrappedHandler);
+      this.pageSubscriptions.get(pageId)?.delete(event);
+    };
+  }
+  
+  // Clean up page subscriptions when hibernating
+  cleanupPageSubscriptions(pageId: string) {
+    this.pageSubscriptions.delete(pageId);
+  }
+}
+
+export const crossPageEventBus = new CrossPageEventBus();
+```
+
+##### **PageHibernation System**
+**File**: `lib/navigation/PageHibernation.ts`
+
+```typescript
+interface HibernatedPageState {
+  pageId: string;
+  scrollPosition: { x: number; y: number };
+  formData: Record<string, any>;
+  essentialData: any;
+  hibernatedAt: number;
+}
+
+class PageHibernation {
+  private hibernatedPages = new Map<string, HibernatedPageState>();
+  private memoryThreshold = 0.8; // 80% memory usage triggers hibernation
+  
+  async hibernatePage(pageId: string) {
+    console.log(`PageHibernation: Hibernating ${pageId} due to memory pressure`);
+    
+    // 1. Extract and save essential state
+    const state = this.extractPageState(pageId);
+    this.hibernatedPages.set(pageId, {
+      pageId,
+      scrollPosition: state.scrollPosition,
+      formData: state.formData,
+      essentialData: state.essentialData,
+      hibernatedAt: Date.now()
+    });
+    
+    // 2. Clean up Firebase listeners
+    listenerManager.cleanupPageListeners(pageId);
+    
+    // 3. Clear image references (keep skeleton UI)
+    this.clearPageImages(pageId);
+    
+    // 4. Unmount heavy components
+    this.unmountHeavyComponents(pageId);
+  }
+  
+  async revivePage(pageId: string): Promise<void> {
+    const hibernatedState = this.hibernatedPages.get(pageId);
+    if (!hibernatedState) return;
+    
+    console.log(`PageHibernation: Reviving ${pageId}`);
+    
+    // 1. Restore component tree
+    await this.restorePageComponents(pageId);
+    
+    // 2. Restore state
+    this.restorePageState(pageId, hibernatedState);
+    
+    // 3. Re-establish Firebase listeners
+    this.restorePageListeners(pageId);
+    
+    // 4. Clean up hibernation data
+    this.hibernatedPages.delete(pageId);
+  }
+  
+  // Check memory pressure and hibernate pages if needed
+  async checkMemoryPressureAndHibernate(): Promise<void> {
+    const memoryUsage = await this.getMemoryUsage();
+    if (memoryUsage > this.memoryThreshold) {
+      const pagesToHibernate = this.selectPagesForHibernation();
+      for (const pageId of pagesToHibernate) {
+        await this.hibernatePage(pageId);
+      }
+    }
+  }
+  
+  private selectPagesForHibernation(): string[] {
+    // Hibernate least recently used pages first
+    // Never hibernate the current active page
+    return [];
+  }
+}
+
+export const pageHibernation = new PageHibernation();
 ```
 
 ### **Phase 2: Enhanced Page Components (Week 1-2)**
@@ -514,16 +761,125 @@ interface PersistentNavigationConfig {
 
 ## 📚 **Files to Create/Modify**
 
+#### **Critical Hooks for Page Management**
+
+##### **usePersistentPage Hook**
+**File**: `lib/hooks/usePersistentPage.ts`
+
+```typescript
+interface PersistentPageOptions {
+  pageId: string;
+  onActivate?: () => void;
+  onDeactivate?: () => void;
+  backgroundRefreshInterval?: number;
+}
+
+export const usePersistentPage = (options: PersistentPageOptions) => {
+  const { pageId, onActivate, onDeactivate, backgroundRefreshInterval = 30000 } = options;
+  const [isActive, setIsActive] = useState(false);
+  const [scrollPosition, setScrollPosition] = useState({ x: 0, y: 0 });
+  
+  // Register with PersistentPageManager
+  useEffect(() => {
+    const unregister = persistentPageManager.registerPage(pageId, {
+      onShow: () => {
+        setIsActive(true);
+        onActivate?.();
+      },
+      onHide: () => {
+        setIsActive(false);
+        onDeactivate?.();
+      }
+    });
+    
+    return unregister;
+  }, [pageId]);
+  
+  // Firebase listener management
+  const registerListener = useCallback((listenerId: string, unsubscribe: () => void) => {
+    listenerManager.registerListener(pageId, listenerId, unsubscribe);
+  }, [pageId]);
+  
+  // Cross-page event subscription
+  const subscribeToEvent = useCallback(<K extends keyof CrossPageEvents>(
+    event: K, 
+    handler: (data: CrossPageEvents[K]) => void
+  ) => {
+    return crossPageEventBus.subscribe(pageId, event, handler);
+  }, [pageId]);
+  
+  // Background data refresh for inactive pages
+  useEffect(() => {
+    if (!isActive && backgroundRefreshInterval > 0) {
+      const interval = setInterval(() => {
+        // Only refresh data, don't update UI when inactive
+        refreshDataSilently();
+      }, backgroundRefreshInterval);
+      
+      return () => clearInterval(interval);
+    }
+  }, [isActive, backgroundRefreshInterval]);
+  
+  return {
+    isActive,
+    scrollPosition,
+    setScrollPosition,
+    registerListener,
+    subscribeToEvent,
+    emitEvent: crossPageEventBus.emit.bind(crossPageEventBus)
+  };
+};
+```
+
+##### **usePageVisibility Hook**
+**File**: `lib/hooks/usePageVisibility.ts`
+
+```typescript
+export const usePageVisibility = (pageId: string) => {
+  const [isVisible, setIsVisible] = useState(false);
+  const [isHibernated, setIsHibernated] = useState(false);
+  
+  useEffect(() => {
+    const unsubscribe = persistentPageManager.subscribeToVisibility(pageId, (visible, hibernated) => {
+      setIsVisible(visible);
+      setIsHibernated(hibernated);
+    });
+    
+    return unsubscribe;
+  }, [pageId]);
+  
+  // Performance optimization: don't render heavy components when not visible
+  const shouldRenderHeavyComponents = isVisible && !isHibernated;
+  
+  // Memory optimization: use skeleton UI when hibernated
+  const shouldUseSkeletonUI = isHibernated;
+  
+  return {
+    isVisible,
+    isHibernated,
+    shouldRenderHeavyComponents,
+    shouldUseSkeletonUI
+  };
+};
+```
+
 ### **New Files**
 ```
 lib/navigation/
 ├── PersistentPageManager.tsx
+├── ListenerManager.ts           # NEW - Firebase listener management
+├── CrossPageEventBus.ts         # NEW - State synchronization
+├── PageHibernation.ts           # NEW - Memory management
 ├── NavigationState.ts
 └── types.ts
 
 lib/components/
 ├── PersistentPageContainer.tsx
 └── PageTransition.tsx
+
+lib/hooks/
+├── usePersistentPage.ts         # NEW - Page registration hook
+└── usePageVisibility.ts         # NEW - Visibility optimization hook
 
 lib/state/
 ├── PersistentStateManager.ts
