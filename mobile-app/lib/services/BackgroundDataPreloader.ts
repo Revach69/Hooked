@@ -20,6 +20,7 @@ interface PreloadedData {
 
 class BackgroundDataPreloaderClass {
   private isPreloading = false;
+  private preloadAbortController?: AbortController;
   private preloadedData: PreloadedData = {
     profile: null,
     matches: [],
@@ -36,8 +37,17 @@ class BackgroundDataPreloaderClass {
       return;
     }
 
+    // Cancel previous preload if still running
+    if (this.preloadAbortController) {
+      console.log('BackgroundDataPreloader: Cancelling previous preload');
+      this.preloadAbortController.abort();
+    }
+
     try {
       this.isPreloading = true;
+      this.preloadAbortController = new AbortController();
+      const signal = this.preloadAbortController.signal;
+      
       console.log('🚀 BackgroundDataPreloader: Starting comprehensive data preloading...');
 
       const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
@@ -48,28 +58,45 @@ class BackgroundDataPreloaderClass {
         return;
       }
 
+      // Check if cancelled before starting
+      if (signal.aborted) {
+        console.log('BackgroundDataPreloader: Preload cancelled before starting');
+        return;
+      }
+
       // Run all preloading in parallel for maximum speed
       await Promise.all([
-        this.preloadProfileData(eventId, sessionId),
-        this.preloadMatchesData(eventId, sessionId),
-        this.preloadConversationsData(eventId, sessionId)
+        this.preloadProfileData(eventId, sessionId, signal),
+        this.preloadMatchesData(eventId, sessionId, signal),
+        this.preloadConversationsData(eventId, sessionId, signal)
       ]);
 
       console.log('✅ BackgroundDataPreloader: All data preloaded successfully');
 
     } catch (error) {
+      // Handle abort error gracefully
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.log('BackgroundDataPreloader: Preload cancelled');
+        return;
+      }
       console.error('BackgroundDataPreloader: Preloading failed:', error);
     } finally {
       this.isPreloading = false;
+      this.preloadAbortController = undefined;
     }
   }
 
   /**
    * Preload profile data for instant Profile page display
    */
-  private async preloadProfileData(eventId: string, sessionId: string): Promise<void> {
+  private async preloadProfileData(eventId: string, sessionId: string, signal?: AbortSignal): Promise<void> {
     try {
       console.log('📄 BackgroundDataPreloader: Preloading profile data...');
+      
+      // Check if cancelled
+      if (signal?.aborted) {
+        throw new Error('AbortError');
+      }
       
       // Fetch profile data
       const profiles = await EventProfileAPI.filter({
@@ -103,9 +130,14 @@ class BackgroundDataPreloaderClass {
   /**
    * Preload matches data for instant Matches page display
    */
-  private async preloadMatchesData(eventId: string, sessionId: string): Promise<void> {
+  private async preloadMatchesData(eventId: string, sessionId: string, signal?: AbortSignal): Promise<void> {
     try {
       console.log('💕 BackgroundDataPreloader: Preloading matches data...');
+
+      // Check if cancelled
+      if (signal?.aborted) {
+        throw new Error('AbortError');
+      }
 
       // Fetch likes data (matches are mutual likes)
       const likes = await LikeAPI.filter({
@@ -166,9 +198,14 @@ class BackgroundDataPreloaderClass {
   /**
    * Preload conversation data for instant Chat functionality
    */
-  private async preloadConversationsData(eventId: string, sessionId: string): Promise<void> {
+  private async preloadConversationsData(eventId: string, sessionId: string, signal?: AbortSignal): Promise<void> {
     try {
       console.log('💬 BackgroundDataPreloader: Preloading conversations data...');
+
+      // Check if cancelled
+      if (signal?.aborted) {
+        throw new Error('AbortError');
+      }
 
       // Get conversation list (recent messages)
       const [sentMessages, receivedMessages] = await Promise.all([
@@ -285,12 +322,82 @@ class BackgroundDataPreloaderClass {
    */
   clearPreloadedData(): void {
     console.log('🗑️ BackgroundDataPreloader: Clearing preloaded data');
+    
+    // Cancel any ongoing preload
+    if (this.preloadAbortController) {
+      this.preloadAbortController.abort();
+      this.preloadAbortController = undefined;
+    }
+    
     this.preloadedData = {
       profile: null,
       matches: [],
       conversations: [],
       images: []
     };
+  }
+
+  /**
+   * Invalidate specific user's cached data
+   */
+  invalidateUserData(sessionId: string): void {
+    console.log('🗑️ BackgroundDataPreloader: Invalidating user data for session:', sessionId.substring(0, 8) + '...');
+    
+    // Clear preloaded data for this user
+    if (this.preloadedData.profile?.session_id === sessionId) {
+      this.preloadedData.profile = null;
+    }
+    
+    // Clear matches involving this user
+    this.preloadedData.matches = this.preloadedData.matches.filter(
+      match => match.session_id !== sessionId
+    );
+    
+    // Clear conversations with this user
+    this.preloadedData.conversations = this.preloadedData.conversations.filter(
+      conv => conv.sessionId !== sessionId
+    );
+    
+    // Clear related cache entries
+    const cacheKeysToInvalidate = [
+      `${CacheKeys.PROFILE_DATA}_${sessionId}`,
+      `${CacheKeys.MATCHES_DATA}_${sessionId}`,
+    ];
+    
+    cacheKeysToInvalidate.forEach(key => {
+      GlobalDataCache.clear(key);
+    });
+  }
+
+  /**
+   * Refresh specific data type for current session
+   */
+  async refreshData(dataType: 'profile' | 'matches' | 'conversations'): Promise<void> {
+    const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
+    const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
+    
+    if (!eventId || !sessionId) {
+      console.warn('BackgroundDataPreloader: Missing session data for refresh');
+      return;
+    }
+    
+    console.log(`🔄 BackgroundDataPreloader: Refreshing ${dataType} data`);
+    
+    try {
+      switch (dataType) {
+        case 'profile':
+          await this.preloadProfileData(eventId, sessionId);
+          break;
+        case 'matches':
+          await this.preloadMatchesData(eventId, sessionId);
+          break;
+        case 'conversations':
+          await this.preloadConversationsData(eventId, sessionId);
+          break;
+      }
+    } catch (error) {
+      console.warn(`BackgroundDataPreloader: Failed to refresh ${dataType}:`, error);
+    }
   }
 
   /**

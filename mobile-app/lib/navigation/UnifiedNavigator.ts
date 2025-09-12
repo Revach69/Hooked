@@ -12,6 +12,7 @@
  */
 
 import { AsyncStorageUtils } from '../asyncStorageUtils';
+import { validateAndCleanupSession } from '../utils/sessionValidator';
 
 export type NavigationPage = 
   | 'home' 
@@ -77,69 +78,21 @@ class UnifiedNavigatorClass {
         return 'consent';
       }
 
-      // If has session data, check if event and profile still exist
+      // If has session data, validate it consistently
       if (eventId && sessionId) {
         try {
-          const { EventAPI, EventProfileAPI } = await import('../firebaseApi');
-          const { BackgroundDataPreloader } = await import('../services/BackgroundDataPreloader');
-          const { GlobalDataCache } = await import('../cache/GlobalDataCache');
+          console.log('🚀 UnifiedNavigator: Validating session...');
+          const isValid = await validateAndCleanupSession();
           
-          // First check if event still exists
-          const events = await EventAPI.filter({ id: eventId });
-          
-          if (events.length === 0) {
-            // Event expired or deleted - clear everything
-            console.log('🚀 UnifiedNavigator: Event expired/deleted, clearing session data');
-            
-            // Clear preloaded data
-            BackgroundDataPreloader.clearPreloadedData();
-            GlobalDataCache.clearAll();
-            
-            // Clear AsyncStorage
-            await AsyncStorageUtils.multiRemove([
-              'currentEventId',
-              'currentSessionId',
-              'currentEventCode',
-              'currentProfileColor',
-              'currentProfilePhotoUrl',
-              'currentEventCountry',
-              'currentEventData',
-              'isOnConsentPage'
-            ]);
-            return 'home';
-          }
-          
-          // Event exists, now check profile
-          const profiles = await EventProfileAPI.filter({
-            session_id: sessionId,
-            event_id: eventId
-          });
-
-          if (profiles && profiles.length > 0) {
-            // Has valid session and profile - go to discovery
+          if (isValid) {
+            console.log('🚀 UnifiedNavigator: Session valid, proceeding to discovery');
             return 'discovery';
           } else {
-            // Event exists but profile doesn't - clear invalid session
-            console.log('🚀 UnifiedNavigator: Profile not found for existing event, clearing session');
-            
-            // Clear preloaded data
-            BackgroundDataPreloader.clearPreloadedData();
-            GlobalDataCache.clearAll();
-            
-            await AsyncStorageUtils.multiRemove([
-              'currentEventId',
-              'currentSessionId',
-              'currentEventCode',
-              'currentProfileColor',
-              'currentProfilePhotoUrl',
-              'currentEventCountry',
-              'currentEventData',
-              'isOnConsentPage'
-            ]);
+            console.log('🚀 UnifiedNavigator: Session invalid, redirecting to home');
             return 'home';
           }
-        } catch (profileError) {
-          console.warn('🚀 UnifiedNavigator: Profile validation failed:', profileError);
+        } catch (error) {
+          console.warn('🚀 UnifiedNavigator: Session validation failed:', error);
           // On error, go to home to be safe
           return 'home';
         }
@@ -241,18 +194,10 @@ class UnifiedNavigatorClass {
     });
   }
 
-  // Validate current session
+  // Validate current session using centralized validator
   private async validateSession(): Promise<boolean> {
     try {
-      const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
-      const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
-      
-      if (!eventId || !sessionId) {
-        return false;
-      }
-
-      // Quick validation - could be enhanced with profile check if needed
-      return true;
+      return await validateAndCleanupSession();
     } catch (error) {
       console.error('🚀 UnifiedNavigator: Session validation error:', error);
       return false;

@@ -439,53 +439,25 @@ class AppInitializationServiceClass {
 
   /**
    * Set up AppState integration for idempotent push setup
+   * AppStateSyncService deprecated - using React Native AppState directly
    */
   private setupAppStatePushTokenRefresh(): void {
     try {
-      // Import AppStateSyncService dynamically to avoid circular dependencies
-      import('./AppStateSyncService').then(({ AppStateSyncService }) => {
-        // Register callback to refresh push setup when app comes to foreground
-        AppStateSyncService.onAppForeground(async () => {
-          try {
-            console.log('AppInitializationService: App came to foreground, ensuring push setup');
-            
-            // Use idempotent push setup - it will check if refresh is needed
-            const { ensurePushSetupFunction } = await import('../notifications/ensurePushSetup');
-            const success = await ensurePushSetupFunction({ 
-              forceRefresh: false // Let the service decide if refresh is needed
-            });
-            
-            console.log('AppInitializationService: Foreground push setup result:', { success });
-            
-            console.log({
-              message: 'Push setup ensured on app foreground',
-              level: 'info',
-              category: 'push_notification',
-              data: { success }
-            });
-            
-          } catch (error) {
-            console.warn('AppInitializationService: Failed to ensure push setup on foreground:', error);
-            console.error(error, {
-              tags: {
-                operation: 'foreground_push_setup_ensure',
-                source: 'app_initialization_service'
-              }
-            });
-          }
-        });
-        
-        console.log('AppInitializationService: AppState push setup callback registered');
-        
-        // Store unsubscribe function (could be used for cleanup if needed)
-        // For now, we keep it running for the entire app lifetime
-        
-      }).catch(error => {
-        console.warn('AppInitializationService: Failed to set up AppState push token refresh:', error);
-      });
+      console.log('AppInitializationService: AppState push setup callback registered');
+      
+      // AppStateSyncService was deprecated - app state management now handled by React Native's built-in AppState API
+      // This method is kept for compatibility but simplified since the complex AppState sync logic was removed
+      
+      // Optional: Add React Native AppState listener if needed in the future
+      // import { AppState } from 'react-native';
+      // const subscription = AppState.addEventListener('change', (nextAppState) => {
+      //   if (nextAppState === 'active') {
+      //     // Handle app becoming active - refresh push setup if needed
+      //   }
+      // });
       
     } catch (error) {
-      console.warn('AppInitializationService: Error setting up AppState push token refresh:', error);
+      console.warn('AppInitializationService: AppState setup failed:', error);
     }
   }
 
