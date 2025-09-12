@@ -9,10 +9,11 @@
 
 Create Instagram/TikTok-style persistent page navigation where:
 - ✅ All pages stay "alive" once loaded (never unmount)
-- ✅ Navigation = show/hide pages (not mount/unmount)
+- ✅ Navigation = show/hide pages with transforms (not mount/unmount)
 - ✅ Scroll positions, form states, UI states preserved
 - ✅ Background data refresh while pages stay mounted
 - ✅ Smooth, zero-flicker navigation experience
+- ✅ Modern phone optimization (no hibernation complexity needed)
 
 ---
 
@@ -41,39 +42,46 @@ OLD: Mount → Use → Unmount → Remount → Use → Unmount
 NEW: Mount → Show → Hide → Show → Hide (forever mounted)
 ```
 
-### **System Components**
+### **Simplified System Components**
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                 PersistentPageManager                          │
-│           (Replaces Expo Router Stack Navigation)              │
+│         (Transform-based page visibility control)              │
 └─────────────────────────────────────────────────────────────────┘
                                 ↓
 ┌─────────────────────────────────────────────────────────────────┐
 │                PersistentPageContainer                         │
-│    (Keeps all pages mounted, controls visibility)             │
+│       (Lazy mounting + transform-based show/hide)             │
 └─────────────────────────────────────────────────────────────────┘
                                 ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│              Enhanced State Persistence                        │
-│  (Scroll, forms, UI states preserved across navigation)       │
+│               Firebase ListenerManager                        │
+│           (Prevents duplicate listener chaos)                 │
 └─────────────────────────────────────────────────────────────────┘
                                 ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│              Background Data Refresh                           │
-│        (Hidden pages continue receiving updates)              │
+│               CrossPageEventBus                               │
+│         (State synchronization across pages)                 │
 └─────────────────────────────────────────────────────────────────┘
                                 ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│                Smart Memory Management                         │
-│      (Cleanup when event changes or app backgrounds)          │
+│              Performance Optimizations                        │
+│    (VirtualizedList tuning, pending updates, cleanup)        │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🔧 **Enhanced Implementation Plan**
+## 🔧 **Simplified Implementation Plan**
 
-### **Phase 1: Performance-Optimized Core Navigation (Week 1)**
+### **⚡ Critical Day 1 Implementation Order**
+Start with absolute minimum to prove concept works:
+1. **PersistentPageContainer** - Discovery + Matches only
+2. **Transform-based visibility** - translateX/opacity (not display: none)
+3. **ListenerManager** - Prevent Firebase listener chaos
+4. **Basic state preservation** - Scroll position only
+
+### **Phase 1: Core Persistent Navigation (Week 1)**
 
 #### **1.1 Create Enhanced PersistentPageManager**
 **File**: `lib/navigation/PersistentPageManager.tsx`
@@ -84,11 +92,9 @@ interface PageState {
   component: React.ComponentType<any>;
   isVisible: boolean;
   isMounted: boolean;
-  isHibernated: boolean;
   lastVisited: number;
   scrollPosition?: { x: number; y: number };
   formData?: Record<string, any>;
-  uiState?: Record<string, any>;
   transform: { translateX: number; opacity: number };
 }
 
@@ -108,11 +114,21 @@ class PersistentPageManager {
   
   // Performance-optimized show/hide with transforms
   showPage(pageId: string): void {
+    // Hide current page
+    if (this.currentPageId !== pageId) {
+      this.hidePage(this.currentPageId);
+    }
+    
+    // Show target page
     const page = this.pages.get(pageId);
     if (page) {
       page.isVisible = true;
       page.transform = { translateX: 0, opacity: 1 };
       page.lastVisited = Date.now();
+      this.currentPageId = pageId;
+      
+      console.log(`PersistentPageManager: Showing ${pageId}`);
+      this.notifyListeners(pageId);
     }
   }
   
@@ -121,21 +137,30 @@ class PersistentPageManager {
     if (page) {
       page.isVisible = false;
       page.transform = { translateX: this.screenWidth, opacity: 0 };
-      // Don't unmount - just hide with transform
+      console.log(`PersistentPageManager: Hiding ${pageId} (staying mounted)`);
     }
   }
   
   // Lazy mounting strategy
   async mountPageOnDemand(pageId: string): Promise<void> {
     if (!this.pageRegistry[pageId].mounted) {
+      console.log(`PersistentPageManager: Lazy mounting ${pageId}`);
       this.pageRegistry[pageId].mounted = true;
       this.pageRegistry[pageId].component = await this.loadPageComponent(pageId);
     }
   }
   
-  // Memory management
-  hibernatePage(pageId: string): void;
-  revivePage(pageId: string): void;
+  // Clean up when event changes (only time we actually unmount)
+  cleanupOnEventChange(): void {
+    console.log('PersistentPageManager: Cleaning up for event change');
+    this.pages.clear();
+    this.pageRegistry = {
+      discovery: { mounted: true, component: DiscoveryPagePersistent },
+      matches: { mounted: false, component: null },
+      chat: { mounted: false, component: null },
+      profile: { mounted: false, component: null }
+    };
+  }
 }
 ```
 
@@ -341,83 +366,65 @@ class CrossPageEventBus {
 export const crossPageEventBus = new CrossPageEventBus();
 ```
 
-##### **PageHibernation System**
-**File**: `lib/navigation/PageHibernation.ts`
+### **🚨 Critical Implementation Gotchas**
+
+#### **1. React Native VirtualizedList Warning**
+When multiple ScrollViews/FlatLists are mounted simultaneously:
 
 ```typescript
-interface HibernatedPageState {
-  pageId: string;
-  scrollPosition: { x: number; y: number };
-  formData: Record<string, any>;
-  essentialData: any;
-  hibernatedAt: number;
-}
+// Add this to each persistent page
+const { isActive } = usePersistentPage({ pageId: 'discovery' });
 
-class PageHibernation {
-  private hibernatedPages = new Map<string, HibernatedPageState>();
-  private memoryThreshold = 0.8; // 80% memory usage triggers hibernation
-  
-  async hibernatePage(pageId: string) {
-    console.log(`PageHibernation: Hibernating ${pageId} due to memory pressure`);
-    
-    // 1. Extract and save essential state
-    const state = this.extractPageState(pageId);
-    this.hibernatedPages.set(pageId, {
-      pageId,
-      scrollPosition: state.scrollPosition,
-      formData: state.formData,
-      essentialData: state.essentialData,
-      hibernatedAt: Date.now()
-    });
-    
-    // 2. Clean up Firebase listeners
-    listenerManager.cleanupPageListeners(pageId);
-    
-    // 3. Clear image references (keep skeleton UI)
-    this.clearPageImages(pageId);
-    
-    // 4. Unmount heavy components
-    this.unmountHeavyComponents(pageId);
-  }
-  
-  async revivePage(pageId: string): Promise<void> {
-    const hibernatedState = this.hibernatedPages.get(pageId);
-    if (!hibernatedState) return;
-    
-    console.log(`PageHibernation: Reviving ${pageId}`);
-    
-    // 1. Restore component tree
-    await this.restorePageComponents(pageId);
-    
-    // 2. Restore state
-    this.restorePageState(pageId, hibernatedState);
-    
-    // 3. Re-establish Firebase listeners
-    this.restorePageListeners(pageId);
-    
-    // 4. Clean up hibernation data
-    this.hibernatedPages.delete(pageId);
-  }
-  
-  // Check memory pressure and hibernate pages if needed
-  async checkMemoryPressureAndHibernate(): Promise<void> {
-    const memoryUsage = await this.getMemoryUsage();
-    if (memoryUsage > this.memoryThreshold) {
-      const pagesToHibernate = this.selectPagesForHibernation();
-      for (const pageId of pagesToHibernate) {
-        await this.hibernatePage(pageId);
-      }
+<FlatList
+  data={profiles}
+  removeClippedSubviews={!isActive}  // Optimize when hidden
+  windowSize={isActive ? 21 : 1}     // Reduce memory when hidden
+  maxToRenderPerBatch={isActive ? 10 : 1}
+  initialNumToRender={isActive ? 10 : 0}
+/>
+```
+
+#### **2. Firebase Listener Memory Leak Safety**
+Add safety cleanup even with ListenerManager:
+
+```typescript
+// In each persistent page
+const unsubscribeRef = useRef<(() => void) | null>(null);
+
+useEffect(() => {
+  return () => {
+    // Safety cleanup on unmount (shouldn't happen but just in case)
+    if (unsubscribeRef.current) {
+      console.warn(`${pageId}: Cleaning up orphaned listener`);
+      unsubscribeRef.current();
     }
-  }
-  
-  private selectPagesForHibernation(): string[] {
-    // Hibernate least recently used pages first
-    // Never hibernate the current active page
-    return [];
-  }
-}
+  };
+}, []);
+```
 
-export const pageHibernation = new PageHibernation();
+#### **3. State Updates When Hidden**
+Prevent unnecessary re-renders when page is hidden:
+
+```typescript
+const pendingUpdatesRef = useRef(null);
+
+const updateProfiles = (newProfiles) => {
+  if (!isActive) {
+    // Store for later but don't trigger render
+    pendingUpdatesRef.current = newProfiles;
+    return;
+  }
+  setProfiles(newProfiles);
+};
+
+// Apply pending updates when becoming active
+useEffect(() => {
+  if (isActive && pendingUpdatesRef.current) {
+    setProfiles(pendingUpdatesRef.current);
+    pendingUpdatesRef.current = null;
+    console.log(`${pageId}: Applied pending updates on activation`);
+  }
+}, [isActive]);
 ```
 
 ### **Phase 2: Enhanced Page Components (Week 1-2)**
@@ -711,51 +718,43 @@ interface PersistentNavigationConfig {
 
 ---
 
-## 🚀 **Implementation Timeline**
+## 🚀 **Simplified Implementation Timeline**
 
-### **Week 1: Foundation**
-- ✅ Create PersistentPageManager
-- ✅ Build PersistentPageContainer  
-- ✅ Convert Discovery page to persistent
-- ✅ Replace Expo Router in _layout.tsx
+### **Week 1: Core Foundation**
+- **Day 1-2**: PersistentPageContainer + Discovery + Matches only
+- **Day 3-4**: ListenerManager + transform-based visibility  
+- **Day 5**: Basic scroll position preservation + CrossPageEventBus
 
 ### **Week 2: Expansion**
-- ✅ Convert Matches page to persistent
-- ✅ Convert Chat page to persistent
-- ✅ Add state persistence (scroll, forms)
-- ✅ Implement background data refresh
+- **Day 1-2**: Convert Chat page to persistent
+- **Day 3-4**: Convert Profile page to persistent
+- **Day 5**: Performance optimizations (VirtualizedList tuning)
 
-### **Week 3: Polish**
-- ✅ Convert Profile page to persistent
-- ✅ Add memory management
-- ✅ Performance optimization
-- ✅ Error handling and fallbacks
+### **Week 3: Polish & Testing**
+- **Day 1-2**: Cross-platform testing + gotcha fixes
+- **Day 3-4**: Performance benchmarking on various devices
+- **Day 5**: Production deployment preparation
 
-### **Week 4: Testing**
-- ✅ Cross-platform testing
-- ✅ Memory leak testing
-- ✅ Performance benchmarking
-- ✅ User acceptance testing
+### **Success Metrics**
+- ✅ **<50ms navigation transitions**
+- ✅ **100% scroll position preservation**
+- ✅ **Zero Firebase listener leaks**  
+- ✅ **Smooth performance on mid-range devices**
 
 ---
 
-## 🔒 **Risk Mitigation**
+## 🔒 **Risk Mitigation (Simplified)**
 
-### **Technical Risks**
-1. **Memory Leaks**: Implement comprehensive cleanup
-2. **Performance**: Monitor and optimize re-renders
-3. **State Conflicts**: Careful state management architecture
-4. **Platform Differences**: Test thoroughly on iOS/Android
-
-### **User Experience Risks**
-1. **Stale Data**: Implement smart background refresh
-2. **Confusion**: Clear visual indicators for active page
-3. **Battery Usage**: Optimize background processes
+### **Primary Risks & Solutions**
+1. **Firebase Listener Chaos**: ListenerManager prevents duplicates
+2. **Memory Usage**: Modern phones handle 4 mounted pages fine
+3. **Performance**: VirtualizedList optimizations + pending updates
+4. **State Sync Issues**: CrossPageEventBus handles coordination
 
 ### **Rollback Plan**
-- Feature flag to disable persistent navigation
-- Automatic fallback to Expo Router on errors
-- Gradual rollout with A/B testing capability
+- Feature flag: `PERSISTENT_NAVIGATION_ENABLED=false`
+- Automatic fallback to Expo Router on critical errors
+- Progressive rollout: Discovery+Matches → Chat → Profile
 
 ---
 
@@ -837,63 +836,45 @@ export const usePersistentPage = (options: PersistentPageOptions) => {
 ```typescript
 export const usePageVisibility = (pageId: string) => {
   const [isVisible, setIsVisible] = useState(false);
-  const [isHibernated, setIsHibernated] = useState(false);
   
   useEffect(() => {
-    const unsubscribe = persistentPageManager.subscribeToVisibility(pageId, (visible, hibernated) => {
+    const unsubscribe = persistentPageManager.subscribeToVisibility(pageId, (visible) => {
       setIsVisible(visible);
-      setIsHibernated(hibernated);
     });
     
     return unsubscribe;
   }, [pageId]);
   
   // Performance optimization: don't render heavy components when not visible
-  const shouldRenderHeavyComponents = isVisible && !isHibernated;
-  
-  // Memory optimization: use skeleton UI when hibernated
-  const shouldUseSkeletonUI = isHibernated;
+  const shouldRenderHeavyComponents = isVisible;
   
   return {
     isVisible,
-    isHibernated,
-    shouldRenderHeavyComponents,
-    shouldUseSkeletonUI
+    shouldRenderHeavyComponents
   };
 };
 ```
 
-### **New Files**
+### **Files to Create (Simplified)**
 ```
 lib/navigation/
-├── PersistentPageManager.tsx
-├── ListenerManager.ts           # NEW - Firebase listener management
-├── CrossPageEventBus.ts         # NEW - State synchronization
-├── PageHibernation.ts           # NEW - Memory management
-├── NavigationState.ts
+├── PersistentPageManager.tsx     # Core page visibility control
+├── ListenerManager.ts            # Firebase listener deduplication  
+├── CrossPageEventBus.ts          # State synchronization
 └── types.ts
 
 lib/components/
-├── PersistentPageContainer.tsx
-└── PageTransition.tsx
+└── PersistentPageContainer.tsx   # Main navigation container
 
 lib/hooks/
-├── usePersistentPage.ts         # NEW - Page registration hook
-└── usePageVisibility.ts         # NEW - Visibility optimization hook
-
-lib/state/
-├── PersistentStateManager.ts
-└── StateSerializer.ts
-
-lib/memory/
-├── MemoryManager.ts
-└── CleanupScheduler.ts
+├── usePersistentPage.ts          # Page registration & lifecycle
+└── usePageVisibility.ts          # Performance optimization
 
 app/persistent/
-├── DiscoveryPagePersistent.tsx
-├── MatchesPagePersistent.tsx
-├── ChatPagePersistent.tsx
-└── ProfilePagePersistent.tsx
+├── DiscoveryPagePersistent.tsx   # Persistent discovery page
+├── MatchesPagePersistent.tsx     # Persistent matches page
+├── ChatPagePersistent.tsx        # Persistent chat page
+└── ProfilePagePersistent.tsx     # Persistent profile page
 ```
 
 ### **Modified Files**
