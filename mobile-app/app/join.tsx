@@ -21,11 +21,31 @@ import { Timestamp } from 'firebase/firestore';
 export default function JoinPage() {
   const [code, setCode] = useState<string | null>(null);
   
-  // Get code from unified navigator params
+  // Get code from unified navigator params - subscribe to navigation changes
   useEffect(() => {
-    const state = unifiedNavigator.getState();
-    setCode(state.params.code as string || null);
-  }, []);
+    const getCodeFromNavigator = () => {
+      const state = unifiedNavigator.getState();
+      const codeParam = state.params.code as string;
+      console.log('Join page: Extracting code from navigation params:', codeParam);
+      return codeParam || null;
+    };
+    
+    // Get initial code
+    setCode(getCodeFromNavigator());
+    
+    // Subscribe to navigation changes to handle delayed parameter updates
+    const unsubscribe = unifiedNavigator.subscribe((navigationState) => {
+      if (navigationState.currentPage === 'join') {
+        const newCode = navigationState.params.code as string;
+        if (newCode && newCode !== code) {
+          console.log('Join page: Code updated from navigation:', newCode);
+          setCode(newCode);
+        }
+      }
+    });
+    
+    return unsubscribe;
+  }, [code]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const colorScheme = useColorScheme();
@@ -163,8 +183,12 @@ export default function JoinPage() {
   }, [code, executeOperationWithOfflineFallback]);
 
   useEffect(() => {
-    handleEventJoin();
-  }, [handleEventJoin]);
+    // Only run validation when we have a code
+    if (code) {
+      console.log('Join page: Starting validation for code:', code);
+      handleEventJoin();
+    }
+  }, [code, handleEventJoin]);
 
   const createEventProfile = async (event: any) => {
     try {
