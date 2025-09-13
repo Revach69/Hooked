@@ -136,7 +136,7 @@ export async function registerPushToken(sessionId: string): Promise<boolean> {
       // Get current event country for regional function selection
       let eventCountry: string | null = null;
       try {
-        const event = await AsyncStorageUtils.getItem<any>('currentEvent');
+        const event = await AsyncStorageUtils.getItem<{ location?: string }>('currentEvent');
         eventCountry = event?.location || null;
         console.log('Push token registration: Using event country for regional function:', eventCountry);
       } catch (error) {
@@ -189,9 +189,10 @@ export async function registerPushToken(sessionId: string): Promise<boolean> {
       });
       
       return true;
-    } catch (callableError: any) {
+    } catch (callableError: unknown) {
       // Log the error but don't treat it as critical since push notifications are optional
-      if (callableError.code === 'functions/unauthenticated') {
+      const error = callableError as { code?: string; message?: string; details?: unknown };
+      if (error.code === 'functions/unauthenticated') {
         console.log('savePushToken: Skipping due to authentication requirements (App Check disabled)');
         console.log('ℹ️  Push notifications will work via local fallback system when needed');
         
@@ -210,24 +211,20 @@ export async function registerPushToken(sessionId: string): Promise<boolean> {
         return false;
       } else {
         console.error('savePushToken error:', {
-          code: callableError.code,
-          message: callableError.message,
-          details: callableError.details
+          code: error.code,
+          message: error.message,
+          details: error.details
         });
         
-        console.error(callableError, {
-          tags: {
-            operation: 'push_token_registration',
-            source: 'savePushToken_callable'
-          },
-          extra: {
-            sessionId,
-            platform,
-            tokenLength: expoToken.data.length,
-            errorMessage: callableError.message,
-            errorCode: callableError.code,
-            errorDetails: callableError.details
-          }
+        console.error('Push token registration error:', error.message || 'Unknown error', {
+          operation: 'push_token_registration',
+          source: 'savePushToken_callable',
+          sessionId,
+          platform,
+          tokenLength: expoToken.data.length,
+          errorMessage: error.message,
+          errorCode: error.code,
+          errorDetails: error.details
         });
       }
       return false;

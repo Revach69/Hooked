@@ -16,6 +16,7 @@ export default function SplashScreen() {
       {/* App Icon */}
       <View style={styles.iconContainer}>
         <Image 
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
           source={require('../../assets/icon-rounded.png')}
           style={styles.appIcon}
           resizeMode="contain"

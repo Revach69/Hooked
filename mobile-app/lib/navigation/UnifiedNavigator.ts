@@ -73,9 +73,13 @@ class UnifiedNavigatorClass {
       const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
       const isOnConsentPage = await AsyncStorageUtils.getItem<boolean>('isOnConsentPage');
 
-      // If on consent page, stay there
-      if (isOnConsentPage) {
+      // Only stay on consent page if we have event context
+      // This prevents navigating to consent without an event
+      if (isOnConsentPage && eventId) {
         return 'consent';
+      } else if (isOnConsentPage && !eventId) {
+        // Clean up stale consent flag if no event
+        await AsyncStorageUtils.removeItem('isOnConsentPage');
       }
 
       // If has session data, validate it consistently
@@ -151,30 +155,61 @@ class UnifiedNavigatorClass {
     }
   }
 
+  // Track if navigation is in progress to prevent race conditions
+  private isNavigating = false;
+  private navigationQueue: Array<{ page: NavigationPage; params: NavigationParams; replace: boolean }> = [];
+
   // Navigate to a page
   async navigate(page: NavigationPage, params: NavigationParams = {}, replace: boolean = false): Promise<void> {
-    console.log(`🚀 UnifiedNavigator: Navigate to ${page}`, params, replace ? '(replace)' : '');
-
-    // Validate navigation based on session state for protected pages
-    const protectedPages: NavigationPage[] = ['discovery', 'matches', 'profile'];
-    if (protectedPages.includes(page)) {
-      const hasValidSession = await this.validateSession();
-      if (!hasValidSession) {
-        console.log('🚀 UnifiedNavigator: Invalid session for protected page, redirecting to home');
-        return this.navigate('home', {}, true);
-      }
+    // Prevent duplicate navigation to the same page with same params
+    if (this.state.currentPage === page && JSON.stringify(this.state.params) === JSON.stringify(params)) {
+      console.log(`🚀 UnifiedNavigator: Already on ${page}, skipping navigation`);
+      return;
     }
 
-    // Update navigation state
-    const newHistory = replace 
-      ? [...this.state.history.slice(0, -1), { page, params }]
-      : [...this.state.history, { page, params }];
+    // Queue navigation if one is in progress
+    if (this.isNavigating) {
+      console.log(`🚀 UnifiedNavigator: Navigation in progress, queueing ${page}`);
+      this.navigationQueue.push({ page, params, replace });
+      return;
+    }
 
-    this.setState({
-      currentPage: page,
-      params,
-      history: newHistory
-    });
+    this.isNavigating = true;
+    console.log(`🚀 UnifiedNavigator: Navigate to ${page}`, params, replace ? '(replace)' : '');
+
+    try {
+      // Validate navigation based on session state for protected pages
+      const protectedPages: NavigationPage[] = ['discovery', 'matches', 'profile'];
+      if (protectedPages.includes(page)) {
+        const hasValidSession = await this.validateSession();
+        if (!hasValidSession) {
+          console.log('🚀 UnifiedNavigator: Invalid session for protected page, redirecting to home');
+          this.isNavigating = false;
+          return this.navigate('home', {}, true);
+        }
+      }
+
+      // Update navigation state
+      const newHistory = replace 
+        ? [...this.state.history.slice(0, -1), { page, params }]
+        : [...this.state.history, { page, params }];
+
+      this.setState({
+        currentPage: page,
+        params,
+        history: newHistory
+      });
+    } finally {
+      this.isNavigating = false;
+      
+      // Process queued navigation if any
+      if (this.navigationQueue.length > 0) {
+        const nextNav = this.navigationQueue.shift();
+        if (nextNav) {
+          this.navigate(nextNav.page, nextNav.params, nextNav.replace);
+        }
+      }
+    }
   }
 
   // Go back in navigation history
@@ -251,15 +286,6 @@ class UnifiedNavigatorClass {
           this.navigate('join', { code: code.toUpperCase() }, true);
           return;
         }
-      }
-      
-      // Handle hooked://join?code=XXXXX (existing format)
-      const Linking = require('expo-linking');
-      const { path, queryParams } = Linking.parse(url);
-      
-      if (path === 'join' && queryParams?.code) {
-        console.log('🚀 UnifiedNavigator: Extracted code from runtime hooked:// URL:', queryParams.code);
-        this.navigate('join', { code: queryParams.code as string }, true);
       }
     } catch (error) {
       console.error('🚀 UnifiedNavigator: Deep link handling error:', error);

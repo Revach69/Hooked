@@ -1,5 +1,5 @@
 import { FirebaseApp } from 'firebase/app';
-import { initializeAppCheck, ReCaptchaV3Provider, CustomProvider } from 'firebase/app-check';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 // Sentry removed
 
 /**

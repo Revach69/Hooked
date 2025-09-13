@@ -16,7 +16,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { router } from '../lib/navigation/UnifiedNavigator';
+import { unifiedNavigator } from '../lib/navigation/UnifiedNavigator';
 import { Heart, MessageCircle, Users, User, UserX, VolumeX, Volume2, Flag } from 'lucide-react-native';
 import { EventProfileAPI, LikeAPI, EventAPI, MessageAPI, MutedMatchAPI, ReportAPI } from '../lib/firebaseApi';
 import { BackgroundDataPreloader } from '../lib/services/BackgroundDataPreloader';
@@ -39,7 +39,10 @@ export default function Matches() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const [matches, setMatches] = useState<any[]>([]);
-  const [currentEvent, setCurrentEvent] = useState<any>(null);
+  // Initialize currentEvent from cache to prevent loading state
+  const [currentEvent, setCurrentEvent] = useState<any>(() => {
+    return GlobalDataCache.get<any>(CacheKeys.MATCHES_EVENT) || null;
+  });
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [currentUserProfile, setCurrentUserProfile] = useState<any>(null);
   const [selectedProfileForDetail, setSelectedProfileForDetail] = useState<any>(null);
@@ -126,11 +129,6 @@ export default function Matches() {
 
     try {
       const { collection, query, where, getDocs } = await import('firebase/firestore');
-      const { getDbForEvent } = await import('../lib/firebaseConfig');
-
-      // Get event-specific database
-      const eventCountry = currentEvent?.country || currentEvent?.location;
-      const eventDb = getDbForEvent(eventCountry);
 
       // Fetch messages for each match
       const messagePromises = matchProfiles.map(async (profile) => {
@@ -215,8 +213,8 @@ export default function Matches() {
         const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
         
         if (!eventId || !sessionId) {
-          // No session data - redirect to home for normal flow
-          router.replace('/home');
+          // No event context - skip initialization
+          console.log('Matches: No event context, skipping initialization');
           return;
         }
 
@@ -254,7 +252,7 @@ export default function Matches() {
             'currentSessionId',
             'currentEventCode'
           ]);
-          router.replace('/home');
+          unifiedNavigator.navigate('home', {}, true); // replace: true
           return;
         }
       } catch (error) {
@@ -275,19 +273,32 @@ export default function Matches() {
       }
     }
 
-    initializeSession();
-    // Initialize image cache service
-    ImageCacheService.initialize();
+    // Only initialize if we have event context
+    const checkAndInit = async () => {
+      const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
+      const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
+      
+      if (eventId && sessionId) {
+        initializeSession();
+        // Initialize image cache service only when needed
+        ImageCacheService.initialize();
+      }
+    };
+    
+    checkAndInit();
   }, []);
 
   // Reload muted matches and refresh unread messages whenever user returns to this page
   useFocusEffect(
     React.useCallback(() => {
-      console.log('Matches page focused - checking if can reload muted matches and unread messages', {
-        platform: Platform.OS,
-        hasCurrentEvent: !!currentEvent?.id,
-        hasCurrentSessionId: !!currentSessionId
-      });
+      // Only log when we have event context (to reduce noise on home page)
+      if (currentEvent?.id || currentSessionId) {
+        console.log('Matches page focused - checking if can reload muted matches and unread messages', {
+          platform: Platform.OS,
+          hasCurrentEvent: !!currentEvent?.id,
+          hasCurrentSessionId: !!currentSessionId
+        });
+      }
       
       // Try to get session data if not available
       const reloadData = async () => {
@@ -1372,7 +1383,10 @@ export default function Matches() {
         [{ text: 'OK' }]
       );
       if (error) {
-        try { require('@sentry/react-native').captureException(error); } catch { /* ignore */ }
+        try { 
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          require('@sentry/react-native').captureException(error); 
+        } catch { /* ignore */ }
       }
     }
   };
@@ -1899,7 +1913,7 @@ export default function Matches() {
             </Text>
             <TouchableOpacity
               style={styles.makeVisibleButton}
-              onPress={() => router.push('/profile')}
+              onPress={() => unifiedNavigator.navigate('profile')}
               accessibilityRole="button"
               accessibilityLabel="Make visible"
               accessibilityHint="Navigate to profile settings to make your profile visible"
@@ -1972,7 +1986,10 @@ export default function Matches() {
                   style={cardStyles}
                 onPress={() => {
                   // Navigate to chat without marking messages as seen
-                  router.push(`/chat?matchId=${match.session_id}&matchName=${match.first_name}`);
+                  unifiedNavigator.navigate('chat', {
+                    matchId: match.session_id,
+                    matchName: match.first_name
+                  });
                 }}
                 accessibilityRole="button"
                 accessibilityLabel={`Open chat with ${match.first_name}${mutedMatches.has(match.session_id) ? ' (muted)' : ''}`}
@@ -2100,7 +2117,7 @@ export default function Matches() {
             </Text>
             <TouchableOpacity
               style={styles.browseButton}
-              onPress={() => router.push('/discovery')}
+              onPress={() => unifiedNavigator.navigate('discovery')}
               accessibilityRole="button"
               accessibilityLabel="Browse singles"
               accessibilityHint="Navigate to discovery page to browse and like profiles"
@@ -2115,7 +2132,7 @@ export default function Matches() {
       <View style={styles.bottomNavigation}>
         <TouchableOpacity
           style={styles.navButton}
-          onPress={() => router.push('/discovery')}
+          onPress={() => unifiedNavigator.navigate('discovery')}
           accessibilityRole="button"
           accessibilityLabel="Discover"
           accessibilityHint="Navigate to discovery page to browse profiles"
@@ -2160,7 +2177,7 @@ export default function Matches() {
         
         <TouchableOpacity
           style={styles.navButton}
-          onPress={() => router.push('/profile')}
+          onPress={() => unifiedNavigator.navigate('profile')}
           accessibilityRole="button"
           accessibilityLabel="Profile"
           accessibilityHint="Navigate to your profile page"

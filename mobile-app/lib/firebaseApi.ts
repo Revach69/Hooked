@@ -405,7 +405,7 @@ export const EventAPI = {
         const docRef = doc(regionalDb, 'events', id);
         const docSnap = await getDoc(docRef);
         
-        // @ts-ignore - React Native Firebase v23 exists is a boolean property, not function
+        // @ts-expect-error - React Native Firebase v23 exists is a boolean property, not function
         if (docSnap.exists) {
           return { id: docSnap.id, ...docSnap.data() } as Event;
         }
@@ -428,7 +428,7 @@ export const EventAPI = {
           const docRef = doc(regionalDb, 'events', id);
           const docSnap = await getDoc(docRef);
           
-          // @ts-ignore - React Native Firebase v23 exists is a boolean property, not function
+          // @ts-expect-error - React Native Firebase v23 exists is a boolean property, not function
           if (docSnap.exists) {
             console.log(`📍 Found event ${id} in ${region.label} region`);
             return { id: docSnap.id, ...docSnap.data() } as Event;
@@ -678,7 +678,7 @@ export const EventProfileAPI = {
       const docRef = doc(targetDb, 'event_profiles', id);
       const docSnap = await getDoc(docRef);
       
-      // @ts-ignore - React Native Firebase v23 exists is a boolean property, not function
+      // @ts-expect-error - React Native Firebase v23 exists is a boolean property, not function
       if (docSnap.exists) {
         return { id: docSnap.id, ...docSnap.data() } as EventProfile;
       }
@@ -803,7 +803,7 @@ export const LikeAPI = {
       const docRef = doc(targetDb, 'likes', id);
       const docSnap = await getDoc(docRef);
       
-      // @ts-ignore - React Native Firebase v23 exists is a boolean property, not function
+      // @ts-expect-error - React Native Firebase v23 exists is a boolean property, not function
       if (docSnap.exists) {
         return { id: docSnap.id, ...docSnap.data() } as Like;
       }
@@ -1036,7 +1036,7 @@ export const KickedUserAPI = {
       const docRef = doc(targetDb, 'kicked_users', id);
       const docSnap = await getDoc(docRef);
       
-      // @ts-ignore - React Native Firebase v23 exists is a boolean property, not function
+      // @ts-expect-error - React Native Firebase v23 exists is a boolean property, not function
       if (docSnap.exists) {
         return { id: docSnap.id, ...docSnap.data() } as KickedUser;
       }
@@ -1400,7 +1400,7 @@ export const ReportAPI = {
       const docRef = doc(targetDb, 'reports', id);
       const docSnap = await getDoc(docRef);
       
-      // @ts-ignore - React Native Firebase v23 exists is a boolean property, not function
+      // @ts-expect-error - React Native Firebase v23 exists is a boolean property, not function
       if (docSnap.exists) {
         return { id: docSnap.id, ...docSnap.data() } as Report;
       }

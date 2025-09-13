@@ -16,10 +16,10 @@ interface AndroidNotificationDebugInfo {
     status: string;
     granted: boolean;
     canAskAgain: boolean;
-    android?: any;
+    android?: unknown;
   };
   channels: {
-    available: any[];
+    available: unknown[];
     initialized: boolean;
     error?: string;
   };
@@ -35,7 +35,7 @@ interface AndroidNotificationDebugInfo {
   storage: {
     hasSession: boolean;
     hasEvent: boolean;
-    pushSetupCache?: any;
+    pushSetupCache?: unknown;
   };
 }
 

@@ -8,7 +8,6 @@ import {
   Image,
 } from 'react-native';
 import {
-  GestureHandlerRootView,
   PinchGestureHandler,
   PanGestureHandler,
   PinchGestureHandlerGestureEvent,

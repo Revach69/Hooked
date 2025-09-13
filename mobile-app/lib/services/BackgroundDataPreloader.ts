@@ -34,6 +34,76 @@ class BackgroundDataPreloaderClass {
   };
 
   /**
+   * Preload discovery profiles for instant Discovery page display
+   */
+  private async preloadDiscoveryProfiles(eventId: string, sessionId: string, signal?: AbortSignal): Promise<void> {
+    try {
+      console.log('👥 BackgroundDataPreloader: Preloading discovery profiles...');
+      
+      // Check if cancelled
+      if (signal?.aborted) {
+        throw new Error('AbortError');
+      }
+      
+      // Fetch all visible profiles for the event
+      const allProfiles = await EventProfileAPI.filter({
+        event_id: eventId,
+        is_visible: true
+      }) as unknown as EventProfile[];
+      
+      // Filter out current user's profile
+      const otherProfiles = allProfiles.filter(p => p.session_id !== sessionId);
+      
+      // Cache the profiles using the same cache key as discovery page
+      GlobalDataCache.set(CacheKeys.DISCOVERY_PROFILES, otherProfiles, 2 * 60 * 1000); // 2 minutes
+      
+      console.log(`✅ BackgroundDataPreloader: Preloaded ${otherProfiles.length} discovery profiles`);
+      
+      // Preload profile images for instant modal display
+      const imageUrls = otherProfiles
+        .map(p => p.profile_photo_url)
+        .filter(Boolean) as string[];
+      
+      if (imageUrls.length > 0) {
+        console.log(`🖼️ BackgroundDataPreloader: Preloading ${imageUrls.length} profile images...`);
+        
+        await Promise.all(
+          imageUrls.map(async (url, index) => {
+            try {
+              const profile = otherProfiles.find(p => p.profile_photo_url === url);
+              if (profile && !signal?.aborted) {
+                const cachedUri = await ImageCacheService.getCachedImageUri(
+                  url, 
+                  eventId, 
+                  profile.session_id
+                );
+                
+                // FastImage preloading
+                await FastImage.preload([{
+                  uri: cachedUri,
+                  priority: FastImage.priority.normal,
+                  cache: FastImage.cacheControl.immutable
+                }]);
+              }
+            } catch (error) {
+              console.warn(`BackgroundDataPreloader: Failed to preload image ${index}:`, error);
+            }
+          })
+        );
+        
+        console.log('✅ BackgroundDataPreloader: Profile images preloaded');
+      }
+      
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.log('BackgroundDataPreloader: Discovery preloading cancelled');
+        return;
+      }
+      console.error('BackgroundDataPreloader: Discovery preloading failed:', error);
+    }
+  }
+
+  /**
    * Main preloading function - call after entering an event
    */
   async preloadEventData(): Promise<void> {
@@ -73,7 +143,8 @@ class BackgroundDataPreloaderClass {
       await Promise.all([
         this.preloadProfileData(eventId, sessionId, signal),
         this.preloadMatchesData(eventId, sessionId, signal),
-        this.preloadConversationsData(eventId, sessionId, signal)
+        this.preloadConversationsData(eventId, sessionId, signal),
+        this.preloadDiscoveryProfiles(eventId, sessionId, signal)
       ]);
 
       console.log('✅ BackgroundDataPreloader: All data preloaded successfully');

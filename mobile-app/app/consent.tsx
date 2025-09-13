@@ -18,7 +18,7 @@ import {
   Platform,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
-import { router } from '../lib/navigation/UnifiedNavigator';
+import { unifiedNavigator } from '../lib/navigation/UnifiedNavigator';
 import { EventProfileAPI, EventAPI, StorageAPI } from '../lib/firebaseApi';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { Upload, ArrowLeft } from 'lucide-react-native';
@@ -51,7 +51,12 @@ export default function Consent() {
     age: '',
     gender_identity: '',
     interested_in: '',
-    profile_photo_url: ''
+    profile_photo_url: '',
+    // Additional fields for saved profile data
+    about_me: '',
+    height_cm: null as number | null,
+    interests: [] as string[],
+    instagram_handle: ''
   });
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -62,41 +67,24 @@ export default function Consent() {
   const [rememberProfile, setRememberProfile] = useState(false);
   const [showMissingPhotoAlert, setShowMissingPhotoAlert] = useState(false);
   const [showMissingInfoAlert, setShowMissingInfoAlert] = useState(false);
+  const [hasNavigated, setHasNavigated] = useState(false); // Prevent duplicate navigation
 
 
 
 
-  // Helper function to re-upload saved photo for new event
-  const reuploadSavedPhoto = async (photoUrl: string): Promise<string> => {
-    // Create a file object for the remote URL
-    const fileObject = {
-      uri: photoUrl,
-      name: `saved-profile-photo-${Date.now()}.jpg`,
-      type: 'image/jpeg'
-    };
-
-    // Add timeout to prevent hanging indefinitely
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('Photo upload timeout')), 30000); // 30 second timeout
-    });
-
-    // Upload to Firebase Storage for the new event with timeout
-    const uploadPromise = StorageAPI.uploadFile(fileObject);
-    
+  // Helper function to handle saved photo loading/caching for new events
+  const loadSavedPhoto = async (savedPhotoUrl: string): Promise<string> => {
     try {
-      const { file_url } = await Promise.race([uploadPromise, timeoutPromise]);
-      return file_url;
+      // Don't try to re-upload the old photo URL as it might be expired
+      // Instead, let the user select a new photo but keep it as a fallback
+      // This approach is more reliable and user-friendly
+      console.log('Saved photo URL found, but user should select new photo for reliability');
+      
+      // Return empty string so user can select a fresh photo
+      // The UI will show upload placeholder instead of trying to use potentially expired URL
+      throw new Error('Photo re-selection recommended for new event');
     } catch (error) {
-      console.error('Consent error:', error, {
-        tags: {
-          operation: 'profile_photo_reupload',
-          type: 'timeout_or_upload_error'
-        },
-        extra: {
-          photoUrl: photoUrl,
-          error: error instanceof Error ? error.message : String(error)
-        }
-      });
+      console.error('Error loading saved photo:', error);
       throw error;
     }
   };
@@ -131,7 +119,11 @@ export default function Consent() {
           topOffset: 0,
         });
         // Firebase connection error - must go home to avoid loop
-        router.replace('/home');
+        if (!hasNavigated) {
+          setHasNavigated(true);
+          await AsyncStorageUtils.removeItem('isOnConsentPage');
+          unifiedNavigator.navigate('home', {}, true);
+        }
         return;
       }
       
@@ -148,6 +140,14 @@ export default function Consent() {
           updated_at: storedEventData.updated_at ? new Date(storedEventData.updated_at) : null,
         };
         setEvent(eventWithDates);
+        
+        // Cache event data for Discovery to use instantly
+        const { GlobalDataCache, CacheKeys } = await import('../lib/cache/GlobalDataCache');
+        GlobalDataCache.set(CacheKeys.DISCOVERY_EVENT, eventWithDates, 10 * 60 * 1000);
+        console.log('Consent: Cached event data for instant discovery access');
+        
+        // Initialize services now that we have event context
+        await initializeEventServices();
         return;
       }
       
@@ -156,9 +156,14 @@ export default function Consent() {
       const eventCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
       
       if (!eventId) {
-        console.error('Consent error:', new Error('No event ID found in AsyncStorage'));
-        // No event ID in storage - must go home to avoid loop
-        router.replace('/home');
+        // No event ID in storage - this is expected if coming from QR code or direct navigation
+        // Don't log as error, just silently redirect to home
+        if (!hasNavigated) {
+          console.log('Consent: No event ID found, redirecting to home');
+          setHasNavigated(true);
+          await AsyncStorageUtils.removeItem('isOnConsentPage'); // Clean up before navigating
+          unifiedNavigator.navigate('home', {}, true);
+        }
         return;
       }
       
@@ -167,6 +172,14 @@ export default function Consent() {
         
         if (foundEvent) {
           setEvent(foundEvent);
+          
+          // Cache event data for Discovery to use instantly
+          const { GlobalDataCache, CacheKeys } = await import('../lib/cache/GlobalDataCache');
+          GlobalDataCache.set(CacheKeys.DISCOVERY_EVENT, foundEvent, 10 * 60 * 1000);
+          console.log('Consent: Cached event data from database for instant discovery access');
+          
+          // Initialize services now that we have event context
+          await initializeEventServices();
         } else {
           console.error('Consent error:', new Error(`No event found with ID: ${eventId}`));
           Toast.show({
@@ -179,7 +192,11 @@ export default function Consent() {
             topOffset: 0,
           });
           // Event not found in database - must go home to avoid loop
-          router.replace('/home');
+          if (!hasNavigated) {
+            setHasNavigated(true);
+            await AsyncStorageUtils.removeItem('isOnConsentPage');
+            unifiedNavigator.navigate('home', {}, true);
+          }
         }
       } catch (error) {
         console.error('Consent error:', error);
@@ -193,7 +210,11 @@ export default function Consent() {
           topOffset: 0,
         });
         // General error loading event - must go home to avoid loop
-        router.replace('/home');
+        if (!hasNavigated) {
+          setHasNavigated(true);
+          await AsyncStorageUtils.removeItem('isOnConsentPage');
+          unifiedNavigator.navigate('home', {}, true);
+        }
       }
     };
     
@@ -205,41 +226,74 @@ export default function Consent() {
     };
   }, []);
 
-  // Load saved profile data if available
+  // Initialize services when event is loaded
+  const initializeEventServices = async () => {
+    try {
+      console.log('Consent: Initializing event services...');
+      
+      // Initialize ImageCacheService
+      const { ImageCacheService } = await import('../lib/services/ImageCacheService');
+      ImageCacheService.initialize();
+      
+      // Initialize BackgroundDataPreloader for event data
+      const { BackgroundDataPreloader } = await import('../lib/services/BackgroundDataPreloader');
+      BackgroundDataPreloader.preloadEventData().catch(error => {
+        console.warn('Consent: Background preloading failed:', error);
+      });
+      
+      console.log('Consent: Event services initialized successfully');
+    } catch (error) {
+      console.error('Consent: Failed to initialize event services:', error);
+      // Don't fail consent process for this
+    }
+  };
+
+  // Load saved profile data if available - but only after event is loaded
   useEffect(() => {
+    // Only load saved profile if we have an event loaded
+    if (!event) {
+      return;
+    }
+    
     const loadSavedProfile = async () => {
       try {
         const savedProfile = await AsyncStorageUtils.getItem<string>('savedProfileData');
-        const savedPhotoUrl = await AsyncStorageUtils.getItem<string>('savedProfilePhotoUrl');
         
         if (savedProfile) {
           const parsedProfile = JSON.parse(savedProfile);
           
-          // If we have a saved photo URL, re-upload it for the new event
-          if (savedPhotoUrl) {
-            setIsReuploadingPhoto(true);
-            try {
-              const newPhotoUrl = await reuploadSavedPhoto(savedPhotoUrl);
-              setFormData({
-                ...parsedProfile,
-                profile_photo_url: newPhotoUrl
-              });
-            } catch {
-              // If photo re-upload fails, load data without photo
-              setFormData({
-                ...parsedProfile,
-                profile_photo_url: ''
-              });
-            } finally {
-              setIsReuploadingPhoto(false);
+          // Also load any additional data that was saved from profile page
+          let additionalData = {};
+          try {
+            const savedAdditionalData = await AsyncStorageUtils.getItem<any>('savedAdditionalProfileData');
+            if (savedAdditionalData) {
+              additionalData = savedAdditionalData;
             }
-          } else {
-            // No saved photo, just load the other data
-            setFormData({
-              ...parsedProfile,
-              profile_photo_url: ''
-            });
+          } catch (error) {
+            console.warn('No additional profile data found:', error);
           }
+          
+          // Load basic profile data + additional data including photo for re-upload
+          setFormData({
+            first_name: parsedProfile.first_name || '',
+            age: parsedProfile.age || '',
+            gender_identity: parsedProfile.gender_identity || '',
+            interested_in: parsedProfile.interested_in || '',
+            profile_photo_url: parsedProfile.profile_photo_url || '',
+            // Load additional data from profile page if available
+            about_me: (additionalData as any).about_me || '',
+            height_cm: (additionalData as any).height_cm || null,
+            interests: (additionalData as any).interests || [],
+            instagram_handle: (additionalData as any).instagram_handle || ''
+          });
+          
+          console.log('Loaded complete profile data including additional fields:', {
+            hasPhoto: !!parsedProfile.profile_photo_url,
+            hasAboutMe: !!(additionalData as any).about_me,
+            hasHeight: !!(additionalData as any).height_cm,
+            hasInterests: Array.isArray((additionalData as any).interests) && (additionalData as any).interests.length > 0,
+            hasInstagram: !!(additionalData as any).instagram_handle
+          });
           
           // Set the remember profile toggle to true if we have saved data
           setRememberProfile(true);
@@ -250,7 +304,7 @@ export default function Consent() {
       }
     };
     loadSavedProfile();
-  }, []);
+  }, [event]); // Depend on event being loaded
 
   // Handler for profile photo upload
   const handlePhotoUpload = async () => {
@@ -398,14 +452,7 @@ export default function Consent() {
               profile_photo_url: file_url
             }));
 
-            // Save photo URL locally if "remember profile" is checked
-            if (rememberProfile) {
-              try {
-                await AsyncStorageUtils.setItem('savedProfilePhotoUrl', file_url);
-              } catch (storageError) {
-                console.error('Consent error:', storageError);
-              }
-            }
+            // Photo URL will be saved with complete profile data when form is submitted
             
             // Clear temp photo and success - break out of retry loop
             setTempPhotoUri(null);
@@ -441,14 +488,7 @@ export default function Consent() {
             profile_photo_url: placeholderUrl
           }));
           
-          // Save placeholder URL locally if "remember profile" is checked
-          if (rememberProfile) {
-            try {
-              await AsyncStorageUtils.setItem('savedProfilePhotoUrl', placeholderUrl);
-            } catch (storageError) {
-              console.error('Consent error:', storageError);
-            }
-          }
+          // Placeholder URL will be saved with complete profile data when form is submitted
           
           // Clear temp photo
           setTempPhotoUri(null);
@@ -536,37 +576,26 @@ export default function Consent() {
       // Save profile data locally if "remember profile" is checked
       if (rememberProfile) {
         try {
-          // Save basic profile data (without photo URL)
-          const profileDataToSave = {
+          // Save basic profile data from consent page + photo
+          const basicProfileDataToSave = {
             first_name: formData.first_name,
             age: formData.age,
             gender_identity: formData.gender_identity,
-            interested_in: formData.interested_in
+            interested_in: formData.interested_in,
+            profile_photo_url: formData.profile_photo_url || ''
           };
           
           // Validate that we have the required data before saving
-          if (profileDataToSave.first_name && profileDataToSave.age && 
-              profileDataToSave.gender_identity && profileDataToSave.interested_in) {
-            await AsyncStorageUtils.setItem('savedProfileData', JSON.stringify(profileDataToSave));
+          if (basicProfileDataToSave.first_name && basicProfileDataToSave.age && 
+              basicProfileDataToSave.gender_identity && basicProfileDataToSave.interested_in) {
+            await AsyncStorageUtils.setItem('savedProfileData', JSON.stringify(basicProfileDataToSave));
+            console.log('Saved basic profile data from consent:', {
+              hasPhoto: !!basicProfileDataToSave.profile_photo_url
+            });
           }
-
-          // Also save any additional profile data that might exist in AsyncStorage
-          // This ensures Instagram, height, interests, about_me are preserved
-          try {
-            const existingProfile = await AsyncStorageUtils.getItem<string>('currentProfileData');
-            if (existingProfile) {
-              const parsedProfile = JSON.parse(existingProfile);
-              const additionalData = {
-                about_me: parsedProfile.about_me || '',
-                height_cm: parsedProfile.height_cm || null,
-                interests: parsedProfile.interests || [],
-                instagram_handle: parsedProfile.instagram_handle || ''
-              };
-              await AsyncStorageUtils.setItem('savedAdditionalProfileData', JSON.stringify(additionalData));
-            }
-          } catch (additionalDataError) {
-            console.log('No additional profile data to save or error:', additionalDataError);
-          }
+          
+          // Save flag that user wants profile remembered for future use by profile page
+          await AsyncStorageUtils.setItem('rememberProfileForFutureEvents', 'true');
         } catch (error) {
           console.error('Consent error:', error);
         }
@@ -574,14 +603,14 @@ export default function Consent() {
         // Clear saved profile data if not checked
         try {
           await AsyncStorageUtils.removeItem('savedProfileData');
-          await AsyncStorageUtils.removeItem('savedProfilePhotoUrl');
+          await AsyncStorageUtils.removeItem('rememberProfileForFutureEvents');
           await AsyncStorageUtils.removeItem('savedAdditionalProfileData');
         } catch (error) {
           console.error('Consent error:', error);
         }
       }
 
-      // Create event profile with photo
+      // Create event profile with photo and additional data
       const profileData = {
         event_id: event.id,
         session_id: sessionId,
@@ -593,6 +622,11 @@ export default function Consent() {
         profile_photo_url: formData.profile_photo_url,
         is_visible: true,
         expires_at: event.expires_at,
+        // Include additional data if available
+        ...(formData.about_me && { about_me: formData.about_me }),
+        ...(formData.height_cm && { height_cm: formData.height_cm }),
+        ...(formData.interests && formData.interests.length > 0 && { interests: formData.interests }),
+        ...(formData.instagram_handle && { instagram_handle: formData.instagram_handle }),
       };
       
       // Add timeout to prevent hanging
@@ -641,11 +675,63 @@ export default function Consent() {
         // Don't fail the profile creation for this
       }
       
+      // DIRECT APPROACH: Fetch all profiles immediately for instant discovery display
+      // CRITICAL: This must complete BEFORE navigation to ensure Discovery has the data
+      try {
+        console.log('Consent: Fetching all profiles directly for instant discovery access...');
+        const allProfiles = await EventProfileAPI.filter({
+          event_id: event.id,
+          is_visible: true
+        });
+        
+        const otherUsersProfiles = allProfiles.filter(p => p.session_id !== sessionId);
+        console.log(`Consent: Fetched ${otherUsersProfiles.length} profiles directly, storing in cache for instant discovery access`);
+        
+        // Store profiles in GlobalDataCache for immediate discovery access
+        const { GlobalDataCache, CacheKeys } = await import('../lib/cache/GlobalDataCache');
+        GlobalDataCache.set(CacheKeys.DISCOVERY_PROFILES, otherUsersProfiles, 10 * 60 * 1000); // Cache for 10 minutes
+        
+        // Set flag to indicate we have fresh consent-fetched profiles
+        GlobalDataCache.set('discovery_has_consent_profiles', true, 2 * 60 * 1000);
+        
+        // Start image preloading but don't wait for it (fire and forget)
+        if (otherUsersProfiles.length > 0) {
+          const { ImageCacheService } = await import('../lib/services/ImageCacheService');
+          const profileImageUrls = otherUsersProfiles
+            .map(p => p.profile_photo_url)
+            .filter(Boolean);
+          
+          if (profileImageUrls.length > 0) {
+            console.log(`Consent: Pre-caching ${profileImageUrls.length} profile images for instant display`);
+            // Fire and forget image preloading - don't wait for this
+            Promise.all(
+              profileImageUrls.slice(0, 15).map(async (url) => { // Limit to first 15 for performance
+                const imageUrl = url as string;
+                try {
+                  const profile = otherUsersProfiles.find(p => p.profile_photo_url === imageUrl);
+                  if (profile?.session_id && event?.id) {
+                    await ImageCacheService.getCachedImageUri(imageUrl, event.id!, profile.session_id!);
+                  }
+                } catch (error) {
+                  // Ignore individual image cache errors
+                }
+              })
+            ).catch(() => {});
+          }
+        }
+        
+        console.log('Consent: Successfully cached profiles for instant discovery access');
+      } catch (directFetchError) {
+        console.error('Consent: Direct profile fetching failed:', directFetchError);
+        // Don't fail the entire consent process for this - discovery will fallback to its own loading
+      }
+      
       // Clear consent page flag before navigating to allow persistent navigation
       await AsyncStorageUtils.removeItem('isOnConsentPage');
       
-      // Navigate to discovery page
-      router.replace('/discovery');
+      // Navigate to discovery page (profiles are now cached and ready)
+      console.log('Consent: Navigating to discovery with profiles cached');
+      unifiedNavigator.navigate('discovery', {}, true);
     } catch (error) {
       console.error('Consent error:', error);
       setError("Failed to create profile. Please try again.");
@@ -1081,7 +1167,7 @@ export default function Consent() {
           {/* Back Button */}
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.replace('/home')} // Processing step back button - home to avoid loop
+            onPress={() => unifiedNavigator.navigate('home', {}, true)} // Processing step back button - home to avoid loop
             accessibilityLabel="Back to Home"
             accessibilityHint="Tap to return to the home screen"
           >
@@ -1105,7 +1191,7 @@ export default function Consent() {
           {/* Back Button */}
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.replace('/home')} // Error step back button - home to avoid loop
+            onPress={() => unifiedNavigator.navigate('home', {}, true)} // Error step back button - home to avoid loop
             accessibilityLabel="Back to Home"
             accessibilityHint="Tap to return to the home screen"
           >
@@ -1130,7 +1216,7 @@ export default function Consent() {
             {/* Back Button */}
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => router.replace('/home')} // Main consent form back button - home to avoid loop
+              onPress={() => unifiedNavigator.navigate('home', {}, true)} // Main consent form back button - home to avoid loop
               accessibilityLabel="Back to Home"
               accessibilityHint="Tap to return to the home screen"
             >
@@ -1139,6 +1225,7 @@ export default function Consent() {
             <View style={styles.header}>
               <View style={styles.logoContainer}>
                 <Image 
+                  // eslint-disable-next-line @typescript-eslint/no-require-imports
                   source={require('../assets/round icon.png')} 
                   style={styles.logoImage}
                   resizeMode="contain"

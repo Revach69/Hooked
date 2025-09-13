@@ -28,26 +28,26 @@ interface PersistentPageProps {
 // Wrapper components that add persistent navigation to original pages
 // Memoized to prevent re-mounting of pages on every render
 // Discovery wrapper - completely static since Discovery manages its own state
-const DiscoveryWrapper: React.FC = React.memo(() => {
+const DiscoveryWrapper: React.FC = React.memo(function DiscoveryWrapper() {
   // Discovery component doesn't need props - it manages its own navigation and state
   // console.log('🔍 DiscoveryWrapper: Rendering Discovery component');
   return <Discovery />;
 });
 
-const MatchesWrapper: React.FC<PersistentPageProps> = React.memo(({ isActive, onNavigate }) => {
+const MatchesWrapper: React.FC<PersistentPageProps> = React.memo(function MatchesWrapper({ isActive, onNavigate }) {
   // Props are passed for future use - original pages use global navigation system  
   // console.log('💕 MatchesWrapper: isActive =', isActive, 'onNavigate available =', !!onNavigate);
   return <Matches />;
 });
 
-const ProfileWrapper: React.FC<PersistentPageProps> = React.memo(({ isActive, onNavigate }) => {
+const ProfileWrapper: React.FC<PersistentPageProps> = React.memo(function ProfileWrapper({ isActive, onNavigate }) {
   // Props are passed for future use - original pages use global navigation system
   // console.log('👤 ProfileWrapper: isActive =', isActive, 'onNavigate available =', !!onNavigate);
   return <Profile />;
 });
 
 // Chat wrapper will need special handling for dynamic routes
-const ChatWrapper: React.FC<PersistentPageProps & { chatId?: string }> = ({ isActive, onNavigate, chatId }) => {
+const ChatWrapper: React.FC<PersistentPageProps & { chatId?: string }> = function ChatWrapper({ isActive, onNavigate, chatId }) {
   // This will be implemented when we handle chat navigation
   // console.log('💬 ChatWrapper: isActive =', isActive, 'chatId =', chatId);
   // console.log('💬 ChatWrapper: onNavigate available =', typeof onNavigate === 'function');
@@ -64,7 +64,7 @@ interface PageRegistry {
 
 // Note: DiscoveryPagePersistent is now imported from persistent directory
 
-export const PersistentPageContainer: React.FC = React.memo(() => {
+export const PersistentPageContainer: React.FC = React.memo(function PersistentPageContainer() {
   // console.log('🏠 PersistentPageContainer: Component rendered');
   const [currentPage, setCurrentPage] = useState('discovery');
   

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, useColorScheme, Platform, Linking, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, useColorScheme, Platform, Alert } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { unifiedNavigator } from '../lib/navigation/UnifiedNavigator';
 import { SafeAreaView } from 'react-native-safe-area-context';

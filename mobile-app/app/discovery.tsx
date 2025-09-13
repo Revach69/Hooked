@@ -12,18 +12,20 @@ import {
   Alert,
   useColorScheme,
   StatusBar,
+  RefreshControl,
 } from 'react-native';
 import FastImage from 'react-native-fast-image';
 import Toast from 'react-native-toast-message';
 import { useFocusEffect } from 'expo-router';
 import { unifiedNavigator } from '../lib/navigation/UnifiedNavigator';
-import { Heart, Filter, Users, User, MessageCircle, X } from 'lucide-react-native';
+import { crossPageEventBus } from '../lib/navigation/CrossPageEventBus';
+import { Filter, Users, User, MessageCircle, X } from 'lucide-react-native';
 import { EventProfileAPI, LikeAPI, EventAPI, BlockedMatchAPI, SkippedProfileAPI } from '../lib/firebaseApi';
 // Sentry removed
 
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { ImageCacheService } from '../lib/services/ImageCacheService';
-import { BackgroundDataPreloader } from '../lib/services/BackgroundDataPreloader';
+// BackgroundDataPreloader removed - now using direct consent-fetched profiles
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { getDbForEvent } from '../lib/firebaseConfig';
@@ -191,11 +193,20 @@ export default function Discovery() {
     enableScreenTracking: true,
     enableUserInteractionTracking: true 
   });
-  const [profiles, setProfiles] = useState<any[]>([]);
+  // Initialize profiles from cache to prevent loading state
+  const [profiles, setProfiles] = useState<any[]>(() => {
+    const cachedProfiles = GlobalDataCache.get<any[]>(CacheKeys.DISCOVERY_PROFILES);
+    return cachedProfiles || [];
+  });
   const [currentUserProfile, setCurrentUserProfile] = useState<any>(null);
   const [filteredProfiles, setFilteredProfiles] = useState<any[]>([]);
-  const [currentEvent, setCurrentEvent] = useState<any>(null);
+  // Initialize currentEvent from cache to prevent loading state
+  const [currentEvent, setCurrentEvent] = useState<any>(() => {
+    const cached = GlobalDataCache.get<any>(CacheKeys.DISCOVERY_EVENT);
+    return cached || null;
+  });
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
   const [filters, setFilters] = useState({
     age_min: 18,
     age_max: 99
@@ -206,13 +217,65 @@ export default function Discovery() {
   });
   const [showFilters, setShowFilters] = useState(false);
   const [likedProfiles, setLikedProfiles] = useState(new Set<string>());
-  const [blockedProfiles, setBlockedProfiles] = useState(new Set<string>());  
   const [skippedProfiles, setSkippedProfiles] = useState(new Set<string>());
   const [selectedProfileForDetail, setSelectedProfileForDetail] = useState<any>(null);
   const [viewedProfiles, setViewedProfiles] = useState(new Set<string>());
   const [isAppActive, setIsAppActive] = useState(true);
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
   const [showHowItWorksModal, setShowHowItWorksModal] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  
+  // Handle pull-to-refresh
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      const eventId = currentEvent?.id || await AsyncStorageUtils.getItem<string>('currentEventId');
+      const sessionId = currentSessionId || await AsyncStorageUtils.getItem<string>('currentSessionId');
+      
+      if (eventId && sessionId) {
+        console.log('Discovery Pull-to-refresh: Reloading all profiles data');
+        
+        // Reload profiles data directly from Firebase
+        const allProfiles = await EventProfileAPI.filter({
+          event_id: eventId,
+          is_visible: true
+        });
+        
+        const otherUsersProfiles = allProfiles.filter(p => p.session_id !== sessionId);
+        setProfiles(otherUsersProfiles);
+        
+        // Update cache for next time
+        GlobalDataCache.set(CacheKeys.DISCOVERY_PROFILES, otherUsersProfiles, 2 * 60 * 1000);
+        
+        // Reload likes data
+        const likes = await LikeAPI.filter({
+          event_id: eventId,
+          liker_session_id: sessionId
+        });
+        setLikedProfiles(new Set(likes.map(like => like.liked_session_id)));
+        
+        // Reload skipped profiles
+        const skipped = await SkippedProfileAPI.filter({
+          event_id: eventId,
+          skipper_session_id: sessionId
+        });
+        setSkippedProfiles(new Set(skipped.map(s => s.skipped_session_id)));
+        
+        console.log(`Discovery Pull-to-refresh: Refreshed ${otherUsersProfiles.length} profiles, ${likes.length} likes, ${skipped.length} skipped`);
+      }
+    } catch (error) {
+      console.error('Discovery Pull-to-refresh error:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Refresh Failed',
+        text2: 'Could not refresh profiles. Please try again.',
+        position: 'top',
+        visibilityTime: 3000,
+      });
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [currentEvent?.id, currentSessionId]);
   
   // Single ref to hold all unsubscribe functions
   const listenersRef = useRef<{
@@ -229,8 +292,9 @@ export default function Discovery() {
     const profilePhotoUrl = await AsyncStorageUtils.getItem<string>('currentProfilePhotoUrl');
   
     if (!eventId || !sessionId) {
-      // No active session - this is correct to go home
-      unifiedNavigator.navigate('home', {}, true); // replace: true
+      // No active session - skip initialization for this page
+      // Don't navigate away - let UnifiedNavigator handle navigation
+      console.log('Discovery: No event context, skipping initialization');
       return;
     }
 
@@ -326,50 +390,6 @@ export default function Discovery() {
         console.log('Discovery: Development mode - event not found but keeping session for debugging');
       }
 
-      // Verify that the user's profile actually exists in the database
-      const cacheKey = `${CacheKeys.DISCOVERY_CURRENT_USER}_${sessionId}`;
-      const cachedUserProfile = GlobalDataCache.get<any>(cacheKey);
-      
-      if (cachedUserProfile) {
-        setCurrentUserProfile(cachedUserProfile);
-        console.log('Discovery: Using cached user profile');
-      } else {
-        const profileTimeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('Profile loading timeout')), 30000); // 30 second timeout - give more time
-        });
-        
-        // Use the same country info for profile lookup as was used for creation
-        const eventCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
-        console.log(`Discovery: Looking for profile in ${eventCountry || 'default'} region for session ${sessionId}`);
-        
-        const profilePromise = EventProfileAPI.filter({
-          event_id: eventId,
-          session_id: sessionId
-        });
-        const userProfiles = await Promise.race([profilePromise, profileTimeoutPromise]);
-
-        if (userProfiles.length === 0) {
-          // Profile doesn't exist in database (user left event and deleted profile)
-          console.log('User profile not found in discovery, clearing session data');
-          await AsyncStorageUtils.multiRemove([
-            'currentEventId',
-            'currentSessionId',
-            'currentEventCode',
-            'currentProfileColor',
-            'currentProfilePhotoUrl',
-            'currentEventCountry',
-            'currentEventData'
-          ]);
-          // 2. Profile deleted but session exists - should go back to matches/previous page
-          unifiedNavigator.navigate('home', {}, true); // go back to home
-          return;
-        } else {
-          setCurrentUserProfile(userProfiles[0]);
-          GlobalDataCache.set(cacheKey, userProfiles[0], 5 * 60 * 1000); // Cache for 5 minutes
-          console.log('Discovery: Loaded and cached user profile');
-        }
-      }
-      
       // For photos set up display, we need to check if profilePhotoUrl is in storage
       // If it's not, then the user needs to reselect their photo
       if (!profilePhotoUrl) {
@@ -377,29 +397,169 @@ export default function Discovery() {
         unifiedNavigator.navigate('profile', {}, true); // Let them select a photo again
         return;
       }
+
+      // CRITICAL FIX: Load user profile FIRST before other profiles
+      // This ensures filtering has user profile available when other profiles load
+      const cacheKey = `${CacheKeys.DISCOVERY_CURRENT_USER}_${sessionId}`;
+      const cachedUserProfile = GlobalDataCache.get<any>(cacheKey);
+      
+      if (cachedUserProfile) {
+        setCurrentUserProfile(cachedUserProfile);
+        console.log('Discovery: Using cached user profile for filtering');
+      } else {
+        const profileTimeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('Profile loading timeout')), 30000);
+        });
+        
+        try {
+          const eventCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
+          console.log(`Discovery: Looking for user profile in ${eventCountry || 'default'} region for session ${sessionId}`);
+          const profilePromise = EventProfileAPI.filter({
+            event_id: eventId,
+            session_id: sessionId
+          });
+          const userProfiles = await Promise.race([profilePromise, profileTimeoutPromise]);
+
+          if (userProfiles.length === 0) {
+            console.log('User profile not found in discovery, clearing session data');
+            await AsyncStorageUtils.multiRemove([
+              'currentEventId',
+              'currentSessionId',
+              'currentEventCode',
+              'currentProfileColor',
+              'currentProfilePhotoUrl',
+              'currentEventCountry',
+              'currentEventData'
+            ]);
+            unifiedNavigator.navigate('home', {}, true);
+            return;
+          } else {
+            setCurrentUserProfile(userProfiles[0]);
+            GlobalDataCache.set(cacheKey, userProfiles[0], 5 * 60 * 1000);
+            console.log('Discovery: Loaded user profile for filtering');
+          }
+        } catch (userProfileError) {
+          console.error('Discovery: Failed to load user profile:', userProfileError);
+          setIsInitialized(true);
+          return;
+        }
+      }
+      
+      // Check if we already have consent-fetched profiles to avoid unnecessary refetch
+      const hasConsentProfiles = GlobalDataCache.get('discovery_has_consent_profiles');
+      
+      if (hasConsentProfiles && profiles.length > 0) {
+        console.log('Discovery: Skipping profile reload - already have consent-fetched profiles');
+        // If we have consent profiles and event data, we can set initialized immediately
+        if (currentEvent) {
+          setIsInitialized(true);
+        }
+      } else {
+        // Fallback: Load profiles if consent didn't provide them
+        console.log('Discovery: Loading profiles as fallback (consent may have failed)');
+        try {
+          const allProfiles = await EventProfileAPI.filter({
+            event_id: eventId,
+            is_visible: true
+          });
+          
+          const otherUsersProfiles = allProfiles.filter(p => p.session_id !== sessionId);
+          setProfiles(otherUsersProfiles);
+          
+          // Cache for listeners to use
+          GlobalDataCache.set(CacheKeys.DISCOVERY_PROFILES, otherUsersProfiles, 2 * 60 * 1000);
+          console.log(`Discovery: Fallback loaded ${otherUsersProfiles.length} profiles`);
+        } catch (profileLoadError) {
+          console.error('Discovery: Fallback profile loading failed:', profileLoadError);
+        }
+        
+        // Load likes for UI state
+        try {
+          const likes = await LikeAPI.filter({
+            event_id: eventId,
+            liker_session_id: sessionId
+          });
+          setLikedProfiles(new Set(likes.map(like => like.liked_session_id)));
+          console.log(`Discovery: Loaded ${likes.length} likes for UI state`);
+        } catch (likesError) {
+          console.error('Discovery: Failed to load likes:', likesError);
+        }
+      }
       
       // All checks passed - session is valid
+      setIsInitialized(true);
     } catch (error) {
       console.error('Discovery error:', error);
       
       // Handle errors gracefully without losing user session
       if (error instanceof Error && error.message === 'Event loading timeout') {
         console.log('Event loading timed out - continuing with cached data if available');
-        // Don't redirect - let the user continue using the app
-        // The cached data should still work
+        // Set initialized to prevent infinite loading
+        setIsInitialized(true);
         return;
       } else if (error instanceof Error && error.message === 'Profile loading timeout') {
         console.log('Profile loading timed out - continuing with cached data if available');
-        // Don't redirect - let the user continue using the app
+        // Set initialized to prevent infinite loading
+        setIsInitialized(true);
         return;
       } else {
         console.error('Error in initializeSession:', error);
-        // For other errors, still don't redirect immediately
-        // Let the user stay on the page - they can manually navigate if needed
+        // For other errors, still set initialized to prevent infinite loading
+        setIsInitialized(true);
         return;
       }
     }
   }, []);
+
+  // Listen for navigation events to re-check cached profiles when Discovery becomes active
+  useEffect(() => {
+    const unsubscribe = crossPageEventBus.subscribe(
+      'discovery',
+      'navigation:request',
+      async (data) => {
+        // Only handle when Discovery is the target page
+        if (data.targetPage === 'discovery') {
+          console.log('🔍 Discovery: Navigation request received, checking for full initialization');
+          
+          // Check if we have session context now (might not have had it during early mount)
+          const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
+          const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
+          
+          if (eventId && sessionId && (!currentEvent || profiles.length === 0)) {
+            console.log('🔍 Discovery: Session context available, triggering full initialization');
+            
+            // Reset initialization state so main initialization can run
+            setIsInitialized(false);
+            
+            // Trigger re-initialization by updating session context
+            setCurrentSessionId(sessionId);
+            
+            return; // Let the main useEffect handle the full initialization
+          }
+          
+          // If already initialized, just check for cached profiles
+          const cachedProfiles = GlobalDataCache.get<any[]>(CacheKeys.DISCOVERY_PROFILES);
+          const hasConsentProfiles = GlobalDataCache.get('discovery_has_consent_profiles');
+          
+          console.log(`🔍 Discovery: Navigation re-check - found ${cachedProfiles?.length || 0} cached profiles, hasConsentFlag: ${!!hasConsentProfiles}`);
+          
+          // If we have profiles now but didn't before, update the display
+          if (cachedProfiles && Array.isArray(cachedProfiles) && cachedProfiles.length > 0 && profiles.length === 0) {
+            if (sessionId) {
+              const otherUsersProfiles = cachedProfiles.filter(p => p.session_id !== sessionId);
+              setProfiles(otherUsersProfiles);
+              console.log(`🔍 Discovery: Navigation update - loaded ${otherUsersProfiles.length} consent-fetched profiles`);
+              
+              // Mark that we have consent-fetched profiles
+              GlobalDataCache.set('discovery_has_consent_profiles', true, 2 * 60 * 1000);
+            }
+          }
+        }
+      }
+    );
+
+    return unsubscribe;
+  }, [profiles.length, currentEvent, isInitialized]); // Re-run if profiles, event, or init state changes
 
   const checkAndShowHowItWorksModal = useCallback(async () => {
     try {
@@ -419,10 +579,71 @@ export default function Discovery() {
 
   // Use initializeSession in useEffect
   useEffect(() => {
-    initializeSession();
-    // Initialize image cache service
-    ImageCacheService.initialize();
+    const init = async () => {
+      const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
+      const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
+      
+      // Set session ID immediately if available
+      if (sessionId) {
+        setCurrentSessionId(sessionId);
+      }
+      
+      // If no session context, immediately set initialized to prevent infinite loading
+      if (!eventId || !sessionId) {
+        console.log('Discovery: No event context, setting initialized');
+        setIsInitialized(true);
+        return;
+      }
+      
+      // PRIORITY 1: Load event data immediately from cache/storage to prevent loading screen
+      const cachedEvent = GlobalDataCache.get<any>(CacheKeys.DISCOVERY_EVENT);
+      if (cachedEvent && cachedEvent.id === eventId) {
+        setCurrentEvent(cachedEvent);
+        console.log('Discovery: Using cached event data for instant display');
+      } else {
+        // Try stored event data for instant display
+        const storedEventData = await AsyncStorageUtils.getItem<any>('currentEventData');
+        if (storedEventData && storedEventData.id === eventId) {
+          // Convert date strings back to Date objects
+          const eventWithDates = {
+            ...storedEventData,
+            starts_at: storedEventData.starts_at ? new Date(storedEventData.starts_at) : null,
+            expires_at: storedEventData.expires_at ? new Date(storedEventData.expires_at) : null,
+            start_date: storedEventData.start_date ? new Date(storedEventData.start_date) : null,
+            created_at: storedEventData.created_at ? new Date(storedEventData.created_at) : null,
+            updated_at: storedEventData.updated_at ? new Date(storedEventData.updated_at) : null,
+          };
+          setCurrentEvent(eventWithDates);
+          GlobalDataCache.set(CacheKeys.DISCOVERY_EVENT, eventWithDates, 10 * 60 * 1000);
+          console.log('Discovery: Using stored event data for instant display');
+        }
+      }
+      
+      // PRIORITY 2: Check for consent-fetched profiles (direct approach)
+      const cachedProfiles = GlobalDataCache.get<any[]>(CacheKeys.DISCOVERY_PROFILES);
+      console.log(`Discovery: Checking cached profiles - found ${cachedProfiles?.length || 0} profiles, sessionId: ${sessionId}`);
+      
+      if (cachedProfiles && Array.isArray(cachedProfiles) && cachedProfiles.length > 0) {
+        const otherUsersProfiles = cachedProfiles.filter(p => p.session_id !== sessionId);
+        setProfiles(otherUsersProfiles);
+        console.log(`Discovery: Found ${otherUsersProfiles.length} consent-fetched profiles (filtered from ${cachedProfiles.length}), using immediately for instant display`);
+        
+        // Mark that we have consent-fetched profiles to prevent immediate overwriting
+        GlobalDataCache.set('discovery_has_consent_profiles', true, 2 * 60 * 1000);
+      } else {
+        console.log('Discovery: No cached profiles found from consent');
+      }
+      
+      // Initialize session to load any missing data and set up listeners
+      initializeSession();
+      // Initialize image cache service only when needed
+      ImageCacheService.initialize();
+    };
+    
+    init();
   }, [initializeSession]);
+  
+  // Navigation listener removed - consent-fetched profiles make this redundant
 
   // Force refresh user profile data when page gains focus (e.g., after visibility toggle on profile page)
   useFocusEffect(
@@ -430,7 +651,6 @@ export default function Discovery() {
       const refreshUserProfile = async () => {
         if (currentSessionId && currentEvent?.id) {
           try {
-            const eventCountry = await AsyncStorageUtils.getItem<string>('currentEventCountry');
             const profiles = await EventProfileAPI.filter({
               event_id: currentEvent.id,
               session_id: currentSessionId
@@ -571,21 +791,7 @@ export default function Discovery() {
         where('is_visible', '==', true)
       );
 
-      // Check for cached profiles first to show immediately - both profiles and filtered profiles
-      const cachedProfiles = GlobalDataCache.get<any[]>(CacheKeys.DISCOVERY_PROFILES);
-      const cachedFilteredProfiles = GlobalDataCache.get<any[]>(`${CacheKeys.DISCOVERY_PROFILES}_filtered`);
-      
-      if (cachedProfiles && Array.isArray(cachedProfiles)) {
-        setProfiles(cachedProfiles);
-        console.log('Discovery: Using cached profiles for instant display');
-        
-        // Also set filtered profiles immediately to prevent visual reordering
-        if (cachedFilteredProfiles && Array.isArray(cachedFilteredProfiles)) {
-          setFilteredProfiles(cachedFilteredProfiles);
-          console.log('Discovery: Using cached filtered profiles to prevent reordering');
-        }
-      }
-
+      // Real-time listener for live updates
       const otherProfilesUnsubscribe = onSnapshot(otherProfilesQuery, (otherSnapshot) => {
         try {
           const allVisibleProfiles = otherSnapshot.docs.map(doc => ({
@@ -595,48 +801,38 @@ export default function Discovery() {
           const otherUsersProfiles = allVisibleProfiles.filter(p => 
             p.session_id !== currentSessionId
           );
-          setProfiles(otherUsersProfiles);
           
-          // AGGRESSIVE IMAGE PRELOADING - like develop branch
-          const profileImageUrls = otherUsersProfiles
-            .map(p => p.profile_photo_url)
-            .filter(Boolean);
+          // Check if we should respect consent-fetched profiles
+          const hasConsentProfiles = GlobalDataCache.get('discovery_has_consent_profiles');
           
-          if (profileImageUrls.length > 0 && currentEvent?.id) {
-            console.log(`Discovery: Aggressively preloading ${profileImageUrls.length} profile images for instant modal display`);
-            
-            // Preload ALL images immediately - don't wait for UI render
-            // Combined with direct URL rendering in Discovery cards, this ensures:
-            // 1. Images are cached by ImageCacheService
-            // 2. Images are decoded into memory by React Native when Discovery cards render
-            // 3. Modal opens instantly (both cached + decoded)
-            Promise.all(
-              profileImageUrls.map(async (url, index) => {
-                try {
-                  const profile = otherUsersProfiles.find(p => p.profile_photo_url === url);
-                  if (profile) {
-                    // Force immediate caching - combined with direct rendering for instant modal
-                    const cachedUri = await ImageCacheService.getCachedImageUri(url, currentEvent.id, profile.session_id);
-                    
-                    // FastImage preloading for instant modal display
-                    try {
-                      await FastImage.preload([{
-                        uri: cachedUri,
-                        priority: FastImage.priority.high,
-                        cache: FastImage.cacheControl.immutable
-                      }]);
-                    } catch (preloadError) {
-                      console.warn('Discovery: FastImage preload failed:', preloadError);
-                    }
-                  }
-                } catch (error) {
-                  console.warn('Discovery: Failed to preload image:', error);
-                }
-              })
-            ).catch(error => {
-              console.warn('Discovery: Some image preloading failed:', error);
-            });
+          // Update profiles from real-time listener for live updates
+          // Only update if different to prevent unnecessary re-renders
+          // Be more conservative when we have fresh consent-fetched profiles
+          const shouldUpdate = JSON.stringify(otherUsersProfiles) !== JSON.stringify(profiles);
+          
+          if (shouldUpdate) {
+            // If we have fresh consent profiles, only update if there's a significant change
+            if (hasConsentProfiles && profiles.length > 0) {
+              // Only update if there's a meaningful difference (new profiles, removed profiles, etc.)
+              const currentIds = new Set(profiles.map(p => p.session_id));
+              const newIds = new Set(otherUsersProfiles.map(p => p.session_id));
+              const hasNewUsers = otherUsersProfiles.some(p => !currentIds.has(p.session_id));
+              const hasRemovedUsers = profiles.some(p => !newIds.has(p.session_id));
+              
+              if (hasNewUsers || hasRemovedUsers) {
+                setProfiles(otherUsersProfiles);
+                console.log(`Discovery: Updated ${otherUsersProfiles.length} profiles from real-time listener (meaningful change detected)`);
+              } else {
+                console.log(`Discovery: Skipping profile update - no meaningful changes detected`);
+              }
+            } else {
+              // No consent profiles or empty profile list, update normally
+              setProfiles(otherUsersProfiles);
+              console.log(`Discovery: Updated ${otherUsersProfiles.length} profiles from real-time listener`);
+            }
           }
+          
+          // Image preloading removed - handled by consent page and hidden image pool
           
           // Cache the fresh data for next time
           GlobalDataCache.set(CacheKeys.DISCOVERY_PROFILES, otherUsersProfiles, 2 * 60 * 1000); // Cache for 2 minutes
@@ -735,7 +931,7 @@ export default function Discovery() {
             return;
           }
 
-          // If user is not visible, don't load other profiles and show hidden state
+          // If user is not visible, clear profiles to show hidden state
           if (!userProfile.is_visible) {
             setProfiles([]);
             setFilteredProfiles([]);
@@ -748,12 +944,9 @@ export default function Discovery() {
               listenersRef.current.likes();
               listenersRef.current.likes = undefined;
             }
-          } else {
-            // User is visible, set up other listeners only if they don't exist
-            if (!listenersRef.current.otherProfiles && !listenersRef.current.likes) {
-              setupOtherListeners();
-            }
           }
+          // OPTION 1 FIX: Removed dependency on user profile for setting up other listeners
+          // Other listeners are now set up independently below
         } catch (error) {
           console.error('Discovery error:', error);
         }
@@ -762,6 +955,12 @@ export default function Discovery() {
       });
 
         listenersRef.current.userProfile = userProfileUnsubscribe;
+        
+        // OPTION 1 FIX: Set up other listeners immediately, not dependent on user profile
+        // This ensures profiles load even if user profile listener is slow
+        if (!listenersRef.current.otherProfiles && !listenersRef.current.likes) {
+          setupOtherListeners();
+        }
 
       } catch (error) {
         console.error('Discovery error:', error);
@@ -769,15 +968,6 @@ export default function Discovery() {
     };
 
     setupConsolidatedListeners();
-
-    // Trigger background data preloading for instant page transitions
-    // Only run once when both event and session are available
-    if (!BackgroundDataPreloader.getIsPreloading()) {
-      console.log('🚀 Discovery: Triggering background data preloading...');
-      BackgroundDataPreloader.preloadEventData().catch(error => {
-        console.warn('Discovery: Background preloading failed:', error);
-      });
-    }
 
     return () => {
       cleanupAllListeners();
@@ -837,7 +1027,7 @@ export default function Discovery() {
         event_id: eventId,
         blocker_session_id: sessionId
       });
-      setBlockedProfiles(new Set(blocked.map(b => b.blocked_session_id)));
+      // Note: blocked profiles are handled by the API filtering, no local state needed
     } catch (error) {
       console.error('Discovery error:', error);
     }
@@ -878,23 +1068,6 @@ export default function Discovery() {
 
   // Apply filters whenever profiles, user profile, filters, or profile states change
   useEffect(() => {
-    // Only skip re-filtering in specific cases to prevent visual reordering
-    // Skip if we just set filtered profiles from cache and nothing significant has changed
-    const cachedFilteredProfiles = GlobalDataCache.get<any[]>(`${CacheKeys.DISCOVERY_PROFILES}_filtered`);
-    
-    // Skip re-filtering only in very specific initial load case
-    // Don't skip if likedProfiles or viewedProfiles have changed (need fresh sorting)
-    const hasInteractionChanges = likedProfiles.size > 0 || viewedProfiles.size > 0;
-    
-    if (cachedFilteredProfiles && 
-        filteredProfiles.length === cachedFilteredProfiles.length && 
-        filteredProfiles.length > 0 &&
-        currentUserProfile &&
-        profiles.length > 0 &&
-        !hasInteractionChanges) {
-      console.log('Discovery: Skipping re-filter to prevent visual reordering (no interactions yet)');
-      return;
-    }
     
     // Sort profiles by priority (move inside to avoid dependency issues)
     function sortProfilesByPriority(profilesList: any[]) {
@@ -968,18 +1141,13 @@ export default function Discovery() {
       const sortedProfiles = sortProfilesByPriority(tempFiltered);
 
       setFilteredProfiles(sortedProfiles);
-      console.log('Discovery: Applied fresh filtering and sorting');
-      
-      // Cache the sorted filtered profiles to prevent visual reordering on next load
-      GlobalDataCache.set(`${CacheKeys.DISCOVERY_PROFILES}_filtered`, sortedProfiles, 2 * 60 * 1000);
+      console.log(`Discovery: Applied filtering and sorting - ${profiles.length} → ${sortedProfiles.length} profiles`);
     }
 
     applyFilters();
   }, [profiles, currentUserProfile, filters, likedProfiles, skippedProfiles, viewedProfiles, filteredProfiles.length]);
 
-  // Images now render directly from original URLs (like develop branch) to force React Native decoding
-
-  // Duplicate initializeSession function removed - already defined above
+  // Obsolete comments removed
 
 
   const handleLike = async (likedProfile: any) => {
@@ -1021,8 +1189,7 @@ export default function Discovery() {
       // Optimistically update UI
       setLikedProfiles(prev => new Set([...prev, likedProfile.session_id]));
       
-      // Clear cached filtered profiles to trigger fresh sorting
-      GlobalDataCache.clear(`${CacheKeys.DISCOVERY_PROFILES}_filtered`);
+      // Filtering will be triggered by state change
 
       const newLike = await trackAsyncOperation('create_like', async () => {
         return await LikeAPI.create({
@@ -1089,8 +1256,7 @@ export default function Discovery() {
         return newSet;
       });
       
-      // Clear cached filtered profiles to trigger fresh sorting
-      GlobalDataCache.clear(`${CacheKeys.DISCOVERY_PROFILES}_filtered`);
+      // Filtering will be triggered by state change
       
       // Show user-friendly error message
       Alert.alert(
@@ -1568,6 +1734,31 @@ export default function Discovery() {
     },
   });
 
+  // Only show loading for truly invalid states (no session data at all)
+  if (!isInitialized && !currentEvent && !currentSessionId) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
+        <StatusBar 
+          barStyle={isDark ? 'light-content' : 'dark-content'}
+          backgroundColor={isDark ? '#000' : '#fff'}
+        />
+        {/* Logo Section */}
+        <View style={styles.logoContainer}>
+          <Image 
+            source={require('../assets/Hooked Full Logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+        </View>
+
+        {/* Loading State */}
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   // Show hidden state if user is not visible
   if (currentUserProfile && !currentUserProfile.is_visible) {
     return (
@@ -1579,6 +1770,7 @@ export default function Discovery() {
         {/* Logo Section */}
         <View style={styles.logoContainer}>
           <Image 
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
             source={require('../assets/Hooked Full Logo.png')}
             style={styles.logo}
             resizeMode="contain"
@@ -1680,17 +1872,25 @@ export default function Discovery() {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerText}>
-          <Text style={styles.title}>
-            Singles at {currentEvent?.name}
-          </Text>
+          {currentEvent?.name ? (
+            <Text style={styles.title}>
+              Singles at {currentEvent.name}
+            </Text>
+          ) : (
+            <Text style={styles.title}>
+              Loading event...
+            </Text>
+          )}
           {currentEvent?.expires_at ? (
             <CountdownTimer
               expiresAt={currentEvent.expires_at}
               prefix="Everything expires in "
               style={styles.subtitle}
             />
-          ) : (
+          ) : currentEvent?.name ? (
             <Text style={styles.subtitle}>{filteredProfiles.length} people discovered</Text>
+          ) : (
+            <Text style={styles.subtitle}>Preparing your experience...</Text>
           )}
         </View>
         <TouchableOpacity
@@ -1705,8 +1905,19 @@ export default function Discovery() {
       </View>
 
       {/* Profiles Grid */}
-      <ScrollView style={styles.profilesContainer}>
-        <View style={styles.profilesGrid}>
+      {currentEvent?.name ? (
+        <ScrollView 
+          style={styles.profilesContainer}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              colors={['#FF6B6B']} // Android
+              tintColor="#FF6B6B" // iOS
+            />
+          }
+        >
+          <View style={styles.profilesGrid}>
           {(() => {
             const rows = [];
             for (let i = 0; i < filteredProfiles.length; i += 3) {
@@ -1772,7 +1983,14 @@ export default function Discovery() {
             </TouchableOpacity>
           </View>
         )}
-      </ScrollView>
+        </ScrollView>
+      ) : (
+        <View style={[styles.profilesContainer, { justifyContent: 'center', alignItems: 'center' }]}>
+          <Text style={[styles.emptyTitle, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
+            Loading profiles...
+          </Text>
+        </View>
+      )}
 
       {/* Bottom Navigation */}
       <View style={styles.bottomNavigation}>
@@ -1901,9 +2119,6 @@ export default function Discovery() {
             const newViewedSet = new Set([...viewedProfiles, selectedProfileForDetail.session_id]);
             setViewedProfiles(newViewedSet);
             saveViewedProfiles(currentEvent.id, newViewedSet);
-            
-            // Clear cached filtered profiles to trigger fresh sorting
-            GlobalDataCache.clear(`${CacheKeys.DISCOVERY_PROFILES}_filtered`);
           }
           setSelectedProfileForDetail(null);
         }}

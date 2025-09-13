@@ -14,7 +14,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { unifiedNavigator } from '../lib/navigation/UnifiedNavigator';
-import { QrCode, X } from 'lucide-react-native';
+import { QrCode, X, Hash } from 'lucide-react-native';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 
 import QRCodeScanner from '../lib/components/QRCodeScanner';
@@ -35,10 +35,9 @@ export default function Home() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const [activeModal, setActiveModal] = useState<string | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);  
+  const isProcessing = false; // Future: implement loading state for QR scanning  
   const [manualCode, setManualCode] = useState('');
-  const [isInitialized, setIsInitialized] = useState(false);  
-  const [isCheckingResume, setIsCheckingResume] = useState(true); // <-- NEW
+  const [isCheckingResume, setIsCheckingResume] = useState(true);
 
 
   const { kickedUser, handleKickedUserClose } = useKickedUserCheck();
@@ -122,7 +121,7 @@ export default function Home() {
         }
         
         // Simple initialization without complex async operations
-        setIsInitialized(true);
+        // Component is now initialized
         
         // Check for survey with delay (only shows if within survey visibility timeframe)
         setTimeout(async () => {
@@ -487,11 +486,13 @@ export default function Home() {
         <View style={styles.headerSection}>
           <View style={styles.logoContainer}>
             <Image 
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
               source={require('../assets/round icon.png')} 
               style={styles.logo}
               resizeMode="contain"
             />
             <Image 
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
               source={require('../assets/Hooked.png')} 
               style={styles.hookedImage}
               resizeMode="contain"
@@ -537,6 +538,7 @@ export default function Home() {
               accessibilityLabel="Enter Code Manually"
               accessibilityHint="Opens modal to manually enter event code"
             >
+              <Hash size={24} color="black" />
               <Text style={styles.buttonText}>Enter Code Manually</Text>
             </TouchableOpacity>
 

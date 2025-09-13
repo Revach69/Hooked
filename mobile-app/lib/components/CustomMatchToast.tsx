@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   useColorScheme,
   Dimensions,
   Animated,
+  Appearance,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
@@ -66,14 +67,14 @@ const createStyles = (isDark: boolean, text2?: string) => {
   text1: {
     fontSize: 16,
     fontWeight: '600' as const,
-    color: isDark ? '#ffffff' : '#000000',
+    color: isDark ? '#ffffff' : '#1f2937',
     marginBottom: text2 ? 4 : 0,
     lineHeight: 22,
     flexShrink: 1,
   },
   text2: {
     fontSize: 14,
-    color: isDark ? '#e5e7eb' : '#374151',
+    color: isDark ? '#d1d5db' : '#6b7280',
     lineHeight: 20,
     flexShrink: 1,
   },
@@ -87,10 +88,30 @@ export const CustomMatchToast: React.FC<CustomMatchToastProps> = ({
   onHide,
 }) => {
   const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const [forcedDarkMode, setForcedDarkMode] = useState(colorScheme === 'dark');
+  const isDark = forcedDarkMode;
   
-  // Debug logging
-  console.log('CustomMatchToast props:', { text1, text2, isDark });
+  // Force re-render when color scheme changes
+  useEffect(() => {
+    const subscription = Appearance.addChangeListener(({ colorScheme: newColorScheme }) => {
+      setForcedDarkMode(newColorScheme === 'dark');
+    });
+    
+    // Also update immediately in case useColorScheme is stale
+    setForcedDarkMode(colorScheme === 'dark');
+    
+    return () => subscription?.remove();
+  }, [colorScheme]);
+  
+  // Debug logging with more detail
+  console.log('CustomMatchToast render:', { 
+    text1, 
+    text2, 
+    isDark, 
+    colorScheme,
+    text1Color: isDark ? '#ffffff' : '#1f2937',
+    text2Color: isDark ? '#d1d5db' : '#6b7280'
+  });
   
   const translateY = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(1)).current;
@@ -152,6 +173,7 @@ export const CustomMatchToast: React.FC<CustomMatchToastProps> = ({
         >
           <View style={styles.iconContainer}>
             <Image
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
               source={require('../../assets/icon.png')}
               style={styles.appIcon}
               resizeMode="cover"

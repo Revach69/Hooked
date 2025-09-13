@@ -330,7 +330,7 @@ class LocalNotificationFallbackService {
         return { recentFailures: 0 };
       }
       return JSON.parse(history);
-    } catch (_error) {
+    } catch {
       return { recentFailures: 0 };
     }
   }
@@ -367,7 +367,7 @@ class LocalNotificationFallbackService {
         try {
           // Reset failure history every hour to give push notifications a chance
           await AsyncStorage.removeItem('android_push_failure_history');
-        } catch (_error) {
+        } catch {
           // Ignore cleanup errors
         }
       }, 60 * 60 * 1000); // Every hour

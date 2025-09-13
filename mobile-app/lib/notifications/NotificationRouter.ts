@@ -1,12 +1,13 @@
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { AnyEvent } from './types';
 // Sentry removed
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { unifiedNavigator } from '../navigation/UnifiedNavigator';
 
 type InitArgs = {
   getIsForeground: () => boolean;
-  navigateToMatches: () => void; // router.push('/matches')
+  navigateToMatches: () => void; // unifiedNavigator.navigate('matches')
   showMatchModal?: (partnerName: string, partnerSessionId: string, partnerImage?: string) => void;
 };
 
@@ -29,10 +30,12 @@ function dedupeKey(ev: AnyEvent) {
     const sessions = [ev.senderSessionId, getCurrentSessionId()].sort();
     return `${ev.type}:${sessions[0]}:${sessions[1]}:${contentHash}`;
   }
-  return `${(ev as any).type}:${(ev as any).id}`;
+  return `${(ev as { type: string; id: string }).type}:${(ev as { type: string; id: string }).id}`;
 }
 
 // Cleanup old entries from memory cache periodically
+let cleanupTimer: NodeJS.Timeout | null = null;
+
 function cleanupMemoryCache() {
   const now = Date.now();
   for (const [key, timestamp] of memoryFallbackCache.entries()) {
@@ -42,8 +45,24 @@ function cleanupMemoryCache() {
   }
 }
 
-// Run cleanup every 5 minutes
-setInterval(cleanupMemoryCache, 5 * 60 * 1000);
+// Start cleanup timer
+function startCleanupTimer() {
+  if (cleanupTimer) {
+    clearInterval(cleanupTimer);
+  }
+  cleanupTimer = setInterval(cleanupMemoryCache, 5 * 60 * 1000);
+}
+
+// Stop cleanup timer to prevent memory leaks
+function stopCleanupTimer() {
+  if (cleanupTimer) {
+    clearInterval(cleanupTimer);
+    cleanupTimer = null;
+  }
+}
+
+// Initialize cleanup timer
+startCleanupTimer();
 
 // Helper to get current session (will be set by _layout.tsx)
 let currentSessionIdForDedup: string | null = null;
@@ -107,12 +126,12 @@ export async function clearMatchNotificationCache(sessionId1: string, sessionId2
     console.log(`Cleared match notification from AsyncStorage for sessions ${sessions[0]} and ${sessions[1]}`);
   } catch (error) {
     console.warn('Failed to clear from AsyncStorage, will clear from memory caches:', error);
-    console.error('NotificationRouter error:', error); console.log('Context:', {
-      tags: {
-        operation: 'notification_cache_clear',
-        source: 'NotificationRouter',
-        storage: 'AsyncStorage'
-      }
+    console.error('NotificationRouter error:', error instanceof Error ? error.message : String(error), {
+      operation: 'notification_cache_clear',
+      source: 'NotificationRouter',
+      storage: 'AsyncStorage',
+      persistentKey,
+      sessions
     });
   }
   
@@ -167,6 +186,9 @@ export const NotificationRouter = {
     isInitialized = true;
     console.log('NotificationRouter initialized with modal support:', !!showMatchModal);
     
+    // Restart cleanup timer when router is initialized
+    startCleanupTimer();
+    
     // Process any pending notifications
     if (pendingNotifications.length > 0) {
       console.log(`Processing ${pendingNotifications.length} pending notifications`);
@@ -180,6 +202,20 @@ export const NotificationRouter = {
         }, index * 100); // 100ms between each notification
       });
     }
+  },
+
+  cleanup() {
+    // Cleanup function to prevent memory leaks
+    stopCleanupTimer();
+    seen.clear();
+    memoryFallbackCache.clear();
+    pendingNotifications = [];
+    isInitialized = false;
+    getFg = undefined;
+    gotoMatches = undefined;
+    showMatchModal = null;
+    currentSessionIdForDedup = null;
+    console.log('NotificationRouter cleanup completed');
   },
 
   isReady(): boolean {
@@ -200,7 +236,7 @@ export const NotificationRouter = {
       hasSessionId: !!sessionId,
       currentSessionId: sessionId,
       timestamp: new Date().toISOString(),
-      platform: require('react-native').Platform.OS
+      platform: Platform.OS
     });
     
     // Additional safety check: Ensure this event is relevant to current session
@@ -320,16 +356,12 @@ export const NotificationRouter = {
         console.warn('AsyncStorage failed, using memory fallback cache:', error);
         // Storage not working, using memory fallback
         
-        // Log to Sentry for monitoring
-        console.error('NotificationRouter error:', error); console.log('Context:', {
-          tags: {
-            operation: 'notification_deduplication',
-            fallback: 'memory_cache'
-          },
-          extra: {
-            persistentKey,
-            sessions
-          }
+        // Log error for monitoring
+        console.error('NotificationRouter AsyncStorage error:', error instanceof Error ? error.message : String(error), {
+          operation: 'notification_deduplication',
+          fallback: 'memory_cache',
+          persistentKey,
+          sessions
         });
         
         // Fallback to memory cache when AsyncStorage fails
@@ -371,10 +403,15 @@ export const NotificationRouter = {
       // Set memory marker immediately to prevent race conditions
       seen.set(singleMatchKey, now);
       
-      // Additional protection: Add a small random delay to prevent simultaneous processing
-      // This helps when multiple listeners trigger at exactly the same time
-      const randomDelay = Math.random() * 100; // 0-100ms
-      await new Promise(resolve => setTimeout(resolve, randomDelay));
+      // Double-check one more time after setting the marker to handle true race conditions
+      // This handles the case where two notifications arrive within microseconds
+      await new Promise(resolve => setTimeout(resolve, 50)); // Small delay to let other processes complete
+      
+      const doubleCheckLastShown = seen.get(singleMatchKey);
+      if (doubleCheckLastShown && doubleCheckLastShown !== now) {
+        console.log(`Race condition detected: another notification already processing, aborting`);
+        return;
+      }
 
       // Check if user is in foreground - both creators and recipients get custom modal when in app
       const isForeground = getFg?.() ?? false;
@@ -407,13 +444,9 @@ export const NotificationRouter = {
                 text: 'Start Chat', 
                 onPress: () => {
                   try {
-                    const { router } = require('expo-router');
-                    router.push({
-                      pathname: '/chat',
-                      params: {
-                        matchId: ev.otherSessionId,
-                        matchName: otherName
-                      }
+                    unifiedNavigator.navigate('chat', {
+                      matchId: ev.otherSessionId,
+                      matchName: otherName
                     });
                   } catch (navError) {
                     console.warn('Failed to navigate to chat from alert, falling back to matches:', navError);
@@ -475,13 +508,9 @@ export const NotificationRouter = {
                 onPress: () => {
                   Toast.hide();
                   try {
-                    const { router } = require('expo-router');
-                    router.push({
-                      pathname: '/chat',
-                      params: {
-                        matchId: ev.otherSessionId,
-                        matchName: otherName
-                      }
+                    unifiedNavigator.navigate('chat', {
+                      matchId: ev.otherSessionId,
+                      matchName: otherName
                     });
                   } catch (navError) {
                     console.warn('Failed to navigate to chat, falling back to matches:', navError);
@@ -490,15 +519,11 @@ export const NotificationRouter = {
                 }
               });
             } catch (error) {
-              console.error('NotificationRouter error:', error); console.log('Context:', {
-                tags: {
-                  operation: 'notification_display',
-                  type: 'match_toast'
-                },
-                extra: {
-                  eventId: ev.id,
-                  otherSessionId: ev.otherSessionId
-                }
+              console.error('NotificationRouter toast error:', error instanceof Error ? error.message : String(error), {
+                operation: 'notification_display',
+                type: 'match_toast',
+                eventId: ev.id,
+                otherSessionId: ev.otherSessionId
               });
             }
           }
@@ -509,7 +534,7 @@ export const NotificationRouter = {
           try {
             const { LocalNotificationFallback } = await import('./LocalNotificationFallback');
             // Use Android aggressive fallback if on Android platform
-            if (require('react-native').Platform.OS === 'android') {
+            if (Platform.OS === 'android') {
               console.log('🤖 Triggering Android aggressive fallback for match');
               await LocalNotificationFallback.enableAndroidAggressiveFallback(ev);
             } else {
@@ -519,16 +544,12 @@ export const NotificationRouter = {
           } catch (error) {
             console.warn('NotificationRouter: Failed to schedule local fallback for match:', error);
             
-            console.error('NotificationRouter error:', error); console.log('Context:', {
-              tags: {
-                operation: 'notification_fallback',
-                type: 'match',
-                platform: require('react-native').Platform.OS
-              },
-              extra: {
-                eventId: ev.id,
-                otherSessionId: ev.otherSessionId
-              }
+            console.error('NotificationRouter fallback error:', error instanceof Error ? error.message : String(error), {
+              operation: 'notification_fallback',
+              type: 'match',
+              platform: Platform.OS,
+              eventId: ev.id,
+              otherSessionId: ev.otherSessionId
             });
           }
         }
@@ -672,38 +693,28 @@ export const NotificationRouter = {
                 Toast.hide();
                 // Navigate to specific chat with sender's session ID
                 try {
-                  const { router } = require('expo-router');
-                  // Use the partner parameter format to match push notification routing
-                  router.push({
-                    pathname: '/chat',
-                    params: {
-                      matchId: ev.senderSessionId,
-                      matchName: ev.senderName || 'Someone'
-                    }
+                  // Use the unified navigator for consistent chat navigation
+                  unifiedNavigator.navigate('chat', {
+                    matchId: ev.senderSessionId,
+                    matchName: ev.senderName || 'Someone'
                   });
                 } catch (navError) {
                   console.warn('Failed to navigate to chat:', navError);
-                console.error(navError, {
-                  tags: {
+                  console.error('NotificationRouter navigation error:', navError instanceof Error ? navError.message : String(navError), {
                     operation: 'navigation',
                     type: 'message_toast'
-                  }
-                });
+                  });
               }
             }
           });
           } catch (error) {
             console.error('Error showing message toast:', error);
-            console.error('NotificationRouter error:', error); console.log('Context:', {
-              tags: {
-                operation: 'notification_display',
-                type: 'message_toast'
-              },
-              extra: {
-                eventId: ev.id,
-                senderName: ev.senderName,
-                senderSessionId: ev.senderSessionId
-              }
+            console.error('NotificationRouter message toast error:', error instanceof Error ? error.message : String(error), {
+              operation: 'notification_display',
+              type: 'message_toast',
+              eventId: ev.id,
+              senderName: ev.senderName,
+              senderSessionId: ev.senderSessionId
             });
           }
         }, 100); // 100ms delay to allow app state to stabilize
@@ -714,7 +725,7 @@ export const NotificationRouter = {
         try {
           const { LocalNotificationFallback } = await import('./LocalNotificationFallback');
           // Use Android aggressive fallback if on Android platform
-          if (require('react-native').Platform.OS === 'android') {
+          if (Platform.OS === 'android') {
             console.log('🤖 Triggering Android aggressive fallback for message');
             await LocalNotificationFallback.enableAndroidAggressiveFallback(ev);
           } else {
@@ -724,17 +735,13 @@ export const NotificationRouter = {
         } catch (error) {
           console.warn('NotificationRouter: Failed to schedule local fallback for message:', error);
           
-          console.error('NotificationRouter error:', error); console.log('Context:', {
-            tags: {
-              operation: 'notification_fallback',
-              type: 'message',
-              platform: require('react-native').Platform.OS
-            },
-            extra: {
-              eventId: ev.id,
-              senderSessionId: ev.senderSessionId,
-              senderName: ev.senderName
-            }
+          console.error('NotificationRouter message fallback error:', error instanceof Error ? error.message : String(error), {
+            operation: 'notification_fallback',
+            type: 'message',
+            platform: Platform.OS,
+            eventId: ev.id,
+            senderSessionId: ev.senderSessionId,
+            senderName: ev.senderName
           });
         }
       }

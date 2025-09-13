@@ -212,7 +212,7 @@ class AndroidNotificationManagerService {
     try {
       const logsStr = await AsyncStorage.getItem(this.ERROR_LOG_KEY);
       return logsStr ? JSON.parse(logsStr) : [];
-    } catch (error) {
+    } catch {
       return [];
     }
   }
@@ -235,15 +235,15 @@ class AndroidNotificationManagerService {
       ];
 
       await Promise.all(keysToRemove.map(key => 
-        AsyncStorage.removeItem(key).catch((_error) => {
+        AsyncStorage.removeItem(key).catch(() => {
           // Ignore individual failures
         })
       ));
 
       console.log('🧹 Cleared all Android notification caches');
 
-    } catch (_error) {
-      console.warn('Failed to clear Android caches:', _error);
+    } catch (error) {
+      console.warn('Failed to clear Android caches:', error);
     }
   }
 
@@ -254,7 +254,7 @@ class AndroidNotificationManagerService {
     try {
       const usage = await AsyncStorage.getItem('android_aggressive_fallback_usage');
       return usage ? JSON.parse(usage) : { count: 0 };
-    } catch (_error) {
+    } catch {
       return { count: 0 };
     }
   }

@@ -14,7 +14,7 @@ import {
   TouchableWithoutFeedback,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { router } from '../lib/navigation/UnifiedNavigator';
+import { unifiedNavigator } from '../lib/navigation/UnifiedNavigator';
 import { ArrowLeft } from 'lucide-react-native';
 import { SurveyService } from '../lib/surveyService';
 import Toast from 'react-native-toast-message';
@@ -57,7 +57,7 @@ export default function SurveyScreen() {
             autoHide: true,
             topOffset: 0,
           });
-          router.replace('/home');
+          unifiedNavigator.navigate('home', {}, true);
         } else {
           // Mark survey as shown immediately when screen loads
           // This ensures "show once" logic works even if app crashes before user exits/completes
@@ -130,7 +130,7 @@ export default function SurveyScreen() {
         autoHide: true,
         topOffset: 0,
       });
-      router.replace('/home');
+      unifiedNavigator.navigate('home', {}, true);
     } catch {
       // Failed to submit feedback
       Toast.show({
@@ -158,7 +158,7 @@ export default function SurveyScreen() {
           style: 'destructive',
           onPress: () => {
             // Survey is already marked as shown when screen loads
-            router.replace('/home');
+            unifiedNavigator.navigate('home', {}, true);
           }
         }
       ]

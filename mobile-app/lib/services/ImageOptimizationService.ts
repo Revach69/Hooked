@@ -1,15 +1,7 @@
 
 import * as ImageManipulator from 'expo-image-manipulator';
 
-// Fallback handling for native module issues
-try {
-  require('expo-image-manipulator');
-} catch (error) {
-  console.warn('ImageOptimizationService: expo-image-manipulator not available:', error);
-  console.error(error, {
-    tags: { operation: 'image_manipulator_import' }
-  });
-}
+// Image manipulator is imported above - no fallback handling needed
 
 /**
  * Service for optimizing images before upload to improve performance

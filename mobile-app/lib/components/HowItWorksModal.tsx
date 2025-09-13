@@ -131,9 +131,13 @@ export const HowItWorksModal: React.FC<HowItWorksModalProps> = ({
     <View style={[styles.card, { width: cardWidth }]}>
       <Image
         source={
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
           item.imageName === 'Discover' ? require('../../assets/Discover.png') :
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
           item.imageName === 'Match' ? require('../../assets/Match.png') :
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
           item.imageName === 'Chat' ? require('../../assets/Chat.png') :
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
           require('../../assets/Disappears After.png')
         }
         style={styles.cardImage}

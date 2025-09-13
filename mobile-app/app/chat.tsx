@@ -19,18 +19,20 @@ import {
 import Toast from 'react-native-toast-message';
 import { unifiedNavigator } from '../lib/navigation/UnifiedNavigator';
 import { ArrowLeft, Send, Flag, X, VolumeX, Volume2, UserX } from 'lucide-react-native';
-import { useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { collection, query, where, orderBy, onSnapshot, getDocs, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { getDbForEvent } from '../lib/firebaseConfig';
-import { EventProfileAPI, MessageAPI, ReportAPI, MutedMatchAPI, LikeAPI } from '../lib/firebaseApi';
+import { EventProfileAPI, MessageAPI, ReportAPI, MutedMatchAPI, LikeAPI, type EventProfile, type Event } from '../lib/firebaseApi';
+import { type Message } from '../lib/types/index';
 import { BackgroundDataPreloader } from '../lib/services/BackgroundDataPreloader';
 import UserProfileModal from '../lib/UserProfileModal';
 import DropdownMenu from '../components/DropdownMenu';
 import { formatTime } from '../lib/utils';
 import CountdownTimer from '../lib/components/CountdownTimer';
 import { setCurrentChatSession } from '../lib/messageNotificationHelper';
+import { NavigationErrorBoundary } from '../lib/components/NavigationErrorBoundary';
 
 interface ChatMessage {
   id: string;
@@ -44,8 +46,47 @@ interface ChatMessage {
 export default function Chat() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const params = useLocalSearchParams();
-  const { matchId, matchName } = params;
+  
+  // Get parameters from UnifiedNavigator (not expo-router)
+  const [matchId, setMatchId] = useState<string | null>(null);
+  const [matchName, setMatchName] = useState<string | null>(null);
+  
+  // Get parameters from unified navigator - subscribe to navigation changes
+  useEffect(() => {
+    const getParamsFromNavigator = () => {
+      const state = unifiedNavigator.getState();
+      const currentMatchId = state.params.matchId as string;
+      const currentMatchName = state.params.matchName as string;
+      
+      // Only log when chat page is actually active and has params
+      if (state.currentPage === 'chat' && (currentMatchId || currentMatchName)) {
+        console.log('Chat page: Extracting params from navigation:', { matchId: currentMatchId, matchName: currentMatchName });
+      }
+      
+      return { matchId: currentMatchId || null, matchName: currentMatchName || null };
+    };
+    
+    // Get initial parameters
+    const { matchId: initialMatchId, matchName: initialMatchName } = getParamsFromNavigator();
+    setMatchId(initialMatchId);
+    setMatchName(initialMatchName);
+    
+    // Subscribe to navigation changes to handle parameter updates
+    const unsubscribe = unifiedNavigator.subscribe((navigationState) => {
+      if (navigationState.currentPage === 'chat') {
+        const newMatchId = navigationState.params.matchId as string;
+        const newMatchName = navigationState.params.matchName as string;
+        if (newMatchId && newMatchId !== matchId) {
+          console.log('Chat page: Params updated from navigation:', { matchId: newMatchId, matchName: newMatchName });
+          setMatchId(newMatchId);
+          setMatchName(newMatchName);
+        }
+      }
+    });
+    
+    return unsubscribe;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // matchId intentionally excluded to avoid infinite loop in parameter subscription
   
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -54,8 +95,8 @@ export default function Chat() {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [currentEventId, setCurrentEventId] = useState<string | null>(null);
   const [currentUserProfileId, setCurrentUserProfileId] = useState<string | null>(null);
-  const [matchProfile, setMatchProfile] = useState<any>(null);
-  const [currentEvent, setCurrentEvent] = useState<any>(null);
+  const [matchProfile, setMatchProfile] = useState<EventProfile | null>(null);
+  const [currentEvent, setCurrentEvent] = useState<Event | null>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [processedMessageIds, setProcessedMessageIds] = useState<Set<string>>(new Set());
   const [showReportModal, setShowReportModal] = useState(false);
@@ -218,7 +259,7 @@ export default function Chat() {
     } catch (error) {
       console.error('Error toggling mute status:', error);
       // Use Toast instead of notifications to match message toast design
-      const Toast = require('react-native-toast-message').default;
+      // Toast already imported at top of file
       Toast.show({
         type: 'error',
         text1: 'Error',
@@ -287,7 +328,7 @@ export default function Chat() {
               }
             } catch {
               // Use Toast instead of notifications to match message toast design
-              const Toast = require('react-native-toast-message').default;
+              // Toast already imported at top of file
               Toast.show({
                 type: 'error',
                 text1: 'Error',
@@ -432,14 +473,16 @@ export default function Chat() {
         
         if (currentConversation && currentConversation.messages.length > 0) {
           console.log('Chat: Using preloaded conversation data for instant display');
-          const sortedMessages = currentConversation.messages.sort((a: any, b: any) =>
-            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-          );
+          const sortedMessages = currentConversation.messages.sort((a: Message, b: Message) => {
+            const aTime = typeof a.created_at === 'string' ? new Date(a.created_at) : a.created_at.toDate();
+            const bTime = typeof b.created_at === 'string' ? new Date(b.created_at) : b.created_at.toDate();
+            return aTime.getTime() - bTime.getTime();
+          });
           setMessages(sortedMessages);
         }
         
         // Get event data to determine correct database
-        const event = await AsyncStorageUtils.getItem<any>('currentEvent');
+        const event = await AsyncStorageUtils.getItem<Event>('currentEvent');
         const eventCountry = event?.location;
         const eventDb = getDbForEvent(eventCountry);
         
@@ -596,7 +639,7 @@ export default function Chat() {
         console.log('Setting up match status listener for chat validation');
         
         // Get event data to determine correct database
-        const event = await AsyncStorageUtils.getItem<any>('currentEvent');
+        const event = await AsyncStorageUtils.getItem<Event>('currentEvent');
         const eventCountry = event?.location;
         const eventDb = getDbForEvent(eventCountry);
         
@@ -664,7 +707,7 @@ export default function Chat() {
     setIsSending(true);
     try {
       // First check if the match still exists before sending message
-      const event = await AsyncStorageUtils.getItem<any>('currentEvent');
+      const event = await AsyncStorageUtils.getItem<Event>('currentEvent');
       const eventCountry = event?.location;
       const eventDb = getDbForEvent(eventCountry);
       
@@ -1210,7 +1253,18 @@ export default function Chat() {
   }
 
   return (
-    <>
+    <NavigationErrorBoundary 
+      fallbackPage="matches"
+      onError={(error, errorInfo) => {
+        console.error('Chat: Error caught by navigation boundary:', {
+          error: error.message,
+          matchId,
+          matchName,
+          componentStack: errorInfo.componentStack
+        });
+      }}
+    >
+      <>
       <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#000' : '#fff' }]}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
@@ -1452,6 +1506,7 @@ export default function Chat() {
         profile={matchProfile}
         onClose={() => setShowProfileModal(false)}
       />
-    </>
+      </>
+    </NavigationErrorBoundary>
   );
 } 

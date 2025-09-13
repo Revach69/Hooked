@@ -1,7 +1,25 @@
-import { clsx } from "clsx";
+import { clsx, type ClassValue } from "clsx";
 import NetInfo from '@react-native-community/netinfo';
+import type { Timestamp } from 'firebase/firestore';
 
-export function cn(...inputs: any[]) {
+// Type for Firestore timestamp-like objects
+type TimestampLike = Timestamp | Date | { toDate(): Date } | number | null | undefined;
+
+// Type for functions with any arguments
+type AnyFunction = (...args: unknown[]) => unknown;
+
+// Type for performance memory API
+interface PerformanceMemory {
+  usedJSHeapSize?: number;
+}
+
+interface GlobalWithPerformance {
+  performance?: {
+    memory?: PerformanceMemory;
+  };
+}
+
+export function cn(...inputs: ClassValue[]) {
   return clsx(inputs);
 }
 
@@ -18,11 +36,11 @@ export const formatTime = (date: Date): string => {
 };
 
 // Firestore timestamp utilities
-export const getTimestampValue = (timestamp: any): number => {
+export const getTimestampValue = (timestamp: TimestampLike): number => {
   if (!timestamp) return 0;
   
   // Handle Firestore Timestamp objects
-  if (timestamp.toDate && typeof timestamp.toDate === 'function') {
+  if (timestamp && typeof timestamp === 'object' && 'toDate' in timestamp && typeof timestamp.toDate === 'function') {
     return timestamp.toDate().getTime();
   }
   
@@ -44,14 +62,14 @@ export const getTimestampValue = (timestamp: any): number => {
   return 0;
 };
 
-export const formatTimestamp = (timestamp: any): string => {
+export const formatTimestamp = (timestamp: TimestampLike): string => {
   if (!timestamp) return '';
   
   try {
     let date: Date;
     
     // Handle Firestore Timestamp objects
-    if (timestamp.toDate && typeof timestamp.toDate === 'function') {
+    if (timestamp && typeof timestamp === 'object' && 'toDate' in timestamp && typeof timestamp.toDate === 'function') {
       date = timestamp.toDate();
     } else if (timestamp instanceof Date) {
       date = timestamp;
@@ -218,7 +236,7 @@ export const safeAsyncOperation = async <T>(
 };
 
 // Debounce utility to prevent excessive function calls
-export function debounce<T extends (..._args: any[]) => any>(
+export function debounce<T extends AnyFunction>(
   func: T,
   wait: number
 ): (..._args: Parameters<T>) => void {
@@ -233,7 +251,7 @@ export function debounce<T extends (..._args: any[]) => any>(
 };
 
 // Throttle utility to limit function execution frequency
-export const throttle = <T extends (..._args: any[]) => any>(
+export const throttle = <T extends AnyFunction>(
   func: T,
   limit: number
 ): ((..._args: Parameters<T>) => void) => {
@@ -250,11 +268,11 @@ export const throttle = <T extends (..._args: any[]) => any>(
 
 // Memory leak detection helper
 export const createMemoryLeakDetector = () => {
-  const startMemory = (global as any).performance?.memory?.usedJSHeapSize || 0;
+  const startMemory = (global as unknown as GlobalWithPerformance).performance?.memory?.usedJSHeapSize || 0;
   
   return {
     check: () => {
-      const currentMemory = (global as any).performance?.memory?.usedJSHeapSize || 0;
+      const currentMemory = (global as unknown as GlobalWithPerformance).performance?.memory?.usedJSHeapSize || 0;
       const memoryIncrease = currentMemory - startMemory;
       
       if (memoryIncrease > 10 * 1024 * 1024) { // 10MB threshold

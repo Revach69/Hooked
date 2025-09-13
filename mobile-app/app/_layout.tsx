@@ -13,7 +13,7 @@ import { UnifiedPageContainer } from '../lib/components/UnifiedPageContainer';
 import { unifiedNavigator } from '../lib/navigation/UnifiedNavigator';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Toast from 'react-native-toast-message';
-import type { NotificationData, NotificationDataPayload, ExpoNotificationRequest } from '../lib/types';
+import type { NotificationData, NotificationDataPayload } from '../lib/types';
 import { NotificationRouter } from '../lib/notifications/NotificationRouter';
 import { useIsForegroundGetter } from '../lib/notifications/helpers';
 import CustomSplashScreen from '../lib/components/SplashScreen';
@@ -217,7 +217,8 @@ export default function RootLayout() {
     return () => {
       sub.remove();
     };
-  }, [getIsForeground]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [getIsForeground]); // matchModalVisible intentionally excluded - notification handler should only set up once
 
   // Match modal handlers
   const handleStartChatting = () => {
@@ -293,7 +294,8 @@ export default function RootLayout() {
       }
     });
     return () => sub.remove();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps  
+  }, []); // matchModalVisible intentionally excluded - notification handler should only set up once
 
   // 2.6) Deep linking handler for QR codes from native camera
   useEffect(() => {
@@ -326,8 +328,8 @@ export default function RootLayout() {
 
   // 2.7) Enhanced foreground notification policy - intelligent handling
   useEffect(() => {
-    if (!(Notifications as any).__hookedHandlerSet) {
-      (Notifications as any).__hookedHandlerSet = true;
+    if (!(Notifications as unknown as { __hookedHandlerSet?: boolean }).__hookedHandlerSet) {
+      (Notifications as unknown as { __hookedHandlerSet?: boolean }).__hookedHandlerSet = true;
       Notifications.setNotificationHandler({
         handleNotification: async (notification) => {
           // Enhanced logic: Check notification source and type

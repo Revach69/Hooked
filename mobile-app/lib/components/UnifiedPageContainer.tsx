@@ -17,6 +17,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { View, Dimensions, Animated } from 'react-native';
 import { unifiedNavigator, NavigationState, NavigationPage } from '../navigation/UnifiedNavigator';
 import { crossPageEventBus } from '../navigation/CrossPageEventBus';
+import { NavigationErrorBoundary } from './NavigationErrorBoundary';
 
 // Import all pages
 import Home from '../../app/home';
@@ -37,37 +38,37 @@ interface PageRegistry {
 }
 
 // Page wrapper components - memoized for performance
-const HomeWrapper: React.FC = React.memo(() => {
+const HomeWrapper: React.FC = React.memo(function HomeWrapper() {
   console.log('🏠 HomeWrapper: Rendering');
   return <Home />;
 });
 
-const JoinWrapper: React.FC = React.memo(() => {
+const JoinWrapper: React.FC = React.memo(function JoinWrapper() {
   console.log('🔗 JoinWrapper: Rendering');
   return <Join />;
 });
 
-const ConsentWrapper: React.FC = React.memo(() => {
+const ConsentWrapper: React.FC = React.memo(function ConsentWrapper() {
   console.log('📝 ConsentWrapper: Rendering');  
   return <Consent />;
 });
 
-const DiscoveryWrapper: React.FC = React.memo(() => {
+const DiscoveryWrapper: React.FC = React.memo(function DiscoveryWrapper() {
   console.log('🔍 DiscoveryWrapper: Rendering');
   return <Discovery />;
 });
 
-const MatchesWrapper: React.FC = React.memo(() => {
+const MatchesWrapper: React.FC = React.memo(function MatchesWrapper() {
   console.log('💕 MatchesWrapper: Rendering');
   return <Matches />;
 });
 
-const ProfileWrapper: React.FC = React.memo(() => {
+const ProfileWrapper: React.FC = React.memo(function ProfileWrapper() {
   console.log('👤 ProfileWrapper: Rendering');
   return <Profile />;
 });
 
-const ChatWrapper: React.FC = React.memo(() => {
+const ChatWrapper: React.FC = React.memo(function ChatWrapper() {
   console.log('💬 ChatWrapper: Rendering');
   return <Chat />;
 });
@@ -82,15 +83,18 @@ export const UnifiedPageContainer: React.FC = React.memo(() => {
   // Track page visibility for conditional listener management
   const pageVisibilityRef = useRef<Set<NavigationPage>>(new Set(['home']));
 
-  // Page registry for lazy mounting
+  // Track if user has completed consent (has active session)
+  const [hasActiveSession, setHasActiveSession] = useState(false);
+
+  // Page registry for lazy mounting - session pages only mount after consent
   const [pageRegistry, setPageRegistry] = useState<PageRegistry>({
     home: { mounted: true, component: HomeWrapper },
     join: { mounted: false, component: null },
     consent: { mounted: false, component: null },
-    discovery: { mounted: true, component: DiscoveryWrapper }, // Keep mounted for instant navigation
-    matches: { mounted: true, component: MatchesWrapper },     // Keep mounted for instant navigation  
-    profile: { mounted: true, component: ProfileWrapper },     // Keep mounted for instant navigation
-    chat: { mounted: true, component: ChatWrapper }            // Keep mounted for instant chat access
+    discovery: { mounted: false, component: null }, // Mount after consent
+    matches: { mounted: false, component: null },   // Mount after consent  
+    profile: { mounted: false, component: null },   // Mount after consent
+    chat: { mounted: false, component: null }       // Mount after consent
   });
 
   const screenWidth = Dimensions.get('window').width;
@@ -108,8 +112,49 @@ export const UnifiedPageContainer: React.FC = React.memo(() => {
   useEffect(() => {
     console.log('🚀 UnifiedPageContainer: Subscribing to navigation state');
     
-    const unsubscribe = unifiedNavigator.subscribe((state: NavigationState) => {
+    const unsubscribe = unifiedNavigator.subscribe(async (state: NavigationState) => {
       console.log('🚀 UnifiedPageContainer: Navigation state changed:', state.currentPage);
+      
+      // Check for active session when navigating to session-required pages
+      if (['discovery', 'matches', 'profile', 'chat'].includes(state.currentPage) && !hasActiveSession) {
+        const { AsyncStorageUtils } = await import('../asyncStorageUtils');
+        const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
+        const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
+        
+        if (sessionId && eventId) {
+          console.log('🚀 UnifiedPageContainer: Active session detected, enabling session pages');
+          setHasActiveSession(true);
+          
+          // Mount all session pages now that we have an active session
+          setPageRegistry(prev => ({
+            ...prev,
+            discovery: { mounted: true, component: DiscoveryWrapper },
+            matches: { mounted: true, component: MatchesWrapper },
+            profile: { mounted: true, component: ProfileWrapper },
+            chat: { mounted: true, component: ChatWrapper }
+          }));
+        }
+      }
+      
+      // Clear session pages when navigating back to home (user left event)
+      if (state.currentPage === 'home' && hasActiveSession) {
+        const { AsyncStorageUtils } = await import('../asyncStorageUtils');
+        const sessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
+        
+        if (!sessionId) {
+          console.log('🚀 UnifiedPageContainer: No active session, clearing session pages');
+          setHasActiveSession(false);
+          
+          // Clear session pages
+          setPageRegistry(prev => ({
+            ...prev,
+            discovery: { mounted: false, component: null },
+            matches: { mounted: false, component: null },
+            profile: { mounted: false, component: null },
+            chat: { mounted: false, component: null }
+          }));
+        }
+      }
       
       // Update page visibility tracking for listener management
       const previousPage = navigationState.currentPage;
@@ -246,15 +291,26 @@ export const UnifiedPageContainer: React.FC = React.memo(() => {
   };
 
   return (
-    <View style={{ flex: 1, position: 'relative' }}>
-      {renderPage('home', homeTranslateX, 'home')}
-      {renderPage('join', joinTranslateX, 'join')}
-      {renderPage('consent', consentTranslateX, 'consent')}
-      {renderPage('discovery', discoveryTranslateX, 'discovery')}
-      {renderPage('matches', matchesTranslateX, 'matches')}
-      {renderPage('profile', profileTranslateX, 'profile')}
-      {renderPage('chat', chatTranslateX, 'chat')}
-    </View>
+    <NavigationErrorBoundary 
+      fallbackPage="home"
+      onError={(error, errorInfo) => {
+        console.error('UnifiedPageContainer: Navigation error caught by boundary:', {
+          error: error.message,
+          stack: error.stack,
+          componentStack: errorInfo.componentStack
+        });
+      }}
+    >
+      <View style={{ flex: 1, position: 'relative' }}>
+        {renderPage('home', homeTranslateX, 'home')}
+        {renderPage('join', joinTranslateX, 'join')}
+        {renderPage('consent', consentTranslateX, 'consent')}
+        {renderPage('discovery', discoveryTranslateX, 'discovery')}
+        {renderPage('matches', matchesTranslateX, 'matches')}
+        {renderPage('profile', profileTranslateX, 'profile')}
+        {renderPage('chat', chatTranslateX, 'chat')}
+      </View>
+    </NavigationErrorBoundary>
   );
 });
 

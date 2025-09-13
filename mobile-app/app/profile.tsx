@@ -41,7 +41,10 @@ export default function Profile() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const [profile, setProfile] = useState<any>(null);
-  const [currentEvent, setCurrentEvent] = useState<any>(null);
+  // Initialize currentEvent from cache to prevent loading state
+  const [currentEvent, setCurrentEvent] = useState<any>(() => {
+    return GlobalDataCache.get<any>(CacheKeys.PROFILE_EVENT) || null;
+  });
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [tempPhotoUri, setTempPhotoUri] = useState<string | null>(null);
   const [aboutMe, setAboutMe] = useState('');
@@ -76,6 +79,29 @@ export default function Profile() {
   const [instagramHandle, setInstagramHandle] = useState('');
   const [editingInstagram, setEditingInstagram] = useState(false);
   const lastProfileId = useRef<string | null>(null);
+
+  // Helper function to save additional data to device if user wants profile remembered
+  const saveAdditionalDataToDeviceIfRemembered = async (updatedData: any) => {
+    try {
+      // Check if user wants profile remembered for future events
+      const rememberProfile = await AsyncStorageUtils.getItem<string>('rememberProfileForFutureEvents');
+      
+      if (rememberProfile === 'true') {
+        // Get current saved additional data
+        const existingAdditionalData = await AsyncStorageUtils.getItem<any>('savedAdditionalProfileData') || {};
+        
+        // Merge with new data
+        const mergedData = { ...existingAdditionalData, ...updatedData };
+        
+        // Save back to device
+        await AsyncStorageUtils.setItem('savedAdditionalProfileData', mergedData);
+        
+        console.log('Profile: Saved additional data to device for future events:', Object.keys(updatedData));
+      }
+    } catch (error) {
+      console.error('Profile: Failed to save additional data to device:', error);
+    }
+  };
 
   // Update dependent states when profile changes (for instant display)
   useEffect(() => {
@@ -1038,6 +1064,9 @@ export default function Profile() {
       setProfile((prev: any) => ({ ...prev, about_me: aboutMe }));
       setEditingAboutMe(false);
       
+      // Save to device for future events if user wants profile remembered
+      await saveAdditionalDataToDeviceIfRemembered({ about_me: aboutMe });
+      
       Toast.show({
         type: 'success',
         text1: 'About Me Updated!',
@@ -1084,6 +1113,9 @@ export default function Profile() {
       setProfile((prev: any) => ({ ...prev, height_cm: heightInCm }));
       setEditingHeight(false);
       
+      // Save to device for future events if user wants profile remembered
+      await saveAdditionalDataToDeviceIfRemembered({ height_cm: heightInCm });
+      
       Toast.show({
         type: 'success',
         text1: 'Height Updated!',
@@ -1123,6 +1155,9 @@ export default function Profile() {
       await EventProfileAPI.update(profile.id, { interests });
       setProfile((prev: any) => ({ ...prev, interests }));
       setShowInterests(false);
+      
+      // Save to device for future events if user wants profile remembered
+      await saveAdditionalDataToDeviceIfRemembered({ interests });
       
       Toast.show({
         type: 'success',
@@ -1222,6 +1257,9 @@ export default function Profile() {
       setInstagramHandle(cleanHandle);
       setEditingInstagram(false);
 
+      // Save to device for future events if user wants profile remembered
+      await saveAdditionalDataToDeviceIfRemembered({ instagram_handle: cleanHandle });
+
       Toast.show({
         type: 'success',
         text1: 'Instagram Connected!',
@@ -1292,6 +1330,9 @@ export default function Profile() {
               setProfile((prev: any) => ({ ...prev, instagram_handle: undefined }));
               setInstagramHandle('');
               setEditingInstagram(false);
+
+              // Remove from device storage for future events if user wants profile remembered
+              await saveAdditionalDataToDeviceIfRemembered({ instagram_handle: undefined });
 
               Toast.show({
                 type: 'success',

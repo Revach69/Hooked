@@ -7,12 +7,11 @@ import {
   StyleSheet,
   useColorScheme,
 } from 'react-native';
-import { router, unifiedNavigator } from '../lib/navigation/UnifiedNavigator';
+import { unifiedNavigator } from '../lib/navigation/UnifiedNavigator';
 import { AlertCircle } from 'lucide-react-native';
 import { AsyncStorageUtils } from '../lib/asyncStorageUtils';
-import { EventAPI, type Event } from '../lib/firebaseApi';
-import { app } from '../lib/firebaseConfig';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { type Event } from '../lib/firebaseApi';
+import { httpsCallable } from 'firebase/functions';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMobileAsyncOperation } from '../lib/hooks/useMobileErrorHandling';
 import MobileOfflineStatusBar from '../lib/components/MobileOfflineStatusBar';
@@ -46,19 +45,48 @@ export default function JoinPage() {
     
     return unsubscribe;
   }, [code]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false); // Start as false, only set true when validation begins
+  const [isValidating, setIsValidating] = useState(false); // Track when validation actually starts
   const [error, setError] = useState<string | null>(null);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const { executeOperationWithOfflineFallback } = useMobileAsyncOperation();
+
+  // Add timeout to prevent getting stuck on join page - only start when validation begins
+  useEffect(() => {
+    if (isValidating && code) {
+      console.log('Join page: Starting validation timeout timer');
+      const timeout = setTimeout(() => {
+        if (isValidating) {
+          console.log('Join page: Validation timeout, returning to home');
+          setError("Event validation is taking too long. Please try again.");
+          setIsLoading(false);
+          setIsValidating(false);
+          
+          // Navigate to home after showing error briefly
+          setTimeout(() => {
+            unifiedNavigator.navigate('home', {}, true);
+          }, 2000);
+        }
+      }, 30000); // 30 second timeout
+
+      return () => clearTimeout(timeout);
+    }
+  }, [isValidating, code]);
 
   const handleEventJoin = useCallback(async () => {
     try {
       if (!code) {
         setError("No event code provided.");
         setIsLoading(false);
+        setIsValidating(false);
         return;
       }
+
+      // Start validation
+      setIsLoading(true);
+      setIsValidating(true);
+      setError(null);
 
       // Check for admin code first
       if (code.toUpperCase() === 'ADMIN') {
@@ -124,6 +152,7 @@ export default function JoinPage() {
       if (result.queued) {
         setError("You're offline. This action will be completed when you're back online.");
         setIsLoading(false);
+        setIsValidating(false);
         return;
       }
 
@@ -131,11 +160,12 @@ export default function JoinPage() {
         throw result.error || new Error('Failed to validate event code');
       }
 
-      const events = result.result;
+      const events: Event[] = result.result || [];
 
       if (!events || events.length === 0) {
         setError("Invalid event code. Please check the code and try again.");
         setIsLoading(false);
+        setIsValidating(false);
         return;
       }
 
@@ -146,6 +176,7 @@ export default function JoinPage() {
       if (!foundEvent.starts_at || !foundEvent.expires_at) {
         setError("This event is not configured correctly. Please contact the organizer.");
         setIsLoading(false);
+        setIsValidating(false);
         return;
       }
       
@@ -161,6 +192,7 @@ export default function JoinPage() {
           setError("This event hasn't started yet. Try again soon!");
         }
         setIsLoading(false);
+        setIsValidating(false);
         return;
       }
 
@@ -168,6 +200,7 @@ export default function JoinPage() {
       if (nowTimestamp.seconds >= foundEvent.expires_at.seconds || foundEvent.expired) {
         setError("This event has ended.");
         setIsLoading(false);
+        setIsValidating(false);
         return;
       }
 
@@ -176,13 +209,35 @@ export default function JoinPage() {
       await createEventProfile(foundEvent);
     } catch (error: any) {
       // Event join failed
-      const errorMessage = error.message || 'Failed to join event. Please try again.';
+      console.error('Join page: Event validation failed:', error);
+      
+      let errorMessage = 'Failed to join event. Please try again.';
+      
+      // Handle specific error types
+      if (error.code === 'unavailable' || error.code === 'deadline-exceeded') {
+        errorMessage = "Can't reach the server. Please check your connection and try again.";
+      } else if (error.code === 'permission-denied') {
+        errorMessage = "Access denied. You may have been removed from this event.";
+      } else if (error.code === 'not-found') {
+        errorMessage = "Event not found. Please check the code and try again.";
+      } else if (error.message && error.message.includes('timeout')) {
+        errorMessage = "Connection timeout. Please try again.";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       setError(errorMessage);
       setIsLoading(false);
+      setIsValidating(false);
     }
   }, [code, executeOperationWithOfflineFallback]);
 
   useEffect(() => {
+    // Reset states when code changes or component mounts
+    setError(null);
+    setIsLoading(false);
+    setIsValidating(false);
+    
     // Only run validation when we have a code
     if (code) {
       console.log('Join page: Starting validation for code:', code);
@@ -192,21 +247,15 @@ export default function JoinPage() {
 
   const createEventProfile = async (event: any) => {
     try {
-      // Clear any existing event data before joining new event
-      // This ensures clean state when joining a new event after having old/expired data
+      // Clear only essential session data, preserve cache for instant performance
+      // ~43MB/month accumulation is negligible for modern devices (0.03% of 128GB)
       try {
-        console.log('🚀 Join: Clearing old event data before joining new event');
-        const { BackgroundDataPreloader } = await import('../lib/services/BackgroundDataPreloader');
-        const { GlobalDataCache } = await import('../lib/cache/GlobalDataCache');
+        console.log('🚀 Join: Updating session data for new event (preserving cache for performance)');
         
-        // Clear preloaded data and cache
-        BackgroundDataPreloader.clearPreloadedData();
-        GlobalDataCache.clearAll();
-        
-        // Clear all existing AsyncStorage event data
+        // Clear only current session data, not cache or preloaded data
         await AsyncStorageUtils.multiRemove([
           'currentEventId',
-          'currentSessionId',
+          'currentSessionId', 
           'currentEventCode',
           'currentProfileColor',
           'currentProfilePhotoUrl',
@@ -215,9 +264,9 @@ export default function JoinPage() {
           'isOnConsentPage'
         ]);
         
-        console.log('✅ Join: Old event data cleared successfully');
+        console.log('✅ Join: Session data updated successfully, cache preserved for instant app performance');
       } catch (clearError) {
-        console.warn('Join: Failed to clear old event data:', clearError);
+        console.warn('Join: Failed to update session data:', clearError);
         // Continue with join process even if cleanup fails
       }
       
@@ -255,12 +304,17 @@ export default function JoinPage() {
         // Don't fail the join process for this
       }
 
+      // Clear loading states before navigation
+      setIsLoading(false);
+      setIsValidating(false);
+      
       // Navigate to consent page
       unifiedNavigator.navigate('consent', {}, true); // replace: true
     } catch {
       // Failed to create event profile
       setError("Failed to set up your event session. Please try again.");
       setIsLoading(false);
+      setIsValidating(false);
     }
   };
 

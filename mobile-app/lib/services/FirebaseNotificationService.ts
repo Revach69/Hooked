@@ -1,16 +1,19 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-import { httpsCallable } from 'firebase/functions';
+import { httpsCallable, type HttpsCallable } from 'firebase/functions';
 import { getFunctions } from '../firebaseConfig';
 import { AsyncStorageUtils } from '../asyncStorageUtils';
 import { NotificationManager } from './NotificationManager';
-import { router } from 'expo-router';
+import { unifiedNavigator } from '../navigation/UnifiedNavigator';
+
+// Firebase notification data type
+type FirebaseNotificationData = Record<string, unknown>;
 
 interface CrossDeviceNotificationPayload {
   type: 'match' | 'message' | 'generic';
   title: string;
   body: string;
-  data?: Record<string, any>;
+  data?: FirebaseNotificationData;
   targetSessionId?: string;
   senderSessionId?: string;
   priority?: 'low' | 'medium' | 'high' | 'urgent';
@@ -23,7 +26,7 @@ interface FirebaseNotificationResponse {
 }
 
 class FirebaseNotificationServiceClass {
-  private sendNotificationCallable: any;
+  private sendNotificationCallable: HttpsCallable<CrossDeviceNotificationPayload, FirebaseNotificationResponse>;
 
   constructor() {
     this.sendNotificationCallable = httpsCallable(getFunctions(), 'sendCrossDeviceNotification');
@@ -112,7 +115,7 @@ class FirebaseNotificationServiceClass {
     targetSessionId: string,
     title: string,
     body: string,
-    data?: Record<string, any>
+    data?: FirebaseNotificationData
   ): Promise<boolean> {
     const currentSessionId = await AsyncStorageUtils.getItem<string>('currentSessionId');
     
@@ -136,7 +139,7 @@ class FirebaseNotificationServiceClass {
   /**
    * Handle incoming Firebase notifications (when app is in foreground)
    */
-  handleIncomingFirebaseNotification(notification: any): void {
+  handleIncomingFirebaseNotification(notification: Notifications.Notification): void {
     const data = notification.request?.content?.data;
     
     if (!data || !data.type) {
@@ -159,32 +162,33 @@ class FirebaseNotificationServiceClass {
   /**
    * Handle match notification
    */
-  private handleMatchNotification(data: any): void {
-    const matchedUserName = data.matchedUserName || 'Someone';
+  private handleMatchNotification(data: FirebaseNotificationData): void {
+    const matchedUserName = (data.matchedUserName as string) || 'Someone';
     
     NotificationManager.match(matchedUserName, () => {
-      router.push('/matches');
+      unifiedNavigator.navigate('matches');
     });
   }
 
   /**
    * Handle message notification
    */
-  private handleMessageNotification(data: any): void {
-    const senderName = data.senderName || 'Someone';
-    const preview = data.messagePreview || 'New message';
+  private handleMessageNotification(data: FirebaseNotificationData): void {
+    const senderName = (data.senderName as string) || 'Someone';
+    const preview = (data.messagePreview as string) || 'New message';
     
     NotificationManager.message(senderName, preview, () => {
-      router.push('/chat');
+      // Navigate to matches since we don't have specific chat parameters here
+      unifiedNavigator.navigate('matches');
     });
   }
 
   /**
    * Handle generic notification
    */
-  private handleGenericNotification(data: any): void {
-    const title = data.title || 'Notification';
-    const body = data.body || '';
+  private handleGenericNotification(data: FirebaseNotificationData): void {
+    const title = (data.title as string) || 'Notification';
+    const body = (data.body as string) || '';
     
     NotificationManager.info(title, body);
   }
@@ -203,9 +207,10 @@ class FirebaseNotificationServiceClass {
       const data = response.notification.request.content.data;
       
       if (data?.action === 'view_matches') {
-        router.push('/matches');
+        unifiedNavigator.navigate('matches');
       } else if (data?.action === 'view_chat') {
-        router.push('/chat');
+        // Navigate to matches since we don't have specific chat parameters here
+        unifiedNavigator.navigate('matches');
       }
     });
 

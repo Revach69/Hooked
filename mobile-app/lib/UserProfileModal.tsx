@@ -10,7 +10,6 @@ import {
   Dimensions,
   PanResponder,
   Animated,
-  Image,
 } from 'react-native';
 import FastImage from 'react-native-fast-image';
 import { X, MapPin, Heart, Instagram } from 'lucide-react-native';
