@@ -6,6 +6,8 @@ import mobileErrorHandler, {
   getOfflineQueueLength 
 } from '../mobileErrorHandler';
 import Toast from 'react-native-toast-message';
+import type { ErrorReport } from '../types';
+import { globalEventEmitter } from '../utils/globalEventEmitter';
 
 export const useMobileErrorHandling = () => {
   const [isOnline, setIsOnline] = useState(mobileErrorHandler.getOnlineStatus());
@@ -25,36 +27,42 @@ export const useMobileErrorHandling = () => {
       }, 1000);
     };
 
-    // Listen for online/offline events
-    if ((global as any).eventEmitter) {
-      (global as any).eventEmitter.on('appOnline', handleAppOnline);
-      (global as any).eventEmitter.on('appOffline', handleOffline);
-    }
+    // Listen for online/offline events using type-safe event emitter
+    globalEventEmitter.on('appOnline', handleAppOnline);
+    globalEventEmitter.on('appOffline', handleOffline);
 
     // Initial check
     setIsOnline(mobileErrorHandler.getOnlineStatus());
     setOfflineQueueLength(getOfflineQueueLength());
 
     return () => {
-      if ((global as any).eventEmitter) {
-        (global as any).eventEmitter.off('appOnline', handleAppOnline);
-        (global as any).eventEmitter.off('appOffline', handleOffline);
-      }
+      globalEventEmitter.off('appOnline', handleAppOnline);
+      globalEventEmitter.off('appOffline', handleOffline);
     };
   }, []);
 
   // Enhanced operation wrapper with error handling
-  const executeWithRetry = useCallback(async (operation: () => Promise<any>, options: any = {}) => {
+  const executeWithRetry = useCallback(async <T>(
+    operation: () => Promise<T>, 
+    options: Record<string, unknown> = {}
+  ): Promise<T> => {
     try {
       return await withErrorHandling(operation, options);
     } catch (error) {
       const userMessage = getErrorMessage(error);
-      throw { ...(error as any), userMessage };
+      if (error instanceof Error) {
+        const enhancedError = Object.assign(error, { userMessage });
+        throw enhancedError;
+      }
+      throw new Error(`${error} - ${userMessage}`);
     }
   }, []);
 
   // Queue operation for offline execution
-  const queueForOffline = useCallback((operation: () => Promise<any>, metadata: any = {}) => {
+  const queueForOffline = useCallback(<T>(
+    operation: () => Promise<T>, 
+    metadata: Record<string, unknown> = {}
+  ): string => {
     const actionId = queueOfflineAction(operation, metadata);
     setOfflineQueueLength(getOfflineQueueLength());
     return actionId;
@@ -78,13 +86,24 @@ export const useMobileErrorHandling = () => {
   };
 };
 
+interface OperationResult<T> {
+  success?: boolean;
+  result?: T;
+  queued?: boolean;
+  actionId?: string;
+  error?: Error;
+}
+
 // Hook for managing async operations with loading states
 export const useMobileAsyncOperation = () => {
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<any>(null);
+  const [error, setError] = useState<Error | null>(null);
   const { executeWithRetry, queueForOffline, isOnline } = useMobileErrorHandling();
 
-  const executeOperation = useCallback(async (operation: () => Promise<any>, options: any = {}) => {
+  const executeOperation = useCallback(async <T>(
+    operation: () => Promise<T>, 
+    options: Record<string, unknown> = {}
+  ): Promise<T> => {
     setIsLoading(true);
     setError(null);
 
@@ -92,14 +111,18 @@ export const useMobileAsyncOperation = () => {
       const result = await executeWithRetry(operation, options);
       return result;
     } catch (err) {
-      setError(err);
-      throw err;
+      const error = err instanceof Error ? err : new Error(String(err));
+      setError(error);
+      throw error;
     } finally {
       setIsLoading(false);
     }
   }, [executeWithRetry]);
 
-  const executeOperationWithOfflineFallback = useCallback(async (operation: () => Promise<any>, metadata: any = {}) => {
+  const executeOperationWithOfflineFallback = useCallback(async <T>(
+    operation: () => Promise<T>, 
+    metadata: Record<string, unknown> = {}
+  ): Promise<OperationResult<T>> => {
     if (!isOnline) {
       // Queue for offline execution
       const actionId = queueForOffline(operation, metadata);
@@ -110,12 +133,14 @@ export const useMobileAsyncOperation = () => {
       const result = await executeOperation(operation);
       return { success: true, result };
     } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
       // If it's a network error and we're offline, queue it
-      if ((err as any).message?.includes('No internet connection') || (err as any).code === 'unavailable') {
+      if (error.message?.includes('No internet connection') || 
+          (error as any).code === 'unavailable') {
         const actionId = queueForOffline(operation, metadata);
-        return { queued: true, actionId, error: err };
+        return { queued: true, actionId, error };
       }
-      throw err;
+      throw error;
     }
   }, [isOnline, executeOperation, queueForOffline]);
 
@@ -123,7 +148,7 @@ export const useMobileAsyncOperation = () => {
     setError(null);
   }, []);
 
-  const showErrorAlert = useCallback((error: any, onRetry?: () => void) => {
+  const showErrorAlert = useCallback((error: Error | string, onRetry?: () => void) => {
     const message = getErrorMessage(error);
     Toast.show({
       type: 'error',

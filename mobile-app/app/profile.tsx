@@ -180,18 +180,18 @@ export default function Profile() {
 
         // First check if we have preloaded profile data for instant display
         const preloadedProfile = BackgroundDataPreloader.getPreloadedProfile();
-        if (preloadedProfile && preloadedProfile.session_id === sessionId && preloadedProfile.event_id === eventId) {
+        if (preloadedProfile?.profile && preloadedProfile.profile.session_id === sessionId && preloadedProfile.profile.event_id === eventId) {
           console.log('Profile: Using preloaded profile data for instant display');
-          setProfile(preloadedProfile);
+          setProfile(preloadedProfile.profile);
           
           // Load cached image URI for instant display
           const imageCacheKey = `profile_image_${sessionId}`;
           const cachedImageUri = GlobalDataCache.get<string>(imageCacheKey);
           if (cachedImageUri) {
             setCachedProfileImageUri(cachedImageUri);
-          } else if (preloadedProfile.profile_photo_url) {
+          } else if (preloadedProfile.profile.profile_photo_url) {
             // Use preloaded image URL as fallback
-            setCachedProfileImageUri(preloadedProfile.profile_photo_url);
+            setCachedProfileImageUri(preloadedProfile.profile.profile_photo_url);
           }
           
           // Refresh profile data in background for updates

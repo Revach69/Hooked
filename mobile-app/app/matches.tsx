@@ -733,9 +733,9 @@ export default function Matches() {
       const preloadedData = GlobalDataCache.get(CacheKeys.MATCHES_DATA);
       const cachedMatches = GlobalDataCache.get<any[]>(CacheKeys.MATCHES_LIST);
       
-      if (preloadedMatches.length > 0) {
+      if (preloadedMatches?.matches && preloadedMatches.matches.length > 0) {
         console.log('Matches: Using preloaded matches for instant display');
-        setMatches(preloadedMatches);
+        setMatches(preloadedMatches.matches.map(match => match.profile).filter(Boolean));
       } else if (preloadedData && typeof preloadedData === 'object' && 'matches' in preloadedData) {
         console.log('Matches: Using preloaded data cache for instant display');
         setMatches((preloadedData as any).matches);

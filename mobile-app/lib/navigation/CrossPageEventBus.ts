@@ -6,7 +6,7 @@
  * - Match creation, message updates, user profile changes
  */
 
-// Simple EventEmitter implementation for React Native (Node's 'events' not available)
+import type { Message, EventProfile, Match, NavigationParams } from '../types';
 
 // Based on codebase analysis - Discovery manages these states that need sync:
 export type CrossPageEvents = {
@@ -14,46 +14,49 @@ export type CrossPageEvents = {
   'profileSkipped': { profileId: string; eventId: string };  // Updates skippedProfiles Set  
   'profileViewed': { profileId: string; eventId: string };   // Updates viewedProfiles Set
   'profileBlocked': { profileId: string; eventId: string };  // Updates blockedProfiles Set
-  'matchCreated': { matchId: string; partnerName: string };
-  'messageReceived': { conversationId: string; message: any };
+  'matchCreated': { matchId: string; partnerName: string; match?: Match };
+  'messageReceived': { conversationId: string; message: Message };
   'messageRead': { conversationId: string; messageIds: string[] };
-  'userProfileUpdated': { userId: string; changes: any };
+  'userProfileUpdated': { userId: string; changes: Partial<EventProfile> };
   'chat:switchConversation': { matchId: string; matchName: string; conversationId?: string }; // For Instagram-style chat switching
   
   // Navigation events for persistent navigation
-  'navigation:request': { targetPage: string; params?: any };
+  'navigation:request': { targetPage: string; params?: NavigationParams };
   'navigateToChat': { conversationId: string; partnerName: string; partnerId: string };
 };
 
-// Simple EventEmitter for React Native
-class SimpleEventEmitter {
-  private listeners = new Map<string, ((...args: any[]) => void)[]>();
+// Type-safe EventEmitter for React Native
+class TypeSafeEventEmitter<TEvents extends Record<string, unknown>> {
+  private listeners = new Map<keyof TEvents, Set<(data: unknown) => void>>();
 
-  on(event: string, listener: (...args: any[]) => void) {
+  on<K extends keyof TEvents>(event: K, listener: (data: TEvents[K]) => void): void {
     if (!this.listeners.has(event)) {
-      this.listeners.set(event, []);
+      this.listeners.set(event, new Set());
     }
-    this.listeners.get(event)!.push(listener);
+    this.listeners.get(event)!.add(listener as (data: unknown) => void);
   }
 
-  off(event: string, listener: (...args: any[]) => void) {
+  off<K extends keyof TEvents>(event: K, listener: (data: TEvents[K]) => void): void {
     const eventListeners = this.listeners.get(event);
     if (eventListeners) {
-      const index = eventListeners.indexOf(listener);
-      if (index > -1) {
-        eventListeners.splice(index, 1);
-      }
+      eventListeners.delete(listener as (data: unknown) => void);
     }
   }
 
-  emit(event: string, ...args: any[]) {
+  emit<K extends keyof TEvents>(event: K, data: TEvents[K]): void {
     const eventListeners = this.listeners.get(event);
     if (eventListeners) {
-      eventListeners.forEach(listener => listener(...args));
+      eventListeners.forEach(listener => {
+        try {
+          listener(data);
+        } catch (error) {
+          console.error(`Error in event listener for ${String(event)}:`, error);
+        }
+      });
     }
   }
 
-  removeAllListeners(event?: string) {
+  removeAllListeners<K extends keyof TEvents>(event?: K): void {
     if (event) {
       this.listeners.delete(event);
     } else {
@@ -61,13 +64,17 @@ class SimpleEventEmitter {
     }
   }
 
-  eventNames() {
+  eventNames(): (keyof TEvents)[] {
     return Array.from(this.listeners.keys());
+  }
+
+  listenerCount<K extends keyof TEvents>(event: K): number {
+    return this.listeners.get(event)?.size || 0;
   }
 }
 
 class CrossPageEventBus {
-  private events = new SimpleEventEmitter();
+  private events = new TypeSafeEventEmitter<CrossPageEvents>();
   private pageSubscriptions = new Map<string, Set<string>>();
   
   emit<K extends keyof CrossPageEvents>(

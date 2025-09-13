@@ -10,20 +10,25 @@ import { AsyncStorageUtils } from '../asyncStorageUtils';
 import { GlobalDataCache, CacheKeys } from '../cache/GlobalDataCache';
 import { ImageCacheService } from './ImageCacheService';
 import FastImage from 'react-native-fast-image';
-
-interface PreloadedData {
-  profile: any | null;
-  matches: any[];
-  conversations: any[];
-  images: string[];
-}
+import type { 
+  BackgroundPreloaderData, 
+  EventProfile, 
+  Event, 
+  Like, 
+  Match, 
+  PreloadedConversation,
+  PreloadedProfileData,
+  PreloadedMatchData,
+  Message
+} from '../types';
+import { timestampToDate } from '../types';
 
 class BackgroundDataPreloaderClass {
   private isPreloading = false;
   private preloadAbortController?: AbortController;
-  private preloadedData: PreloadedData = {
+  private preloadedData: BackgroundPreloaderData = {
     profile: null,
-    matches: [],
+    matches: null,
     conversations: [],
     images: []
   };
@@ -102,17 +107,19 @@ class BackgroundDataPreloaderClass {
       const profiles = await EventProfileAPI.filter({
         event_id: eventId,
         session_id: sessionId
-      });
+      }) as unknown as EventProfile[];
 
       if (profiles && profiles.length > 0) {
         const profile = profiles[0];
-        this.preloadedData.profile = profile;
+        const event = await EventAPI.get(eventId) as Event;
+        
+        this.preloadedData.profile = {
+          profile,
+          event
+        };
 
         // Cache profile data with longer TTL for instant access
         GlobalDataCache.set(CacheKeys.PROFILE_DATA, profile, 10 * 60 * 1000); // 10 minutes
-        
-        // Also fetch event data for profile page
-        const event = await EventAPI.get(eventId);
         GlobalDataCache.set(CacheKeys.EVENT_DATA, event, 10 * 60 * 1000);
 
         // Preload profile image if exists
@@ -143,52 +150,63 @@ class BackgroundDataPreloaderClass {
       const likes = await LikeAPI.filter({
         event_id: eventId,
         liker_session_id: sessionId
-      });
+      }) as unknown as Like[];
 
       const receivedLikes = await LikeAPI.filter({
         event_id: eventId,
         liked_session_id: sessionId
-      });
+      }) as unknown as Like[];
 
       // Find mutual likes (matches)
-      const matches = likes.filter(sentLike => 
+      const mutualLikes = likes.filter(sentLike => 
         receivedLikes.some(receivedLike => 
           receivedLike.liker_session_id === sentLike.liked_session_id
         )
       );
 
       // Fetch full profile data for each match
-      const matchProfilePromises = matches.map(async (match) => {
+      const matchProfilePromises = mutualLikes.map(async (like): Promise<Match | null> => {
         try {
           const profiles = await EventProfileAPI.filter({
             event_id: eventId,
-            session_id: match.liked_session_id
-          });
-          return profiles[0] || null;
+            session_id: like.liked_session_id
+          }) as unknown as EventProfile[];
+          
+          const profile = profiles[0];
+          if (!profile) return null;
+          
+          return {
+            id: like.id,
+            event_id: eventId,
+            profile1_session_id: sessionId,
+            profile2_session_id: like.liked_session_id,
+            created_at: like.created_at as any,
+            profile
+          };
         } catch {
           return null;
         }
       });
 
-      const matchProfiles = (await Promise.all(matchProfilePromises)).filter(Boolean);
-      this.preloadedData.matches = matchProfiles;
+      const matches = (await Promise.all(matchProfilePromises)).filter((match): match is Match => match !== null);
+      
+      this.preloadedData.matches = {
+        matches,
+        sentLikes: likes,
+        receivedLikes
+      };
 
       // Cache matches data
-      GlobalDataCache.set(CacheKeys.MATCHES_DATA, {
-        matches: matchProfiles,
-        sentLikes: likes,
-        receivedLikes: receivedLikes
-      }, 5 * 60 * 1000); // 5 minutes
+      GlobalDataCache.set(CacheKeys.MATCHES_DATA, this.preloadedData.matches, 5 * 60 * 1000); // 5 minutes
 
       // Preload match profile images
-      const imagePromises = matchProfiles
-        .filter(profile => profile?.profile_photo_url && profile?.session_id)
-        .map(profile => profile && this.preloadImage(profile.profile_photo_url!, eventId, profile.session_id!))
-        .filter(Boolean);
+      const imagePromises = matches
+        .filter(match => match.profile?.profile_photo_url)
+        .map(match => match.profile && this.preloadImage(match.profile.profile_photo_url!, eventId, match.profile.session_id));
 
-      await Promise.all(imagePromises);
+      await Promise.all(imagePromises.filter(Boolean));
 
-      console.log(`💕 BackgroundDataPreloader: ${matchProfiles.length} matches preloaded`);
+      console.log(`💕 BackgroundDataPreloader: ${matches.length} matches preloaded`);
 
     } catch (error) {
       console.warn('BackgroundDataPreloader: Matches preload failed:', error);
@@ -212,19 +230,19 @@ class BackgroundDataPreloaderClass {
         MessageAPI.filter({
           event_id: eventId,
           from_profile_id: sessionId
-        }),
+        }) as unknown as Promise<Message[]>,
         MessageAPI.filter({
           event_id: eventId,
           to_profile_id: sessionId
-        })
+        }) as unknown as Promise<Message[]>
       ]);
       
       const messages = [...sentMessages, ...receivedMessages];
 
       // Group messages by conversation
-      const conversationMap = new Map();
+      const conversationMap = new Map<string, Message[]>();
       
-      messages.forEach((message: any) => {
+      messages.forEach((message: Message) => {
         const otherSessionId = message.from_profile_id === sessionId 
           ? message.to_profile_id 
           : message.from_profile_id;
@@ -232,27 +250,30 @@ class BackgroundDataPreloaderClass {
         if (!conversationMap.has(otherSessionId)) {
           conversationMap.set(otherSessionId, []);
         }
-        conversationMap.get(otherSessionId).push(message);
+        conversationMap.get(otherSessionId)!.push(message);
       });
 
       // Sort conversations by latest message
-      const conversations = Array.from(conversationMap.entries()).map(([otherSessionId, msgs]: [string, any[]]) => {
-        const sortedMessages = msgs.sort((a: any, b: any) => 
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
+      const conversations: PreloadedConversation[] = Array.from(conversationMap.entries()).map(([otherSessionId, msgs]) => {
+        const sortedMessages = msgs.sort((a, b) => {
+          const aTime = timestampToDate(a.created_at).getTime();
+          const bTime = timestampToDate(b.created_at).getTime();
+          return bTime - aTime;
+        });
         
         return {
           sessionId: otherSessionId,
           messages: sortedMessages,
           latestMessage: sortedMessages[0],
-          unreadCount: sortedMessages.filter((m: any) => 
+          unreadCount: sortedMessages.filter((m) => 
             m.to_profile_id === sessionId && !m.read_at
           ).length
         };
-      }).sort((a: any, b: any) => 
-        new Date(b.latestMessage.created_at).getTime() - 
-        new Date(a.latestMessage.created_at).getTime()
-      );
+      }).sort((a, b) => {
+        const aTime = timestampToDate(a.latestMessage.created_at).getTime();
+        const bTime = timestampToDate(b.latestMessage.created_at).getTime();
+        return bTime - aTime;
+      });
 
       this.preloadedData.conversations = conversations;
 
@@ -290,15 +311,15 @@ class BackgroundDataPreloaderClass {
   /**
    * Get preloaded data - used by pages for instant display
    */
-  getPreloadedProfile(): any | null {
+  getPreloadedProfile(): PreloadedProfileData | null {
     return this.preloadedData.profile;
   }
 
-  getPreloadedMatches(): any[] {
+  getPreloadedMatches(): PreloadedMatchData | null {
     return this.preloadedData.matches;
   }
 
-  getPreloadedConversations(): any[] {
+  getPreloadedConversations(): PreloadedConversation[] {
     return this.preloadedData.conversations;
   }
 
@@ -310,7 +331,7 @@ class BackgroundDataPreloaderClass {
   }
 
   isMatchesPreloaded(): boolean {
-    return this.preloadedData.matches.length > 0;
+    return this.preloadedData.matches?.matches?.length ? this.preloadedData.matches.matches.length > 0 : false;
   }
 
   isConversationsPreloaded(): boolean {
@@ -331,7 +352,7 @@ class BackgroundDataPreloaderClass {
     
     this.preloadedData = {
       profile: null,
-      matches: [],
+      matches: null,
       conversations: [],
       images: []
     };
@@ -344,14 +365,16 @@ class BackgroundDataPreloaderClass {
     console.log('🗑️ BackgroundDataPreloader: Invalidating user data for session:', sessionId.substring(0, 8) + '...');
     
     // Clear preloaded data for this user
-    if (this.preloadedData.profile?.session_id === sessionId) {
+    if (this.preloadedData.profile?.profile?.session_id === sessionId) {
       this.preloadedData.profile = null;
     }
     
     // Clear matches involving this user
-    this.preloadedData.matches = this.preloadedData.matches.filter(
-      match => match.session_id !== sessionId
-    );
+    if (this.preloadedData.matches) {
+      this.preloadedData.matches.matches = this.preloadedData.matches.matches.filter(
+        (match: Match) => match.profile?.session_id !== sessionId
+      );
+    }
     
     // Clear conversations with this user
     this.preloadedData.conversations = this.preloadedData.conversations.filter(
