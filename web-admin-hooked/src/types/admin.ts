@@ -27,11 +27,37 @@ export type AdminClient = {
   status: 'Initial Discussion' | 'Negotiation' | 'Won' | 'Lost' | 'Pre-Discussion';
   source?: 'Personal Connect' | 'Instagram Inbound' | 'Email' | 'Other' | 'Olim in TLV' | 'Contact Form';
   events?: ClientEvent[];      // Array of events for this client
+  adminNotes?: string | null;  // Admin notes field
+
+  // Merge-related fields (PRD Section 6.2)
+  alternateEmails?: string[];  // Additional emails from merged clients
+  alternatePhones?: string[];  // Additional phones from merged clients
+  audit?: Array<{              // Audit trail for admin actions
+    ts: number;
+    actor: string;
+    action: 'merge' | 'edit' | 'create' | 'link';
+    details: Record<string, unknown>;
+  }>;
+  mergedFrom?: string[];       // IDs of clients that were merged into this one
 
   // system fields
   createdAt: unknown;              // Firestore Timestamp
   updatedAt: unknown;              // Firestore Timestamp
   createdByUid?: string | null;
+};
+
+export type ContactFormSubmission = {
+  id: string;
+  fullName: string;
+  email: string;
+  phone?: string | null;
+  message: string;
+  status: 'New' | 'Reviewed' | 'Converted' | 'Dismissed';
+  linkedClientId?: string | null; // If converted to client
+  adminNotes?: string | null;
+  createdAt: unknown; // Firestore Timestamp
+  reviewedAt?: unknown; // When admin took action
+  reviewedBy?: string | null; // Admin who reviewed
 };
 
 export type EventForm = {
@@ -49,9 +75,19 @@ export type EventForm = {
   expectedAttendees: string;
   eventName: string;
   eventDate: string;           // Legacy field
-  accessTime?: string;         // New time field
-  startTime?: string;          // New time field
-  endTime?: string;            // New time field
+  
+  // Canonical time fields (PRD Section 6.4)
+  starts_at?: Date | import('firebase/firestore').Timestamp;  // When users can access on mobile
+  start_date?: Date | import('firebase/firestore').Timestamp; // Real event start time
+  expires_at?: Date | import('firebase/firestore').Timestamp; // When access expires
+  end_date?: Date | import('firebase/firestore').Timestamp;   // Real event end time
+  timezone?: string;           // IANA timezone string
+  
+  // Legacy time fields (to be migrated)
+  accessTime?: string;         // Legacy - use starts_at
+  startTime?: string;          // Legacy - use start_date
+  endTime?: string;            // Legacy - use expires_at
+  
   eventLink?: string;          // New field
   eventImage?: string;         // New field (filename)
   posterPreference: string;
@@ -59,6 +95,9 @@ export type EventForm = {
   socialMedia?: string;
   status: 'New' | 'Reviewed' | 'Contacted' | 'Converted' | 'Rejected';
   linkedClientId?: string | null; // Reference to linked client
+  linkedEventId?: string | null;  // Reference to linked event (PRD Section 6.4)
+  conversionCompleted?: boolean;   // Indicates if form has been converted
+  convertedAt?: Date | import('firebase/firestore').Timestamp; // When conversion happened
   adminNotes?: string;
   
   // system fields
@@ -71,7 +110,9 @@ export type Event = {
   name: string;                // Event name
   event_code: string;          // Event code for joining
   starts_at: string | Date | import('firebase/firestore').Timestamp;           // ISO date string, Date, or Timestamp
+  start_date?: string | Date | import('firebase/firestore').Timestamp;         // Real event start time (for display)
   expires_at: string | Date | import('firebase/firestore').Timestamp;          // ISO date string, Date, or Timestamp
+  end_date?: string | Date | import('firebase/firestore').Timestamp;           // Real event end time (for display) - NEW
   location?: string;           // Event location (optional to match firebaseApi)
   event_type?: string;         // Event type
   description?: string;        // Event description

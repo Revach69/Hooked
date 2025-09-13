@@ -7,6 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { EventFormCard } from '@/components/EventFormCard';
 import { EventFormModal } from '@/components/EventFormModal';
 import { LinkFormModal } from '@/components/LinkFormModal';
+import ConvertFormWizard from '@/components/forms/ConvertFormWizard';
+import { ContactSubmissionsSection } from '@/components/forms/ContactSubmissionsSection';
 import { EventFormAPI } from '@/lib/firestore/eventForms';
 import { AdminClientAPI } from '@/lib/firestore/clients';
 import { mapFormEventTypeToClientData, convertExpectedAttendees } from '@/lib/utils';
@@ -25,6 +27,9 @@ export default function FormsPage() {
   const [selectedForm, setSelectedForm] = useState<EventForm | null>(null);
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
+  const [convertingForm, setConvertingForm] = useState<EventForm | null>(null);
+  const [showConvertWizard, setShowConvertWizard] = useState(false);
+  const [newSubmissionsCount, setNewSubmissionsCount] = useState(0);
 
   useEffect(() => {
     loadData();
@@ -67,62 +72,6 @@ export default function FormsPage() {
     setIsLinkModalOpen(true);
   };
 
-  const handleCreateClientFromForm = async (form: EventForm) => {
-    try {
-      // Map form event type to client type and event kind
-      const { type, eventKind } = mapFormEventTypeToClientData(form.eventType, form.otherEventType);
-      
-      // Convert expected attendees from string to number
-      const expectedAttendees = convertExpectedAttendees(form.expectedAttendees);
-      
-      // Create the event data from the form
-      const eventData = {
-        id: `event_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        expectedAttendees,
-        accessTime: form.accessTime || null,
-        startTime: form.startTime || null,
-        endTime: form.endTime || null,
-        organizerFormSent: 'Yes' as const,
-        eventCardCreated: 'No' as const,
-        description: form.eventDescription || form.eventDetails || `Event: ${form.eventName} at ${form.venueName}`,
-        eventLink: form.eventLink || null,
-        eventImage: form.eventImage || null,
-        linkedFormId: form.id,
-        linkedEventId: null,
-        eventKind,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      
-      // Create client data from form (without the event-specific fields)
-      const clientData: Omit<AdminClient, 'id' | 'createdAt' | 'updatedAt'> = {
-        name: form.fullName, // Use fullName as client name initially
-        type,
-        pocName: form.fullName,
-        phone: form.phone,
-        email: form.email,
-        country: form.country || null,
-        status: 'Initial Discussion',
-        source: 'Contact Form',
-        events: [eventData] // Include the event in the events array
-      };
-
-      // Create the client
-      const newClient = await AdminClientAPI.create(clientData);
-      
-      // Link the form to the new client
-      await EventFormAPI.update(form.id, { linkedClientId: newClient.id });
-      
-      // Reload data to reflect changes
-      await loadData();
-      
-      // Show success message
-      alert(`Client "${newClient.name}" created successfully with event and linked to form!`);
-    } catch (error) {
-      console.error('Failed to create client from form:', error);
-      throw error;
-    }
-  };
 
   const handleSaveForm = async (formId: string, updates: Partial<EventForm>) => {
     try {
@@ -195,6 +144,24 @@ export default function FormsPage() {
     } catch (error) {
       console.error('Failed to unlink form:', error);
       throw error;
+    }
+  };
+
+  const handleConvertForm = async (form: EventForm) => {
+    setConvertingForm(form);
+    setShowConvertWizard(true);
+  };
+
+  const handleConversionResult = async (result: { mode: string; targetClient: any; createdEvent?: Record<string, unknown> }) => {
+    try {
+      // Refresh data to show updated state
+      await loadData();
+      setShowConvertWizard(false);
+      setConvertingForm(null);
+      
+      alert(`Successfully ${result.mode === 'new' ? 'created new client' : 'attached to existing client'} and created event!`);
+    } catch (error) {
+      console.error('Failed to handle conversion result:', error);
     }
   };
 
@@ -279,6 +246,12 @@ export default function FormsPage() {
         </Select>
       </div>
 
+      {/* Contact Form Submissions Section */}
+      <ContactSubmissionsSection 
+        newSubmissionsCount={newSubmissionsCount}
+        onNewSubmissionsCountChange={setNewSubmissionsCount}
+      />
+
       {/* Forms Grid */}
       {filteredForms.length === 0 ? (
         <div className="text-center py-12">
@@ -301,7 +274,7 @@ export default function FormsPage() {
               onDelete={handleDeleteForm}
               onLink={handleLinkForm}
               onUnlink={handleUnlinkForm}
-              onCreateClient={handleCreateClientFromForm}
+              onConvert={handleConvertForm}
               linkedClientName={form.linkedClientId ? getClientName(form.linkedClientId) : undefined}
             />
           ))}
@@ -329,6 +302,18 @@ export default function FormsPage() {
         }}
         onLink={handleLinkFormToClient}
       />
+
+      {convertingForm && (
+        <ConvertFormWizard
+          isOpen={showConvertWizard}
+          onClose={() => {
+            setShowConvertWizard(false);
+            setConvertingForm(null);
+          }}
+          form={convertingForm}
+          onConvert={handleConversionResult}
+        />
+      )}
     </div>
   );
 }

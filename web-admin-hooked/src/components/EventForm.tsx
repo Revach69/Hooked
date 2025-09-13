@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { Event, EventAPI } from '@/lib/firebaseApi';
+import { EVENT_TYPES } from '@/lib/constants/eventTypes';
 import { X, Save, Plus, Upload, Edit3 } from 'lucide-react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getStorageInstance } from '@/lib/firebaseConfig';
@@ -44,6 +45,7 @@ export default function EventForm({
     starts_at: '', // When users can start accessing the event (early access)
     start_date: '', // Real event start time (for display)
     expires_at: '',
+    end_date: '', // Real event end time (for display) - NEW
     description: '',
     event_type: '',
     event_link: '',
@@ -91,6 +93,7 @@ export default function EventForm({
       let startsAtString = '';
       let startDateString = '';
       let expiresAtString = '';
+      let endDateString = '';
 
       if (event.starts_at) {
         // Handle various timestamp formats from Firestore
@@ -172,6 +175,34 @@ export default function EventForm({
         }
       }
 
+      if (event.end_date) {
+        if (typeof event.end_date === 'object' && 'toDate' in event.end_date) {
+          endDateString = utcTimestampToLocalEventTimeString(event.end_date, eventTimezone);
+        } else if (typeof event.end_date === 'object' && ('seconds' in event.end_date || '_seconds' in event.end_date)) {
+          const timestampObj = event.end_date as { seconds?: number; _seconds?: number };
+          const seconds = timestampObj.seconds || timestampObj._seconds || 0;
+          const date = new Date(seconds * 1000);
+          const formatter = new Intl.DateTimeFormat('en-CA', {
+            timeZone: eventTimezone,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+          });
+          const parts = formatter.formatToParts(date);
+          const values: Record<string, string> = {};
+          parts.forEach(part => { 
+            if (part.type !== 'literal') values[part.type] = part.value; 
+          });
+          endDateString = `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
+        }
+      } else if (expiresAtString) {
+        // Fall back to expires_at if end_date is not set
+        endDateString = expiresAtString;
+      }
+
       // Generate a new event code for duplication (random 6 character string)
       const generateEventCode = () => Math.random().toString(36).substring(2, 8).toUpperCase();
       
@@ -182,6 +213,7 @@ export default function EventForm({
         starts_at: startsAtString,
         start_date: startDateString,
         expires_at: expiresAtString,
+        end_date: endDateString,
         description: event.description || '',
         event_type: event.event_type || '',
         event_link: event.event_link || '',
@@ -204,6 +236,7 @@ export default function EventForm({
         starts_at: '',
         start_date: '',
         expires_at: '',
+        end_date: '',
         description: '',
         event_type: '',
         event_link: '',
@@ -586,6 +619,7 @@ export default function EventForm({
         starts_at: localEventTimeStringToUTCTimestamp(formData.starts_at, formData.timezone).toDate(),
         start_date: localEventTimeStringToUTCTimestamp(formData.start_date, formData.timezone).toDate(),
         expires_at: localEventTimeStringToUTCTimestamp(formData.expires_at, formData.timezone).toDate(),
+        end_date: formData.end_date ? localEventTimeStringToUTCTimestamp(formData.end_date, formData.timezone).toDate() : undefined,
         event_type: formData.event_type,
         event_link: formData.event_link,
         is_private: formData.is_private,
@@ -822,11 +856,11 @@ export default function EventForm({
               } bg-white dark:bg-gray-700 text-gray-900 dark:text-white`}
             >
               <option value="">Select event type</option>
-              <option value="parties">Parties</option>
-              <option value="conferences">Conferences</option>
-              <option value="weddings">Weddings</option>
-              <option value="private">Private Events</option>
-              <option value="bars">Bars & Lounges</option>
+              {EVENT_TYPES.map((eventType) => (
+                <option key={eventType} value={eventType}>
+                  {eventType}
+                </option>
+              ))}
             </select>
             {errors.event_type && (
               <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.event_type}</p>
@@ -996,29 +1030,55 @@ export default function EventForm({
             </div>
           </div>
 
-          {/* End Date */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              End Date & Time *
-            </label>
-            <input
-              type="datetime-local"
-              value={formData.expires_at}
-              onChange={(e) => handleInputChange('expires_at', e.target.value)}
-              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                errors.expires_at 
-                  ? 'border-red-500 dark:border-red-400' 
-                  : 'border-gray-300 dark:border-gray-600'
-              } bg-white dark:bg-gray-700 text-gray-900 dark:text-white`}
-            />
-            {formData.timezone && (
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Enter time in event timezone: {getTimezoneDisplayName(formData.timezone)}
-              </p>
-            )}
-            {errors.expires_at && (
-              <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.expires_at}</p>
-            )}
+          {/* App Access End & Real Event End */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                App Access Ends *
+              </label>
+              <input
+                type="datetime-local"
+                value={formData.expires_at}
+                onChange={(e) => handleInputChange('expires_at', e.target.value)}
+                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  errors.expires_at 
+                    ? 'border-red-500 dark:border-red-400' 
+                    : 'border-gray-300 dark:border-gray-600'
+                } bg-white dark:bg-gray-700 text-gray-900 dark:text-white`}
+              />
+              {formData.timezone && (
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  When app access expires: {getTimezoneDisplayName(formData.timezone)}
+                </p>
+              )}
+              {errors.expires_at && (
+                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.expires_at}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Real Event Ends
+              </label>
+              <input
+                type="datetime-local"
+                value={formData.end_date}
+                onChange={(e) => handleInputChange('end_date', e.target.value)}
+                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  errors.end_date 
+                    ? 'border-red-500 dark:border-red-400' 
+                    : 'border-gray-300 dark:border-gray-600'
+                } bg-white dark:bg-gray-700 text-gray-900 dark:text-white`}
+              />
+              {formData.timezone && (
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  When event actually ends: {getTimezoneDisplayName(formData.timezone)}
+                </p>
+              )}
+              {errors.end_date && (
+                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.end_date}</p>
+              )}
+            </div>
           </div>
 
           {/* Description */}

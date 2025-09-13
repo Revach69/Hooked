@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Edit, Trash2, Link, Unlink, Calendar, MapPin, Users, Mail, Phone, UserPlus } from 'lucide-react';
+import { Edit, Trash2, Link, Unlink, Calendar, MapPin, Users, Mail, Phone, ArrowRightLeft } from 'lucide-react';
 import type { EventForm } from '@/types/admin';
 
 interface EventFormCardProps {
@@ -13,7 +13,7 @@ interface EventFormCardProps {
   onDelete: (formId: string) => void;
   onLink: (form: EventForm) => void;
   onUnlink: (formId: string) => void;
-  onCreateClient: (form: EventForm) => Promise<void>;
+  onConvert: (form: EventForm) => void;
   linkedClientName?: string;
 }
 
@@ -34,9 +34,8 @@ const getStatusColor = (status: string) => {
   }
 };
 
-export function EventFormCard({ form, onEdit, onDelete, onLink, onUnlink, onCreateClient, linkedClientName }: EventFormCardProps) {
+export function EventFormCard({ form, onEdit, onDelete, onLink, onUnlink, onConvert, linkedClientName }: EventFormCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [isCreatingClient, setIsCreatingClient] = useState(false);
 
   const formatDate = (dateString: string) => {
     if (!dateString) return 'Not set';
@@ -77,16 +76,6 @@ export function EventFormCard({ form, onEdit, onDelete, onLink, onUnlink, onCrea
     });
   };
 
-  const handleCreateClient = async () => {
-    setIsCreatingClient(true);
-    try {
-      await onCreateClient(form);
-    } catch (error) {
-      console.error('Failed to create client:', error);
-    } finally {
-      setIsCreatingClient(false);
-    }
-  };
 
   return (
     <Card className="hover:shadow-md transition-shadow">
@@ -126,11 +115,10 @@ export function EventFormCard({ form, onEdit, onDelete, onLink, onUnlink, onCrea
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={handleCreateClient}
-                  disabled={isCreatingClient}
-                  title="Create new client from form"
+                  onClick={() => onConvert(form)}
+                  title="Convert form to client and event"
                 >
-                  <UserPlus className="h-4 w-4" />
+                  <ArrowRightLeft className="h-4 w-4" />
                 </Button>
               </>
             ) : (

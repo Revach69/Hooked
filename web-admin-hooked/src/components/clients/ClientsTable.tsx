@@ -4,15 +4,16 @@ import React, { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Edit, Trash2, ChevronDown, ChevronRight, FileText, Calendar, Merge, Plus, ExternalLink, Download, Image } from 'lucide-react';
+import { Edit, Trash2, ChevronDown, ChevronRight, FileText, Calendar, Merge, Plus, ExternalLink, Download } from 'lucide-react';
 import type { AdminClient, ClientEvent } from '@/types/admin';
+import { EVENT_TYPES, getEventTypeLabel } from '@/lib/constants/eventTypes';
 
 interface ClientsTableProps {
   clients: AdminClient[];
   onEdit: (client: AdminClient) => void;
   onDelete: (clientId: string) => void;
   onUpdate: (clientId: string, field: string, value: unknown) => void;
-  onMergeClient?: (fromClientId: string, toClientId: string) => void;
+  onMergeClient?: (clientId: string) => void;
   onAddEvent?: (clientId: string) => void;
   onEditEvent?: (clientId: string, event: ClientEvent) => void;
   onDeleteEvent?: (clientId: string, eventId: string) => void;
@@ -37,16 +38,7 @@ const CLIENT_TYPES = [
   'Other Organization'
 ] as const;
 
-const EVENT_KINDS = [
-  'House Party',
-  'Club',
-  'Wedding',
-  'Meetup',
-  'High Tech Event',
-  'Retreat',
-  'Party',
-  'Conference'
-] as const;
+const EVENT_KINDS = EVENT_TYPES;
 
 const STATUS_OPTIONS = [
   'Initial Discussion',
@@ -104,8 +96,6 @@ export function ClientsTable({
   sortOrder 
 }: ClientsTableProps) {
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
-  const [mergeMode, setMergeMode] = useState(false);
-  const [selectedClientForMerge, setSelectedClientForMerge] = useState<string | null>(null);
 
   const toggleClientExpansion = (clientId: string) => {
     const newExpanded = new Set(expandedClients);
@@ -118,21 +108,8 @@ export function ClientsTable({
   };
 
   const handleMergeClick = (clientId: string) => {
-    if (mergeMode && selectedClientForMerge === clientId) {
-      // Cancel merge mode
-      setMergeMode(false);
-      setSelectedClientForMerge(null);
-    } else if (mergeMode && selectedClientForMerge && selectedClientForMerge !== clientId) {
-      // Execute merge
-      if (onMergeClient) {
-        onMergeClient(selectedClientForMerge, clientId);
-      }
-      setMergeMode(false);
-      setSelectedClientForMerge(null);
-    } else {
-      // Start merge mode
-      setMergeMode(true);
-      setSelectedClientForMerge(clientId);
+    if (onMergeClient) {
+      onMergeClient(clientId);
     }
   };
 
@@ -162,8 +139,27 @@ export function ClientsTable({
     // link.click();
   };
 
-  const renderEventRow = (event: ClientEvent, clientId: string, index: number) => (
+  const renderEventRow = (event: ClientEvent, clientId: string) => (
     <tr key={event.id} className="border-t border-gray-100 bg-gray-50">
+      {/* Event Type */}
+      <td className="px-4 py-2">
+        <Select
+          value={event.eventKind || 'Other'}
+          onValueChange={(value) => onUpdateEvent?.(clientId, event.id, 'eventKind', value)}
+        >
+          <SelectTrigger className="h-8 w-full border-none shadow-none p-1 focus:ring-0 hover:bg-gray-100">
+            <SelectValue className="text-sm" />
+          </SelectTrigger>
+          <SelectContent>
+            {EVENT_KINDS.map((kind) => (
+              <SelectItem key={kind} value={kind}>
+                {kind}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </td>
+      
       {/* Expected Attendees */}
       <td className="px-4 py-2 text-sm">{event.expectedAttendees || '-'}</td>
       
@@ -361,8 +357,8 @@ export function ClientsTable({
         bValue = new Date(bValue as string).getTime();
       }
       
-      if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
-      if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
+      if (String(aValue) < String(bValue)) return sortOrder === 'asc' ? -1 : 1;
+      if (String(aValue) > String(bValue)) return sortOrder === 'asc' ? 1 : -1;
       return 0;
     });
     return sorted;
@@ -370,25 +366,6 @@ export function ClientsTable({
 
   return (
     <div className="space-y-4">
-      {mergeMode && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <p className="text-blue-800">
-            Merge mode active. Select a target client to merge &quot;{clients.find(c => c.id === selectedClientForMerge)?.name}&quot; into.
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={() => {
-                setMergeMode(false);
-                setSelectedClientForMerge(null);
-              }}
-              className="ml-2"
-            >
-              Cancel
-            </Button>
-          </p>
-        </div>
-      )}
-      
       {/* Client Cards */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
@@ -411,25 +388,14 @@ export function ClientsTable({
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
               {sortedData.map((client) => {
                 const isExpanded = expandedClients.has(client.id);
-                const isSelected = selectedClientForMerge === client.id;
-                const eventTypes = client.events?.map(e => e.eventKind).filter(Boolean).join(', ') || '-';
+                const eventTypes = client.events?.map(e => e.eventKind).filter(Boolean).map(type => getEventTypeLabel(type!)).join(', ') || '-';
                 
                 return (
                   <React.Fragment key={client.id}>
                     {/* Main Client Row */}
                     <tr 
-                      className={`hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer ${
-                        isSelected ? 'bg-blue-100 dark:bg-blue-900' : ''
-                      } ${
-                        mergeMode && !isSelected ? 'hover:bg-green-50 dark:hover:bg-green-900' : ''
-                      }`}
-                      onClick={() => {
-                        if (mergeMode && selectedClientForMerge !== client.id) {
-                          handleMergeClick(client.id);
-                        } else if (!mergeMode) {
-                          toggleClientExpansion(client.id);
-                        }
-                      }}
+                      className="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                      onClick={() => toggleClientExpansion(client.id)}
                     >
                       <td className="px-6 py-4 whitespace-nowrap">
                         {isExpanded ? (
@@ -445,7 +411,6 @@ export function ClientsTable({
                         <Select
                           value={client.type}
                           onValueChange={(value) => onUpdate(client.id, 'type', value)}
-                          disabled={mergeMode}
                         >
                           <SelectTrigger className="h-8 w-full border-none shadow-none p-1 focus:ring-0 hover:bg-gray-100">
                             <SelectValue className="text-sm" />
@@ -486,7 +451,6 @@ export function ClientsTable({
                         <Select
                           value={client.status}
                           onValueChange={(value) => onUpdate(client.id, 'status', value)}
-                          disabled={mergeMode}
                         >
                           <SelectTrigger className="h-8 w-full border-none shadow-none p-1 focus:ring-0 hover:bg-gray-100">
                             <Badge className={getStatusColor(client.status)}>
@@ -508,7 +472,6 @@ export function ClientsTable({
                         <Select
                           value={client.source || 'none'}
                           onValueChange={(value) => onUpdate(client.id, 'source', value === 'none' ? null : value)}
-                          disabled={mergeMode}
                         >
                           <SelectTrigger className="h-8 w-full border-none shadow-none p-1 focus:ring-0 hover:bg-gray-100">
                             <SelectValue className="text-sm" placeholder="-" />
@@ -532,8 +495,7 @@ export function ClientsTable({
                               e.stopPropagation();
                               onEdit(client);
                             }}
-                            disabled={mergeMode}
-                          >
+                            >
                             <Edit className="h-4 w-4" />
                           </Button>
                           <Button
@@ -543,8 +505,7 @@ export function ClientsTable({
                               e.stopPropagation();
                               handleMergeClick(client.id);
                             }}
-                            className={isSelected ? 'bg-blue-200 dark:bg-blue-800' : ''}
-                            title={mergeMode ? (isSelected ? 'Cancel merge' : 'Merge into this client') : 'Start merge'}
+                            title="Merge client"
                           >
                             <Merge className="h-4 w-4" />
                           </Button>
@@ -555,8 +516,7 @@ export function ClientsTable({
                               e.stopPropagation();
                               onDelete(client.id);
                             }}
-                            disabled={mergeMode}
-                          >
+                            >
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
@@ -587,6 +547,7 @@ export function ClientsTable({
                                 <table className="w-full text-sm">
                                   <thead>
                                     <tr className="border-b border-gray-200 dark:border-gray-700">
+                                      <th className="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-300">Event Type</th>
                                       <th className="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-300"># of Expected Attendees</th>
                                       <th className="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-300">Access Time</th>
                                       <th className="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-300">Start Time</th>
@@ -600,8 +561,8 @@ export function ClientsTable({
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {client.events.map((event, index) => 
-                                      renderEventRow(event, client.id, index)
+                                    {client.events.map((event) => 
+                                      renderEventRow(event, client.id)
                                     )}
                                   </tbody>
                                 </table>

@@ -325,7 +325,7 @@ export default function EventsPage() {
     try {
       // Find the event data to pass along
       const event = events.find(e => e.id === eventId) || linkingEvent;
-      await AdminClientAPI.linkEvent(clientId, eventId, event);
+      await AdminClientAPI.linkEvent(clientId, eventId, event as unknown as Record<string, unknown> | undefined);
       await loadEvents(); // Refresh events to show updated state
     } catch (error) {
       console.error('Failed to link event to client:', error);

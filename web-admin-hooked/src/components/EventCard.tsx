@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Event } from '@/lib/firebaseApi';
 import { toDate } from '@/lib/timezoneUtils';
+import { getEventTypeLabel } from '@/lib/constants/eventTypes';
 import Image from 'next/image';
 import { 
   Copy, 
@@ -182,6 +183,11 @@ export default function EventCard({
                 <MapPin size={16} />
                 <span>{event.location || 'TLV'}</span>
               </div>
+              {event.event_type && (
+                <span className="bg-white bg-opacity-20 px-2 py-1 rounded-full text-xs font-medium">
+                  {getEventTypeLabel(event.event_type)}
+                </span>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">

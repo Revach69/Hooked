@@ -6,7 +6,11 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "migrate:all": "tsx src/scripts/runMigrations.ts",
+    "migrate:events": "tsx src/scripts/migrateEvents.ts",
+    "migrate:event-forms": "tsx src/scripts/migrateEventForms.ts",
+    "migrate:client-events": "tsx src/scripts/migrateClientEvents.ts"
   },
   "dependencies": {
     "@floating-ui/dom": "^1.7.4",
@@ -38,7 +42,9 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "dotenv": "^17.2.2",
     "firebase": "^12.0.0",
+    "firebase-admin": "^13.5.0",
     "lucide-react": "^0.541.0",
     "next": "^15.5.2",
     "qrcode": "^1.5.4",
@@ -60,6 +66,7 @@
     "eslint": "^9.34.0",
     "eslint-config-next": "^15.5.2",
     "tailwindcss": "^4.1.12",
+    "tsx": "^4.20.5",
     "typescript": "^5"
   }
 }

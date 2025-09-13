@@ -9,6 +9,7 @@ import { ClientFormSheet } from '@/components/clients/ClientFormSheet';
 import { EventFormModal } from '@/components/clients/EventFormModal';
 import { FormViewerModal } from '@/components/FormViewerModal';
 import { EventViewerModal } from '@/components/EventViewerModal';
+import MergeClientsModal from '@/components/clients/MergeClientsModal';
 import { AdminClientAPI } from '@/lib/firestore/clients';
 import { EventFormAPI } from '@/lib/firestore/eventForms';
 import { EventAPI } from '@/lib/firebaseApi';
@@ -36,6 +37,8 @@ export default function ClientsPage() {
   const [isFormViewerOpen, setIsFormViewerOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [isEventViewerOpen, setIsEventViewerOpen] = useState(false);
+  const [mergeSourceClient, setMergeSourceClient] = useState<AdminClient | null>(null);
+  const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
 
   useEffect(() => {
     loadClients();
@@ -118,30 +121,44 @@ export default function ClientsPage() {
     loadClients();
   };
 
-  // Event management handlers
-  const handleMergeClient = async (fromClientId: string, toClientId: string) => {
-    try {
-      const fromClient = clients.find(c => c.id === fromClientId);
-      const toClient = clients.find(c => c.id === toClientId);
-      
-      if (!fromClient || !toClient) {
-        console.error('Client not found for merge');
-        return;
-      }
+  // Merge client handlers
+  const handleMergeClientClick = (clientId: string) => {
+    const client = clients.find(c => c.id === clientId);
+    if (!client) {
+      console.error('Client not found for merge');
+      return;
+    }
+    
+    setMergeSourceClient(client);
+    setIsMergeModalOpen(true);
+  };
 
-      // Merge events from fromClient to toClient
-      const mergedEvents = [...(toClient.events || []), ...(fromClient.events || [])];
+  const handleMergeConfirm = async (result: {
+    sourceId: string;
+    targetId: string;
+    fieldOverrides: Partial<AdminClient>;
+    keepBothOptions: {
+      email: boolean;
+      phone: boolean;
+    };
+  }) => {
+    try {
+      await AdminClientAPI.mergeClients({
+        sourceId: result.sourceId,
+        targetId: result.targetId,
+        fieldOverrides: result.fieldOverrides,
+        keepBothOptions: result.keepBothOptions,
+        actor: 'admin' // Could be replaced with actual admin user info
+      });
       
-      // Update the target client with merged events
-      await AdminClientAPI.update(toClientId, { events: mergedEvents });
-      
-      // Delete the source client
-      await AdminClientAPI.delete(fromClientId);
-      
-      // Reload clients
+      // Reload clients to reflect the changes
       await loadClients();
+      
+      // Show success message
+      console.log('✅ Clients merged successfully');
     } catch (error) {
       console.error('Failed to merge clients:', error);
+      throw error; // Re-throw to let modal handle the error display
     }
   };
 
@@ -343,7 +360,7 @@ export default function ClientsPage() {
         onEdit={handleEditClient}
         onDelete={handleDeleteClient}
         onUpdate={handleUpdateClient}
-        onMergeClient={handleMergeClient}
+        onMergeClient={handleMergeClientClick}
         onAddEvent={handleAddEvent}
         onEditEvent={handleEditEvent}
         onDeleteEvent={handleDeleteEvent}
@@ -403,6 +420,18 @@ export default function ClientsPage() {
           setSelectedEvent(null);
         }}
       />
+
+      {mergeSourceClient && (
+        <MergeClientsModal
+          isOpen={isMergeModalOpen}
+          onClose={() => {
+            setIsMergeModalOpen(false);
+            setMergeSourceClient(null);
+          }}
+          sourceClient={mergeSourceClient}
+          onMerge={handleMergeConfirm}
+        />
+      )}
     </div>
   );
 }

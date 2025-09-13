@@ -30,6 +30,7 @@ export interface Event {
   starts_at: Date | Timestamp | string; // Support both old string format and new Timestamp
   start_date?: Date | Timestamp | string; // Real event start time (for display purposes)  
   expires_at: Date | Timestamp | string; // Support both old string format and new Timestamp
+  end_date?: Date | Timestamp | string; // Real event end time (for display purposes) - NEW
   event_code: string;
   location?: string;
   organizer_email?: string;
