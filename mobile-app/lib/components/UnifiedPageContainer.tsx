@@ -16,6 +16,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Dimensions, Animated } from 'react-native';
 import { unifiedNavigator, NavigationState, NavigationPage } from '../navigation/UnifiedNavigator';
+import { crossPageEventBus } from '../navigation/CrossPageEventBus';
 
 // Import all pages
 import Home from '../../app/home';
@@ -117,17 +118,18 @@ export const UnifiedPageContainer: React.FC = React.memo(() => {
       
       // Emit visibility change event for conditional listener cleanup
       if (previousPage !== state.currentPage) {
-        // Notify components of page visibility change
-        const visibilityEvent = new CustomEvent('pageVisibilityChange', {
-          detail: { 
-            currentPage: state.currentPage, 
-            previousPage,
-            visiblePages: Array.from(pageVisibilityRef.current)
-          }
+        // Use cross-page event bus for React Native compatibility
+        crossPageEventBus.emit('navigation:request', {
+          targetPage: state.currentPage,
+          params: state.params
         });
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(visibilityEvent);
-        }
+        
+        // Log for debugging
+        console.log('Page visibility changed:', {
+          currentPage: state.currentPage,
+          previousPage,
+          visiblePages: Array.from(pageVisibilityRef.current)
+        });
       }
       
       setNavigationState(state);
