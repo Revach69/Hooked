@@ -90,16 +90,20 @@ export default function Chat() {
       const eventId = await AsyncStorageUtils.getItem<string>('currentEventId');
       
       if (!sessionId || !eventId || !matchId) {
-        Toast.show({
-          type: 'error',
-          text1: 'Error',
-          text2: 'Missing session information',
-          position: 'top',
-          visibilityTime: 3500,
-          autoHide: true,
-          topOffset: 0,
-        });
-        unifiedNavigator.navigate('matches', {}, true); // go back to matches
+        // Only show error if chat page is actually visible
+        const currentState = unifiedNavigator.getState();
+        if (currentState.currentPage === 'chat') {
+          Toast.show({
+            type: 'error',
+            text1: 'Error',
+            text2: 'Missing session information',
+            position: 'top',
+            visibilityTime: 3500,
+            autoHide: true,
+            topOffset: 0,
+          });
+          unifiedNavigator.navigate('matches', {}, true); // go back to matches
+        }
         return;
       }
 
