@@ -10,7 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router } from '../lib/navigation/UnifiedNavigator';
 import { Eye, EyeOff, Lock, Mail, Check } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthAPI } from '../lib/firebaseApi';

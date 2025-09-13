@@ -13,7 +13,8 @@ import {
   Keyboard,
   TouchableWithoutFeedback,
 } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
+import { router } from '../lib/navigation/UnifiedNavigator';
 import { ArrowLeft } from 'lucide-react-native';
 import { SurveyService } from '../lib/surveyService';
 import Toast from 'react-native-toast-message';

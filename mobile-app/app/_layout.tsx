@@ -8,7 +8,7 @@ import 'react-native-get-random-values';
 // No manual background handler needed for Expo apps
 
 import React, { useEffect, useState } from 'react';
-import { useRouter, usePathname } from 'expo-router';
+// Removed unused expo-router imports
 import { UnifiedPageContainer } from '../lib/components/UnifiedPageContainer';
 import { unifiedNavigator } from '../lib/navigation/UnifiedNavigator';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -42,7 +42,7 @@ import { getSessionAndInstallationIds } from '../lib/session/sessionId';
 // Legacy mapping functions removed - now handled by GlobalNotificationService
 
 export default function RootLayout() {
-  const expoRouter = useRouter();
+  // Using UnifiedNavigator instead of expo-router
   const [appIsReady, setAppIsReady] = useState(false);
   const [navigationReady, setNavigationReady] = useState(false);
   
