@@ -13,7 +13,7 @@ import { UnifiedPageContainer } from '../lib/components/UnifiedPageContainer';
 import { unifiedNavigator } from '../lib/navigation/UnifiedNavigator';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Toast from 'react-native-toast-message';
-import type { NotificationData } from '../lib/types';
+import type { NotificationData, NotificationDataPayload, ExpoNotificationRequest } from '../lib/types';
 import { NotificationRouter } from '../lib/notifications/NotificationRouter';
 import { useIsForegroundGetter } from '../lib/notifications/helpers';
 import CustomSplashScreen from '../lib/components/SplashScreen';
@@ -114,7 +114,7 @@ export default function RootLayout() {
     
     const sub = Notifications.addNotificationReceivedListener(async (notification) => {
       try {
-        const data = notification.request.content.data as NotificationData['data'] || {};
+        const data = notification.request.content.data as NotificationDataPayload || {};
         const isForeground = getIsForeground();
         
         // Enhanced deduplication check
@@ -240,7 +240,7 @@ export default function RootLayout() {
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       try {
-        const data = (response?.notification?.request?.content?.data || {}) as NotificationData['data'];
+        const data = (response?.notification?.request?.content?.data || {}) as NotificationDataPayload;
         
         // Track notification interaction analytics
         console.log('Notification tapped:', { type: data?.type, notificationId: data?.notificationId?.substring(0, 10) + '...' });
@@ -331,7 +331,7 @@ export default function RootLayout() {
       Notifications.setNotificationHandler({
         handleNotification: async (notification) => {
           // Enhanced logic: Check notification source and type
-          const data = notification.request.content.data as NotificationData['data'] || {};
+          const data = notification.request.content.data as NotificationDataPayload || {};
           const isLocalFallback = data?.source === 'local_fallback';
           const isForeground = getIsForeground();
           

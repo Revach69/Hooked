@@ -11,7 +11,12 @@ import {
   where, 
   orderBy, 
   serverTimestamp,
-  Timestamp
+  Timestamp,
+  DocumentData,
+  QueryDocumentSnapshot,
+  DocumentSnapshot,
+  Query,
+  CollectionReference
 } from 'firebase/firestore';
 import { ref, getDownloadURL, uploadBytes } from 'firebase/storage';
 import { 
@@ -20,6 +25,8 @@ import {
   updateProfile as firebaseUpdateProfile
 } from 'firebase/auth';
 import { getDb, getStorage, getDbForEvent } from './firebaseConfig';
+import type { Event as TypedEvent, EventProfile as TypedEventProfile, Like as TypedLike, Message as TypedMessage } from './types';
+import { extractDocumentData, extractDocumentArray, documentToTypedObject, documentsToTypedArray } from './utils/firebaseConverters';
 
 // Helper function to get all regional databases for cross-region operations
 function getAllDatabases() {
@@ -378,17 +385,14 @@ export const EventAPI = {
         }
         
         // For other filters, use default database (backward compatibility)
-        let q: any = collection(getDb(), 'events');
+        let q: Query<DocumentData> | CollectionReference<DocumentData> = collection(getDb(), 'events');
         
         if (filters.id) {
           q = query(q, where('__name__', '==', filters.id));
         }
         
         const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map((doc: any) => ({
-          id: doc.id,
-          ...(doc.data() as any)
-        })) as Event[];
+        return documentsToTypedArray<Event>(querySnapshot.docs);
       });
     }, { operation: 'Filter events' });
   },
@@ -650,7 +654,7 @@ export const EventProfileAPI = {
           }
         }
         
-        let q: any = collection(targetDb, 'event_profiles');
+        let q: Query<DocumentData> | CollectionReference<DocumentData> = collection(targetDb, 'event_profiles');
         
         if (filters.event_id) {
           q = query(q, where('event_id', '==', filters.event_id));
@@ -663,10 +667,7 @@ export const EventProfileAPI = {
         }
         
         const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map((doc: any) => ({
-          id: doc.id,
-          ...(doc.data() as any)
-        })) as EventProfile[];
+        return documentsToTypedArray<EventProfile>(querySnapshot.docs);
       });
     }, { operation: 'Filter event profiles' });
   },
@@ -773,7 +774,7 @@ export const LikeAPI = {
         }
       }
       
-      let q: any = collection(targetDb, 'likes');
+      let q: Query<DocumentData> | CollectionReference<DocumentData> = collection(targetDb, 'likes');
       
       if (filters.event_id) {
         q = query(q, where('event_id', '==', filters.event_id));
@@ -792,10 +793,7 @@ export const LikeAPI = {
       }
       
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map((doc: any) => ({
-        id: doc.id,
-        ...(doc.data() as any)
-      })) as Like[];
+      return documentsToTypedArray<Like>(querySnapshot.docs);
     }, { operation: 'Filter likes' });
   },
 
@@ -880,7 +878,7 @@ export const MessageAPI = {
         }
       }
       
-      let q: any = collection(targetDb, 'messages');
+      let q: Query<DocumentData> | CollectionReference<DocumentData> = collection(targetDb, 'messages');
       
       if (filters.event_id) {
         q = query(q, where('event_id', '==', filters.event_id));
@@ -895,10 +893,7 @@ export const MessageAPI = {
       q = query(q, orderBy('created_at', 'asc'));
       
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map((doc: any) => ({
-        id: doc.id,
-        ...(doc.data() as any)
-      })) as Message[];
+      return documentsToTypedArray<Message>(querySnapshot.docs);
     }, { operation: 'Filter messages' });
   },
 
@@ -963,7 +958,7 @@ export const EventFeedbackAPI = {
         }
       }
       
-      let q: any = collection(targetDb, 'event_feedback');
+      let q: Query<DocumentData> | CollectionReference<DocumentData> = collection(targetDb, 'event_feedback');
       
       if (filters.event_id) {
         q = query(q, where('event_id', '==', filters.event_id));
@@ -973,10 +968,7 @@ export const EventFeedbackAPI = {
       }
       
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map((doc: any) => ({
-        id: doc.id,
-        ...(doc.data() as any)
-      })) as EventFeedback[];
+      return documentsToTypedArray<EventFeedback>(querySnapshot.docs);
     }, { operation: 'Filter event feedback' });
   }
 };
@@ -1024,7 +1016,7 @@ export const KickedUserAPI = {
         }
       }
       
-      let q: any = collection(targetDb, 'kicked_users');
+      let q: Query<DocumentData> | CollectionReference<DocumentData> = collection(targetDb, 'kicked_users');
       
       if (filters.event_id) {
         q = query(q, where('event_id', '==', filters.event_id));
@@ -1034,10 +1026,7 @@ export const KickedUserAPI = {
       }
       
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map((doc: any) => ({
-        id: doc.id,
-        ...(doc.data() as any)
-      })) as KickedUser[];
+      return documentsToTypedArray<KickedUser>(querySnapshot.docs);
     }, { operation: 'Filter kicked users' });
   },
 
@@ -1112,7 +1101,7 @@ export const BlockedMatchAPI = {
         }
       }
       
-      let q: any = collection(targetDb, 'blocked_matches');
+      let q: Query<DocumentData> | CollectionReference<DocumentData> = collection(targetDb, 'blocked_matches');
       
       if (filters.event_id) {
         q = query(q, where('event_id', '==', filters.event_id));
@@ -1192,7 +1181,7 @@ export const MutedMatchAPI = {
         }
       }
       
-      let q: any = collection(targetDb, 'muted_matches');
+      let q: Query<DocumentData> | CollectionReference<DocumentData> = collection(targetDb, 'muted_matches');
       
       if (filters.event_id) {
         q = query(q, where('event_id', '==', filters.event_id));
@@ -1269,7 +1258,7 @@ export const SkippedProfileAPI = {
         }
       }
       
-      let q: any = collection(targetDb, 'skipped_profiles');
+      let q: Query<DocumentData> | CollectionReference<DocumentData> = collection(targetDb, 'skipped_profiles');
       
       if (filters.event_id) {
         q = query(q, where('event_id', '==', filters.event_id));
@@ -1382,7 +1371,7 @@ export const ReportAPI = {
         }
       }
       
-      let q: any = collection(targetDb, 'reports');
+      let q: Query<DocumentData> | CollectionReference<DocumentData> = collection(targetDb, 'reports');
       
       if (filters.event_id) {
         q = query(q, where('event_id', '==', filters.event_id));
@@ -1401,10 +1390,7 @@ export const ReportAPI = {
       }
       
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map((doc: any) => ({
-        id: doc.id,
-        ...(doc.data() as any)
-      })) as Report[];
+      return documentsToTypedArray<Report>(querySnapshot.docs);
     }, { operation: 'Filter reports' });
   },
 
@@ -1693,7 +1679,7 @@ export const AdminClientAPI = {
   },
 
   async filter(filters: Partial<AdminClient> = {}): Promise<AdminClient[]> {
-    let q: any = collection(getDb(), 'adminClients');
+    let q: Query<DocumentData> | CollectionReference<DocumentData> = collection(getDb(), 'adminClients');
     
     if (filters.status) {
       q = query(q, where('status', '==', filters.status));

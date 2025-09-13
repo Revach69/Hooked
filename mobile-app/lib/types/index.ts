@@ -95,14 +95,20 @@ export interface BackgroundPreloaderData {
 export interface NotificationData {
   title?: string;
   body?: string;
-  data?: {
-    type?: 'match' | 'message' | 'event' | 'system';
-    eventId?: string;
-    sessionId?: string;
-    matchId?: string;
-    messageId?: string;
-    [key: string]: string | undefined;
-  };
+  data?: NotificationDataPayload;
+}
+
+export interface NotificationDataPayload {
+  type?: 'match' | 'message' | 'event' | 'system' | 'local_fallback';
+  eventId?: string;
+  sessionId?: string;
+  matchId?: string;
+  messageId?: string;
+  notificationId?: string;
+  source?: string;
+  priority?: 'high' | 'normal' | 'low';
+  timestamp?: string;
+  [key: string]: string | undefined;
 }
 
 export interface FirebaseNotificationPayload {
@@ -111,13 +117,39 @@ export interface FirebaseNotificationPayload {
     body?: string;
     imageUrl?: string;
     icon?: string;
+    badge?: string;
+    sound?: string;
+    color?: string;
   };
-  data?: Record<string, string>;
+  data?: NotificationDataPayload;
   messageId?: string;
   from?: string;
   collapseKey?: string;
   sentTime?: number;
   ttl?: number;
+  priority?: 'high' | 'normal';
+}
+
+export interface ExpoNotificationContent {
+  title?: string;
+  subtitle?: string;
+  body?: string;
+  data?: NotificationDataPayload;
+  sound?: boolean | string;
+  badge?: number;
+  categoryIdentifier?: string;
+}
+
+export interface ExpoNotificationRequest {
+  identifier?: string;
+  content: ExpoNotificationContent;
+  trigger?: {
+    type: 'push' | 'calendar' | 'timeInterval' | 'daily' | 'weekly' | 'yearly';
+    seconds?: number;
+    date?: Date;
+    hour?: number;
+    minute?: number;
+  };
 }
 
 export interface AndroidNotificationChannel {
@@ -128,6 +160,9 @@ export interface AndroidNotificationChannel {
   sound?: string;
   vibration?: boolean;
   showBadge?: boolean;
+  enableLights?: boolean;
+  lightColor?: string;
+  bypassDnd?: boolean;
 }
 
 // ==================== ERROR HANDLING TYPES ====================
