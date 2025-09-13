@@ -13,15 +13,15 @@ export default function JoinInstantPage() {
   const isDark = colorScheme === 'dark';
 
   useEffect(() => {
-    // Detect if running in native app vs web browser
-    if (Platform.OS === 'web') {
-      setUserAgent(navigator.userAgent);
-      setIsNativeApp(false);
+    // This is a mobile-only app, no web support
+    if (Platform.OS === 'ios' || Platform.OS === 'android') {
+      setIsNativeApp(true);
+      setUserAgent(''); // Not applicable for mobile
       
-      // Auto-redirect to app if possible (universal linking)
+      // Handle deep linking for mobile
       if (code) {
-        const appUrl = `hooked://join?code=${code}`;
-        window.location.href = appUrl;
+        // In mobile app, navigate directly using UnifiedNavigator
+        unifiedNavigator.navigate('join', { code });
         
         // Fallback after short delay to show platform-specific UI
         setTimeout(() => {
@@ -88,12 +88,8 @@ export default function JoinInstantPage() {
 
   const handleRetryDeepLink = () => {
     if (code) {
-      const appUrl = `hooked://join?code=${code}`;
-      if (Platform.OS === 'web') {
-        window.location.href = appUrl;
-      } else {
-        Linking.openURL(appUrl);
-      }
+      // Mobile-only app - navigate directly using UnifiedNavigator
+      unifiedNavigator.navigate('join', { code });
     }
   };
 
