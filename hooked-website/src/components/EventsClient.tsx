@@ -53,10 +53,18 @@ export default function EventsClient() {
 
   // Helper function to check if image_url is a valid URL
   const isValidUrl = (url: string) => {
+    if (!url) return false;
+    
     try {
       new URL(url);
       return true;
     } catch {
+      // Also accept Firebase Storage URLs that might not parse as valid URLs
+      if (url.includes('firebasestorage.googleapis.com') || 
+          url.startsWith('gs://') ||
+          url.startsWith('https://')) {
+        return true;
+      }
       return false;
     }
   };

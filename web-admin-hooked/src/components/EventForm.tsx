@@ -225,16 +225,28 @@ export default function EventForm({
       
       // Load existing image if available (but not when duplicating)
       if (event.image_url && !isDuplicating) {
-        // Check if image_url is a valid URL
+        console.log('Loading existing image:', event.image_url);
+        // Check if image_url is a valid URL or a Firebase Storage URL
         try {
+          // Try to create URL - this will throw if invalid
           new URL(event.image_url);
           setExistingImageUrl(event.image_url);
           setImagePreview(event.image_url);
+          console.log('Image URL is valid, setting preview');
         } catch {
-          // If image_url is not a valid URL (e.g., just a filename), don't set preview
-          console.warn('Event image_url is not a valid URL:', event.image_url);
-          setExistingImageUrl(null);
-          setImagePreview(null);
+          // If image_url is not a valid URL, check if it's a Firebase Storage path
+          if (event.image_url.includes('firebasestorage.googleapis.com') || 
+              event.image_url.startsWith('gs://') ||
+              event.image_url.startsWith('https://')) {
+            // Looks like a Firebase Storage URL, try to use it anyway
+            console.log('Trying Firebase Storage URL anyway:', event.image_url);
+            setExistingImageUrl(event.image_url);
+            setImagePreview(event.image_url);
+          } else {
+            console.warn('Event image_url is not a valid URL and not recognizable as Firebase Storage:', event.image_url);
+            setExistingImageUrl(null);
+            setImagePreview(null);
+          }
         }
       }
     } else {

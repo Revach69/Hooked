@@ -18,7 +18,7 @@ import {
   Firestore,
   getFirestore
 } from 'firebase/firestore';
-import { getFunctions } from 'firebase/functions';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getApp, getApps } from 'firebase/app';
 import { toDate } from './timezoneUtils';
 
