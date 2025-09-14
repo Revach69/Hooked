@@ -50,13 +50,18 @@ export function localDateTimeStringToUTC(localDateTimeString: string): string {
 
 /**
  * Maps form event types to client types and event kinds
+ * Updated to handle standardized event types from PRD Step 0
  * 
- * Test cases:
- * - "Club / Nightlife Event" -> type: "Club / Bar", eventKind: "Club"
+ * Standardized Event Types:
+ * - "Party" -> type: "Personal Host", eventKind: "Party"
+ * - "Club Event" -> type: "Club / Bar", eventKind: "Club Event"
+ * - "Music Festival" -> type: "Company", eventKind: "Music Festival"
+ * - "Company Event" -> type: "Company", eventKind: "Company Event"
+ * - "Conference" -> type: "Company", eventKind: "Conference"
+ * - "Meetup / Networking Event" -> type: "Company", eventKind: "Meetup / Networking Event"
+ * - "Retreat / Offsite" -> type: "Company", eventKind: "Retreat / Offsite"
  * - "Wedding" -> type: "Wedding Organizer", eventKind: "Wedding"
- * - "House Party" -> type: "Personal Host", eventKind: "House Party"
- * - "High Tech Event" -> type: "Company", eventKind: "High Tech Event"
- * - "Other" with otherEventType: "Birthday Party" -> type: "Other Organization", eventKind: "Birthday Party"
+ * - "Other" with otherEventType -> type: "Other Organization", eventKind: otherEventType or "Other"
  */
 export function mapFormEventTypeToClientData(eventType: string, otherEventType?: string): {
   type: 'Company' | 'Wedding Organizer' | 'Club / Bar' | 'Restaurant' | 'Personal Host' | 'Other Organization';
@@ -71,82 +76,109 @@ export function mapFormEventTypeToClientData(eventType: string, otherEventType?:
     case 'wedding':
       clientType = 'Wedding Organizer';
       break;
+    case 'club event':
     case 'club':
     case 'nightlife event':
     case 'club / nightlife event':
       clientType = 'Club / Bar';
       break;
-    case 'restaurant':
-    case 'dining':
-      clientType = 'Restaurant';
-      break;
+    case 'party':
     case 'house party':
     case 'private party':
     case 'personal event':
       clientType = 'Personal Host';
       break;
     case 'company event':
+    case 'conference':
+    case 'meetup / networking event':
+    case 'meetup':
+    case 'networking event':
+    case 'retreat / offsite':
+    case 'retreat':
+    case 'offsite':
+    case 'music festival':
+    case 'festival':
     case 'corporate event':
     case 'business event':
     case 'high tech event':
-    case 'conference':
-    case 'meetup':
       clientType = 'Company';
+      break;
+    case 'restaurant':
+    case 'dining':
+      clientType = 'Restaurant';
       break;
     default:
       clientType = 'Other Organization';
   }
   
-  // Map event types to event kinds
+  // Map event types to event kinds using standardized types
   let eventKind: string;
   
   switch (normalizedEventType) {
-    case 'house party':
-      eventKind = 'House Party';
+    case 'party':
+      eventKind = 'Party';
       break;
+    case 'club event':
     case 'club':
     case 'nightlife event':
     case 'club / nightlife event':
-      eventKind = 'Club';
+      eventKind = 'Club Event';
       break;
-    case 'wedding':
-      eventKind = 'Wedding';
+    case 'music festival':
+    case 'festival':
+      eventKind = 'Music Festival';
       break;
-    case 'meetup':
-      eventKind = 'Meetup';
-      break;
-    case 'high tech event':
-      eventKind = 'High Tech Event';
-      break;
-    case 'retreat':
-      eventKind = 'Retreat';
-      break;
-    case 'party':
-      eventKind = 'Party';
+    case 'company event':
+    case 'corporate event':
+    case 'business event':
+      eventKind = 'Company Event';
       break;
     case 'conference':
       eventKind = 'Conference';
       break;
+    case 'meetup / networking event':
+    case 'meetup':
+    case 'networking event':
+      eventKind = 'Meetup / Networking Event';
+      break;
+    case 'retreat / offsite':
+    case 'retreat':
+    case 'offsite':
+      eventKind = 'Retreat / Offsite';
+      break;
+    case 'wedding':
+      eventKind = 'Wedding';
+      break;
+    case 'house party':
+    case 'private party':
+    case 'personal event':
+      eventKind = 'Party'; // Map house party variants to standardized 'Party'
+      break;
+    case 'high tech event':
+      eventKind = 'Company Event'; // Map legacy high tech to Company Event
+      break;
     case 'other':
-      // Use the custom event type if provided
+      // Use the custom event type if provided, otherwise use 'Other'
       eventKind = otherEventType || 'Other';
       break;
     default:
-      // Try to match partial strings
+      // Try to match partial strings with standardized types
       if (normalizedEventType.includes('party')) {
         eventKind = 'Party';
       } else if (normalizedEventType.includes('club')) {
-        eventKind = 'Club';
+        eventKind = 'Club Event';
+      } else if (normalizedEventType.includes('festival') || normalizedEventType.includes('music')) {
+        eventKind = 'Music Festival';
       } else if (normalizedEventType.includes('wedding')) {
         eventKind = 'Wedding';
-      } else if (normalizedEventType.includes('meetup')) {
-        eventKind = 'Meetup';
+      } else if (normalizedEventType.includes('meetup') || normalizedEventType.includes('networking')) {
+        eventKind = 'Meetup / Networking Event';
       } else if (normalizedEventType.includes('conference')) {
         eventKind = 'Conference';
-      } else if (normalizedEventType.includes('retreat')) {
-        eventKind = 'Retreat';
-      } else if (normalizedEventType.includes('tech') || normalizedEventType.includes('high tech')) {
-        eventKind = 'High Tech Event';
+      } else if (normalizedEventType.includes('retreat') || normalizedEventType.includes('offsite')) {
+        eventKind = 'Retreat / Offsite';
+      } else if (normalizedEventType.includes('company') || normalizedEventType.includes('corporate') || normalizedEventType.includes('business') || normalizedEventType.includes('tech')) {
+        eventKind = 'Company Event';
       } else {
         eventKind = eventType; // Use original event type as fallback
       }

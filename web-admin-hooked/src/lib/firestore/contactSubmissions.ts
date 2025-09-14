@@ -19,8 +19,8 @@ export const ContactFormSubmissionAPI = {
   async getAll(): Promise<ContactFormSubmission[]> {
     const dbInstance = getDbInstance();
     const q = query(
-      collection(dbInstance, 'contactFormSubmissions'),
-      orderBy('createdAt', 'desc')
+      collection(dbInstance, 'ContactFormSubmissions')
+      // Remove server-side ordering to allow client-side sorting by status priority
     );
     
     const snapshot = await getDocs(q);
@@ -33,7 +33,7 @@ export const ContactFormSubmissionAPI = {
   async getNew(): Promise<ContactFormSubmission[]> {
     const dbInstance = getDbInstance();
     const q = query(
-      collection(dbInstance, 'contactFormSubmissions'),
+      collection(dbInstance, 'ContactFormSubmissions'),
       where('status', '==', 'New'),
       orderBy('createdAt', 'desc')
     );
@@ -47,7 +47,7 @@ export const ContactFormSubmissionAPI = {
 
   async getById(id: string): Promise<ContactFormSubmission | null> {
     const dbInstance = getDbInstance();
-    const docSnap = await getDoc(doc(dbInstance, 'contactFormSubmissions', id));
+    const docSnap = await getDoc(doc(dbInstance, 'ContactFormSubmissions', id));
     
     if (!docSnap.exists()) return null;
     
@@ -64,7 +64,7 @@ export const ContactFormSubmissionAPI = {
       createdAt: serverTimestamp(),
     };
     
-    const docRef = await addDoc(collection(dbInstance, 'contactFormSubmissions'), submissionData);
+    const docRef = await addDoc(collection(dbInstance, 'ContactFormSubmissions'), submissionData);
     
     return { 
       id: docRef.id, 
@@ -75,7 +75,7 @@ export const ContactFormSubmissionAPI = {
 
   async update(id: string, updates: Partial<ContactFormSubmission>): Promise<void> {
     const dbInstance = getDbInstance();
-    await updateDoc(doc(dbInstance, 'contactFormSubmissions', id), {
+    await updateDoc(doc(dbInstance, 'ContactFormSubmissions', id), {
       ...updates,
       reviewedAt: serverTimestamp(),
     });
@@ -83,7 +83,7 @@ export const ContactFormSubmissionAPI = {
 
   async markAsReviewed(id: string, reviewedBy: string): Promise<void> {
     const dbInstance = getDbInstance();
-    await updateDoc(doc(dbInstance, 'contactFormSubmissions', id), {
+    await updateDoc(doc(dbInstance, 'ContactFormSubmissions', id), {
       status: 'Reviewed',
       reviewedBy,
       reviewedAt: serverTimestamp(),
@@ -92,7 +92,7 @@ export const ContactFormSubmissionAPI = {
 
   async markAsConverted(id: string, clientId: string, reviewedBy: string): Promise<void> {
     const dbInstance = getDbInstance();
-    await updateDoc(doc(dbInstance, 'contactFormSubmissions', id), {
+    await updateDoc(doc(dbInstance, 'ContactFormSubmissions', id), {
       status: 'Converted',
       linkedClientId: clientId,
       reviewedBy,
@@ -102,7 +102,7 @@ export const ContactFormSubmissionAPI = {
 
   async markAsDismissed(id: string, reviewedBy: string): Promise<void> {
     const dbInstance = getDbInstance();
-    await updateDoc(doc(dbInstance, 'contactFormSubmissions', id), {
+    await updateDoc(doc(dbInstance, 'ContactFormSubmissions', id), {
       status: 'Dismissed',
       reviewedBy,
       reviewedAt: serverTimestamp(),
@@ -111,13 +111,13 @@ export const ContactFormSubmissionAPI = {
 
   async delete(id: string): Promise<void> {
     const dbInstance = getDbInstance();
-    await deleteDoc(doc(dbInstance, 'contactFormSubmissions', id));
+    await deleteDoc(doc(dbInstance, 'ContactFormSubmissions', id));
   },
 
   async getUnreadCount(): Promise<number> {
     const dbInstance = getDbInstance();
     const q = query(
-      collection(dbInstance, 'contactFormSubmissions'),
+      collection(dbInstance, 'ContactFormSubmissions'),
       where('status', '==', 'New'),
       limit(100) // Reasonable limit for counting
     );

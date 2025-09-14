@@ -234,6 +234,7 @@ export default function EventCard({
                 <button
                   onClick={downloadQR}
                   className="mt-4 flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  title="Download QR code as PNG image"
                 >
                   <Download size={16} />
                   Download QR
@@ -291,6 +292,7 @@ export default function EventCard({
             <button
               onClick={() => onAnalytics(event.id)}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              title="View detailed analytics and statistics for this event"
             >
               <BarChart3 size={16} />
               Analytics
@@ -300,6 +302,7 @@ export default function EventCard({
               <button
                 onClick={() => onReports(event.id, event.name)}
                 className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+                title="View reports and feedback for this event"
               >
                 <Flag size={16} />
                 Reports
@@ -309,7 +312,7 @@ export default function EventCard({
             <button
               className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
               disabled
-              title="Coming soon"
+              title="View user feedback and comments (Coming soon)"
             >
               <MessageSquare size={16} />
               Feedbacks
@@ -318,6 +321,7 @@ export default function EventCard({
             <button
               onClick={() => onEdit(event)}
               className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              title="Edit event details and settings"
             >
               <Edit size={16} />
               Edit
@@ -326,6 +330,7 @@ export default function EventCard({
             <button
               onClick={() => onDownloadData(event.id)}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              title="Download event data (profiles, likes, messages as CSV files)"
             >
               <DownloadIcon size={16} />
               Download Data
@@ -334,6 +339,7 @@ export default function EventCard({
             <button
               onClick={() => onDownloadQRSign(event.id)}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              title="Download QR code sign for printing and display"
             >
               <DownloadIcon size={16} />
               <QrCode size={16} />
@@ -343,6 +349,7 @@ export default function EventCard({
             <button
               onClick={() => onDelete(event.id)}
               className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              title="Delete this event permanently (cannot be undone)"
             >
               <Trash2 size={16} />
               Delete

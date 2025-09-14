@@ -225,8 +225,17 @@ export default function EventForm({
       
       // Load existing image if available (but not when duplicating)
       if (event.image_url && !isDuplicating) {
-        setExistingImageUrl(event.image_url);
-        setImagePreview(event.image_url);
+        // Check if image_url is a valid URL
+        try {
+          new URL(event.image_url);
+          setExistingImageUrl(event.image_url);
+          setImagePreview(event.image_url);
+        } catch {
+          // If image_url is not a valid URL (e.g., just a filename), don't set preview
+          console.warn('Event image_url is not a valid URL:', event.image_url);
+          setExistingImageUrl(null);
+          setImagePreview(null);
+        }
       }
     } else {
       setFormData({
@@ -1133,7 +1142,15 @@ export default function EventForm({
             </label>
             <div className="space-y-3">
               {/* Image Preview */}
-              {imagePreview && (
+              {imagePreview && (() => {
+                // Helper function to check if URL is valid
+                try {
+                  new URL(imagePreview);
+                  return true;
+                } catch {
+                  return false;
+                }
+              })() && (
                 <div className="relative">
                   <div className="w-full h-48 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600 relative overflow-hidden">
                     <Image

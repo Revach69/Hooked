@@ -6,13 +6,13 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { EventFormCard } from '@/components/EventFormCard';
 import { EventFormModal } from '@/components/EventFormModal';
-import { LinkFormModal } from '@/components/LinkFormModal';
 import ConvertFormWizard from '@/components/forms/ConvertFormWizard';
 import { ContactSubmissionsSection } from '@/components/forms/ContactSubmissionsSection';
 import { EventFormAPI } from '@/lib/firestore/eventForms';
 import { AdminClientAPI } from '@/lib/firestore/clients';
+import { EventAPI } from '@/lib/firebaseApi';
 import { mapFormEventTypeToClientData, convertExpectedAttendees } from '@/lib/utils';
-import { FileText, Search } from 'lucide-react';
+import { FileText, Search, ChevronDown, ChevronRight } from 'lucide-react';
 import type { EventForm, AdminClient } from '@/types/admin';
 
 export default function FormsPage() {
@@ -26,10 +26,11 @@ export default function FormsPage() {
   // Modal states
   const [selectedForm, setSelectedForm] = useState<EventForm | null>(null);
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
-  const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
   const [convertingForm, setConvertingForm] = useState<EventForm | null>(null);
   const [showConvertWizard, setShowConvertWizard] = useState(false);
   const [newSubmissionsCount, setNewSubmissionsCount] = useState(0);
+  const [isNewFormsExpanded, setIsNewFormsExpanded] = useState(true);
+  const [isConvertedFormsExpanded, setIsConvertedFormsExpanded] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -57,20 +58,64 @@ export default function FormsPage() {
   };
 
   const handleDeleteForm = async (formId: string) => {
-    if (!confirm('Are you sure you want to delete this form?')) return;
+    // Find the form to check if it's linked to client/event
+    const form = forms.find(f => f.id === formId);
+    if (!form) {
+      console.error('Form not found');
+      return;
+    }
+
+    let confirmMessage = 'Are you sure you want to delete this form?';
+    if (form.linkedClientId || form.linkedEventId) {
+      confirmMessage = 'This form is linked to a client and event. Deleting it will also delete:\n\n• The associated client\n• The associated event\n• All event data (profiles, likes, messages)\n\nThis action cannot be undone. Are you sure?';
+    }
+
+    if (!confirm(confirmMessage)) return;
     
     try {
+      let eventDeleted = false;
+      let clientDeleted = false;
+      
+      // If form is linked to event, try to delete it (but don't fail if already deleted)
+      if (form.linkedEventId) {
+        try {
+          console.log('Deleting linked event:', form.linkedEventId);
+          await EventAPI.delete(form.linkedEventId);
+          eventDeleted = true;
+        } catch (eventError) {
+          console.warn('Event may already be deleted:', eventError);
+          // Continue with form deletion even if event deletion fails
+        }
+      }
+      
+      // If form is linked to client, try to delete it (but don't fail if already deleted)
+      if (form.linkedClientId) {
+        try {
+          console.log('Deleting linked client:', form.linkedClientId);
+          await AdminClientAPI.delete(form.linkedClientId);
+          clientDeleted = true;
+        } catch (clientError) {
+          console.warn('Client may already be deleted:', clientError);
+          // Continue with form deletion even if client deletion fails
+        }
+      }
+      
+      // Finally delete the form (this should always succeed)
       await EventFormAPI.delete(formId);
       await loadData();
+      
+      // Show appropriate success message
+      if (eventDeleted || clientDeleted) {
+        alert('Form and linked resources deleted successfully!');
+      } else if (form.linkedClientId || form.linkedEventId) {
+        alert('Form deleted successfully! (Linked resources may have been already deleted)');
+      }
     } catch (error) {
       console.error('Failed to delete form:', error);
+      alert('Error deleting form. Please check the console for details.');
     }
   };
 
-  const handleLinkForm = (form: EventForm) => {
-    setSelectedForm(form);
-    setIsLinkModalOpen(true);
-  };
 
 
   const handleSaveForm = async (formId: string, updates: Partial<EventForm>) => {
@@ -83,69 +128,7 @@ export default function FormsPage() {
     }
   };
 
-  const handleLinkFormToClient = async (formId: string, clientId: string) => {
-    try {
-      // Fetch the latest client and form data
-      const [client, form] = await Promise.all([
-        AdminClientAPI.get(clientId),
-        EventFormAPI.get(formId),
-      ]);
-      if (!client || !form) throw new Error('Client or form not found');
 
-      // Prepare updates for the client
-      const updates: Partial<AdminClient> = {};
-
-      // 1. fullName -> pocName
-      if (!client.pocName) updates.pocName = form.fullName;
-
-      // 2. email
-      if (!client.email) updates.email = form.email;
-
-      // 3. phone
-      if (!client.phone) updates.phone = form.phone;
-
-      // 4. country
-      if (!client.country) updates.country = form.country || null;
-
-      // Note: eventKind is now managed per-event, not at client level
-
-      // Only update if there are fields to update
-      if (Object.keys(updates).length > 0) {
-        await AdminClientAPI.update(clientId, updates);
-      }
-
-      // Link the form to the client as before
-      await EventFormAPI.update(formId, { linkedClientId: clientId });
-      await AdminClientAPI.linkForm(clientId, formId, form);
-      await loadData();
-    } catch (error) {
-      console.error('Failed to link form:', error);
-      throw error;
-    }
-  };
-
-  const handleUnlinkForm = async (formId: string) => {
-    try {
-      // Get the form to find the linked client
-      const form = forms.find(f => f.id === formId);
-      if (!form || !form.linkedClientId) {
-        console.error('Form not found or not linked');
-        return;
-      }
-
-      // Unlink the form from the client
-      await AdminClientAPI.unlinkForm(form.linkedClientId, formId);
-      
-      // Update the form to remove the client link
-      await EventFormAPI.update(formId, { linkedClientId: null });
-      
-      // Reload data to reflect changes
-      await loadData();
-    } catch (error) {
-      console.error('Failed to unlink form:', error);
-      throw error;
-    }
-  };
 
   const handleConvertForm = async (form: EventForm) => {
     setConvertingForm(form);
@@ -170,8 +153,8 @@ export default function FormsPage() {
     return client?.name || 'Unknown Client';
   };
 
-  // Filter forms
-  const filteredForms = forms.filter(form => {
+  // Separate and filter forms
+  const allFilteredForms = forms.filter(form => {
     const searchMatch = !searchQuery || 
       form.eventName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       form.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -184,6 +167,59 @@ export default function FormsPage() {
       (linkedFilter === 'unlinked' && !form.linkedClientId);
     
     return searchMatch && statusMatch && linkedMatch;
+  });
+
+  // Separate converted and non-converted forms
+  const convertedForms = allFilteredForms.filter(form => 
+    form.linkedClientId || form.status === 'Converted'
+  );
+  
+  const newForms = allFilteredForms.filter(form => 
+    !form.linkedClientId && form.status !== 'Converted'
+  );
+
+  // Sort new forms with oldest first (FIFO processing)
+  const sortedNewForms = [...newForms].sort((a, b) => {
+    const getTimeValue = (timestamp: unknown): number => {
+      if (!timestamp) return 0;
+      if (typeof timestamp === 'object' && timestamp !== null && 'seconds' in timestamp) {
+        return (timestamp as { seconds: number }).seconds;
+      }
+      if (typeof timestamp === 'number') {
+        return timestamp > 1000000000000 ? timestamp / 1000 : timestamp;
+      }
+      if (typeof timestamp === 'string') {
+        return new Date(timestamp).getTime() / 1000;
+      }
+      return new Date(timestamp as Date).getTime() / 1000;
+    };
+    
+    const aTime = getTimeValue(a.createdAt);
+    const bTime = getTimeValue(b.createdAt);
+    
+    return aTime - bTime; // Oldest first
+  });
+
+  // Sort converted forms with newest first
+  const sortedConvertedForms = [...convertedForms].sort((a, b) => {
+    const getTimeValue = (timestamp: unknown): number => {
+      if (!timestamp) return 0;
+      if (typeof timestamp === 'object' && timestamp !== null && 'seconds' in timestamp) {
+        return (timestamp as { seconds: number }).seconds;
+      }
+      if (typeof timestamp === 'number') {
+        return timestamp > 1000000000000 ? timestamp / 1000 : timestamp;
+      }
+      if (typeof timestamp === 'string') {
+        return new Date(timestamp).getTime() / 1000;
+      }
+      return new Date(timestamp as Date).getTime() / 1000;
+    };
+    
+    const aTime = getTimeValue(a.convertedAt || a.updatedAt || a.createdAt);
+    const bTime = getTimeValue(b.convertedAt || b.updatedAt || b.createdAt);
+    
+    return bTime - aTime; // Newest first
   });
 
   if (isLoading) {
@@ -252,34 +288,95 @@ export default function FormsPage() {
         onNewSubmissionsCountChange={setNewSubmissionsCount}
       />
 
-      {/* Forms Grid */}
-      {filteredForms.length === 0 ? (
-        <div className="text-center py-12">
-          <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No forms found</h3>
-          <p className="text-gray-500">
-            {searchQuery || statusFilter || linkedFilter 
-              ? 'Try adjusting your filters to see more results.'
-              : 'No event forms have been submitted yet.'
-            }
-          </p>
+      {/* New Forms Section */}
+      <div className="border rounded-lg border-gray-200">
+        <div 
+          className="flex justify-between items-center p-4 cursor-pointer hover:bg-gray-50"
+          onClick={() => setIsNewFormsExpanded(!isNewFormsExpanded)}
+        >
+          <div className="flex items-center gap-2">
+            {isNewFormsExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            <FileText className="h-5 w-5 text-blue-600" />
+            <h2 className="text-lg font-semibold">New Event Forms</h2>
+            <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+              sortedNewForms.length > 0 
+                ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300' 
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
+            }`}>
+              {sortedNewForms.length}
+            </span>
+          </div>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredForms.map((form) => (
-            <EventFormCard
-              key={form.id}
-              form={form}
-              onEdit={handleEditForm}
-              onDelete={handleDeleteForm}
-              onLink={handleLinkForm}
-              onUnlink={handleUnlinkForm}
-              onConvert={handleConvertForm}
-              linkedClientName={form.linkedClientId ? getClientName(form.linkedClientId) : undefined}
-            />
-          ))}
+        
+        {isNewFormsExpanded && (
+          <div className="border-t border-gray-200 p-4">
+            {sortedNewForms.length === 0 ? (
+              <div className="text-center py-8">
+                <FileText className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                <p className="text-gray-500">No new forms to process</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {sortedNewForms.map((form) => (
+                  <EventFormCard
+                    key={form.id}
+                    form={form}
+                    onEdit={handleEditForm}
+                    onDelete={handleDeleteForm}
+                    onConvert={handleConvertForm}
+                    linkedClientName={form.linkedClientId ? getClientName(form.linkedClientId) : undefined}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Converted Forms Section */}
+      <div className="border rounded-lg border-gray-200">
+        <div 
+          className="flex justify-between items-center p-4 cursor-pointer hover:bg-gray-50"
+          onClick={() => setIsConvertedFormsExpanded(!isConvertedFormsExpanded)}
+        >
+          <div className="flex items-center gap-2">
+            {isConvertedFormsExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            <FileText className="h-5 w-5 text-green-600" />
+            <h2 className="text-lg font-semibold">Converted Forms</h2>
+            <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+              sortedConvertedForms.length > 0 
+                ? 'bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-300' 
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
+            }`}>
+              {sortedConvertedForms.length}
+            </span>
+          </div>
         </div>
-      )}
+        
+        {isConvertedFormsExpanded && (
+          <div className="border-t border-gray-200 p-4">
+            {sortedConvertedForms.length === 0 ? (
+              <div className="text-center py-8">
+                <FileText className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                <p className="text-gray-500">No converted forms yet</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {sortedConvertedForms.map((form) => (
+                  <EventFormCard
+                    key={form.id}
+                    form={form}
+                    onEdit={handleEditForm}
+                    onDelete={handleDeleteForm}
+                    onConvert={handleConvertForm}
+                    linkedClientName={form.linkedClientId ? getClientName(form.linkedClientId) : undefined}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Modals */}
       <EventFormModal
@@ -292,16 +389,6 @@ export default function FormsPage() {
         onSave={handleSaveForm}
       />
 
-      <LinkFormModal
-        form={selectedForm}
-        clients={clients}
-        isOpen={isLinkModalOpen}
-        onClose={() => {
-          setIsLinkModalOpen(false);
-          setSelectedForm(null);
-        }}
-        onLink={handleLinkFormToClient}
-      />
 
       {convertingForm && (
         <ConvertFormWizard

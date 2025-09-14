@@ -4,15 +4,13 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Edit, Trash2, Link, Unlink, Calendar, MapPin, Users, Mail, Phone, ArrowRightLeft } from 'lucide-react';
+import { Edit, Trash2, Calendar, MapPin, Users, Mail, Phone, ArrowRightLeft } from 'lucide-react';
 import type { EventForm } from '@/types/admin';
 
 interface EventFormCardProps {
   form: EventForm;
   onEdit: (form: EventForm) => void;
   onDelete: (formId: string) => void;
-  onLink: (form: EventForm) => void;
-  onUnlink: (formId: string) => void;
   onConvert: (form: EventForm) => void;
   linkedClientName?: string;
 }
@@ -34,7 +32,7 @@ const getStatusColor = (status: string) => {
   }
 };
 
-export function EventFormCard({ form, onEdit, onDelete, onLink, onUnlink, onConvert, linkedClientName }: EventFormCardProps) {
+export function EventFormCard({ form, onEdit, onDelete, onConvert, linkedClientName }: EventFormCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const formatDate = (dateString: string) => {
@@ -55,7 +53,8 @@ export function EventFormCard({ form, onEdit, onDelete, onLink, onUnlink, onConv
         month: 'short',
         day: 'numeric',
         hour: '2-digit',
-        minute: '2-digit'
+        minute: '2-digit',
+        hour12: false
       });
     } catch (error) {
       console.error('Error formatting date:', error, dateString);
@@ -72,7 +71,8 @@ export function EventFormCard({ form, onEdit, onDelete, onLink, onUnlink, onConv
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      hour12: false
     });
   };
 
@@ -99,42 +99,25 @@ export function EventFormCard({ form, onEdit, onDelete, onLink, onUnlink, onConv
               variant="ghost"
               size="sm"
               onClick={() => onEdit(form)}
+              title="Edit form details"
             >
               <Edit className="h-4 w-4" />
             </Button>
-            {!form.linkedClientId ? (
-              <>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onLink(form)}
-                  title="Link to existing client"
-                >
-                  <Link className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onConvert(form)}
-                  title="Convert form to client and event"
-                >
-                  <ArrowRightLeft className="h-4 w-4" />
-                </Button>
-              </>
-            ) : (
+            {!form.linkedClientId && (
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => onUnlink(form.id)}
-                title="Unlink from client"
+                onClick={() => onConvert(form)}
+                title="Convert this form into a new client and event"
               >
-                <Unlink className="h-4 w-4" />
+                <ArrowRightLeft className="h-4 w-4" />
               </Button>
             )}
             <Button
               variant="ghost"
               size="sm"
               onClick={() => onDelete(form.id)}
+              title="Delete this form permanently"
             >
               <Trash2 className="h-4 w-4" />
             </Button>
@@ -215,7 +198,7 @@ export function EventFormCard({ form, onEdit, onDelete, onLink, onUnlink, onConv
                 <span className="font-medium">Poster Preference:</span> {form.posterPreference}
               </div>
               <div className="text-sm">
-                <span className="font-medium">Visibility:</span> {form.eventVisibility}
+                <span className="font-medium">Visibility:</span> {form.is_private ? 'Private' : 'Public'}
               </div>
               {form.socialMedia && (
                 <div className="text-sm">
@@ -239,6 +222,7 @@ export function EventFormCard({ form, onEdit, onDelete, onLink, onUnlink, onConv
             size="sm"
             onClick={() => setIsExpanded(!isExpanded)}
             className="w-full"
+            title={isExpanded ? "Hide additional details" : "Show additional details"}
           >
             {isExpanded ? 'Show Less' : 'Show More'}
           </Button>

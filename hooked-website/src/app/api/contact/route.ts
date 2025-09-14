@@ -1,34 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { EmailService } from '@/lib/emailService';
-import { createClientFromContactForm, createContactFormSubmission } from '@/lib/firebaseApi';
+import { createContactFormSubmission } from '@/lib/firebaseApi';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const isDevelopment = process.env.NODE_ENV === 'development';
-    const skipEmail = process.env.SKIP_EMAIL_IN_DEV === 'true';
     
-    console.log('Contact form submission:', { isDevelopment, skipEmail, body });
+    console.log('Contact form submission:', { isDevelopment, body });
     
-    // In development, create ContactFormSubmission instead of client
-    if (isDevelopment) {
-      try {
-        console.log('Development mode: Creating ContactFormSubmission instead of client');
-        const submissionId = await createContactFormSubmission({
-          fullName: body.fullName,
-          email: body.email,
-          phone: body.phone || '',
-          message: body.message,
-          status: 'New'
-        });
-        console.log('Successfully created ContactFormSubmission with ID:', submissionId);
-        
-        return NextResponse.json(
-          { message: 'Contact form submitted successfully (development mode)' },
-          { status: 200 }
-        );
-      } catch (devError) {
-        console.error('Error creating contact form submission:', devError);
+    // Create ContactFormSubmission (appears in expandable section of admin Forms tab)
+    try {
+      console.log('Creating ContactFormSubmission (not EventForm) from contact page');
+      const submissionId = await createContactFormSubmission({
+        fullName: body.fullName,
+        email: body.email,
+        phone: body.phone || '',
+        message: body.message,
+        status: 'New'
+      });
+      console.log('Successfully created ContactFormSubmission with ID:', submissionId);
+    } catch (formError) {
+      console.error('Error creating form submission:', formError);
+      // Don't fail if form creation fails in production (email is more important)
+      if (isDevelopment) {
         return NextResponse.json(
           { error: 'Failed to submit contact form. Please try again.' },
           { status: 500 }
@@ -36,8 +31,16 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    // Production flow: Send email and create client
-    // Validate that required environment variables are set
+    // Skip email in development
+    if (isDevelopment) {
+      console.log('Development mode: Skipping email send');
+      return NextResponse.json(
+        { message: 'Contact form submitted successfully (development mode)' },
+        { status: 200 }
+      );
+    }
+    
+    // Production: Send email
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
       console.error('Email configuration missing');
       return NextResponse.json(
@@ -47,24 +50,7 @@ export async function POST(request: NextRequest) {
     }
 
     const emailService = new EmailService();
-    
-    // Send the email
     await emailService.sendContactFormEmail(body);
-
-    // Create client entry in admin dashboard
-    try {
-      console.log('Attempting to create client from contact form data:', body);
-      const clientId = await createClientFromContactForm(body);
-      console.log('Successfully created client with ID:', clientId);
-    } catch (clientError) {
-      console.error('Error creating client entry:', clientError);
-      console.error('Client error details:', {
-        message: clientError instanceof Error ? clientError.message : 'Unknown error',
-        stack: clientError instanceof Error ? clientError.stack : undefined
-      });
-      // Don't fail the entire request if client creation fails
-      // The email was already sent successfully
-    }
 
     return NextResponse.json(
       { message: 'Email sent successfully' },

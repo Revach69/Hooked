@@ -71,9 +71,9 @@ export function LinkFormModal({ form, clients, isOpen, onClose, onLink }: LinkFo
               <div><strong>Contact:</strong> {form.fullName} ({form.email})</div>
               <div>
                 <strong>Times:</strong>
-                {form.accessTime && <span> Access: {new Date(form.accessTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>}
-                {form.startTime && <span> | Start: {new Date(form.startTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>}
-                {form.endTime && <span> | End: {new Date(form.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>}
+                {form.accessTime && <span> Access: {new Date(form.accessTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })}</span>}
+                {form.startTime && <span> | Start: {new Date(form.startTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })}</span>}
+                {form.endTime && <span> | End: {new Date(form.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })}</span>}
                 {!form.accessTime && !form.startTime && !form.endTime && form.eventDate && <span> {new Date(form.eventDate).toLocaleDateString()}</span>}
               </div>
             </div>

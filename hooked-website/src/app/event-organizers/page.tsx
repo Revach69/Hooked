@@ -1,37 +1,8 @@
 "use client";
 
-import { useMemo } from 'react';
 import Header from "../../components/Header";
-import Collage from "../../components/Collage";
 
 export default function EventOrganizers() {
-  // Use useMemo to ensure images are assigned only once and remain stable
-  const { secondCollageImages } = useMemo(() => {
-    // Array of all 11 collage images
-    const allImages = [
-      "/Collage1.JPG",
-      "/Collage2.JPG", 
-      "/Collage3.JPG",
-      "/Collage4.JPG",
-      "/Collage5.JPG",
-      "/Collage6.JPG",
-      "/Collage7.JPG",
-      "/Collage8.JPG",
-      "/Collage9.JPG",
-      "/Collage10.JPG",
-      "/Collage11.JPG"
-    ];
-
-    // Randomly shuffle all images
-    const shuffled = [...allImages].sort(() => Math.random() - 0.5);
-    
-    // Get 3 images for the collage
-    const secondImages = shuffled.slice(0, 3);
-    
-    return {
-      secondCollageImages: secondImages
-    };
-  }, []); // Empty dependency array since allImages is now inside the callback
 
   return (
     <div className="dark-mode-bg">
@@ -112,14 +83,6 @@ export default function EventOrganizers() {
                 How It Works
               </h2>
             </div>
-          </div>
-          
-          {/* Collage of images */}
-          <div className="h-80 bg-gray-200 dark:bg-gray-700 rounded-xl p-4">
-            <Collage 
-              className="h-full" 
-              selectedImages={secondCollageImages}
-            />
           </div>
         </div>
       </section>
@@ -213,7 +176,7 @@ export default function EventOrganizers() {
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <a
               href="/contact"
-              className="bg-white text-purple-600 px-8 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
+              className="bg-white dark:bg-gray-100 text-purple-600 dark:text-purple-800 px-8 py-3 rounded-lg font-semibold hover:bg-gray-100 dark:hover:bg-gray-200 transition-colors"
             >
               Host an Event
             </a>

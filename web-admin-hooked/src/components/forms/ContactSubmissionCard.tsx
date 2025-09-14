@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { User, Mail, Phone, MessageSquare, Clock, Check, X, UserPlus } from 'lucide-react';
+import { Check, X, UserPlus } from 'lucide-react';
 import type { ContactFormSubmission } from '@/types/admin';
 
 interface ContactSubmissionCardProps {
@@ -47,9 +47,9 @@ export function ContactSubmissionCard({
         date = new Date(timestamp);
       } else if (timestamp && typeof timestamp === 'object' && 'seconds' in timestamp) {
         // Firestore Timestamp
-        date = new Date((timestamp as any).seconds * 1000);
+        date = new Date((timestamp as { seconds: number }).seconds * 1000);
       } else {
-        date = new Date(timestamp as any);
+        date = new Date(timestamp as string | number | Date);
       }
       
       return date.toLocaleString('en-US', {
@@ -57,7 +57,8 @@ export function ContactSubmissionCard({
         day: 'numeric',
         year: 'numeric',
         hour: '2-digit',
-        minute: '2-digit'
+        minute: '2-digit',
+        hour12: false
       });
     } catch {
       return 'Invalid date';
@@ -71,62 +72,38 @@ export function ContactSubmissionCard({
   };
 
   return (
-    <div className={`border rounded-lg p-6 transition-all ${
+    <div className={`border rounded-lg p-4 transition-all ${
       submission.status === 'New' ? 'border-blue-200 bg-blue-50/30' : 'border-gray-200'
     }`}>
-      {/* Header */}
-      <div className="flex justify-between items-start mb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
-            <User className="w-5 h-5 text-purple-600" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-gray-900">{submission.fullName}</h3>
-            <div className="flex items-center gap-2 text-sm text-gray-500">
-              <Clock className="w-4 h-4" />
-              {formatDate(submission.createdAt)}
-            </div>
-          </div>
-        </div>
-        <Badge className={`${getStatusColor(submission.status)}`}>
-          {submission.status}
-        </Badge>
-      </div>
-
-      {/* Contact Information */}
-      <div className="space-y-2 mb-4">
-        <div className="flex items-center gap-2 text-sm">
-          <Mail className="w-4 h-4 text-gray-400" />
+      {/* Header with status badge */}
+      <div className="flex justify-between items-start mb-3">
+        {/* Contact details in a single row */}
+        <div className="flex items-center gap-4 text-sm">
+          <span className="font-semibold text-gray-900">{submission.fullName}</span>
+          <span className="text-gray-500">{formatDate(submission.createdAt)}</span>
           <a 
             href={`mailto:${submission.email}`}
             className="text-blue-600 hover:text-blue-800 hover:underline"
           >
             {submission.email}
           </a>
-        </div>
-        
-        {submission.phone && (
-          <div className="flex items-center gap-2 text-sm">
-            <Phone className="w-4 h-4 text-gray-400" />
+          {submission.phone && (
             <a 
               href={`tel:${submission.phone}`}
               className="text-blue-600 hover:text-blue-800 hover:underline"
             >
               {submission.phone}
             </a>
-          </div>
-        )}
+          )}
+        </div>
+        <Badge className={`${getStatusColor(submission.status)}`}>
+          {submission.status}
+        </Badge>
       </div>
 
-      {/* Message */}
-      <div className="mb-4">
-        <div className="flex items-start gap-2 mb-2">
-          <MessageSquare className="w-4 h-4 text-gray-400 mt-0.5" />
-          <span className="text-sm font-medium text-gray-700">Message:</span>
-        </div>
-        <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-700 ml-6">
-          {submission.message}
-        </div>
+      {/* Message - single line that expands as needed */}
+      <div className="text-sm text-gray-700 mb-3">
+        {submission.message}
       </div>
 
       {/* Admin Notes (if any) */}
@@ -140,39 +117,46 @@ export function ContactSubmissionCard({
       )}
 
       {/* Actions */}
-      {submission.status === 'New' && (
-        <div className="flex gap-2 pt-4 border-t border-gray-100">
+      {(submission.status === 'New' || submission.status === 'Reviewed') && (
+        <div className="flex gap-2 pt-3 border-t border-gray-100">
           <Button 
             onClick={() => onConvert(submission)}
             size="sm"
-            className="bg-green-600 hover:bg-green-700"
+            className="bg-green-600 hover:bg-green-700 h-8 text-xs"
+            title="Convert this contact submission into a new client"
           >
-            <UserPlus className="w-4 h-4 mr-1" />
+            <UserPlus className="w-3 h-3 mr-1" />
             Convert to Client
           </Button>
           
-          <Button 
-            onClick={() => onMarkReviewed(submission.id)}
-            size="sm"
-            variant="outline"
-          >
-            <Check className="w-4 h-4 mr-1" />
-            Mark Reviewed
-          </Button>
+          {submission.status === 'New' && (
+            <Button 
+              onClick={() => onMarkReviewed(submission.id)}
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs"
+              title="Mark this submission as reviewed"
+            >
+              <Check className="w-3 h-3 mr-1" />
+              Mark Reviewed
+            </Button>
+          )}
           
           <Button 
             onClick={() => setShowNotes(true)}
             size="sm"
             variant="outline"
+            className="h-8 text-xs"
+            title="Dismiss this submission with optional notes"
           >
-            <X className="w-4 h-4 mr-1" />
+            <X className="w-3 h-3 mr-1" />
             Dismiss
           </Button>
         </div>
       )}
 
       {/* Notes input for dismissal */}
-      {showNotes && submission.status === 'New' && (
+      {showNotes && (submission.status === 'New' || submission.status === 'Reviewed') && (
         <div className="mt-4 pt-4 border-t border-gray-100">
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Dismissal reason (optional):
@@ -190,6 +174,7 @@ export function ContactSubmissionCard({
               size="sm"
               variant="outline"
               className="text-red-600 border-red-200 hover:bg-red-50"
+              title="Confirm dismissal of this submission"
             >
               Dismiss
             </Button>
@@ -197,6 +182,7 @@ export function ContactSubmissionCard({
               onClick={() => setShowNotes(false)}
               size="sm"
               variant="ghost"
+              title="Cancel dismissal"
             >
               Cancel
             </Button>
@@ -206,11 +192,11 @@ export function ContactSubmissionCard({
 
       {/* Reviewed/Converted info */}
       {submission.status !== 'New' && submission.reviewedBy && (
-        <div className="mt-4 pt-4 border-t border-gray-100 text-sm text-gray-500">
+        <div className="pt-3 border-t border-gray-100 text-xs text-gray-500">
           {submission.status === 'Converted' && 'Converted to client'}
           {submission.status === 'Reviewed' && 'Marked as reviewed'} 
           {submission.status === 'Dismissed' && 'Dismissed'}
-          {' by '}{submission.reviewedBy}
+          {' by '}<span className="font-medium">{submission.reviewedBy}</span>
           {submission.reviewedAt && (
             <> on {formatDate(submission.reviewedAt)}</>
           )}

@@ -5,11 +5,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChevronDown, ChevronRight, Search, Filter, Mail, Users } from 'lucide-react';
+import { ChevronDown, ChevronRight, Search, Filter, Mail, Users, Check } from 'lucide-react';
 import { ContactSubmissionCard } from './ContactSubmissionCard';
 import { ContactFormSubmissionAPI } from '@/lib/firestore/contactSubmissions';
 import { AdminClientAPI } from '@/lib/firestore/clients';
 import type { ContactFormSubmission } from '@/types/admin';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ContactSubmissionsSectionProps {
   newSubmissionsCount: number;
@@ -20,12 +21,12 @@ export function ContactSubmissionsSection({
   newSubmissionsCount, 
   onNewSubmissionsCountChange 
 }: ContactSubmissionsSectionProps) {
+  const { user } = useAuth();
   const [submissions, setSubmissions] = useState<ContactFormSubmission[]>([]);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [convertingSubmission, setConvertingSubmission] = useState<ContactFormSubmission | null>(null);
 
   // Load submissions when expanded
   useEffect(() => {
@@ -80,10 +81,11 @@ export function ContactSubmissionsSection({
       const newClient = await AdminClientAPI.create(clientData);
       
       // Mark submission as converted
+      const adminEmail = user?.email || 'admin@hooked-app.com';
       await ContactFormSubmissionAPI.markAsConverted(
         submission.id, 
         newClient.id, 
-        'Admin' // TODO: Get actual admin user
+        adminEmail
       );
 
       // Refresh submissions and update counts
@@ -101,7 +103,8 @@ export function ContactSubmissionsSection({
 
   const handleDismiss = async (submissionId: string, notes?: string) => {
     try {
-      await ContactFormSubmissionAPI.markAsDismissed(submissionId, 'Admin'); // TODO: Get actual admin user
+      const adminEmail = user?.email || 'admin@hooked-app.com';
+      await ContactFormSubmissionAPI.markAsDismissed(submissionId, adminEmail);
       
       if (notes) {
         await ContactFormSubmissionAPI.update(submissionId, { adminNotes: notes });
@@ -118,7 +121,8 @@ export function ContactSubmissionsSection({
 
   const handleMarkReviewed = async (submissionId: string) => {
     try {
-      await ContactFormSubmissionAPI.markAsReviewed(submissionId, 'Admin'); // TODO: Get actual admin user
+      const adminEmail = user?.email || 'admin@hooked-app.com';
+      await ContactFormSubmissionAPI.markAsReviewed(submissionId, adminEmail);
       
       // Refresh submissions and update counts
       await loadSubmissions();
@@ -129,16 +133,87 @@ export function ContactSubmissionsSection({
     }
   };
 
-  // Filter submissions
-  const filteredSubmissions = submissions.filter(submission => {
-    const matchesStatus = !statusFilter || submission.status === statusFilter;
-    const matchesSearch = !searchQuery || 
-      submission.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      submission.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      submission.message.toLowerCase().includes(searchQuery.toLowerCase());
+  const handleMarkAllNewAsReviewed = async () => {
+    const newSubmissions = submissions.filter(s => s.status === 'New');
+    if (newSubmissions.length === 0) return;
     
-    return matchesStatus && matchesSearch;
-  });
+    try {
+      const adminEmail = user?.email || 'admin@hooked-app.com';
+      
+      // Mark all new submissions as reviewed
+      await Promise.all(
+        newSubmissions.map(submission => 
+          ContactFormSubmissionAPI.markAsReviewed(submission.id, adminEmail)
+        )
+      );
+      
+      // Refresh submissions and update counts
+      await loadSubmissions();
+      await loadNewSubmissionsCount();
+      
+      alert(`Successfully marked ${newSubmissions.length} submission(s) as reviewed.`);
+    } catch (error) {
+      console.error('Failed to mark all submissions as reviewed:', error);
+      alert('Failed to mark all submissions as reviewed. Please try again.');
+    }
+  };
+
+  // Filter and sort submissions
+  const filteredSubmissions = submissions
+    .filter(submission => {
+      const matchesStatus = statusFilter === 'all' || submission.status === statusFilter;
+      const matchesSearch = !searchQuery || 
+        submission.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        submission.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        submission.message.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      return matchesStatus && matchesSearch;
+    })
+    .sort((a, b) => {
+      // Sorting priority: New, Reviewed, Converted, Dismissed
+      const getStatusOrder = (status: string): number => {
+        const cleanStatus = status?.trim?.() || '';
+        switch (cleanStatus) {
+          case 'New': return 0;
+          case 'Reviewed': return 1;
+          case 'Converted': return 2;
+          case 'Dismissed': return 3;
+          default: return 4;
+        }
+      };
+      
+      const aOrder = getStatusOrder(a.status);
+      const bOrder = getStatusOrder(b.status);
+      const statusDiff = aOrder - bOrder;
+      
+      // Debug logging for troubleshooting
+      console.log(`Comparing: "${a.status}"(${aOrder}) vs "${b.status}"(${bOrder}) = ${statusDiff}`);
+      
+      if (statusDiff !== 0) return statusDiff;
+      
+      // Within same status, sort by creation date (newest first)
+      const getTimeValue = (timestamp: unknown): number => {
+        if (!timestamp) return 0;
+        if (typeof timestamp === 'object' && timestamp !== null && 'seconds' in timestamp) {
+          return (timestamp as { seconds: number }).seconds;
+        }
+        if (typeof timestamp === 'number') {
+          return timestamp > 1000000000000 ? timestamp / 1000 : timestamp; // Handle milliseconds vs seconds
+        }
+        if (typeof timestamp === 'string') {
+          return new Date(timestamp).getTime() / 1000;
+        }
+        return new Date(timestamp as Date).getTime() / 1000;
+      };
+      
+      const aTime = getTimeValue(a.createdAt);
+      const bTime = getTimeValue(b.createdAt);
+      
+      return bTime - aTime;
+    });
+
+  // Debug log to verify sorting
+  console.log('Filtered submissions sorted by status:', filteredSubmissions.map(s => ({ name: s.fullName, status: s.status, created: s.createdAt })));
 
   const getSectionBadgeColor = () => {
     if (newSubmissionsCount === 0) return 'bg-gray-100 text-gray-600';
@@ -202,13 +277,25 @@ export function ContactSubmissionsSection({
                 <SelectValue placeholder="All statuses" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All statuses</SelectItem>
+                <SelectItem value="all">All statuses</SelectItem>
                 <SelectItem value="New">New</SelectItem>
                 <SelectItem value="Reviewed">Reviewed</SelectItem>
                 <SelectItem value="Converted">Converted</SelectItem>
                 <SelectItem value="Dismissed">Dismissed</SelectItem>
               </SelectContent>
             </Select>
+            
+            {/* Mark All New as Reviewed Button */}
+            <Button 
+              onClick={handleMarkAllNewAsReviewed}
+              size="sm"
+              variant="outline"
+              className="whitespace-nowrap"
+              disabled={submissions.filter(s => s.status === 'New').length === 0}
+            >
+              <Check className="w-4 h-4 mr-1" />
+              Mark All New as Reviewed
+            </Button>
           </div>
 
           {/* Loading State */}

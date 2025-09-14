@@ -13,9 +13,15 @@ const eventTypes = [
   { id: 'bars', name: 'Bars & Lounges' }
 ];
 
-const locations = [
-  { id: 'all', name: 'All Locations' },
-  { id: 'tel-aviv', name: 'Tel-Aviv' }
+const countries = [
+  { id: 'all', name: 'All Countries' },
+  { id: 'Israel', name: 'Israel' },
+  { id: 'Australia', name: 'Australia' },
+  { id: 'United States', name: 'United States' },
+  { id: 'Canada', name: 'Canada' },
+  { id: 'United Kingdom', name: 'United Kingdom' },
+  { id: 'Germany', name: 'Germany' },
+  { id: 'France', name: 'France' }
 ];
 
 // Helper function to capitalize event types (currently unused but kept for future use)
@@ -39,11 +45,21 @@ export default function EventsClient() {
   const [events, setEvents] = useState<FirestoreEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedType, setSelectedType] = useState('all');
-  const [selectedLocation, setSelectedLocation] = useState('all');
+  const [selectedCountry, setSelectedCountry] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<FirestoreEvent | null>(null);
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const descriptionRef = useRef<HTMLParagraphElement>(null);
+
+  // Helper function to check if image_url is a valid URL
+  const isValidUrl = (url: string) => {
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  };
 
   useEffect(() => {
     loadEvents();
@@ -126,8 +142,8 @@ export default function EventsClient() {
   const filteredEvents = events
     .filter(event => {
       const typeMatch = selectedType === 'all' || event.event_type === selectedType;
-      const locationMatch = selectedLocation === 'all' || event.location === selectedLocation;
-      return typeMatch && locationMatch;
+      const countryMatch = selectedCountry === 'all' || event.country === selectedCountry;
+      return typeMatch && countryMatch;
     })
     .sort((a, b) => {
       // Sort by start date in ascending order (closest events first)
@@ -156,15 +172,15 @@ export default function EventsClient() {
             </select>
             
             <select
-              value={selectedLocation}
+              value={selectedCountry}
               onChange={(e) => {
-                setSelectedLocation(e.target.value);
-                trackFilterUsage('location', e.target.value);
+                setSelectedCountry(e.target.value);
+                trackFilterUsage('country', e.target.value);
               }}
               className="px-3 py-1.5 border dark-mode-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark-mode-bg dark-mode-text text-sm"
             >
-              {locations.map(location => (
-                <option key={location.id} value={location.id}>{location.name}</option>
+              {countries.map(country => (
+                <option key={country.id} value={country.id}>{country.name}</option>
               ))}
             </select>
           </div>
@@ -192,6 +208,9 @@ export default function EventsClient() {
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
               {filteredEvents.map((event) => {
+                // Only show image if it's a valid URL
+                const hasValidImage = event.image_url && isValidUrl(event.image_url);
+
                 return (
                   <div 
                     key={event.id} 
@@ -203,10 +222,10 @@ export default function EventsClient() {
                   >
                     {/* Event Image - 4:5 aspect ratio (Instagram portrait style) */}
                     <div className="relative aspect-[4/5]">
-                      {event.image_url ? (
+                      {hasValidImage ? (
                         <div className="w-full h-full bg-gray-100 dark:bg-gray-800 rounded-t-lg flex items-center justify-center overflow-hidden relative">
                           <FadeInImage 
-                            src={event.image_url} 
+                            src={event.image_url || ''} 
                             alt={event.name}
                             fill
                             className="object-cover"
@@ -237,13 +256,18 @@ export default function EventsClient() {
                           <span>{EventAPI.formatDate(toDate(event.start_date || event.starts_at).toISOString(), event.timezone)} {EventAPI.formatTime(toDate(event.start_date || event.starts_at).toISOString(), event.timezone)}</span>
                         </div>
                         
-                        {event.location && (
+                        {(event.location || event.country) && (
                           <div className="flex items-center text-xs text-gray-600 dark:text-gray-300">
                             <svg className="w-3 h-3 mr-1.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                             </svg>
-                            <span className="line-clamp-1">{event.location}</span>
+                            <span className="line-clamp-1">
+                              {event.location && event.country 
+                                ? `${event.location}, ${event.country}`
+                                : event.location || event.country
+                              }
+                            </span>
                           </div>
                         )}
                       </div>
@@ -277,13 +301,13 @@ export default function EventsClient() {
             <div className="p-6">
               {/* Event Image */}
               <div className="relative mb-6 flex justify-center">
-                {selectedEvent.image_url ? (
+                {selectedEvent.image_url && isValidUrl(selectedEvent.image_url) ? (
                   <div className="w-3/5 aspect-[4/5] bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center overflow-hidden relative">
                     <FadeInImage 
-                      src={selectedEvent.image_url} 
+                      src={selectedEvent.image_url || ''} 
                       alt={selectedEvent.name}
                       fill
-                      className="object-cover"
+                      className="object-contain"
                       fadeInDuration={50}
                     />
                   </div>
@@ -309,10 +333,15 @@ export default function EventsClient() {
                       <span className="text-gray-500 dark:text-gray-400">Time:</span>
                       <p className="dark-mode-text">{EventAPI.formatTime(toDate(selectedEvent.start_date || selectedEvent.starts_at).toISOString(), selectedEvent.timezone)} - {EventAPI.formatTime(toDate(selectedEvent.expires_at).toISOString(), selectedEvent.timezone)}</p>
                     </div>
-                    {selectedEvent.location && (
+                    {(selectedEvent.location || selectedEvent.country) && (
                       <div>
                         <span className="text-gray-500 dark:text-gray-400">Location:</span>
-                        <p className="dark-mode-text">{selectedEvent.location}</p>
+                        <p className="dark-mode-text">
+                          {selectedEvent.location && selectedEvent.country 
+                            ? `${selectedEvent.location}, ${selectedEvent.country}`
+                            : selectedEvent.location || selectedEvent.country
+                          }
+                        </p>
                       </div>
                     )}
                   </div>

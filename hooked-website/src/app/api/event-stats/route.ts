@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeApp } from 'firebase/app';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { getFirestore, doc, getDoc, initializeFirestore } from 'firebase/firestore';
+import { getFirestore, doc, getDoc } from 'firebase/firestore';
 
 // Interface for API data types
 interface Like {
@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
       try {
         // Get preserved analytics data from the same region/database as the event
         const regionInfo = searchData.region || 'me-west1';
-        const databaseName = searchData.database || '(default)';
+        console.log(`Using region: ${regionInfo} for event stats`);
         
         // Create a regional app to access the correct database
         const regionalConfig = {

@@ -4,6 +4,11 @@ import React, { useState, useEffect } from 'react';
 import { X, ChevronRight, ChevronLeft, Users, Plus, Search, Filter, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { convertExpectedAttendees } from '@/lib/utils';
+import { 
+  getPrimaryTimezoneForCountry, 
+  localEventTimeStringToUTCTimestamp 
+} from '@/lib/timezoneUtils';
 import type { EventForm, AdminClient } from '@/types/admin';
 
 interface ConvertFormWizardProps {
@@ -60,6 +65,19 @@ export default function ConvertFormWizard({
     country: false,
     adminNotes: false
   });
+  
+  // State for editing new client data
+  const [newClientData, setNewClientData] = useState({
+    name: '',
+    type: 'Personal Host' as const,
+    pocName: '',
+    email: '',
+    phone: '',
+    country: 'US',
+    status: 'Won' as const,
+    source: 'Contact Form' as const,
+    adminNotes: ''
+  });
 
   // Reset state when modal opens
   useEffect(() => {
@@ -78,8 +96,20 @@ export default function ConvertFormWizard({
         country: false,
         adminNotes: false
       });
+      // Initialize new client data from form
+      setNewClientData({
+        name: form.eventName, // Use event name as initial client name
+        type: 'Personal Host' as const,
+        pocName: form.fullName,
+        email: form.email,
+        phone: form.phone || '',
+        country: form.country || 'US',
+        status: 'Won' as const,
+        source: 'Contact Form' as const,
+        adminNotes: `Created from event form: ${form.eventName}`
+      });
     }
-  }, [isOpen]);
+  }, [isOpen, form]);
 
   // Load suggested clients when switching to attach mode
   useEffect(() => {
@@ -189,16 +219,14 @@ export default function ConvertFormWizard({
     }
     
     if (currentStep === 1) {
-      setCurrentStep(mode === 'new' ? 3 : 2); // Skip step 2 if creating new client
+      setCurrentStep(2); // Always go to step 2
     } else if (currentStep === 2) {
       setCurrentStep(3);
     }
   };
 
   const handleBack = () => {
-    if (currentStep === 3 && mode === 'new') {
-      setCurrentStep(1); // Go back to step 1 if we skipped step 2
-    } else if (currentStep > 1) {
+    if (currentStep > 1) {
       setCurrentStep((prev) => (prev - 1) as WizardStep);
     }
   };
@@ -224,21 +252,13 @@ export default function ConvertFormWizard({
       let targetClient: AdminClient;
       
       if (mode === 'new') {
-        // Create new client from form data
-        const newClientData = {
-          name: form.eventName, // Use event name as client name initially
-          type: 'Personal Host' as const, // Default type, can be updated later
-          pocName: form.fullName,
-          email: form.email,
-          phone: form.phone || '',
-          country: form.country || 'US',
-          status: 'Pre-Discussion' as const, // Initial status from valid enum
-          source: 'Contact Form' as const, // Source is form submission
-          events: [],
-          adminNotes: `Created from event form: ${form.eventName}`
+        // Create new client from edited data
+        const clientDataToCreate = {
+          ...newClientData,
+          events: []
         };
         
-        targetClient = await AdminClientAPI.create(newClientData);
+        targetClient = await AdminClientAPI.create(clientDataToCreate);
       } else {
         // Use existing selected client and optionally update fields
         if (!selectedClient) {
@@ -271,32 +291,89 @@ export default function ConvertFormWizard({
         }
       }
       
-      // Create event from form data
+      // Determine the timezone for the event based on the country
+      const eventCountry = form.country || 'Israel'; // Default to Israel if no country
+      const eventTimezone = form.timezone || getPrimaryTimezoneForCountry(eventCountry);
+      
+      // Helper function to safely convert form time strings to UTC Date objects
+      const convertFormTimeToUTC = (timeString: string | undefined, fallbackDate: Date): Date => {
+        if (!timeString || typeof timeString !== 'string') {
+          console.warn('Invalid time string, using fallback:', timeString);
+          return fallbackDate;
+        }
+        
+        try {
+          // The form stores times as datetime-local strings like "2024-12-01T14:30"
+          // Convert them from event timezone to UTC using the timezone utilities
+          const utcTimestamp = localEventTimeStringToUTCTimestamp(timeString, eventTimezone);
+          const utcDate = utcTimestamp.toDate();
+          console.log(`🕒 Converted ${timeString} (${eventTimezone}) → ${utcDate.toISOString()}`);
+          return utcDate;
+        } catch (error) {
+          console.error('Timezone conversion failed:', error, { timeString, eventTimezone });
+          return fallbackDate;
+        }
+      };
+
+      // Create event from form data with proper timezone conversion
       const eventData = {
         name: form.eventName,
-        description: form.eventDescription,
-        starts_at: form.starts_at || new Date(), // Access time for mobile app
-        start_date: form.start_date, // Real event start time
-        expires_at: form.expires_at || new Date(), // When access expires
-        end_date: form.end_date, // Real event end time
-        event_code: generateEventCode(), // Generate unique code
+        description: form.eventDescription || form.eventDetails || '',
+        // Apply timezone conversion to all time fields
+        starts_at: convertFormTimeToUTC(form.accessTime || form.starts_at, new Date()), // Access time for mobile app
+        start_date: convertFormTimeToUTC(form.startTime || form.start_date || form.eventDate, new Date()), // Real event start time
+        expires_at: convertFormTimeToUTC(form.expiresAt || form.expires_at, new Date()), // When access expires
+        end_date: convertFormTimeToUTC(form.endTime || form.end_date, new Date()), // Real event end time
+        event_code: form.event_code || generateEventCode(), // Use custom code or generate unique code
         location: form.venueName,
         organizer_email: form.email,
         is_active: false, // Starts inactive until admin enables
+        is_private: form.is_private || false, // Private events don't appear on IRL page
         event_type: form.eventType || 'Other',
-        timezone: form.timezone || 'UTC',
-        country: form.country || 'US',
+        timezone: eventTimezone, // Use the properly determined timezone
+        country: eventCountry, // Use the properly determined country
+        event_link: form.eventLink || null, // Map event link from form
+        image_url: form.eventImage || null, // Map event image from form
         clientId: targetClient.id // Link to client
       };
       
       const createdEvent = await EventAPI.create(eventData);
+      
+      // Add the created event to the client's events array
+      const clientDoc = await AdminClientAPI.get(targetClient.id);
+      if (clientDoc) {
+        const currentEvents = clientDoc.events || [];
+        const newClientEvent = {
+          id: createdEvent.id, // Use the global event ID
+          expectedAttendees: convertExpectedAttendees(form.expectedAttendees),
+          // Use the properly converted UTC dates from the created event
+          starts_at: createdEvent.starts_at,
+          start_date: createdEvent.start_date,
+          expires_at: createdEvent.expires_at,
+          end_date: createdEvent.end_date,
+          organizerFormSent: 'No',
+          eventCardCreated: 'No', 
+          description: form.eventDescription || form.eventDetails || '',
+          eventLink: form.eventLink || null,
+          eventImage: form.eventImage || null,
+          linkedFormId: form.id,
+          linkedEventId: createdEvent.id,
+          eventKind: form.eventType,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+        
+        const updatedEvents = [...currentEvents, newClientEvent];
+        await AdminClientAPI.update(targetClient.id, { events: updatedEvents });
+      }
       
       // Update the form to link it to the client and event
       await EventFormAPI.update(form.id, {
         linkedClientId: targetClient.id,
         linkedEventId: createdEvent.id,
         conversionCompleted: true,
-        convertedAt: new Date()
+        convertedAt: new Date(),
+        status: 'Converted'
       });
       
       // Call parent callback with results
@@ -534,7 +611,151 @@ export default function ConvertFormWizard({
             </div>
           )}
 
-          {currentStep === 2 && (
+          {currentStep === 2 && mode === 'new' && (
+            <div className="space-y-6">
+              {/* Edit New Client Details */}
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                  Edit Client Details
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Client/Organization Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={newClientData.name}
+                      onChange={(e) => setNewClientData({...newClientData, name: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="Organization or client name"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Client Type *
+                    </label>
+                    <select
+                      value={newClientData.type}
+                      onChange={(e) => setNewClientData({...newClientData, type: e.target.value as any})}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="Personal Host">Personal Host</option>
+                      <option value="Company">Company</option>
+                      <option value="Wedding Organizer">Wedding Organizer</option>
+                      <option value="Club / Bar">Club / Bar</option>
+                      <option value="Restaurant">Restaurant</option>
+                      <option value="Other Organization">Other Organization</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Contact Person Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={newClientData.pocName}
+                      onChange={(e) => setNewClientData({...newClientData, pocName: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="Point of contact name"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Email *
+                    </label>
+                    <input
+                      type="email"
+                      value={newClientData.email}
+                      onChange={(e) => setNewClientData({...newClientData, email: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="Contact email"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Phone
+                    </label>
+                    <input
+                      type="tel"
+                      value={newClientData.phone}
+                      onChange={(e) => setNewClientData({...newClientData, phone: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="Phone number"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Country
+                    </label>
+                    <input
+                      type="text"
+                      value={newClientData.country}
+                      onChange={(e) => setNewClientData({...newClientData, country: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="Country"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Status
+                    </label>
+                    <select
+                      value={newClientData.status}
+                      onChange={(e) => setNewClientData({...newClientData, status: e.target.value as any})}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="Won">Won</option>
+                      <option value="Pre-Discussion">Pre-Discussion</option>
+                      <option value="Initial Discussion">Initial Discussion</option>
+                      <option value="Negotiation">Negotiation</option>
+                      <option value="Lost">Lost</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Source
+                    </label>
+                    <select
+                      value={newClientData.source}
+                      onChange={(e) => setNewClientData({...newClientData, source: e.target.value as any})}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="Contact Form">Contact Form</option>
+                      <option value="Personal Connect">Personal Connect</option>
+                      <option value="Instagram Inbound">Instagram Inbound</option>
+                      <option value="Email">Email</option>
+                      <option value="Olim in TLV">Olim in TLV</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Admin Notes
+                  </label>
+                  <textarea
+                    value={newClientData.adminNotes}
+                    onChange={(e) => setNewClientData({...newClientData, adminNotes: e.target.value})}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    placeholder="Additional notes about this client..."
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {currentStep === 2 && mode === 'attach' && (
             <div className="space-y-6">
               {/* Search and Filter */}
               <div className="flex gap-4">

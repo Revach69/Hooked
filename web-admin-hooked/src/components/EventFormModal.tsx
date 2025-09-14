@@ -62,7 +62,8 @@ export function EventFormModal({ form, isOpen, onClose, onSave }: EventFormModal
         month: 'short',
         day: 'numeric',
         hour: '2-digit',
-        minute: '2-digit'
+        minute: '2-digit',
+        hour12: false
       });
     } catch (error) {
       console.error('Error formatting date:', error, dateString);
@@ -137,7 +138,7 @@ export function EventFormModal({ form, isOpen, onClose, onSave }: EventFormModal
             </div>
             <div>
               <Label className="text-sm font-medium text-gray-500">Event Visibility</Label>
-              <div className="text-sm mt-1">{form.eventVisibility}</div>
+              <div className="text-sm mt-1">{form.is_private ? 'Private' : 'Public'}</div>
             </div>
           </div>
 

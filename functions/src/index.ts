@@ -8,8 +8,8 @@ import * as fs from 'fs';
 import fetch from 'node-fetch';
 
 // Environment-aware initialization
-const projectId = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || 'hooked-69';
-const isDevelopment = projectId === 'hooked-development';
+const projectId = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT;
+const isDevelopment = projectId?.includes('development') || false;
 
 console.log(`🔧 Initializing Cloud Functions for project: ${projectId} (isDevelopment: ${isDevelopment})`);
 
@@ -17,41 +17,36 @@ console.log(`🔧 Initializing Cloud Functions for project: ${projectId} (isDeve
 let adminConfig: admin.AppOptions = {};
 
 try {
-  // First try environment-specific service account
-  const devServiceAccountPath = path.join(__dirname, '../hooked-development-firebase-adminsdk.json');
-  const prodServiceAccountPath = path.join(__dirname, '../hooked-69-firebase-adminsdk-fbsvc-c7009d8539.json');
-  
-  const serviceAccountPath = isDevelopment ? devServiceAccountPath : prodServiceAccountPath;
-  
-  if (fs.existsSync(serviceAccountPath)) {
-    const serviceAccount = require(serviceAccountPath);
+  // Try to load service account from environment variable first (preferred for production)
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    console.log('✅ Using service account from GOOGLE_APPLICATION_CREDENTIALS');
     adminConfig = {
-      credential: admin.credential.cert(serviceAccount),
-      databaseURL: isDevelopment 
-        ? 'https://hooked-development-default-rtdb.firebaseio.com'
-        : 'https://hooked-69-default-rtdb.firebaseio.com'
+      databaseURL: `https://${projectId}-default-rtdb.firebaseio.com`
     };
-    console.log(`✅ Using service account from: ${serviceAccountPath}`);
-  } else if (isDevelopment && fs.existsSync(prodServiceAccountPath)) {
-    // Fallback for development: use default credentials if no dev service account
-    console.log('⚠️ Development service account not found, using default application credentials');
-    adminConfig = {}; // Use default credentials
-  } else if (fs.existsSync(prodServiceAccountPath)) {
-    // Production fallback
-    const serviceAccount = require(prodServiceAccountPath);
-    adminConfig = {
-      credential: admin.credential.cert(serviceAccount),
-      databaseURL: 'https://hooked-69-default-rtdb.firebaseio.com'
-    };
-    console.log(`✅ Using production service account`);
   } else {
-    // Use default application credentials (when deployed to Cloud Functions)
-    console.log('📦 Using default application credentials (deployed environment)');
-    adminConfig = {};
+    // Fallback to project-specific service account files (for local development)
+    const serviceAccountPath = path.join(__dirname, `../${projectId}-firebase-adminsdk.json`);
+    console.log(`🔍 Looking for service account file: ${serviceAccountPath}`);
+    
+    if (fs.existsSync(serviceAccountPath)) {
+      const serviceAccount = require(serviceAccountPath);
+      adminConfig = {
+        credential: admin.credential.cert(serviceAccount),
+        databaseURL: `https://${projectId}-default-rtdb.firebaseio.com`
+      };
+      console.log(`✅ Using service account from: ${serviceAccountPath}`);
+    } else {
+      // Use default application credentials (fallback for cloud deployment)
+      console.log('⚠️ No service account file found, using default application credentials');
+      adminConfig = {
+        databaseURL: `https://${projectId}-default-rtdb.firebaseio.com`
+      };
   }
 } catch (error) {
   console.error('❌ Error loading service account, using default credentials:', error);
-  adminConfig = {};
+  adminConfig = {
+    databaseURL: `https://${projectId}-default-rtdb.firebaseio.com`
+  };
 }
 
 admin.initializeApp(adminConfig);
@@ -2161,6 +2156,12 @@ const COUNTRY_REGION_MAPPING: CountryRegionMapping = {
 
 // Get regional database for country
 function getRegionalDatabase(country: string): admin.firestore.Firestore {
+  // In development, always use default database
+  if (isDevelopment) {
+    console.log(`📍 Development mode: Using default database for ${country}`);
+    return getDefaultDb();
+  }
+  
   const regionMapping = COUNTRY_REGION_MAPPING[country];
   const databaseId = regionMapping?.database || '(default)';
   
@@ -2199,19 +2200,37 @@ async function getRegionalDatabaseForEvent(eventId: string): Promise<admin.fires
 
 // Note: getCurrentFunctionRegion removed as it's not needed for current implementation
 
-// === Callable: createEventInRegion ===
+// === HTTP Request: createEventInRegion ===
 // Creates an event in the appropriate regional database based on country
-// Deployed to all regions so clients can call the nearest one
-export const createEventInRegion = onCall({
+// Deployed to all regions with CORS support for client-side access
+export const createEventInRegion = onRequest({
   region: ALL_FUNCTION_REGIONS,
-}, async (request) => {
-  const { eventData } = request.data;
-  
-  if (!eventData || !eventData.country) {
-    throw new HttpsError('invalid-argument', 'Event data and country are required');
+}, async (req, res) => {
+  // Set CORS headers
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.set('Access-Control-Max-Age', '3600');
+
+  // Handle preflight request
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
   }
-  
+
+  if (req.method !== 'POST') {
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+
   try {
+    const { eventData } = req.body;
+    
+    if (!eventData || !eventData.country) {
+      res.status(400).json({ error: 'Event data and country are required' });
+      return;
+    }
+    
     console.log(`🌍 Creating event in region for country: ${eventData.country}`);
     
     // Get the appropriate regional database for the country
@@ -2289,16 +2308,16 @@ export const createEventInRegion = onCall({
       displayName: regionMapping?.displayName || 'Default (Middle East)'
     });
     
-    return { 
+    res.status(200).json({ 
       success: true,
       eventId: docRef.id, 
       database: targetDatabase,
       region: regionMapping?.displayName || 'Default (Middle East)',
       organizerPassword
-    };
+    });
   } catch (error) {
     console.error('❌ Failed to create event in region:', error);
-    throw new HttpsError('internal', `Failed to create event: ${error}`);
+    res.status(500).json({ success: false, error: `Failed to create event: ${error}` });
   }
 });
 

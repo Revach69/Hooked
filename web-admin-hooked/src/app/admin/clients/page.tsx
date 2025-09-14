@@ -275,7 +275,7 @@ export default function ClientsPage() {
           <h1 className="text-2xl font-bold">Clients</h1>
           <p className="text-gray-600 dark:text-gray-400">Manage your client relationships</p>
         </div>
-        <Button onClick={() => setShowClientForm(true)}>
+        <Button onClick={() => setShowClientForm(true)} title="Add a new client to the system">
           <Plus className="h-4 w-4 mr-2" />
           Add Client
         </Button>

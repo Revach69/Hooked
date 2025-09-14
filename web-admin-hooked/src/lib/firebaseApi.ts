@@ -18,7 +18,7 @@ import {
   Firestore,
   getFirestore
 } from 'firebase/firestore';
-import { httpsCallable, getFunctions } from 'firebase/functions';
+import { getFunctions } from 'firebase/functions';
 import { getApp, getApps } from 'firebase/app';
 import { toDate } from './timezoneUtils';
 
@@ -223,11 +223,24 @@ export const EventAPI = {
       
       console.log(`🌍 Using functions region: ${functionsRegion} for country: ${data.country}`);
       
-      const functions = getFunctions(app, functionsRegion); // Call the regional function
-      const createEventInRegion = httpsCallable(functions, 'createEventInRegion');
+      // Use HTTP endpoint to create event in regional database (bypasses CORS issues)
+      const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+      if (!projectId) {
+        throw new Error('Firebase project ID is not configured');
+      }
       
-      const result = await createEventInRegion({ eventData: data });
-      const responseData = result.data as { 
+      const fetchUrl = `https://${functionsRegion}-${projectId}.cloudfunctions.net/createEventInRegion`;
+      console.log('🌐 Creating event via HTTP endpoint:', fetchUrl);
+      
+      const response = await fetch(fetchUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ eventData: data }),
+      });
+
+      const responseData = await response.json() as { 
         success: boolean; 
         id: string; 
         eventId?: string;
@@ -237,8 +250,8 @@ export const EventAPI = {
         error?: string;
       };
       
-      if (!responseData.success) {
-        throw new Error(`Failed to create event: ${responseData.error || 'Unknown error'}`);
+      if (!response.ok || !responseData.success) {
+        throw new Error(`Failed to create event: ${responseData.error || `HTTP ${response.status}`}`);
       }
       
       console.log('✅ Event created via Cloud Function:', {

@@ -1,17 +1,26 @@
 export type ClientEvent = {
   id: string;                      // Unique event ID for this client
   expectedAttendees?: number | null;
-  accessTime?: string | null;      // When users can access the event on app
-  startTime?: string | null;       // Actual start time of the event
-  endTime?: string | null;         // When event ends and app content gets deleted
-  organizerFormSent?: 'Yes' | 'No';
-  eventCardCreated?: 'Yes' | 'No';
+  
+  // Canonical time fields (PRD Section 6.4)
+  starts_at?: string | Date | import('firebase/firestore').Timestamp | null;   // When users can access the event on app
+  start_date?: string | Date | import('firebase/firestore').Timestamp | null;  // Actual start time of the event (for display)
+  expires_at?: string | Date | import('firebase/firestore').Timestamp | null;  // When access expires
+  end_date?: string | Date | import('firebase/firestore').Timestamp | null;    // When event actually ends (for display)
+  
+  // Legacy time fields (post-migration fallback)
+  accessTime?: string | null;      // Legacy - use starts_at
+  startTime?: string | null;       // Legacy - use start_date  
+  endTime?: string | null;         // Legacy - use expires_at
+  
+  organizerFormSent?: 'Yes' | 'No' | boolean;  // Support both legacy and new boolean format
+  eventCardCreated?: 'Yes' | 'No' | boolean;   // Support both legacy and new boolean format
   description?: string | null;
   eventLink?: string | null;       // External event link
   eventImage?: string | null;      // Event image filename/URL
   linkedFormId?: string | null;    // Reference to linked event form
   linkedEventId?: string | null;   // Reference to linked event
-  eventKind?: string;              // Event type for this specific event
+  eventKind?: string;              // Event type for this specific event (uses standardized types)
   createdAt?: unknown;             // Firestore Timestamp
   updatedAt?: unknown;             // Firestore Timestamp
 };
@@ -88,10 +97,11 @@ export type EventForm = {
   startTime?: string;          // Legacy - use start_date
   endTime?: string;            // Legacy - use expires_at
   
+  event_code?: string;         // Custom event code field
   eventLink?: string;          // New field
   eventImage?: string;         // New field (filename)
   posterPreference: string;
-  eventVisibility: string;
+  is_private?: boolean;        // Standardized field name
   socialMedia?: string;
   status: 'New' | 'Reviewed' | 'Contacted' | 'Converted' | 'Rejected';
   linkedClientId?: string | null; // Reference to linked client

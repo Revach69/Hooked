@@ -37,6 +37,7 @@ export interface FirestoreEvent {
   expires_at: string | Date | { toDate?: () => Date; seconds?: number };
   event_code: string;
   location?: string;
+  country?: string; // Added for country information
   organizer_email?: string;
   is_active?: boolean;
   image_url?: string; // Added for event images
@@ -366,6 +367,61 @@ export async function createClientFromContactForm(formData: ContactFormData) {
     }
   } catch (error) {
     console.error('Error creating client from contact form:', error);
+    throw error;
+  }
+}
+
+// Create a ContactFormSubmission document (separate from EventForms)
+// This appears in the "Contact Form Submissions" expandable section in admin Forms tab
+export async function createContactFormSubmission(formData: {
+  fullName: string;
+  email: string;
+  phone: string;
+  message: string;
+  status: string;
+}) {
+  try {
+    // Initialize Firebase if not already initialized
+    let firestoreDb = db;
+    if (!firestoreDb) {
+      const firebaseConfig = {
+        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || '',
+        messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '',
+        appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || '',
+        measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || ''
+      };
+      
+      const app = initializeApp(firebaseConfig);
+      firestoreDb = getFirestore(app);
+    }
+
+    // Create ContactFormSubmission document (NOT an EventForm)
+    const contactFormData = {
+      // Contact information
+      fullName: formData.fullName,
+      email: formData.email,
+      phone: formData.phone || '',
+      message: formData.message,
+      
+      // Status tracking
+      status: formData.status || 'New',
+      
+      // Metadata
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      submittedAt: new Date().toISOString()
+    };
+
+    const { addDoc, collection } = await import('firebase/firestore');
+    // Use ContactFormSubmissions collection (separate from eventForms)
+    const docRef = await addDoc(collection(firestoreDb, 'ContactFormSubmissions'), contactFormData);
+    console.log('ContactFormSubmission created with ID:', docRef.id);
+    return docRef.id;
+  } catch (error) {
+    console.error('Error creating ContactFormSubmission:', error);
     throw error;
   }
 } 

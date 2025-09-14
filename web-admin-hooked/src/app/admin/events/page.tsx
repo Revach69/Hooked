@@ -456,7 +456,7 @@ export default function EventsPage() {
     const eventEndDate = toDate(event.expires_at);
 
     if (!eventDate || !eventEndDate) {
-      return { status: 'Unknown', color: 'text-gray-600', bgColor: 'bg-gray-100' };
+      return { status: 'Unknown', color: 'text-gray-600 dark:text-gray-400', bgColor: 'bg-gray-100 dark:bg-gray-800' };
     }
 
     // Convert UTC event times to local event time for comparison
@@ -464,11 +464,11 @@ export default function EventsPage() {
     const eventEndLocal = new Date(eventEndDate.toLocaleString('sv-SE', { timeZone: eventTimezone }));
 
     if (nowInEventTimezone < eventStartLocal) {
-      return { status: 'Upcoming', color: 'text-blue-600', bgColor: 'bg-blue-100' };
+      return { status: 'Upcoming', color: 'text-blue-600 dark:text-blue-400', bgColor: 'bg-blue-100 dark:bg-blue-900' };
     } else if (nowInEventTimezone >= eventStartLocal && nowInEventTimezone <= eventEndLocal) {
-      return { status: 'Live', color: 'text-green-600', bgColor: 'bg-green-100' };
+      return { status: 'Live', color: 'text-green-600 dark:text-green-400', bgColor: 'bg-green-100 dark:bg-green-900' };
     } else {
-      return { status: 'Past', color: 'text-gray-600', bgColor: 'bg-gray-100' };
+      return { status: 'Past', color: 'text-gray-600 dark:text-gray-400', bgColor: 'bg-gray-100 dark:bg-gray-800' };
     }
   };
 
@@ -539,7 +539,7 @@ export default function EventsPage() {
                 {status.status}
               </span>
               {event._region && (
-                <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm font-medium">
+                <span className="bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 px-3 py-1 rounded-full text-sm font-medium">
                   {event._region}
                 </span>
               )}
@@ -578,6 +578,7 @@ export default function EventsPage() {
                   <button
                     onClick={() => handleDownloadQR(event.id)}
                     className="mt-4 flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                    title="Download QR code as PNG image"
                   >
                     <Download className="h-4 w-4" />
                     Download QR
@@ -602,7 +603,7 @@ export default function EventsPage() {
                   {event.event_type && (
                     <div className="flex items-center gap-3 text-gray-700 dark:text-gray-300">
                       <span className="font-medium">Type:</span>
-                      <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-medium">
+                      <span className="inline-block bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs px-2 py-1 rounded-full font-medium">
                         {event.event_type}
                       </span>
                     </div>
@@ -622,7 +623,7 @@ export default function EventsPage() {
                     <button
                       onClick={() => navigator.clipboard.writeText(`https://hooked-app.com/join-instant?code=${event.event_code}`)}
                       className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-                      title="Copy to clipboard"
+                      title="Copy join link to clipboard"
                     >
                       <Copy className="h-4 w-4" />
                     </button>
@@ -643,7 +644,7 @@ export default function EventsPage() {
                       <button
                         onClick={() => navigator.clipboard.writeText(event.event_link || '')}
                         className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-                        title="Copy to clipboard"
+                        title="Copy event link to clipboard"
                       >
                         <Copy className="h-4 w-4" />
                       </button>
@@ -667,7 +668,7 @@ export default function EventsPage() {
                     <button
                       onClick={() => navigator.clipboard.writeText(event.organizer_password || '')}
                       className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-                      title="Copy to clipboard"
+                      title="Copy organizer password to clipboard"
                     >
                       <Copy className="h-4 w-4" />
                     </button>
@@ -685,6 +686,7 @@ export default function EventsPage() {
                   <button
                     onClick={() => handleAnalytics(event.id)}
                     className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                    title="View detailed analytics and statistics"
                   >
                     <BarChart3 className="h-4 w-4" />
                     Analytics
@@ -693,6 +695,7 @@ export default function EventsPage() {
                   <button
                     onClick={() => handleReports(event.id, event.name)}
                     className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm"
+                    title="View reports and user feedback"
                   >
                     <FileText className="h-4 w-4" />
                     Reports
@@ -701,6 +704,7 @@ export default function EventsPage() {
                   <button
                     onClick={() => handleEditEvent(event)}
                     className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm"
+                    title="Edit event details and settings"
                   >
                     <Edit className="h-4 w-4" />
                     Edit
@@ -709,6 +713,7 @@ export default function EventsPage() {
                   <button
                     onClick={() => handleDuplicateEvent(event)}
                     className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm"
+                    title="Create a copy of this event with same settings"
                   >
                     <Files className="h-4 w-4" />
                     Duplicate
@@ -717,6 +722,7 @@ export default function EventsPage() {
                   <button
                     onClick={() => handleDownloadData(event.id)}
                     className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
+                    title="Download event data (profiles, likes, messages)"
                   >
                     <Download className="h-4 w-4" />
                     Download Data
@@ -725,6 +731,7 @@ export default function EventsPage() {
                   <button
                     onClick={() => handleLinkEvent(event)}
                     className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm"
+                    title="Link this event to an existing client"
                   >
                     <Users className="h-4 w-4" />
                     Link
@@ -733,6 +740,7 @@ export default function EventsPage() {
                   <button
                     onClick={() => handleDeleteEvent(event.id)}
                     className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+                    title="Delete this event permanently (cannot be undone)"
                   >
                     <Trash2 className="h-4 w-4" />
                     Delete
@@ -836,6 +844,7 @@ export default function EventsPage() {
             <button
               onClick={() => setShowRegionFilter(!showRegionFilter)}
               className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              title="Filter events by geographical regions"
             >
               <Filter className="h-4 w-4 mr-2" />
               Regions ({selectedRegions.size})
@@ -851,12 +860,14 @@ export default function EventsPage() {
                       <button
                         onClick={handleSelectAllRegions}
                         className="text-xs text-blue-600 hover:text-blue-700"
+                        title="Select all regions"
                       >
                         All
                       </button>
                       <button
                         onClick={handleDeselectAllRegions}
                         className="text-xs text-gray-600 hover:text-gray-700"
+                        title="Deselect all regions"
                       >
                         None
                       </button>
@@ -885,6 +896,7 @@ export default function EventsPage() {
         <button
           onClick={handleCreateEvent}
           className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          title="Create a new event"
         >
           <Plus className="h-4 w-4 mr-2" />
           Create Event
@@ -906,6 +918,7 @@ export default function EventsPage() {
           <button
             onClick={handleCreateEvent}
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            title="Create a new event"
           >
             <Plus className="h-4 w-4 mr-2" />
             Create Event
@@ -935,7 +948,7 @@ export default function EventsPage() {
           />
           {saveError && (
             <div className="fixed inset-0 z-50 flex items-center justify-center">
-              <div className="bg-red-100 border border-red-400 text-red-700 px-6 py-4 rounded shadow-xl max-w-md w-full">
+              <div className="bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-600 text-red-700 dark:text-red-200 px-6 py-4 rounded shadow-xl max-w-md w-full">
                 <div className="flex justify-between items-center mb-2">
                   <span className="font-bold">Error</span>
                   <button onClick={() => setSaveError(null)} className="text-red-700 hover:text-red-900">&times;</button>

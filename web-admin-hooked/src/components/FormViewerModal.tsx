@@ -158,7 +158,7 @@ export function FormViewerModal({ form, isOpen, onClose }: FormViewerModalProps)
               </div>
               <div>
                 <h4 className="font-medium mb-1">Event Visibility</h4>
-                <p className="text-sm text-gray-600">{form.eventVisibility}</p>
+                <p className="text-sm text-gray-600">{form.is_private ? 'Private' : 'Public'}</p>
               </div>
             </div>
 

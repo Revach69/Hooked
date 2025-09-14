@@ -57,21 +57,20 @@ const SOURCE_OPTIONS = [
   'Contact Form'
 ] as const;
 
-const ORGANIZER_FORM_OPTIONS = ['Yes', 'No'] as const;
 const EVENT_CARD_OPTIONS = ['Yes', 'No'] as const;
 
 const getStatusColor = (status: string) => {
   switch (status) {
     case 'Initial Discussion':
-      return 'bg-gray-100 text-gray-800';
+      return 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200';
     case 'Negotiation':
-      return 'bg-yellow-100 text-yellow-800';
+      return 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200';
     case 'Won':
-      return 'bg-green-100 text-green-800';
+      return 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200';
     case 'Lost':
-      return 'bg-red-100 text-red-800';
+      return 'bg-red-100 dark:bg-red-900 dark:bg-red-900 text-red-800 dark:text-red-200';
     default:
-      return 'bg-gray-100 text-gray-800';
+      return 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200';
   }
 };
 
@@ -121,22 +120,33 @@ export function ClientsTable({
         month: 'short',
         day: 'numeric',
         hour: '2-digit',
-        minute: '2-digit'
+        minute: '2-digit',
+        hour12: false
       });
     } catch {
       return dateTimeString;
     }
   };
 
+  const isValidImageUrl = (url: string) => {
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const handleImageDownload = (imageName: string | null) => {
     if (!imageName) return;
-    // For now, just log the action - in a real app, this would download from cloud storage
-    console.log('Download image:', imageName);
-    // You could implement actual download logic here:
-    // const link = document.createElement('a');
-    // link.href = `your-storage-url/${imageName}`;
-    // link.download = imageName;
-    // link.click();
+    
+    if (isValidImageUrl(imageName)) {
+      // If it's a valid URL (Firebase Storage URL), open it in a new tab
+      window.open(imageName, '_blank');
+    } else {
+      // If it's just a filename (legacy data), show an alert
+      alert(`Legacy image data: ${imageName}\n\nThis is an old event form that was submitted before image upload was implemented. The image needs to be re-uploaded.`);
+    }
   };
 
   const renderEventRow = (event: ClientEvent, clientId: string) => (
@@ -147,7 +157,7 @@ export function ClientsTable({
           value={event.eventKind || 'Other'}
           onValueChange={(value) => onUpdateEvent?.(clientId, event.id, 'eventKind', value)}
         >
-          <SelectTrigger className="h-8 w-full border-none shadow-none p-1 focus:ring-0 hover:bg-gray-100">
+          <SelectTrigger className="h-8 w-full border-none shadow-none p-1 focus:ring-0 hover:bg-gray-100 dark:hover:bg-gray-700">
             <SelectValue className="text-sm" />
           </SelectTrigger>
           <SelectContent>
@@ -165,73 +175,28 @@ export function ClientsTable({
       
       {/* Access Time */}
       <td className="px-4 py-2 text-sm">
-        {formatDateTime(event.accessTime || null)}
+        {formatDateTime(event.starts_at || event.accessTime || null)}
       </td>
       
       {/* Start Time */}
       <td className="px-4 py-2 text-sm">
-        {formatDateTime(event.startTime || null)}
+        {formatDateTime(event.start_date || event.startTime || null)}
       </td>
       
-      {/* End Time */}
+      {/* Access Expiry */}
       <td className="px-4 py-2 text-sm">
-        {formatDateTime(event.endTime || null)}
+        {formatDateTime(event.expires_at || event.endTime || null)}
       </td>
       
-      {/* Organizer Form Sent */}
-      <td className="px-4 py-2">
-        <div className="flex items-center gap-2">
-          <Select
-            value={event.organizerFormSent || 'No'}
-            onValueChange={(value) => onUpdateEvent?.(clientId, event.id, 'organizerFormSent', value)}
-          >
-            <SelectTrigger className="h-8 w-16 border-none shadow-none p-1 focus:ring-0 hover:bg-gray-100">
-              <SelectValue className="text-sm" />
-            </SelectTrigger>
-            <SelectContent>
-              {ORGANIZER_FORM_OPTIONS.map((option) => (
-                <SelectItem key={option} value={option}>
-                  {option}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {event.linkedFormId && onViewForm && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                onViewForm(event.linkedFormId!);
-              }}
-              className="h-6 w-6 p-0"
-              title="View linked form"
-            >
-              <FileText className="h-3 w-3" />
-            </Button>
-          )}
-        </div>
+      {/* Actual End Time */}
+      <td className="px-4 py-2 text-sm">
+        {formatDateTime(event.end_date || null)}
       </td>
       
-      {/* Event Card Created */}
+      {/* Event Card */}
       <td className="px-4 py-2">
-        <div className="flex items-center gap-2">
-          <Select
-            value={event.eventCardCreated || 'No'}
-            onValueChange={(value) => onUpdateEvent?.(clientId, event.id, 'eventCardCreated', value)}
-          >
-            <SelectTrigger className="h-8 w-16 border-none shadow-none p-1 focus:ring-0 hover:bg-gray-100">
-              <SelectValue className="text-sm" />
-            </SelectTrigger>
-            <SelectContent>
-              {EVENT_CARD_OPTIONS.map((option) => (
-                <SelectItem key={option} value={option}>
-                  {option}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {event.linkedEventId && onViewEvent && (
+        <div className="flex items-center justify-center">
+          {event.linkedEventId && onViewEvent ? (
             <Button
               variant="ghost"
               size="sm"
@@ -244,6 +209,8 @@ export function ClientsTable({
             >
               <Calendar className="h-3 w-3" />
             </Button>
+          ) : (
+            <span className="text-gray-400">-</span>
           )}
         </div>
       </td>
@@ -277,7 +244,8 @@ export function ClientsTable({
               e.stopPropagation();
               handleImageDownload(event.eventImage || null);
             }}
-            title="Download event image"
+            title={isValidImageUrl(event.eventImage) ? "Download event image" : `Image filename: ${event.eventImage} (not downloadable)`}
+            className={isValidImageUrl(event.eventImage) ? "" : "opacity-60"}
           >
             <Download className="h-3 w-3" />
           </Button>
@@ -412,7 +380,7 @@ export function ClientsTable({
                           value={client.type}
                           onValueChange={(value) => onUpdate(client.id, 'type', value)}
                         >
-                          <SelectTrigger className="h-8 w-full border-none shadow-none p-1 focus:ring-0 hover:bg-gray-100">
+                          <SelectTrigger className="h-8 w-full border-none shadow-none p-1 focus:ring-0 hover:bg-gray-100 dark:hover:bg-gray-700">
                             <SelectValue className="text-sm" />
                           </SelectTrigger>
                           <SelectContent>
@@ -428,22 +396,22 @@ export function ClientsTable({
                         {eventTypes}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className={`text-sm ${!client.pocName || client.pocName === '-' ? 'bg-red-100' : ''}`}>
+                        <div className={`text-sm ${!client.pocName || client.pocName === '-' ? 'bg-red-100 dark:bg-red-900' : ''}`}>
                           {client.pocName || '-'}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className={`text-sm ${!client.phone || client.phone === '-' ? 'bg-red-100' : ''}`}>
+                        <div className={`text-sm ${!client.phone || client.phone === '-' ? 'bg-red-100 dark:bg-red-900' : ''}`}>
                           {client.phone || '-'}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className={`text-sm ${!client.email || client.email === '-' ? 'bg-red-100' : ''}`}>
+                        <div className={`text-sm ${!client.email || client.email === '-' ? 'bg-red-100 dark:bg-red-900' : ''}`}>
                           {client.email || '-'}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className={`text-sm ${!client.country || client.country === '-' ? 'bg-red-100' : ''}`}>
+                        <div className={`text-sm ${!client.country || client.country === '-' ? 'bg-red-100 dark:bg-red-900' : ''}`}>
                           {client.country || '-'}
                         </div>
                       </td>
@@ -452,7 +420,7 @@ export function ClientsTable({
                           value={client.status}
                           onValueChange={(value) => onUpdate(client.id, 'status', value)}
                         >
-                          <SelectTrigger className="h-8 w-full border-none shadow-none p-1 focus:ring-0 hover:bg-gray-100">
+                          <SelectTrigger className="h-8 w-full border-none shadow-none p-1 focus:ring-0 hover:bg-gray-100 dark:hover:bg-gray-700">
                             <Badge className={getStatusColor(client.status)}>
                               {client.status}
                             </Badge>
@@ -473,7 +441,7 @@ export function ClientsTable({
                           value={client.source || 'none'}
                           onValueChange={(value) => onUpdate(client.id, 'source', value === 'none' ? null : value)}
                         >
-                          <SelectTrigger className="h-8 w-full border-none shadow-none p-1 focus:ring-0 hover:bg-gray-100">
+                          <SelectTrigger className="h-8 w-full border-none shadow-none p-1 focus:ring-0 hover:bg-gray-100 dark:hover:bg-gray-700">
                             <SelectValue className="text-sm" placeholder="-" />
                           </SelectTrigger>
                           <SelectContent>
@@ -495,6 +463,7 @@ export function ClientsTable({
                               e.stopPropagation();
                               onEdit(client);
                             }}
+                            title="Edit client details"
                             >
                             <Edit className="h-4 w-4" />
                           </Button>
@@ -505,7 +474,7 @@ export function ClientsTable({
                               e.stopPropagation();
                               handleMergeClick(client.id);
                             }}
-                            title="Merge client"
+                            title="Merge this client with another client"
                           >
                             <Merge className="h-4 w-4" />
                           </Button>
@@ -516,6 +485,7 @@ export function ClientsTable({
                               e.stopPropagation();
                               onDelete(client.id);
                             }}
+                            title="Delete client permanently"
                             >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -535,6 +505,7 @@ export function ClientsTable({
                                   variant="outline"
                                   size="sm"
                                   onClick={() => onAddEvent(client.id)}
+                                  title="Add new event for this client"
                                 >
                                   <Plus className="h-3 w-3 mr-1" />
                                   Add Event
@@ -551,9 +522,9 @@ export function ClientsTable({
                                       <th className="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-300"># of Expected Attendees</th>
                                       <th className="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-300">Access Time</th>
                                       <th className="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-300">Start Time</th>
+                                      <th className="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-300">Access Expiry</th>
                                       <th className="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-300">End Time</th>
-                                      <th className="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-300">Organizer Form Sent</th>
-                                      <th className="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-300">Event Card Created</th>
+                                      <th className="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-300">Event Card</th>
                                       <th className="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-300">Event Link</th>
                                       <th className="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-300">Event Image</th>
                                       <th className="px-4 py-2 text-left font-medium text-gray-700 dark:text-gray-300">Description</th>

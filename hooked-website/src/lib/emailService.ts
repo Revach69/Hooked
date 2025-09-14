@@ -29,7 +29,7 @@ export interface EventFormData {
   eventLink?: string;
   eventImage?: string;
   posterPreference: string;
-  eventVisibility: string;
+  is_private: boolean;
   socialMedia?: string;
   eventTimezone?: string; // Added for timezone
 }
@@ -83,11 +83,11 @@ export class EmailService {
   }
 
   async sendEventFormEmail(data: EventFormData): Promise<void> {
-    const { fullName, email, phone, eventAddress, venueName, eventType, otherEventType, expectedAttendees, eventName, accessTime, startTime, endTime, posterPreference, eventVisibility } = data;
+    const { fullName, email, phone, eventAddress, venueName, eventType, otherEventType, expectedAttendees, eventName, accessTime, startTime, endTime, posterPreference, is_private } = data;
 
-    // Validate required fields
-    if (!fullName || !email || !phone || !eventAddress || !venueName || !eventType || !expectedAttendees || !eventName || !accessTime || !startTime || !endTime || !posterPreference || !eventVisibility) {
-      throw new Error('Missing required fields: fullName, email, phone, eventAddress, venueName, eventType, expectedAttendees, eventName, accessTime, startTime, endTime, posterPreference, and eventVisibility are required');
+    // Validate required fields (is_private is optional, defaults to false)
+    if (!fullName || !email || !phone || !eventAddress || !venueName || !eventType || !expectedAttendees || !eventName || !accessTime || !startTime || !endTime || !posterPreference) {
+      throw new Error('Missing required fields: fullName, email, phone, eventAddress, venueName, eventType, expectedAttendees, eventName, accessTime, startTime, endTime, and posterPreference are required');
     }
 
     // Validate that if eventType is "Other", otherEventType must be provided
@@ -168,7 +168,7 @@ export class EmailService {
   }
 
   private generateEventFormEmailContent(data: EventFormData): string {
-    const { fullName, email, phone, eventDescription, eventAddress, venueName, eventType, otherEventType, expectedAttendees, eventName, accessTime, startTime, endTime, eventLink, eventImage, posterPreference, eventVisibility, socialMedia } = data;
+    const { fullName, email, phone, eventDescription, eventAddress, venueName, eventType, otherEventType, expectedAttendees, eventName, accessTime, startTime, endTime, eventLink, eventImage, posterPreference, is_private, socialMedia } = data;
 
     const finalEventType = eventType === 'Other' ? otherEventType : eventType;
 
@@ -202,7 +202,7 @@ export class EmailService {
           <p><strong>Event Address:</strong> ${eventAddress}</p>
           <p><strong>Expected Attendees:</strong> ${expectedAttendees}</p>
           <p><strong>Poster Preference:</strong> ${posterPreference}</p>
-          <p><strong>Event Visibility:</strong> ${eventVisibility}</p>
+          <p><strong>Event Visibility:</strong> ${is_private ? 'Private' : 'Public'}</p>
           ${eventLink ? `<p><strong>Event Link:</strong> <a href="${eventLink}">${eventLink}</a></p>` : ''}
           ${eventImage ? `<p><strong>Event Image:</strong> ${eventImage}</p>` : ''}
           ${socialMedia ? `<p><strong>Social Media:</strong> ${socialMedia}</p>` : ''}

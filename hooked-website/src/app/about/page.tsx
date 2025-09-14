@@ -6,6 +6,7 @@ import MobileOptimizedImage from "../../components/MobileOptimizedImage";
 import { useEffect, useState, useRef } from "react";
 
 export default function About() {
+  const [showPreText, setShowPreText] = useState(false);
   const [showHeadline, setShowHeadline] = useState(false);
   const [showArrow, setShowArrow] = useState(false);
   const [showContent, setShowContent] = useState(false);
@@ -18,11 +19,13 @@ export default function About() {
         if (entry.isIntersecting) {
           setSectionVisible(true);
           // Start the animation sequence when section becomes visible
-          const timer1 = setTimeout(() => setShowHeadline(true), 500);
-          const timer2 = setTimeout(() => setShowArrow(true), 1500);
-          const timer3 = setTimeout(() => setShowContent(true), 2500);
+          const timer0 = setTimeout(() => setShowPreText(true), 300);
+          const timer1 = setTimeout(() => setShowHeadline(true), 800);
+          const timer2 = setTimeout(() => setShowArrow(true), 1800);
+          const timer3 = setTimeout(() => setShowContent(true), 2800);
 
           return () => {
+            clearTimeout(timer0);
             clearTimeout(timer1);
             clearTimeout(timer2);
             clearTimeout(timer3);
@@ -91,12 +94,21 @@ export default function About() {
           <div className="hidden lg:grid grid-cols-2 gap-12 h-[350px]">
             {/* Left Side - Title in upper half */}
             <div className="flex flex-col justify-start h-full pt-8">
+              {/* Pre-text */}
+              <div className={`transition-all duration-500 ease-out mb-2 ${
+                sectionVisible && showPreText ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+              }`}>
+                <p className="text-lg text-gray-600 dark:text-gray-400 font-light">
+                  We&apos;re here to
+                </p>
+              </div>
+              
               {/* Main Headline */}
               <div className={`transition-all duration-1000 ease-out ${
                 sectionVisible && showHeadline ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
               }`}>
                 <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold dark-mode-text font-heading">
-                  To make real life connection easy
+                  Make real life connections easy
                 </h2>
               </div>
             </div>
@@ -115,12 +127,21 @@ export default function About() {
           
           {/* Mobile Layout - Stacked vertically */}
           <div className="lg:hidden space-y-8">
+            {/* Pre-text */}
+            <div className={`transition-all duration-500 ease-out text-center ${
+              sectionVisible && showPreText ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+            }`}>
+              <p className="text-lg text-gray-600 dark:text-gray-400 font-light">
+                We&apos;re here to
+              </p>
+            </div>
+            
             {/* Title */}
             <div className={`transition-all duration-1000 ease-out ${
               sectionVisible && showHeadline ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
             }`}>
               <h2 className="text-4xl md:text-5xl font-bold dark-mode-text font-heading text-center">
-                To make real-life connection easy
+                Make real life connections easy
               </h2>
             </div>
             

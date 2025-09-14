@@ -39,8 +39,8 @@ const initializeFirebaseApp = () => {
     console.log('🔧 Environment check:', {
       NODE_ENV: process.env.NODE_ENV,
       projectId: firebaseConfig.projectId,
-      isDevelopment: firebaseConfig.projectId === 'hooked-development',
-      isProduction: firebaseConfig.projectId === 'hooked-69'
+      isDevelopment: firebaseConfig.projectId?.includes('development') || false,
+      isProduction: !firebaseConfig.projectId?.includes('development')
     });
     
     return { app, auth, db, storage };

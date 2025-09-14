@@ -16,12 +16,14 @@ interface EventFormData {
   expectedAttendees: string;
   eventName: string;
   accessTime: string;
+  expiresAt: string;
   startTime: string;
   endTime: string;
+  event_code: string;
   eventLink: string;
   eventImage: File | null;
   posterPreference: string;
-  eventVisibility: string;
+  is_private: boolean;
   socialMedia: string;
 }
 
@@ -53,12 +55,14 @@ export default function EventForm() {
     expectedAttendees: '',
     eventName: '',
     accessTime: '',
+    expiresAt: '',
     startTime: '',
     endTime: '',
+    event_code: '',
     eventLink: '',
     eventImage: null,
     posterPreference: '',
-    eventVisibility: '',
+    is_private: false,
     socialMedia: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -88,7 +92,7 @@ export default function EventForm() {
     setSubmitStatus('idle');
 
     // Validate required fields
-    const requiredFields = ['fullName', 'email', 'phone', 'eventAddress', 'country', 'venueName', 'eventType', 'expectedAttendees', 'eventName', 'accessTime', 'startTime', 'endTime', 'posterPreference', 'eventVisibility'];
+    const requiredFields = ['fullName', 'email', 'phone', 'eventAddress', 'country', 'venueName', 'eventType', 'expectedAttendees', 'eventName', 'accessTime', 'expiresAt', 'startTime', 'endTime', 'posterPreference'];
     const missingFields = requiredFields.filter(field => !formData[field as keyof EventFormData]);
     
     // Check if "Other" event type is selected but no specification provided
@@ -139,12 +143,14 @@ export default function EventForm() {
           expectedAttendees: '',
           eventName: '',
           accessTime: '',
+          expiresAt: '',
           startTime: '',
           endTime: '',
+          event_code: '',
           eventLink: '',
           eventImage: null,
           posterPreference: '',
-          eventVisibility: '',
+          is_private: false,
           socialMedia: ''
         });
       } else {
@@ -289,64 +295,97 @@ export default function EventForm() {
                 </div>
               </div>
 
-              {/* Access Time */}
-              <div>
-                <label htmlFor="accessTime" className="block text-sm font-medium dark-mode-text mb-2">
-                  Access Time <span className="text-red-500">*</span>
-                </label>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                  From this time users will be able to access the event on the app. Use the local time zone in your event&apos;s location.
-                </p>
-                <input
-                  type="datetime-local"
-                  id="accessTime"
-                  name="accessTime"
-                  value={formData.accessTime}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-4 py-3 border dark-mode-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark-mode-bg dark-mode-text"
-                  min={new Date().toISOString().slice(0, 16)}
-                />
-              </div>
+              {/* Event Times - 2x2 Grid */}
+              <div className="space-y-6">
+                <div className="text-lg font-semibold dark-mode-text">
+                  Event Times
+                </div>
+                
+                {/* First Row: Access Time & Start Time */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Access Time */}
+                  <div>
+                    <label htmlFor="accessTime" className="block text-sm font-medium dark-mode-text mb-2">
+                      Access Time <span className="text-red-500">*</span>
+                    </label>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                      When users can access event on mobile app
+                    </p>
+                    <input
+                      type="datetime-local"
+                      id="accessTime"
+                      name="accessTime"
+                      value={formData.accessTime}
+                      onChange={handleChange}
+                      required
+                      className="w-full px-4 py-3 border dark-mode-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark-mode-bg dark-mode-text"
+                      min={new Date().toISOString().slice(0, 16)}
+                    />
+                  </div>
 
-              {/* Start Time */}
-              <div>
-                <label htmlFor="startTime" className="block text-sm font-medium dark-mode-text mb-2">
-                  Start Time <span className="text-red-500">*</span>
-                </label>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                  Actual start time of the event. This will also be presented on our website.
-                </p>
-                <input
-                  type="datetime-local"
-                  id="startTime"
-                  name="startTime"
-                  value={formData.startTime}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-4 py-3 border dark-mode-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark-mode-bg dark-mode-text"
-                  min={new Date().toISOString().slice(0, 16)}
-                />
-              </div>
+                  {/* Start Time */}
+                  <div>
+                    <label htmlFor="startTime" className="block text-sm font-medium dark-mode-text mb-2">
+                      Start Time <span className="text-red-500">*</span>
+                    </label>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                      When event actually starts (for website display)
+                    </p>
+                    <input
+                      type="datetime-local"
+                      id="startTime"
+                      name="startTime"
+                      value={formData.startTime}
+                      onChange={handleChange}
+                      required
+                      className="w-full px-4 py-3 border dark-mode-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark-mode-bg dark-mode-text"
+                      min={new Date().toISOString().slice(0, 16)}
+                    />
+                  </div>
+                </div>
 
-              {/* End Time */}
-              <div>
-                <label htmlFor="endTime" className="block text-sm font-medium dark-mode-text mb-2">
-                  End Time <span className="text-red-500">*</span>
-                </label>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                  When event ends and everything on the app gets deleted.
-                </p>
-                <input
-                  type="datetime-local"
-                  id="endTime"
-                  name="endTime"
-                  value={formData.endTime}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-4 py-3 border dark-mode-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark-mode-bg dark-mode-text"
-                  min={new Date().toISOString().slice(0, 16)}
-                />
+                {/* Second Row: Expires At & End Time */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Expires At */}
+                  <div>
+                    <label htmlFor="expiresAt" className="block text-sm font-medium dark-mode-text mb-2">
+                      Access Expiry <span className="text-red-500">*</span>
+                    </label>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                      When app access expires
+                    </p>
+                    <input
+                      type="datetime-local"
+                      id="expiresAt"
+                      name="expiresAt"
+                      value={formData.expiresAt}
+                      onChange={handleChange}
+                      required
+                      className="w-full px-4 py-3 border dark-mode-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark-mode-bg dark-mode-text"
+                      min={new Date().toISOString().slice(0, 16)}
+                    />
+                  </div>
+
+                  {/* End Time */}
+                  <div>
+                    <label htmlFor="endTime" className="block text-sm font-medium dark-mode-text mb-2">
+                      End Time <span className="text-red-500">*</span>
+                    </label>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                      When event actually ends (for website display)
+                    </p>
+                    <input
+                      type="datetime-local"
+                      id="endTime"
+                      name="endTime"
+                      value={formData.endTime}
+                      onChange={handleChange}
+                      required
+                      className="w-full px-4 py-3 border dark-mode-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark-mode-bg dark-mode-text"
+                      min={new Date().toISOString().slice(0, 16)}
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Event Description */}
@@ -399,12 +438,12 @@ export default function EventForm() {
                   className="w-full px-4 py-3 border dark-mode-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark-mode-bg dark-mode-text"
                 >
                   <option value="">Choose one</option>
-                  <option value="Club / Nightlife Event">Club / Nightlife Event</option>
+                  <option value="Party">Party</option>
+                  <option value="Club Event">Club Event</option>
+                  <option value="Music Festival">Music Festival</option>
+                  <option value="Company Event">Company Event</option>
                   <option value="Conference">Conference</option>
-                  <option value="High-Tech / Company Event">High-Tech / Company Event</option>
-                  <option value="House Party (Private Residence)">House Party (Private Residence)</option>
                   <option value="Meetup / Networking Event">Meetup / Networking Event</option>
-                  <option value="Organized Party at a Venue">Organized Party at a Venue (e.g., rented space, bar, or event hall)</option>
                   <option value="Retreat / Offsite">Retreat / Offsite</option>
                   <option value="Wedding">Wedding</option>
                   <option value="Other">Other</option>
@@ -472,23 +511,19 @@ export default function EventForm() {
                 </select>
               </div>
 
-              {/* Event Visibility */}
-              <div>
-                <label htmlFor="eventVisibility" className="block text-sm font-medium dark-mode-text mb-2">
-                  Is your event private or public? <span className="text-red-500">*</span>
+              {/* Event Privacy */}
+              <div className="flex items-center space-x-3 p-4 border dark-mode-border rounded-lg bg-gray-50 dark:bg-gray-800">
+                <input
+                  type="checkbox"
+                  id="is_private"
+                  name="is_private"
+                  checked={formData.is_private}
+                  onChange={(e) => setFormData(prev => ({ ...prev, is_private: e.target.checked }))}
+                  className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                />
+                <label htmlFor="is_private" className="text-sm font-medium dark-mode-text">
+                  Make this event private (won&apos;t be shared on Hooked&apos;s website/IG)
                 </label>
-                <select
-                  id="eventVisibility"
-                  name="eventVisibility"
-                  value={formData.eventVisibility}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-4 py-3 border dark-mode-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark-mode-bg dark-mode-text"
-                >
-                  <option value="">Choose one</option>
-                  <option value="Private">Private (will not be shared on Hooked&apos;s website/IG)</option>
-                  <option value="Public">Public (will be listed on Hooked&apos;s website/IG)</option>
-                </select>
               </div>
 
               {/* Social Media */}
@@ -504,6 +539,26 @@ export default function EventForm() {
                   onChange={handleChange}
                   className="w-full px-4 py-3 border dark-mode-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark-mode-bg dark-mode-text"
                   placeholder="@yourinstagramhandle"
+                />
+              </div>
+
+              {/* Event Code */}
+              <div>
+                <label htmlFor="event_code" className="block text-sm font-medium dark-mode-text mb-2">
+                  Event Code (Optional)
+                </label>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                  Custom join code for your event.
+                </p>
+                <input
+                  type="text"
+                  id="event_code"
+                  name="event_code"
+                  value={formData.event_code}
+                  onChange={handleChange}
+                  className="w-full px-4 py-3 border dark-mode-border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 dark-mode-bg dark-mode-text"
+                  placeholder="e.g. PARTY2024 (leave blank for auto-generation)"
+                  maxLength={20}
                 />
               </div>
 
