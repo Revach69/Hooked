@@ -1,10 +1,21 @@
 import type { Metadata } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Link from "next/link";
 import Script from "next/script";
 import SocialLinks from "../components/SocialLinks";
 import AppStoreButtons from "../components/AppStoreButtons";
 import RouteTracker from "../components/RouteTracker";
+
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
 
 export const metadata: Metadata = {
   title: "Hooked - Meet Singles IRL at Events | Real-Life Dating App",
@@ -69,16 +80,6 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        {/* Google Fonts - Added to head to avoid CSS import issues */}
-        <link
-          href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
-          rel="stylesheet"
-        />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap"
-          rel="stylesheet"
-        />
-        
         {/* Preload critical images for faster loading */}
         <link 
           rel="preload" 
@@ -127,7 +128,7 @@ export default function RootLayout({
         />
       </head>
       <body
-        className="antialiased min-h-screen flex flex-col dark-mode-bg font-body"
+        className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen flex flex-col dark-mode-bg`}
       >
         {/* Google Analytics 4 - Using Firebase-linked property */}
         <Script
