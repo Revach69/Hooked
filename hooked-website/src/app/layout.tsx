@@ -80,6 +80,16 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        {/* Google Fonts - Added to head to avoid CSS import issues */}
+        <link
+          href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
+          rel="stylesheet"
+        />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap"
+          rel="stylesheet"
+        />
+        
         {/* Preload critical images for faster loading */}
         <link 
           rel="preload" 

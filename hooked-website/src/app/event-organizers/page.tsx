@@ -80,10 +80,10 @@ export default function EventOrganizers() {
                 </div>
                 <div>
                   <h4 className="text-lg font-semibold mb-1">
-                    Guests join by scanning
+                    Guests join by scanning a qr or entering a code
                   </h4>
                   <p className="text-gray-600 dark:text-gray-300">
-                    Create a quick profile, and see who&apos;s single
+                    Create a quick profile and see who&apos;s single
                   </p>
                 </div>
               </div>

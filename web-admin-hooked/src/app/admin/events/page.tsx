@@ -125,8 +125,24 @@ export default function EventsPage() {
       console.log('📡 Calling getEventsFromAllRegions with regions:', selectedRegionsArray);
       
       // Use environment-aware Firebase project ID
-      const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'hooked-69';
-      const response = await fetch(`https://us-central1-${projectId}.cloudfunctions.net/getEventsFromAllRegions`, {
+      const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+      console.log('🔍 DEBUG - Environment Check:', {
+        projectId,
+        allEnvKeys: Object.keys(process.env).filter(k => k.includes('FIREBASE')),
+        NODE_ENV: process.env.NODE_ENV,
+        rawProjectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
+      });
+      
+      if (!projectId) {
+        console.error('❌ CRITICAL: NEXT_PUBLIC_FIREBASE_PROJECT_ID is not defined!');
+        console.log('🔍 All available env vars:', Object.keys(process.env));
+        throw new Error('Firebase project ID is not configured');
+      }
+      
+      const fetchUrl = `https://us-central1-${projectId}.cloudfunctions.net/getEventsFromAllRegions`;
+      console.log('🌐 Fetching from URL:', fetchUrl);
+      
+      const response = await fetch(fetchUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

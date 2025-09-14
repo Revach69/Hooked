@@ -586,7 +586,7 @@ export const EventAPI = {
       
       // Use HTTP endpoint for proper CORS support
       // Use environment-aware project ID
-      const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'hooked-69';
+      const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
       const deleteUrl = `https://${functionsRegion}-${projectId}.cloudfunctions.net/deleteEventInRegion`;
       
       const response = await fetch(deleteUrl, {

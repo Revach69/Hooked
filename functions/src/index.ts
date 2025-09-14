@@ -4,15 +4,57 @@ import { onDocumentCreated, onDocumentWritten, onDocumentUpdated } from 'firebas
 import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import * as path from 'path';
+import * as fs from 'fs';
 import fetch from 'node-fetch';
 
-// Initialize Firebase Admin with service account
-const serviceAccount = require(path.join(__dirname, '../hooked-69-firebase-adminsdk-fbsvc-c7009d8539.json'));
+// Environment-aware initialization
+const projectId = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || 'hooked-69';
+const isDevelopment = projectId === 'hooked-development';
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  databaseURL: 'https://hooked-69-default-rtdb.firebaseio.com'
-});
+console.log(`🔧 Initializing Cloud Functions for project: ${projectId} (isDevelopment: ${isDevelopment})`);
+
+// Try to load environment-specific service account
+let adminConfig: admin.AppOptions = {};
+
+try {
+  // First try environment-specific service account
+  const devServiceAccountPath = path.join(__dirname, '../hooked-development-firebase-adminsdk.json');
+  const prodServiceAccountPath = path.join(__dirname, '../hooked-69-firebase-adminsdk-fbsvc-c7009d8539.json');
+  
+  const serviceAccountPath = isDevelopment ? devServiceAccountPath : prodServiceAccountPath;
+  
+  if (fs.existsSync(serviceAccountPath)) {
+    const serviceAccount = require(serviceAccountPath);
+    adminConfig = {
+      credential: admin.credential.cert(serviceAccount),
+      databaseURL: isDevelopment 
+        ? 'https://hooked-development-default-rtdb.firebaseio.com'
+        : 'https://hooked-69-default-rtdb.firebaseio.com'
+    };
+    console.log(`✅ Using service account from: ${serviceAccountPath}`);
+  } else if (isDevelopment && fs.existsSync(prodServiceAccountPath)) {
+    // Fallback for development: use default credentials if no dev service account
+    console.log('⚠️ Development service account not found, using default application credentials');
+    adminConfig = {}; // Use default credentials
+  } else if (fs.existsSync(prodServiceAccountPath)) {
+    // Production fallback
+    const serviceAccount = require(prodServiceAccountPath);
+    adminConfig = {
+      credential: admin.credential.cert(serviceAccount),
+      databaseURL: 'https://hooked-69-default-rtdb.firebaseio.com'
+    };
+    console.log(`✅ Using production service account`);
+  } else {
+    // Use default application credentials (when deployed to Cloud Functions)
+    console.log('📦 Using default application credentials (deployed environment)');
+    adminConfig = {};
+  }
+} catch (error) {
+  console.error('❌ Error loading service account, using default credentials:', error);
+  adminConfig = {};
+}
+
+admin.initializeApp(adminConfig);
 
 // Regional configuration mapping
 
@@ -29,6 +71,15 @@ const SCHEDULER_REGION = 'us-central1';
 
 // Helper function to get all active database instances for scheduled jobs
 function getAllActiveDbs(): { dbId: string; db: admin.firestore.Firestore }[] {
+  // In development, only use the default database
+  if (isDevelopment) {
+    console.log('📦 Development mode: Using only default database');
+    return [
+      { dbId: '(default)', db: getFirestore(admin.app(), '(default)') }
+    ];
+  }
+  
+  // Production: Use all regional databases
   const databases = [
     { dbId: '(default)', db: getFirestore(admin.app(), '(default)') },
     { dbId: 'au-southeast2', db: getFirestore(admin.app(), 'au-southeast2') },
@@ -608,8 +659,17 @@ export const getEventsFromAllRegions = onRequest({
     const allEvents: any[] = [];
     const seenEventIds = new Set<string>();
     
-    // Regional database mapping
-    const regionDbMapping: { [key: string]: { db: admin.firestore.Firestore; label: string } } = {
+    // Regional database mapping - environment aware
+    const regionDbMapping: { [key: string]: { db: admin.firestore.Firestore; label: string } } = isDevelopment ? {
+      // Development: Map all regions to default database
+      '(default)': { db: getDefaultDb(), label: 'Development (All Regions)' },
+      'au-southeast2': { db: getDefaultDb(), label: 'Development (All Regions)' },
+      'eu-eur3': { db: getDefaultDb(), label: 'Development (All Regions)' },
+      'us-nam5': { db: getDefaultDb(), label: 'Development (All Regions)' },
+      'asia-ne1': { db: getDefaultDb(), label: 'Development (All Regions)' },
+      'southamerica-east1': { db: getDefaultDb(), label: 'Development (All Regions)' }
+    } : {
+      // Production: Use actual regional databases
       '(default)': { db: getDefaultDb(), label: 'Israel' },
       'au-southeast2': { db: getFirestore(admin.app(), 'au-southeast2'), label: 'Australia' },
       'eu-eur3': { db: getFirestore(admin.app(), 'eu-eur3'), label: 'Europe' },

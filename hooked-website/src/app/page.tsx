@@ -114,7 +114,7 @@ export default function Home() {
             <div className="text-center lg:col-span-2">
               <p className="text-5xl md:text-6xl lg:text-7xl font-extrabold mb-6 font-heading ">Scan. Match. Meet IRL.</p>
               <p className="text-lg md:text-xl lg:text-2xl mb-10 text-white/90 font-bold font-body">
-                A live social app for any kind of event - parties, conferences,weddings...
+                A live social app to meet singles at any event - parties, conferences, weddings...
               </p>
               <div className="flex flex-col items-center space-y-4">
                 <Link
@@ -292,9 +292,6 @@ export default function Home() {
           </div>
           
           {/* Collage of images */}
-          <div className="text-center mb-6 text-white/80 text-lg font-semibold">
-            Real connections happening at events
-          </div>
           <div className="h-80 bg-white/10 rounded-xl p-4 border border-white/20">
             <Collage 
               className="h-full" 

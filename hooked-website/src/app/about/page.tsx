@@ -96,7 +96,7 @@ export default function About() {
                 sectionVisible && showHeadline ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
               }`}>
                 <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold dark-mode-text font-heading">
-                  To make real-life connection easy
+                  To make real life connection easy
                 </h2>
               </div>
             </div>
@@ -157,7 +157,7 @@ export default function About() {
               Why We&apos;re Here
             </h2>
             <div className="space-y-2 text-lg text-gray-600 dark:text-gray-300 leading-tight">
-              <p>People want to meet — they&apos;re just afraid to make a move.</p>
+              <p>People want to meet, they&apos;re just afraid to make a move.</p>
               <p>Afraid to approach.</p>
               <p>Afraid to be rejected.</p>
               <p><strong>Hooked shows you who&apos;s open — and who&apos;s interested.</strong></p>
@@ -200,7 +200,7 @@ export default function About() {
               </div>
               <h3 className="text-xl font-semibold dark-mode-text mb-2">In-Person</h3>
               <p className="text-gray-600 dark:text-gray-300">
-                Hooked is built for real life — not for staying on your phone.
+                Hooked is built for real life,not for staying on your phone.
               </p>
             </div>
           </div>
@@ -216,7 +216,7 @@ export default function About() {
           <div className="space-y-2 text-lg leading-tight">
             <p>We imagine a world where people talk again.</p>
             <p>Where you don&apos;t need a swipe to start something.</p>
-            <p>Where &quot;we met at that event&quot; becomes the norm — not the exception.</p>
+            <p>Where &quot;we met at that event&quot; becomes the norm, not the exception.</p>
             <p><strong>And Hooked is how we make that happen.</strong></p>
           </div>
         </div>
