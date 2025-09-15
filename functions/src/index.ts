@@ -41,6 +41,7 @@ try {
       adminConfig = {
         databaseURL: `https://${projectId}-default-rtdb.firebaseio.com`
       };
+    }
   }
 } catch (error) {
   console.error('❌ Error loading service account, using default credentials:', error);
@@ -2199,6 +2200,89 @@ async function getRegionalDatabaseForEvent(eventId: string): Promise<admin.fires
 }
 
 // Note: getCurrentFunctionRegion removed as it's not needed for current implementation
+
+// === HTTP Request: searchEventByCode ===
+// HTTP version of searchEventByCode with CORS support for admin dashboard
+export const searchEventByCodeHTTP = onRequest({
+  region: ALL_FUNCTION_REGIONS,
+}, async (req, res) => {
+  // Set CORS headers
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.set('Access-Control-Max-Age', '3600');
+
+  // Handle preflight request
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
+
+  if (req.method !== 'POST') {
+    res.status(405).json({ success: false, error: 'Method not allowed' });
+    return;
+  }
+
+  const { eventCode } = req.body;
+  
+  if (!eventCode || typeof eventCode !== 'string') {
+    res.status(400).json({ success: false, error: 'Event code is required' });
+    return;
+  }
+  
+  const normalizedCode = eventCode.toUpperCase();
+  console.log(`HTTP: Searching for event with code: ${normalizedCode}`);
+  
+  try {
+    // Search across all regional databases
+    const databases = getAllActiveDbs();
+    
+    for (const { dbId, db } of databases) {
+      try {
+        const eventsQuery = db.collection('events')
+          .where('event_code', '==', normalizedCode)
+          .limit(1);
+        
+        const snapshot = await eventsQuery.get();
+        
+        if (!snapshot.empty) {
+          const eventDoc = snapshot.docs[0];
+          const eventData = eventDoc.data();
+          
+          console.log(`HTTP: Found event ${normalizedCode} in database: ${dbId}`);
+          
+          // Return the event data with its ID and database location
+          res.status(200).json({
+            success: true,
+            event: {
+              id: eventDoc.id,
+              ...eventData,
+              _database: dbId,
+            }
+          });
+          return;
+        }
+      } catch (dbError) {
+        console.error(`HTTP: Error searching database ${dbId}:`, dbError);
+        // Continue searching other databases
+      }
+    }
+    
+    // Event not found in any database
+    console.log(`HTTP: Event ${normalizedCode} not found in any database`);
+    res.status(200).json({
+      success: false,
+      error: 'Event not found'
+    });
+    
+  } catch (error) {
+    console.error('HTTP: Error in searchEventByCode:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error'
+    });
+  }
+});
 
 // === HTTP Request: createEventInRegion ===
 // Creates an event in the appropriate regional database based on country

@@ -34,6 +34,7 @@ interface EventFormData {
   expiresAt: string;
   startTime: string;
   endTime: string;
+  event_code?: string;      // Match admin field name
   eventLink?: string;
   eventImage?: string;
   posterPreference: string;
@@ -49,11 +50,25 @@ export async function POST(request: NextRequest) {
     const body: Partial<EventFormData> = {};
     let imageFile: File | null = null;
     
+    console.log('📝 PROCESSING FORM DATA...');
     for (const [key, value] of formData.entries()) {
-      if (key === 'eventImage' && value instanceof File && value.size > 0) {
-        // Store the file for later upload
-        imageFile = value;
-        // Don't add to body yet - we'll add the URL after upload
+      if (key === 'eventImage') {
+        console.log('🖼️ EVENTIMAGE FIELD:', {
+          key: key,
+          isFile: value instanceof File,
+          size: value instanceof File ? value.size : 'N/A',
+          name: value instanceof File ? value.name : 'N/A',
+          type: value instanceof File ? value.type : typeof value
+        });
+        
+        if (value instanceof File && value.size > 0) {
+          // Store the file for later upload
+          imageFile = value;
+          console.log('✅ Image file stored for upload');
+          // Don't add to body yet - we'll add the URL after upload
+        } else {
+          console.log('❌ No valid image file found');
+        }
       } else if (key === 'is_private') {
         // Convert checkbox value to boolean
         (body as Record<string, unknown>)[key] = value === 'true' || value === 'on';
@@ -82,9 +97,15 @@ export async function POST(request: NextRequest) {
 
     // Upload image to Firebase Storage if provided
     let imageUrl: string | undefined;
+    
     if (imageFile) {
       try {
-        console.log('Uploading event image to Firebase Storage...');
+        console.log('📤 STARTING IMAGE UPLOAD:', {
+          filename: imageFile.name,
+          size: imageFile.size,
+          type: imageFile.type,
+          country: body.country
+        });
         
         // Get regional storage bucket based on country
         const country = body.country as string;
@@ -146,7 +167,11 @@ export async function POST(request: NextRequest) {
         
         // Get the download URL
         imageUrl = await getDownloadURL(snapshot.ref);
-        console.log('Image uploaded successfully:', imageUrl);
+        console.log('✅ IMAGE UPLOADED SUCCESSFULLY:', {
+          url: imageUrl,
+          storageBucket: storage.app.options.storageBucket,
+          filename: filename
+        });
       } catch (uploadError) {
         console.error('Failed to upload image to Storage:', uploadError);
         // Continue without image - don't fail the entire form submission
@@ -179,7 +204,12 @@ export async function POST(request: NextRequest) {
       const functions = getFunctions(app);
       const saveEventForm = httpsCallable(functions, 'saveEventForm');
       
-      console.log('Calling saveEventForm function with data:', canonicalFormData);
+      console.log('📞 CALLING SAVE EVENT FORM:', {
+        eventName: canonicalFormData.eventName,
+        country: canonicalFormData.country,
+        hasImageUrl: !!canonicalFormData.eventImage,
+        imageUrl: canonicalFormData.eventImage
+      });
       
       const result = await saveEventForm({
         formData: canonicalFormData
@@ -203,17 +233,18 @@ export async function POST(request: NextRequest) {
       // This ensures the form still works even if Firebase Functions are not available
     }
 
-    // Send email as backup - use canonicalized data
+    // Send email notifications - use canonicalized data
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-      console.warn('Email credentials not configured (EMAIL_USER/EMAIL_PASS), skipping email sending');
+      console.warn('❌ Email credentials not configured (EMAIL_USER/EMAIL_PASS), skipping email sending');
+      console.warn('⚠️  Set EMAIL_USER and EMAIL_PASS environment variables to enable email notifications');
     } else {
       try {
-        console.log('Attempting to send email with EmailService...');
+        console.log('📧 Attempting to send event form email notifications...');
         const emailService = new EmailService();
         await emailService.sendEventFormEmail(canonicalFormData as unknown as EventFormData);
-        console.log('Email sent successfully');
+        console.log('✅ Event form email notifications sent successfully');
       } catch (emailError: unknown) {
-        console.error('Failed to send email:', emailError);
+        console.error('❌ Failed to send email:', emailError);
         console.error('Email Error details:', {
           message: (emailError as Error)?.message,
           stack: (emailError as Error)?.stack
@@ -221,7 +252,8 @@ export async function POST(request: NextRequest) {
         
         // Don't fail the entire request if only email sending fails
         // The database save might have succeeded via cloud function
-        console.warn('Email sending failed, but continuing with success response');
+        console.warn('⚠️  Email sending failed, but continuing with success response');
+        console.warn('💾 Event form data was still saved to database via cloud function');
       }
     }
 

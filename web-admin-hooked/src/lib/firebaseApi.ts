@@ -336,22 +336,34 @@ export const EventAPI = {
   async filter(filters: Partial<Event> = {}): Promise<Event[]> {
     // Use getEventsFromAllRegions cloud function for multi-region support
     try {
-      const app = getApp();
-      const functions = getFunctions(app);
-      const getEventsFromAllRegions = httpsCallable(functions, 'getEventsFromAllRegions');
+      const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+      if (!projectId) {
+        throw new Error('Firebase project ID is not configured');
+      }
       
-      const result = await getEventsFromAllRegions({ 
-        eventCode: filters.event_code,
-        eventId: filters.id
+      const functionsUrl = `https://us-central1-${projectId}.cloudfunctions.net/getEventsFromAllRegions`;
+      
+      const response = await fetch(functionsUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          selectedRegions: ['me-west1', 'australia-southeast2', 'us-central1', 'europe-west3', 'asia-northeast1', 'southamerica-east1'],
+          filters: {
+            eventCode: filters.event_code,
+            eventId: filters.id
+          }
+        }),
       });
       
-      const responseData = result.data as { 
+      const responseData = await response.json() as { 
         success: boolean; 
         events?: Event[]; 
         error?: string 
       };
       
-      if (responseData.success && responseData.events) {
+      if (response.ok && responseData.success && responseData.events) {
         return responseData.events.map(event => {
           // Convert Timestamp objects to proper format
           const processedEvent = {
@@ -442,21 +454,94 @@ export const EventAPI = {
     return uniqueEvents.map(populateRegionConfig);
   },
 
+  async searchByCode(code: string): Promise<Event | null> {
+    if (!code) return null;
+    
+    try {
+      // Use the cloud function to search across all regions efficiently
+      // This avoids creating multiple Firebase app instances in the browser
+      const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+      if (!projectId) {
+        throw new Error('Firebase project ID is not configured');
+      }
+      
+      // Use HTTP cloud function endpoint to search across regions
+      const fetchUrl = `https://me-west1-${projectId}.cloudfunctions.net/searchEventByCodeHTTP`;
+      
+      const response = await fetch(fetchUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ eventCode: code }),
+      });
+
+      if (response.ok) {
+        const responseData = await response.json() as { 
+          success: boolean; 
+          event?: Event;
+          error?: string;
+        };
+        
+        if (responseData.success && responseData.event) {
+          return populateRegionConfig(responseData.event);
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to search via cloud function, falling back to direct search:', error);
+    }
+    
+    // Fallback to direct search in default database only (to minimize Firebase app creation)
+    try {
+      const dbInstance = getDbInstance();
+      const eventsQuery = query(
+        collection(dbInstance, 'events'),
+        where('event_code', '==', code)
+      );
+      const querySnapshot = await getDocs(eventsQuery);
+      
+      if (!querySnapshot.empty) {
+        const doc = querySnapshot.docs[0];
+        const event = { id: doc.id, ...doc.data() } as Event;
+        return populateRegionConfig(event);
+      }
+    } catch (error) {
+      console.warn('Failed to search default database for event code:', error);
+    }
+    
+    return null;
+  },
+
   async get(id: string, eventCountry?: string): Promise<Event | null> {
     // Use getEventsFromAllRegions cloud function for multi-region support
     try {
-      const app = getApp();
-      const functions = getFunctions(app);
-      const getEventsFromAllRegions = httpsCallable(functions, 'getEventsFromAllRegions');
+      const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+      if (!projectId) {
+        throw new Error('Firebase project ID is not configured');
+      }
       
-      const result = await getEventsFromAllRegions({ eventId: id });
-      const responseData = result.data as { 
+      const functionsUrl = `https://us-central1-${projectId}.cloudfunctions.net/getEventsFromAllRegions`;
+      
+      const response = await fetch(functionsUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          selectedRegions: ['me-west1', 'australia-southeast2', 'us-central1', 'europe-west3', 'asia-northeast1', 'southamerica-east1'],
+          filters: {
+            eventId: id
+          }
+        }),
+      });
+      
+      const responseData = await response.json() as { 
         success: boolean; 
         events?: Event[]; 
         error?: string 
       };
       
-      if (responseData.success && responseData.events && responseData.events.length > 0) {
+      if (response.ok && responseData.success && responseData.events && responseData.events.length > 0) {
         const event = responseData.events.find(e => e.id === id);
         if (event) {
           // Convert Timestamp objects to proper format
@@ -531,12 +616,19 @@ export const EventAPI = {
       throw new Error(`Event with id ${id} not found`);
     }
 
-    // Process the data to handle null values properly
+    // Process the data to handle null and undefined values properly
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let updateData: any = {
-      ...data,
       updated_at: serverTimestamp(),
     };
+
+    // Only include fields that are not undefined
+    Object.keys(data).forEach(key => {
+      const value = data[key as keyof Event];
+      if (value !== undefined) {
+        updateData[key] = value;
+      }
+    });
 
     // If country is being updated, update region configuration
     if (data.country && data.country !== existingEvent.country) {

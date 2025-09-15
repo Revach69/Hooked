@@ -530,33 +530,59 @@ export default function EventsPage() {
           className="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
           onClick={() => toggleEventExpansion(event.id)}
         >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                {event.name}
-              </h3>
-              <span className={`${status.bgColor} ${status.color} px-3 py-1 rounded-full text-sm font-medium`}>
-                {status.status}
-              </span>
-              {event._region && (
-                <span className="bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 px-3 py-1 rounded-full text-sm font-medium">
-                  {event._region}
-                </span>
-              )}
-            </div>
+          <div className="flex items-start gap-4">
+            {/* Event Image Thumbnail */}
+            {event.image_url && (
+              <div className="w-24 h-24 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-700 flex-shrink-0">
+                <img 
+                  src={event.image_url} 
+                  alt={event.name}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    // Hide image if it fails to load
+                    const target = e.target as HTMLImageElement;
+                    target.parentElement?.classList.add('hidden');
+                  }}
+                />
+              </div>
+            )}
             
-            <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400">
-              <div className="flex items-center space-x-1">
-                <Calendar className="h-4 w-4" />
-                <span>{formatDate(event.starts_at, event.timezone)}</span>
+            <div className="flex-1">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center space-x-3">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    {event.name}
+                  </h3>
+                  <span className={`${status.bgColor} ${status.color} px-3 py-1 rounded-full text-sm font-medium`}>
+                    {status.status}
+                  </span>
+                  {event._region && (
+                    <span className="bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 px-3 py-1 rounded-full text-sm font-medium">
+                      {event._region}
+                    </span>
+                  )}
+                </div>
               </div>
-              <div className="flex items-center space-x-1">
-                <MapPin className="h-4 w-4" />
-                <span>{event.location}</span>
+              
+              <div className="flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400">
+                <div className="flex items-center space-x-1">
+                  <Calendar className="h-4 w-4" />
+                  <span>{formatDate(event.starts_at, event.timezone)}</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <MapPin className="h-4 w-4" />
+                  <span>{event.location}</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <span>Code: <code className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">{event.event_code}</code></span>
+                </div>
               </div>
-              <div className="flex items-center space-x-1">
-                <span>Code: <code className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">{event.event_code}</code></span>
-              </div>
+              
+              {event.description && (
+                <p className="mt-2 text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+                  {event.description}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -565,7 +591,7 @@ export default function EventsPage() {
         {isExpanded && (
           <div className="border-t border-gray-200 dark:border-gray-700 p-6 bg-gray-50 dark:bg-gray-700">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Left Side - QR Code */}
+              {/* Left Side - QR Code and Event Image */}
               <div>
                 <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">QR Code</h4>
                 <div className="flex flex-col items-center">
@@ -584,6 +610,35 @@ export default function EventsPage() {
                     Download QR
                   </button>
                 </div>
+                
+                {/* Event Image */}
+                {event.image_url && (
+                  <div className="mt-6">
+                    <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Event Image</h4>
+                    <div className="flex flex-col items-center">
+                      <div className="w-48 h-60 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden shadow-sm border border-gray-200 dark:border-gray-600">
+                        <img 
+                          src={event.image_url} 
+                          alt={event.name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.parentElement?.classList.add('hidden');
+                          }}
+                        />
+                      </div>
+                      <a
+                        href={event.image_url}
+                        download={`${event.name.replace(/[^a-z0-9]/gi, '_')}_image.jpg`}
+                        className="mt-4 flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm"
+                        title="Download event image"
+                      >
+                        <Download className="h-4 w-4" />
+                        Download Image
+                      </a>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Middle - Schedule */}

@@ -137,32 +137,48 @@ export function EventFormCard({ form, onEdit, onDelete, onConvert, linkedClientN
             <span>{form.phone}</span>
           </div>
           
-          {/* Event Details - Three separate times */}
-          {form.accessTime && (
+          {/* Event Details - All four timestamp fields */}
+          {/* Access time (when users can join) */}
+          {(form.accessTime || form.starts_at) && (
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <Calendar className="h-4 w-4" />
               <span className="font-medium">Access:</span>
-              <span>{formatDate(form.accessTime)}</span>
+              <span>{formatDate(form.accessTime || (form.starts_at && typeof form.starts_at === 'string' ? form.starts_at : ''))}</span>
             </div>
           )}
-          {form.startTime && (
+          
+          {/* Real event start time */}
+          {(form.startTime || form.start_date) && (
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <Calendar className="h-4 w-4" />
-              <span className="font-medium">Start:</span>
-              <span>{formatDate(form.startTime)}</span>
+              <span className="font-medium">Event Starts:</span>
+              <span>{formatDate(form.startTime || (form.start_date && typeof form.start_date === 'string' ? form.start_date : ''))}</span>
             </div>
           )}
-          {form.endTime && (
+          
+          {/* Access expiry time */}
+          {(form.expires_at) && (
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <Calendar className="h-4 w-4" />
-              <span className="font-medium">End:</span>
-              <span>{formatDate(form.endTime)}</span>
+              <span className="font-medium">Access Expires:</span>
+              <span>{formatDate(typeof form.expires_at === 'string' ? form.expires_at : '')}</span>
             </div>
           )}
-          {/* Fallback to legacy eventDate if new fields don't exist */}
-          {!form.accessTime && !form.startTime && !form.endTime && form.eventDate && (
+          
+          {/* Real event end time */}
+          {(form.endTime || form.end_date) && (
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <Calendar className="h-4 w-4" />
+              <span className="font-medium">Event Ends:</span>
+              <span>{formatDate(form.endTime || (form.end_date && typeof form.end_date === 'string' ? form.end_date : ''))}</span>
+            </div>
+          )}
+          
+          {/* Fallback to legacy eventDate if no other fields exist */}
+          {!form.accessTime && !form.starts_at && !form.startTime && !form.start_date && !form.endTime && !form.end_date && !form.expires_at && form.eventDate && (
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <Calendar className="h-4 w-4" />
+              <span className="font-medium">Date:</span>
               <span>{formatDate(form.eventDate)}</span>
             </div>
           )}

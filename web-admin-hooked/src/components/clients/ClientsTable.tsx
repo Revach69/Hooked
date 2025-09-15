@@ -112,10 +112,22 @@ export function ClientsTable({
     }
   };
 
-  const formatDateTime = (dateTimeString: string | null) => {
-    if (!dateTimeString) return '-';
+  const formatDateTime = (dateTime: string | Date | import('firebase/firestore').Timestamp | null) => {
+    if (!dateTime) return '-';
     try {
-      const date = new Date(dateTimeString);
+      let date: Date;
+      
+      if (dateTime instanceof Date) {
+        date = dateTime;
+      } else if (typeof dateTime === 'string') {
+        date = new Date(dateTime);
+      } else if (dateTime && typeof dateTime === 'object' && 'toDate' in dateTime) {
+        // Firestore Timestamp
+        date = (dateTime as any).toDate();
+      } else {
+        return 'Invalid Date';
+      }
+      
       return date.toLocaleString('en-US', {
         month: 'short',
         day: 'numeric',
@@ -124,7 +136,7 @@ export function ClientsTable({
         hour12: false
       });
     } catch {
-      return dateTimeString;
+      return 'Invalid Date';
     }
   };
 

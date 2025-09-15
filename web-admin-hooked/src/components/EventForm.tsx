@@ -206,6 +206,25 @@ export default function EventForm({
       // Generate a new event code for duplication (random 6 character string)
       const generateEventCode = () => Math.random().toString(36).substring(2, 8).toUpperCase();
       
+      // Debug: Log timestamp conversion for troubleshooting
+      console.log('🕒 EventForm: Loading event timestamps:', {
+        eventId: event.id,
+        eventName: event.name,
+        rawTimestamps: {
+          starts_at: event.starts_at,
+          start_date: event.start_date,
+          expires_at: event.expires_at,
+          end_date: event.end_date,
+        },
+        convertedStrings: {
+          starts_at: startsAtString,
+          start_date: startDateString,
+          expires_at: expiresAtString,
+          end_date: endDateString,
+        },
+        timezone: eventTimezone
+      });
+
       setFormData({
         name: isDuplicating ? `${event.name} (Copy)` : (event.name || ''),
         event_code: isDuplicating ? generateEventCode() : (event.event_code || ''),
@@ -640,7 +659,6 @@ export default function EventForm({
         starts_at: localEventTimeStringToUTCTimestamp(formData.starts_at, formData.timezone).toDate(),
         start_date: localEventTimeStringToUTCTimestamp(formData.start_date, formData.timezone).toDate(),
         expires_at: localEventTimeStringToUTCTimestamp(formData.expires_at, formData.timezone).toDate(),
-        end_date: formData.end_date ? localEventTimeStringToUTCTimestamp(formData.end_date, formData.timezone).toDate() : undefined,
         event_type: formData.event_type,
         event_link: formData.event_link,
         is_private: formData.is_private,
@@ -648,6 +666,11 @@ export default function EventForm({
         timezone: formData.timezone,
         region: formData.region, // Building block for future database region assignment
       };
+
+      // Only add end_date if it has a value (avoid sending undefined to Firestore)
+      if (formData.end_date && formData.end_date.trim()) {
+        eventData.end_date = localEventTimeStringToUTCTimestamp(formData.end_date, formData.timezone).toDate();
+      }
 
       // Handle image_url field
       if (imageUrl && typeof imageUrl === 'string') {

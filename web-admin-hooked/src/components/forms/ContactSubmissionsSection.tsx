@@ -27,6 +27,7 @@ export function ContactSubmissionsSection({
   const [isLoading, setIsLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [convertingSubmission, setConvertingSubmission] = useState<ContactFormSubmission | null>(null);
 
   // Load submissions when expanded
   useEffect(() => {

@@ -38,19 +38,41 @@ export class EmailService {
   private transporter: nodemailer.Transporter;
 
   constructor() {
-    this.transporter = nodemailer.createTransport({
-      service: process.env.EMAIL_SERVICE || 'gmail',
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
+    // Check if using custom domain email or Gmail
+    const isCustomDomain = process.env.EMAIL_USER && !process.env.EMAIL_USER.includes('@gmail.com');
+    
+    if (isCustomDomain && !process.env.EMAIL_HOST) {
+      // For custom domains using Gmail's SMTP (Google Workspace)
+      this.transporter = nodemailer.createTransport({
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false,
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS,
+        },
+      });
+    } else if (process.env.EMAIL_HOST) {
       // For custom SMTP servers
-      ...(process.env.EMAIL_HOST && {
+      this.transporter = nodemailer.createTransport({
         host: process.env.EMAIL_HOST,
         port: parseInt(process.env.EMAIL_PORT || '587'),
         secure: process.env.EMAIL_SECURE === 'true',
-      }),
-    });
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS,
+        },
+      });
+    } else {
+      // For regular Gmail accounts
+      this.transporter = nodemailer.createTransport({
+        service: process.env.EMAIL_SERVICE || 'gmail',
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS,
+        },
+      });
+    }
   }
 
   async sendContactFormEmail(data: ContactFormData): Promise<void> {
@@ -67,7 +89,7 @@ export class EmailService {
 
     const mailOptions = {
       from: process.env.EMAIL_USER,
-      to: process.env.EMAIL_TO || 'roi@hooked-app.com',
+      to: process.env.EMAIL_TO || 'contact@hooked-app.com',
       subject: subject,
       html: htmlContent,
       replyTo: email,

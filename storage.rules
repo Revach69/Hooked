@@ -28,10 +28,26 @@ service firebase.storage {
       allow write: if 
         // Allow image files only
         request.resource.contentType.matches('image/.*') &&
-        // File size limit (5MB for event images)
-        request.resource.size < 5 * 1024 * 1024 &&
+        // File size limit (20MB for event images - larger for high quality)
+        request.resource.size < 20 * 1024 * 1024 &&
         // File name must be safe and follow the pattern: events/timestamp_randomstring.extension
         request.resource.name.matches('^events/[0-9]+_[a-zA-Z0-9]+\\.[a-zA-Z0-9]+$');
+    }
+    
+    // ===== EVENT FORM IMAGES =====
+    // Allow public read access to event form images (from website submissions)
+    match /event-forms/{fileName} {
+      allow read: if true;
+      
+      // Allow uploads for event form images (website form submissions)
+      // This allows session-based uploads without strict Firebase Auth requirement
+      allow write: if 
+        // Allow image files only
+        request.resource.contentType.matches('image/.*') &&
+        // File size limit (20MB for event form images - larger for high quality)
+        request.resource.size < 20 * 1024 * 1024 &&
+        // File name must be safe and follow the pattern: event-forms/timestamp_filename.extension
+        request.resource.name.matches('^event-forms/[0-9]+_[a-zA-Z0-9._-]+$');
     }
     
     // ===== ADMIN FILES =====

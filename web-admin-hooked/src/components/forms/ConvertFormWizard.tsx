@@ -66,6 +66,11 @@ export default function ConvertFormWizard({
     adminNotes: false
   });
   
+  // State for event code
+  const [eventCode, setEventCode] = useState('');
+  const [isValidatingCode, setIsValidatingCode] = useState(false);
+  const [codeError, setCodeError] = useState<string | null>(null);
+  
   // State for editing new client data
   const [newClientData, setNewClientData] = useState({
     name: '',
@@ -89,6 +94,9 @@ export default function ConvertFormWizard({
       setShowAllClients(false);
       setSearchQuery('');
       setError(null);
+      setEventCode(form.event_code || generateEventCode());
+      setCodeError(null);
+      setIsValidatingCode(false);
       setFieldCopies({
         pocName: false,
         email: false,
@@ -167,6 +175,36 @@ export default function ConvertFormWizard({
     }
   };
 
+  const validateEventCode = async (code: string): Promise<boolean> => {
+    if (!code || code.length < 3) {
+      setCodeError('Event code must be at least 3 characters');
+      return false;
+    }
+
+    setIsValidatingCode(true);
+    setCodeError(null);
+    
+    try {
+      const { EventAPI } = await import('@/lib/firebaseApi');
+      
+      // Search across all regional databases
+      const existingEvent = await EventAPI.searchByCode(code);
+      
+      if (existingEvent) {
+        setCodeError(`This code is already in use by event: ${existingEvent.name}`);
+        return false;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Failed to validate event code:', error);
+      setCodeError('Failed to validate code. Please try again.');
+      return false;
+    } finally {
+      setIsValidatingCode(false);
+    }
+  };
+
   // Validation functions
   const validateStep = (step: WizardStep): string | null => {
     switch (step) {
@@ -207,7 +245,7 @@ export default function ConvertFormWizard({
     }
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     // Clear any previous errors
     setError(null);
     
@@ -221,6 +259,11 @@ export default function ConvertFormWizard({
     if (currentStep === 1) {
       setCurrentStep(2); // Always go to step 2
     } else if (currentStep === 2) {
+      // Validate event code before proceeding to step 3
+      const isCodeValid = await validateEventCode(eventCode);
+      if (!isCodeValid) {
+        return;
+      }
       setCurrentStep(3);
     }
   };
@@ -296,9 +339,24 @@ export default function ConvertFormWizard({
       const eventTimezone = form.timezone || getPrimaryTimezoneForCountry(eventCountry);
       
       // Helper function to safely convert form time strings to UTC Date objects
-      const convertFormTimeToUTC = (timeString: string | undefined, fallbackDate: Date): Date => {
-        if (!timeString || typeof timeString !== 'string') {
-          console.warn('Invalid time string, using fallback:', timeString);
+      const convertFormTimeToUTC = (timeString: string | Date | undefined, fallbackDate: Date): Date => {
+        if (!timeString) {
+          console.warn('No time string provided, using fallback');
+          return fallbackDate;
+        }
+        
+        // Handle Date objects directly
+        if (timeString instanceof Date) {
+          return timeString;
+        }
+        
+        // Handle Timestamp objects
+        if (typeof timeString === 'object' && 'toDate' in timeString) {
+          return (timeString as any).toDate();
+        }
+        
+        if (typeof timeString !== 'string') {
+          console.warn('Invalid time string type, using fallback:', timeString, typeof timeString);
           return fallbackDate;
         }
         
@@ -315,16 +373,39 @@ export default function ConvertFormWizard({
         }
       };
 
+      // Debug: Check what's in the form image field
+      console.log('🖼️ Form eventImage:', form.eventImage);
+      console.log('🖼️ Form eventImage type:', typeof form.eventImage);
+      console.log('🖼️ Is valid URL?', form.eventImage && form.eventImage.startsWith('http'));
+      
+      // Calculate fallback dates based on form data
+      const baseStartDate = convertFormTimeToUTC(form.startTime || form.start_date, new Date());
+      const baseAccessDate = convertFormTimeToUTC(form.accessTime || form.starts_at, baseStartDate);
+      const baseEndDate = convertFormTimeToUTC(form.endTime || form.end_date, new Date(baseStartDate.getTime() + 4 * 60 * 60 * 1000)); // Default 4 hours after start
+      
+      // Debug logging for end date conversion
+      console.log('🕒 Form end date conversion:', {
+        formEndTime: form.endTime,
+        formEndDate: form.end_date,
+        baseStartDate: baseStartDate.toISOString(),
+        baseEndDate: baseEndDate.toISOString(),
+        hasFormEndTime: !!form.endTime,
+        hasFormEndDate: !!form.end_date
+      });
+      
+      // Default expires_at to 24 hours after start_date if not provided
+      const defaultExpiresAt = new Date(baseStartDate.getTime() + 24 * 60 * 60 * 1000);
+      
       // Create event from form data with proper timezone conversion
       const eventData = {
         name: form.eventName,
         description: form.eventDescription || form.eventDetails || '',
-        // Apply timezone conversion to all time fields
-        starts_at: convertFormTimeToUTC(form.accessTime || form.starts_at, new Date()), // Access time for mobile app
-        start_date: convertFormTimeToUTC(form.startTime || form.start_date || form.eventDate, new Date()), // Real event start time
-        expires_at: convertFormTimeToUTC(form.expiresAt || form.expires_at, new Date()), // When access expires
-        end_date: convertFormTimeToUTC(form.endTime || form.end_date, new Date()), // Real event end time
-        event_code: form.event_code || generateEventCode(), // Use custom code or generate unique code
+        // Apply timezone conversion to all time fields - corrected mapping based on semantic meaning:
+        starts_at: baseAccessDate, // When users can access the event (mobile app access)
+        start_date: baseStartDate, // When the real event actually starts 
+        expires_at: convertFormTimeToUTC(form.expires_at, defaultExpiresAt), // When mobile app access expires (event gone from app)
+        end_date: baseEndDate, // When the real event actually ends
+        event_code: eventCode, // Use the validated event code
         location: form.venueName,
         organizer_email: form.email,
         is_active: false, // Starts inactive until admin enables
@@ -337,7 +418,30 @@ export default function ConvertFormWizard({
         clientId: targetClient.id // Link to client
       };
       
-      const createdEvent = await EventAPI.create(eventData);
+      // Remove undefined values to avoid Firestore errors
+      const cleanEventData = Object.fromEntries(
+        Object.entries(eventData).filter(([_, value]) => value !== undefined)
+      );
+      
+      // Debug: Log the final event data being sent to EventAPI
+      console.log('📝 Final event data for creation:', {
+        ...cleanEventData,
+        starts_at: cleanEventData.starts_at?.toISOString?.() || cleanEventData.starts_at,
+        start_date: cleanEventData.start_date?.toISOString?.() || cleanEventData.start_date,
+        expires_at: cleanEventData.expires_at?.toISOString?.() || cleanEventData.expires_at,
+        end_date: cleanEventData.end_date?.toISOString?.() || cleanEventData.end_date,
+      });
+
+      const createdEvent = await EventAPI.create(cleanEventData);
+      
+      // Debug: Log the created event to verify end_date is preserved
+      console.log('✅ Created event with timestamps:', {
+        id: createdEvent.id,
+        starts_at: createdEvent.starts_at,
+        start_date: createdEvent.start_date,
+        expires_at: createdEvent.expires_at,
+        end_date: createdEvent.end_date,
+      });
       
       // Add the created event to the client's events array
       const clientDoc = await AdminClientAPI.get(targetClient.id);
@@ -346,13 +450,13 @@ export default function ConvertFormWizard({
         const newClientEvent = {
           id: createdEvent.id, // Use the global event ID
           expectedAttendees: convertExpectedAttendees(form.expectedAttendees),
-          // Use the properly converted UTC dates from the created event
-          starts_at: createdEvent.starts_at,
-          start_date: createdEvent.start_date,
-          expires_at: createdEvent.expires_at,
-          end_date: createdEvent.end_date,
-          organizerFormSent: 'No',
-          eventCardCreated: 'No', 
+          // Use the properly converted UTC dates from the created event (all 4 timestamp fields)
+          starts_at: createdEvent.starts_at, // When users can access event on mobile app
+          start_date: createdEvent.start_date, // When the real event actually starts  
+          expires_at: createdEvent.expires_at, // When mobile app access expires
+          end_date: createdEvent.end_date, // When the real event actually ends
+          organizerFormSent: 'No' as const,
+          eventCardCreated: 'No' as const, 
           description: form.eventDescription || form.eventDetails || '',
           eventLink: form.eventLink || null,
           eventImage: form.eventImage || null,
@@ -613,6 +717,50 @@ export default function ConvertFormWizard({
 
           {currentStep === 2 && mode === 'new' && (
             <div className="space-y-6">
+              {/* Event Code Field */}
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                  Event Code
+                </h3>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Enter a unique code for this event
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={eventCode}
+                      onChange={(e) => {
+                        setEventCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''));
+                        setCodeError(null);
+                      }}
+                      className={`flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white ${
+                        codeError ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder="e.g., NYC2024"
+                      maxLength={10}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setEventCode(generateEventCode())}
+                      disabled={isValidatingCode}
+                    >
+                      Generate
+                    </Button>
+                  </div>
+                  {codeError && (
+                    <p className="text-sm text-red-600 dark:text-red-400">{codeError}</p>
+                  )}
+                  {isValidatingCode && (
+                    <p className="text-sm text-gray-500">Validating code...</p>
+                  )}
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    This code will be used for attendees to join the event
+                  </p>
+                </div>
+              </div>
+
               {/* Edit New Client Details */}
               <div>
                 <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
@@ -757,6 +905,50 @@ export default function ConvertFormWizard({
 
           {currentStep === 2 && mode === 'attach' && (
             <div className="space-y-6">
+              {/* Event Code Field */}
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                  Event Code
+                </h3>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Enter a unique code for this event
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={eventCode}
+                      onChange={(e) => {
+                        setEventCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''));
+                        setCodeError(null);
+                      }}
+                      className={`flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white ${
+                        codeError ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder="e.g., NYC2024"
+                      maxLength={10}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setEventCode(generateEventCode())}
+                      disabled={isValidatingCode}
+                    >
+                      Generate
+                    </Button>
+                  </div>
+                  {codeError && (
+                    <p className="text-sm text-red-600 dark:text-red-400">{codeError}</p>
+                  )}
+                  {isValidatingCode && (
+                    <p className="text-sm text-gray-500">Validating code...</p>
+                  )}
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    This code will be used for attendees to join the event
+                  </p>
+                </div>
+              </div>
+
               {/* Search and Filter */}
               <div className="flex gap-4">
                 <div className="flex-1 relative">
@@ -960,9 +1152,9 @@ export default function ConvertFormWizard({
             {currentStep < 3 ? (
               <Button
                 onClick={handleNext}
-                disabled={isLoading || (currentStep === 2 && mode === 'attach' && !selectedClient)}
+                disabled={isLoading || isValidatingCode || (currentStep === 2 && mode === 'attach' && !selectedClient)}
               >
-                Next
+                {isValidatingCode ? 'Validating...' : 'Next'}
                 <ChevronRight size={16} className="ml-1" />
               </Button>
             ) : (
