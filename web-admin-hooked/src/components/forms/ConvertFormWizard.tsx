@@ -408,7 +408,7 @@ export default function ConvertFormWizard({
         event_code: eventCode, // Use the validated event code
         location: form.venueName,
         organizer_email: form.email,
-        is_active: false, // Starts inactive until admin enables
+        is_active: true, // Events are active by default
         is_private: form.is_private || false, // Private events don't appear on IRL page
         event_type: form.eventType || 'Other',
         timezone: eventTimezone, // Use the properly determined timezone

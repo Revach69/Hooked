@@ -233,7 +233,7 @@ export async function POST(request: NextRequest) {
       // This ensures the form still works even if Firebase Functions are not available
     }
 
-    // Send email notifications - use canonicalized data
+    // Send email notifications - use original field names for EmailService
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
       console.warn('❌ Email credentials not configured (EMAIL_USER/EMAIL_PASS), skipping email sending');
       console.warn('⚠️  Set EMAIL_USER and EMAIL_PASS environment variables to enable email notifications');
@@ -241,8 +241,13 @@ export async function POST(request: NextRequest) {
       try {
         console.log('📧 Attempting to send event form email notifications...');
         const emailService = new EmailService();
-        await emailService.sendEventFormEmail(canonicalFormData as unknown as EventFormData);
-        console.log('✅ Event form email notifications sent successfully');
+        // Pass original form data with original field names that EmailService expects
+        const emailFormData: EventFormData = {
+          ...body,
+          eventImage: imageUrl || undefined,
+        } as EventFormData;
+        await emailService.sendEventFormEmail(emailFormData);
+        console.log('✅ Event form email notifications sent successfully to contact@hooked-app.com');
       } catch (emailError: unknown) {
         console.error('❌ Failed to send email:', emailError);
         console.error('Email Error details:', {

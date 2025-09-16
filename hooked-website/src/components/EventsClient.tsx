@@ -7,21 +7,26 @@ import { trackEventCardClick, trackJoinEvent, trackModalOpen, trackFilterUsage }
 
 const eventTypes = [
   { id: 'all', name: 'All Events' },
-  { id: 'parties', name: 'Parties' },
-  { id: 'conferences', name: 'Conferences & Meetups' },
-  { id: 'private', name: 'Private Events' },
-  { id: 'bars', name: 'Bars & Lounges' }
+  { id: 'Party', name: 'Party' },
+  { id: 'Club Event', name: 'Club Event' },
+  { id: 'Music Festival', name: 'Music Festival' },
+  { id: 'Company Event', name: 'Company Event' },
+  { id: 'Conference', name: 'Conference' },
+  { id: 'Meetup / Networking event', name: 'Meetup / Networking event' },
+  { id: 'Retreat Offsite', name: 'Retreat Offsite' },
+  { id: 'Wedding', name: 'Wedding' },
+  { id: 'Other', name: 'Other' }
 ];
 
+// Regional filters - matches the database regions from Cloud Function
 const countries = [
-  { id: 'all', name: 'All Countries' },
+  { id: 'all', name: 'All' },
   { id: 'Israel', name: 'Israel' },
+  { id: 'USA + Canada', name: 'USA + Canada' },
+  { id: 'Europe', name: 'Europe' },
   { id: 'Australia', name: 'Australia' },
-  { id: 'United States', name: 'United States' },
-  { id: 'Canada', name: 'Canada' },
-  { id: 'United Kingdom', name: 'United Kingdom' },
-  { id: 'Germany', name: 'Germany' },
-  { id: 'France', name: 'France' }
+  { id: 'Asia', name: 'Asia' },
+  { id: 'South America', name: 'South America' }
 ];
 
 // Helper function to capitalize event types (currently unused but kept for future use)
@@ -150,7 +155,11 @@ export default function EventsClient() {
   const filteredEvents = events
     .filter(event => {
       const typeMatch = selectedType === 'all' || event.event_type === selectedType;
-      const countryMatch = selectedCountry === 'all' || event.country === selectedCountry;
+      
+      // Handle regional filtering using _region field from Cloud Function
+      const countryMatch = selectedCountry === 'all' || 
+        event._region === selectedCountry; // Use _region field added by Cloud Function
+      
       return typeMatch && countryMatch;
     })
     .sort((a, b) => {

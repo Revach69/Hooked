@@ -5,7 +5,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { signInAnonymously } from 'firebase/auth';
 
 // Utility function to convert Firestore Timestamps to Date objects
-export const toDate = (dateInput: string | Date | { toDate?: () => Date; seconds?: number }): Date => {
+export const toDate = (dateInput: string | Date | { toDate?: () => Date; seconds?: number; _seconds?: number }): Date => {
   if (!dateInput) return new Date();
   try {
     if (typeof dateInput === 'string') {
@@ -15,9 +15,11 @@ export const toDate = (dateInput: string | Date | { toDate?: () => Date; seconds
     } else if (typeof dateInput === 'object' && dateInput.toDate && typeof dateInput.toDate === 'function') {
       // Firestore Timestamp
       return dateInput.toDate();
-    } else if (typeof dateInput === 'object' && 'seconds' in dateInput) {
-      // Firestore Timestamp object with seconds
-      return new Date((dateInput as { seconds: number }).seconds * 1000);
+    } else if (typeof dateInput === 'object' && ('seconds' in dateInput || '_seconds' in dateInput)) {
+      // Firestore Timestamp object with seconds or _seconds
+      const timestampObj = dateInput as { seconds?: number; _seconds?: number };
+      const seconds = timestampObj.seconds || timestampObj._seconds || 0;
+      return new Date(seconds * 1000);
     } else {
       return new Date(dateInput as string);
     }
@@ -32,9 +34,9 @@ export interface FirestoreEvent {
   id: string;
   name: string;
   description?: string;
-  starts_at: string | Date | { toDate?: () => Date; seconds?: number };
-  start_date?: string | Date | { toDate?: () => Date; seconds?: number };
-  expires_at: string | Date | { toDate?: () => Date; seconds?: number };
+  starts_at: string | Date | { toDate?: () => Date; seconds?: number; _seconds?: number };
+  start_date?: string | Date | { toDate?: () => Date; seconds?: number; _seconds?: number };
+  expires_at: string | Date | { toDate?: () => Date; seconds?: number; _seconds?: number };
   event_code: string;
   location?: string;
   country?: string; // Added for country information
@@ -47,6 +49,8 @@ export interface FirestoreEvent {
   timezone?: string; // Added for timezone support
   created_at: string;
   updated_at: string;
+  _region?: string; // Added by Cloud Function - regional database identifier
+  _databaseId?: string; // Added by Cloud Function - database ID
 }
 
 // Event API for the website
@@ -63,27 +67,46 @@ export const EventAPI = {
         return [];
       }
 
-      // Use getEventsFromAllRegions cloud function for multi-region support
+      // Use getEventsFromAllRegions HTTP endpoint for multi-region support
       try {
-        const functions = getFunctions();
-        const getEventsFromAllRegions = httpsCallable(functions, 'getEventsFromAllRegions');
+        const response = await fetch('https://us-central1-hooked-69.cloudfunctions.net/getEventsFromAllRegions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            selectedRegions: ['(default)', 'au-southeast2', 'eu-eur3', 'us-nam5', 'asia-ne1', 'southamerica-east1']
+          })
+        });
         
-        const result = await getEventsFromAllRegions({});
-        const responseData = result.data as { 
-          success: boolean; 
-          events?: FirestoreEvent[]; 
-          error?: string 
-        };
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
         
-        if (responseData.success && responseData.events) {
-          return responseData.events.map(event => ({
-            ...event,
-            starts_at: toDate(event.starts_at),
-            start_date: toDate(event.start_date || event.starts_at),
-            expires_at: toDate(event.expires_at),
-            created_at: toDate(event.created_at).toISOString(),
-            updated_at: toDate(event.updated_at).toISOString()
-          })) as FirestoreEvent[];
+        const responseData = await response.json();
+        
+        if (responseData.events && Array.isArray(responseData.events)) {
+          return responseData.events.map((event: Record<string, unknown>) => {
+            // Safe date conversion with fallback
+            const safeToISOString = (dateValue: unknown): string => {
+              try {
+                const date = toDate(dateValue as string | Date | { toDate?: () => Date; seconds?: number; _seconds?: number });
+                return date.toISOString();
+              } catch (error) {
+                console.warn('Invalid date value, using current time:', dateValue);
+                return new Date().toISOString();
+              }
+            };
+
+            return {
+              ...event,
+              starts_at: toDate(event.starts_at as string | Date | { toDate?: () => Date; seconds?: number; _seconds?: number }),
+              start_date: toDate((event.start_date || event.starts_at) as string | Date | { toDate?: () => Date; seconds?: number; _seconds?: number }),
+              expires_at: toDate(event.expires_at as string | Date | { toDate?: () => Date; seconds?: number; _seconds?: number }),
+              created_at: safeToISOString(event.created_at),
+              updated_at: safeToISOString(event.updated_at)
+            };
+          }) as FirestoreEvent[];
         }
       } catch (cloudError) {
         console.warn('Failed to fetch events from cloud function, falling back to direct query:', cloudError);

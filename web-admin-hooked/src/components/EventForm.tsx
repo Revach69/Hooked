@@ -119,6 +119,32 @@ export default function EventForm({
             if (part.type !== 'literal') values[part.type] = part.value; 
           });
           startsAtString = `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
+        } else if (typeof event.starts_at === 'string') {
+          // Handle string format
+          try {
+            const date = new Date(event.starts_at);
+            if (!isNaN(date.getTime())) {
+              const formatter = new Intl.DateTimeFormat('en-CA', {
+                timeZone: eventTimezone,
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+              });
+              const parts = formatter.formatToParts(date);
+              const values: Record<string, string> = {};
+              parts.forEach(part => { 
+                if (part.type !== 'literal') values[part.type] = part.value; 
+              });
+              startsAtString = `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
+            } else {
+              startsAtString = event.starts_at;
+            }
+          } catch {
+            startsAtString = event.starts_at as string;
+          }
         }
       }
 
@@ -144,6 +170,32 @@ export default function EventForm({
             if (part.type !== 'literal') values[part.type] = part.value; 
           });
           startDateString = `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
+        } else if (typeof event.start_date === 'string') {
+          // Handle string format
+          try {
+            const date = new Date(event.start_date);
+            if (!isNaN(date.getTime())) {
+              const formatter = new Intl.DateTimeFormat('en-CA', {
+                timeZone: eventTimezone,
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+              });
+              const parts = formatter.formatToParts(date);
+              const values: Record<string, string> = {};
+              parts.forEach(part => { 
+                if (part.type !== 'literal') values[part.type] = part.value; 
+              });
+              startDateString = `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
+            } else {
+              startDateString = event.start_date;
+            }
+          } catch {
+            startDateString = event.start_date as string;
+          }
         }
       } else if (startsAtString) {
         // Fall back to starts_at if start_date is not set
@@ -172,6 +224,32 @@ export default function EventForm({
             if (part.type !== 'literal') values[part.type] = part.value; 
           });
           expiresAtString = `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
+        } else if (typeof event.expires_at === 'string') {
+          // Handle string format
+          try {
+            const date = new Date(event.expires_at);
+            if (!isNaN(date.getTime())) {
+              const formatter = new Intl.DateTimeFormat('en-CA', {
+                timeZone: eventTimezone,
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+              });
+              const parts = formatter.formatToParts(date);
+              const values: Record<string, string> = {};
+              parts.forEach(part => { 
+                if (part.type !== 'literal') values[part.type] = part.value; 
+              });
+              expiresAtString = `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
+            } else {
+              expiresAtString = event.expires_at;
+            }
+          } catch {
+            expiresAtString = event.expires_at as string;
+          }
         }
       }
 
@@ -197,6 +275,33 @@ export default function EventForm({
             if (part.type !== 'literal') values[part.type] = part.value; 
           });
           endDateString = `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
+        } else if (typeof event.end_date === 'string') {
+          // Handle string format (could be ISO string or datetime-local format)
+          try {
+            const date = new Date(event.end_date);
+            if (!isNaN(date.getTime())) {
+              const formatter = new Intl.DateTimeFormat('en-CA', {
+                timeZone: eventTimezone,
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+              });
+              const parts = formatter.formatToParts(date);
+              const values: Record<string, string> = {};
+              parts.forEach(part => { 
+                if (part.type !== 'literal') values[part.type] = part.value; 
+              });
+              endDateString = `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
+            } else {
+              // If it's already in datetime-local format, use it as is
+              endDateString = event.end_date;
+            }
+          } catch {
+            endDateString = event.end_date as string;
+          }
         }
       } else if (expiresAtString) {
         // Fall back to expires_at if end_date is not set
