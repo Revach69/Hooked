@@ -74,176 +74,195 @@ export default function JoinPage() {
     }
   }, [isValidating, code]);
 
-  const handleEventJoin = useCallback(async () => {
-    try {
-      if (!code) {
-        setError("No event code provided.");
-        setIsLoading(false);
-        setIsValidating(false);
-        return;
-      }
+  // Remove handleEventJoin callback, move logic directly into useEffect
+  useEffect(() => {
+    // Only run validation when we have a code
+    if (!code) {
+      return;
+    }
 
-      // Start validation
+    // Track if this effect has been cancelled (component unmounted or code changed)
+    let cancelled = false;
+
+    const validateAndJoinEvent = async () => {
+      // Reset states at the start
+      setError(null);
       setIsLoading(true);
       setIsValidating(true);
-      setError(null);
+      
+      console.log('Join page: Starting validation for code:', code);
 
-      // Check for admin code first
-      if (code.toUpperCase() === 'ADMIN') {
-        // Redirect to admin login page
-        unifiedNavigator.navigate('adminLogin', {}, true); // replace: true
-        return;
-      }
+      try {
+        // Check for admin code first
+        if (code.toUpperCase() === 'ADMIN') {
+          if (!cancelled) {
+            // Redirect to admin login page
+            unifiedNavigator.navigate('adminLogin', {}, true); // replace: true
+          }
+          return;
+        }
 
-      // Use Cloud Function to search for events across all regional databases
-      const result = await executeOperationWithOfflineFallback(
-        async () => {
-          console.log(`Searching for event with code: ${code}`);
-          
-          // Get the appropriate regional functions instance
-          // Use automatic region selection for optimal performance
-          const { getEventSpecificFunctions } = await import('../lib/firebaseRegionConfig');
-          
-          // Use default region for event search since we don't know the event country yet
-          const functions = getEventSpecificFunctions(null);
-          const searchEventByCode = httpsCallable(functions, 'searchEventByCode');
-          
-          try {
-            const response = await searchEventByCode({ eventCode: code });
-            const data = response.data as any;
+        // Use Cloud Function to search for events across all regional databases
+        const result = await executeOperationWithOfflineFallback(
+          async () => {
+            console.log(`Searching for event with code: ${code}`);
             
-            if (data.success && data.event) {
-              console.log(`Found event in database: ${data.event._database}`);
-              // Convert Firestore timestamps if needed
-              const event = data.event;
-              if (event.starts_at && typeof event.starts_at === 'object') {
-                event.starts_at = new Timestamp(event.starts_at.seconds || event.starts_at._seconds, event.starts_at.nanoseconds || event.starts_at._nanoseconds || 0);
+            // Get the appropriate regional functions instance
+            // Use automatic region selection for optimal performance
+            const { getEventSpecificFunctions } = await import('../lib/firebaseRegionConfig');
+            
+            // Use default region for event search since we don't know the event country yet
+            const functions = getEventSpecificFunctions(null);
+            const searchEventByCode = httpsCallable(functions, 'searchEventByCode');
+            
+            try {
+              const response = await searchEventByCode({ eventCode: code });
+              const data = response.data as any;
+              
+              if (data.success && data.event) {
+                console.log(`Found event in database: ${data.event._database}`);
+                // Convert Firestore timestamps if needed
+                const event = data.event;
+                if (event.starts_at && typeof event.starts_at === 'object') {
+                  event.starts_at = new Timestamp(event.starts_at.seconds || event.starts_at._seconds, event.starts_at.nanoseconds || event.starts_at._nanoseconds || 0);
+                }
+                if (event.expires_at && typeof event.expires_at === 'object') {
+                  event.expires_at = new Timestamp(event.expires_at.seconds || event.expires_at._seconds, event.expires_at.nanoseconds || event.expires_at._nanoseconds || 0);
+                }
+                if (event.start_date && typeof event.start_date === 'object') {
+                  event.start_date = new Timestamp(event.start_date.seconds || event.start_date._seconds, event.start_date.nanoseconds || event.start_date._nanoseconds || 0);
+                }
+                if (event.created_at && typeof event.created_at === 'object') {
+                  event.created_at = new Timestamp(event.created_at.seconds || event.created_at._seconds, event.created_at.nanoseconds || event.created_at._nanoseconds || 0);
+                }
+                if (event.updated_at && typeof event.updated_at === 'object') {
+                  event.updated_at = new Timestamp(event.updated_at.seconds || event.updated_at._seconds, event.updated_at.nanoseconds || event.updated_at._nanoseconds || 0);
+                }
+                return [event];
+              } else {
+                console.log('Event not found in any database');
+                return [];
               }
-              if (event.expires_at && typeof event.expires_at === 'object') {
-                event.expires_at = new Timestamp(event.expires_at.seconds || event.expires_at._seconds, event.expires_at.nanoseconds || event.expires_at._nanoseconds || 0);
+            } catch (functionError: any) {
+              console.error('Cloud Function error:', functionError);
+              // If it's a network error, throw it to trigger offline mode
+              if (functionError.code === 'unavailable' || functionError.code === 'deadline-exceeded') {
+                throw functionError;
               }
-              if (event.start_date && typeof event.start_date === 'object') {
-                event.start_date = new Timestamp(event.start_date.seconds || event.start_date._seconds, event.start_date.nanoseconds || event.start_date._nanoseconds || 0);
-              }
-              if (event.created_at && typeof event.created_at === 'object') {
-                event.created_at = new Timestamp(event.created_at.seconds || event.created_at._seconds, event.created_at.nanoseconds || event.created_at._nanoseconds || 0);
-              }
-              if (event.updated_at && typeof event.updated_at === 'object') {
-                event.updated_at = new Timestamp(event.updated_at.seconds || event.updated_at._seconds, event.updated_at.nanoseconds || event.updated_at._nanoseconds || 0);
-              }
-              return [event];
-            } else {
-              console.log('Event not found in any database');
+              // Otherwise, event not found
               return [];
             }
-          } catch (functionError: any) {
-            console.error('Cloud Function error:', functionError);
-            // If it's a network error, throw it to trigger offline mode
-            if (functionError.code === 'unavailable' || functionError.code === 'deadline-exceeded') {
-              throw functionError;
-            }
-            // Otherwise, event not found
-            return [];
-          }
-        },
-        { operation: 'Search for event code' }
-      );
+          },
+          { operation: 'Search for event code' }
+        );
 
-      if (result.queued) {
-        setError("You're offline. This action will be completed when you're back online.");
-        setIsLoading(false);
-        setIsValidating(false);
-        return;
-      }
+        // Check if cancelled before processing result
+        if (cancelled) return;
 
-      if (!result.success) {
-        throw result.error || new Error('Failed to validate event code');
-      }
-
-      const events: Event[] = result.result || [];
-
-      if (!events || events.length === 0) {
-        setError("Invalid event code. Please check the code and try again.");
-        setIsLoading(false);
-        setIsValidating(false);
-        return;
-      }
-
-      const foundEvent = events[0];
-      // Use Firebase Timestamp for platform-agnostic comparison
-      const nowTimestamp = Timestamp.now();
-
-      if (!foundEvent.starts_at || !foundEvent.expires_at) {
-        setError("This event is not configured correctly. Please contact the organizer.");
-        setIsLoading(false);
-        setIsValidating(false);
-        return;
-      }
-      
-      // Compare using Timestamp seconds to avoid platform-specific timezone issues
-      if (nowTimestamp.seconds < foundEvent.starts_at.seconds) {
-        // Use toDate() only for display purposes in error messages
-        const accessTime = foundEvent.starts_at.toDate();
-        const realStartTime = foundEvent.start_date ? foundEvent.start_date.toDate() : accessTime;
-        
-        if (foundEvent.start_date && realStartTime > accessTime) {
-          setError("This event hasn't opened for early access yet. Try again soon!");
-        } else {
-          setError("This event hasn't started yet. Try again soon!");
+        if (result.queued) {
+          setError("You're offline. This action will be completed when you're back online.");
+          setIsLoading(false);
+          setIsValidating(false);
+          return;
         }
+
+        if (!result.success) {
+          throw result.error || new Error('Failed to validate event code');
+        }
+
+        const events: Event[] = result.result || [];
+
+        if (!events || events.length === 0) {
+          if (!cancelled) {
+            setError("Invalid event code. Please check the code and try again.");
+            setIsLoading(false);
+            setIsValidating(false);
+          }
+          return;
+        }
+
+        const foundEvent = events[0];
+        // Use Firebase Timestamp for platform-agnostic comparison
+        const nowTimestamp = Timestamp.now();
+
+        if (!foundEvent.starts_at || !foundEvent.expires_at) {
+          if (!cancelled) {
+            setError("This event is not configured correctly. Please contact the organizer.");
+            setIsLoading(false);
+            setIsValidating(false);
+          }
+          return;
+        }
+        
+        // Compare using Timestamp seconds to avoid platform-specific timezone issues
+        if (nowTimestamp.seconds < foundEvent.starts_at.seconds) {
+          if (!cancelled) {
+            // Use toDate() only for display purposes in error messages
+            const accessTime = foundEvent.starts_at.toDate();
+            const realStartTime = foundEvent.start_date ? foundEvent.start_date.toDate() : accessTime;
+            
+            if (foundEvent.start_date && realStartTime > accessTime) {
+              setError("This event hasn't opened for early access yet. Try again soon!");
+            } else {
+              setError("This event hasn't started yet. Try again soon!");
+            }
+            setIsLoading(false);
+            setIsValidating(false);
+          }
+          return;
+        }
+
+        // Use seconds comparison for expires_at to ensure consistency across platforms
+        if (nowTimestamp.seconds >= foundEvent.expires_at.seconds || foundEvent.expired) {
+          if (!cancelled) {
+            setError("This event has ended.");
+            setIsLoading(false);
+            setIsValidating(false);
+          }
+          return;
+        }
+
+        // Event is valid and active, proceed to create profile
+        if (!cancelled) {
+          setError(null); // Clear any previous errors
+          await createEventProfile(foundEvent);
+        }
+      } catch (error: any) {
+        // Check if cancelled before setting error states
+        if (cancelled) return;
+        
+        // Event join failed
+        console.error('Join page: Event validation failed:', error);
+        
+        let errorMessage = 'Failed to join event. Please try again.';
+        
+        // Handle specific error types
+        if (error.code === 'unavailable' || error.code === 'deadline-exceeded') {
+          errorMessage = "Can't reach the server. Please check your connection and try again.";
+        } else if (error.code === 'permission-denied') {
+          errorMessage = "Access denied. You may have been removed from this event.";
+        } else if (error.code === 'not-found') {
+          errorMessage = "Event not found. Please check the code and try again.";
+        } else if (error.message && error.message.includes('timeout')) {
+          errorMessage = "Connection timeout. Please try again.";
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+        
+        setError(errorMessage);
         setIsLoading(false);
         setIsValidating(false);
-        return;
       }
+    };
 
-      // Use seconds comparison for expires_at to ensure consistency across platforms
-      if (nowTimestamp.seconds >= foundEvent.expires_at.seconds || foundEvent.expired) {
-        setError("This event has ended.");
-        setIsLoading(false);
-        setIsValidating(false);
-        return;
-      }
+    // Start validation
+    validateAndJoinEvent();
 
-      // Event is valid and active, proceed to create profile
-      setError(null); // Clear any previous errors
-      await createEventProfile(foundEvent);
-    } catch (error: any) {
-      // Event join failed
-      console.error('Join page: Event validation failed:', error);
-      
-      let errorMessage = 'Failed to join event. Please try again.';
-      
-      // Handle specific error types
-      if (error.code === 'unavailable' || error.code === 'deadline-exceeded') {
-        errorMessage = "Can't reach the server. Please check your connection and try again.";
-      } else if (error.code === 'permission-denied') {
-        errorMessage = "Access denied. You may have been removed from this event.";
-      } else if (error.code === 'not-found') {
-        errorMessage = "Event not found. Please check the code and try again.";
-      } else if (error.message && error.message.includes('timeout')) {
-        errorMessage = "Connection timeout. Please try again.";
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-      
-      setError(errorMessage);
-      setIsLoading(false);
-      setIsValidating(false);
-    }
+    // Cleanup function to cancel if component unmounts or code changes
+    return () => {
+      cancelled = true;
+    };
   }, [code, executeOperationWithOfflineFallback]);
-
-  useEffect(() => {
-    // Reset states when code changes or component mounts
-    setError(null);
-    setIsLoading(false);
-    setIsValidating(false);
-    
-    // Only run validation when we have a code
-    if (code) {
-      console.log('Join page: Starting validation for code:', code);
-      handleEventJoin();
-    }
-  }, [code, handleEventJoin]);
 
   const createEventProfile = async (event: any) => {
     try {

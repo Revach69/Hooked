@@ -1,4 +1,5 @@
 import 'react-native-get-random-values';
+import '../lib/patches/deprecatedModulesPatch'; // Patch deprecated RN modules
 // Sentry removed for faster startup
 
 // Initialize React Native Firebase - but only after app is ready
@@ -542,23 +543,28 @@ export default function RootLayout() {
     };
   }, [appIsReady]);
 
-  // 3.7) Check for updates when app resumes from background
+  // 3.7) Check for updates when app resumes from background (deferred)
   useEffect(() => {
     if (!appIsReady) return;
 
-    const handleAppStateChange = (nextAppState: string) => {
-      if (nextAppState === 'active') {
-        // Check for updates when app becomes active (resumed from background)
-        import('../lib/updateService').then(({ default: UpdateService }) => {
-          return UpdateService.checkForUpdates();
-        }).catch(error => {
-          console.warn('_layout.tsx: Background update check failed:', error);
-        });
-      }
-    };
+    const cleanup = import('../lib/services/AppStateManager').then(({ AppStateManager }) => {
+      return AppStateManager.addListener((nextAppState) => {
+        if (nextAppState === 'active') {
+          // Defer update check to avoid interfering with session validation
+          setTimeout(() => {
+            import('../lib/updateService').then(({ default: UpdateService }) => {
+              return UpdateService.checkForUpdates();
+            }).catch(error => {
+              console.warn('_layout.tsx: Background update check failed:', error);
+            });
+          }, 5000); // 5 second delay
+        }
+      });
+    });
 
-    const subscription = AppState.addEventListener('change', handleAppStateChange);
-    return () => subscription.remove();
+    return () => {
+      cleanup.then(fn => fn && fn());
+    };
   }, [appIsReady]);
 
   // Legacy Firestore listeners removed - now handled by GlobalNotificationService
