@@ -167,6 +167,7 @@ export function getEventSpecificFirestore(eventCountry?: string | null): Firesto
     } else {
       // Use named database (e.g., "au-southeast2", "eu-eur3", "us-nam5")
       db = initializeFirestore(app, {
+        databaseId: region.database,
         experimentalForceLongPolling: false, // Use WebChannel transport for better performance
       });
     }
